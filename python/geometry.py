@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 
+import pandas as pd
 import shapely
 from geopandas import GeoDataFrame
 from shapely.geometry import MultiPolygon, Polygon
@@ -19,25 +20,34 @@ def clean_geometries(gdf: GeoDataFrame, group_col: str) -> GeoDataFrame:
 
     Returns a GeoDataFrame with one clean polygon per unique *group_col* value.
     Non-geometry columns are preserved (first value per group for non-agg cols).
+    Only multi-part geometries are exploded/dissolved; single-part rows pass through.
     """
     if gdf.empty:
         return gdf
 
-    # 1. Deaggregate: explode multi-part geometries into single parts
-    exploded = gdf.explode(index_parts=False)
-
-    # 2. Dissolve by group_col → merge parts into single polygon per group
     non_geom_cols = [c for c in gdf.columns if c != gdf.geometry.name and c != group_col]
     agg = {c: "first" for c in non_geom_cols}
-    dissolved = exploded.dissolve(by=group_col, aggfunc=agg).reset_index()
 
-    # 3. Repair invalid geometries
-    dissolved.geometry = shapely.make_valid(dissolved.geometry.values)
+    # Split: only explode/dissolve rows that are actually multi-part
+    geom_types = gdf.geometry.geom_type
+    multi_mask = geom_types.isin(["MultiPolygon", "MultiLineString", "GeometryCollection"])
+
+    if multi_mask.any():
+        singles = gdf[~multi_mask].copy()
+        multis = gdf[multi_mask].explode(index_parts=False)
+        multis = multis.dissolve(by=group_col, aggfunc=agg).reset_index()
+        result = pd.concat([singles, multis], ignore_index=True)
+        result = GeoDataFrame(result, geometry=gdf.geometry.name, crs=gdf.crs)
+    else:
+        result = gdf.copy()
+
+    # Repair invalid geometries (vectorised via shapely 2.0)
+    result.geometry = shapely.make_valid(result.geometry.values)
 
     # Drop any results that ended up empty after repair
-    dissolved = dissolved[~dissolved.geometry.is_empty].copy()
+    result = result[~result.geometry.is_empty].copy()
 
-    return dissolved
+    return result
 
 
 def _extract_polygons(geom: BaseGeometry) -> BaseGeometry | None:
@@ -78,17 +88,30 @@ def filter_clip_results(
     or GeometryCollections.  This function:
     1. Extracts only Polygon/MultiPolygon parts.
     2. Drops features with area < *threshold*.
+
+    Uses vectorised shapely 2.0 type checks; only falls back to row-by-row
+    extraction for GeometryCollections.
     """
     if gdf.empty:
         return gdf
 
-    # Extract polygon parts only
     gdf = gdf.copy()
-    gdf.geometry = gdf.geometry.apply(_extract_polygons)
 
-    # Drop rows where no polygon was extracted
-    gdf = gdf.dropna(subset=[gdf.geometry.name])
-    gdf = gdf[~gdf.geometry.is_empty]
+    # Vectorised type check via shapely 2.0
+    # type_id: 3=Polygon, 6=MultiPolygon, 7=GeometryCollection
+    type_ids = shapely.get_type_id(gdf.geometry.values)
+    is_poly = (type_ids == 3) | (type_ids == 6)
+    is_gc = type_ids == 7
+
+    # For GeometryCollections, extract polygon parts row-by-row
+    if is_gc.any():
+        gc_idx = gdf.index[is_gc]
+        gdf.loc[gc_idx, gdf.geometry.name] = gdf.loc[gc_idx].geometry.apply(_extract_polygons)
+        # Re-check: successfully extracted polygons are now valid
+        extracted_valid = gdf.loc[gc_idx].geometry.notna() & ~gdf.loc[gc_idx].geometry.is_empty
+        is_poly = is_poly | (is_gc & extracted_valid.reindex(gdf.index, fill_value=False))
+
+    gdf = gdf[is_poly]
 
     # Drop slivers
     gdf = gdf[gdf.geometry.area >= threshold]

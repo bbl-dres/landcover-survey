@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import logging
 import time
+from datetime import datetime
 from pathlib import Path
 
 import geopandas as _gpd
 import pandas as pd
+import shapely
 from geopandas import GeoDataFrame
 from pandas import DataFrame
 
@@ -25,7 +27,7 @@ from data_io import (
     read_landcover,
     read_parcels,
     read_user_input,
-    write_excel,
+    write_csv,
 )
 
 logger = logging.getLogger(__name__)
@@ -53,6 +55,7 @@ def run(
     gpkg_path: str,
     output_dir: str,
     limit: int | None = None,
+    chunk_size: int = 1000,
 ) -> None:
     """Run the landcover survey pipeline.
 
@@ -65,25 +68,27 @@ def run(
     gpkg_path : str
         Path to the AV GeoPackage.
     output_dir : str
-        Directory for output Excel files.
+        Directory for output CSV files.
     limit : int | None
         Limit processing for testing. Mode 1: first N rows. Mode 2: first N municipalities.
+    chunk_size : int
+        Mode 1: number of rows per processing chunk (default 1000).
     """
     t0 = time.time()
     output_dir = Path(output_dir)
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-    # Step 1 — Load parcel identifiers
     user_df = _load_parcel_identifiers(mode, input_path, limit)
 
     if mode == 1:
-        parcels_out, lc_out = _run_mode1(user_df, gpkg_path)
+        parcels_out, lc_out = _run_mode1(user_df, gpkg_path, output_dir, ts, chunk_size)
     else:
         parcels_out, lc_out = _run_mode2(gpkg_path, limit)
 
-    # Export
-    logger.info("Step 9/9 — Exporting results")
-    write_excel(parcels_out, output_dir / "parcels.xlsx")
-    write_excel(lc_out, output_dir / "landcover.xlsx")
+    # Export final results
+    logger.info("Exporting final results")
+    write_csv(parcels_out, output_dir / f"parcels_{ts}.csv")
+    write_csv(lc_out, output_dir / f"landcover_{ts}.csv")
 
     elapsed = time.time() - t0
     mins, secs = divmod(int(elapsed), 60)
@@ -94,38 +99,107 @@ def run(
 
 
 # ---------------------------------------------------------------------------
-# Mode dispatchers
+# Mode 1 — chunked processing
 # ---------------------------------------------------------------------------
 
 def _run_mode1(
     user_df: DataFrame,
     gpkg_path: str,
+    output_dir: Path,
+    ts: str,
+    chunk_size: int = 1000,
 ) -> tuple[DataFrame, DataFrame]:
-    """Mode 1: process user-provided EGRID list."""
-    egrids = user_df["EGRID"].dropna().unique().tolist()
-    logger.info("Step 1/9 — Loaded %d unique EGRIDs from user input", len(egrids))
+    """Mode 1: process user-provided EGRID list in chunks."""
+    total_rows = len(user_df)
+    n_chunks = -(-total_rows // chunk_size)  # ceiling division
 
-    # Step 2 — Look up parcel geometries
-    logger.info("Step 2/9 — Looking up parcel geometries in AV data")
+    logger.info(
+        "Loaded %d rows — processing in %d chunk(s) of %d",
+        total_rows, n_chunks, chunk_size,
+    )
+
+    # Single chunk — process directly, no intermediate files
+    if n_chunks == 1:
+        return _process_mode1_chunk(user_df, gpkg_path)
+
+    chunk_parcels_paths: list[Path] = []
+    chunk_lc_paths: list[Path] = []
+    t0 = time.time()
+
+    for chunk_idx in range(n_chunks):
+        start = chunk_idx * chunk_size
+        end = min(start + chunk_size, total_rows)
+        chunk_df = user_df.iloc[start:end].copy()
+
+        eta = _fmt_eta(time.time() - t0, chunk_idx, n_chunks)
+        logger.info(
+            "— Chunk %d/%d (rows %d–%d) %s",
+            chunk_idx + 1, n_chunks, start + 1, end, eta,
+        )
+
+        parcels_out, lc_out = _process_mode1_chunk(chunk_df, gpkg_path)
+
+        # Write chunk CSV
+        p_path = output_dir / f"parcels_{ts}_chunk{chunk_idx + 1:03d}.csv"
+        l_path = output_dir / f"landcover_{ts}_chunk{chunk_idx + 1:03d}.csv"
+        write_csv(parcels_out, p_path)
+        write_csv(lc_out, l_path)
+        chunk_parcels_paths.append(p_path)
+        chunk_lc_paths.append(l_path)
+
+    # Merge chunk CSVs
+    logger.info("Merging %d chunk files", n_chunks)
+    parcels_merged = pd.concat(
+        [pd.read_csv(p) for p in chunk_parcels_paths], ignore_index=True,
+    )
+    lc_merged = pd.concat(
+        [pd.read_csv(p) for p in chunk_lc_paths], ignore_index=True,
+    )
+
+    # Clean up chunk files
+    for p in chunk_parcels_paths + chunk_lc_paths:
+        p.unlink(missing_ok=True)
+
+    return parcels_merged, lc_merged
+
+
+def _process_mode1_chunk(
+    user_df: DataFrame,
+    gpkg_path: str,
+) -> tuple[DataFrame, DataFrame]:
+    """Process a single chunk of Mode 1 user input."""
+    egrids = user_df["EGRID"].dropna().unique().tolist()
+    logger.info("  Looking up %d unique EGRIDs", len(egrids))
+
+    # Look up parcel geometries & dissolve duplicates
     parcels_gdf = _lookup_parcel_geometries(egrids, gpkg_path)
 
-    # Step 3 — Clean & calculate parcel area
-    logger.info("Step 3/9 — Cleaning parcel geometries & calculating area")
+    # Clean parcels & calculate area
     parcels_gdf = _process_parcels(parcels_gdf)
 
-    # Left-join user data onto parcel results (preserve all user rows)
+    # Attach user's ID
+    egrid_to_id = user_df.drop_duplicates(subset="EGRID").set_index("EGRID")["ID"]
+    if not parcels_gdf.empty:
+        parcels_gdf["ID"] = parcels_gdf["EGRIS_EGRID"].map(egrid_to_id)
+        parcels_gdf["EGRID"] = parcels_gdf["EGRIS_EGRID"]
+
+    # Left-join user data onto parcel results
     parcels_out = _merge_user_parcels(user_df, parcels_gdf)
 
-    # Steps 4-8 — Land cover processing
+    # Land cover processing
     found = parcels_gdf[parcels_gdf.geometry.notna() & ~parcels_gdf.geometry.is_empty]
     if found.empty:
-        logger.warning("No parcel geometries found — skipping land cover processing")
+        logger.warning("  No parcel geometries found — skipping land cover")
         lc_out = _empty_landcover_df()
     else:
         lc_out = _process_landcover(found, gpkg_path)
 
     return parcels_out, lc_out
 
+
+# ---------------------------------------------------------------------------
+# Mode 2 — batched by municipality
+# ---------------------------------------------------------------------------
 
 def _run_mode2(gpkg_path: str, limit: int | None = None) -> tuple[DataFrame, DataFrame]:
     """Mode 2: process all parcels, batched by BFSNr."""
@@ -177,7 +251,7 @@ def _run_mode2(gpkg_path: str, limit: int | None = None) -> tuple[DataFrame, Dat
 
 
 # ---------------------------------------------------------------------------
-# Step 1 — Load parcel identifiers
+# Load parcel identifiers
 # ---------------------------------------------------------------------------
 
 def _load_parcel_identifiers(
@@ -198,7 +272,7 @@ def _load_parcel_identifiers(
 
 
 # ---------------------------------------------------------------------------
-# Step 2 — Look up parcel geometries & handle duplicates
+# Look up parcel geometries & handle duplicates
 # ---------------------------------------------------------------------------
 
 def _lookup_parcel_geometries(
@@ -252,7 +326,7 @@ def _dissolve_duplicate_egrids(gdf: GeoDataFrame) -> GeoDataFrame:
 
 
 # ---------------------------------------------------------------------------
-# Step 3 — Clean parcel geometries & calculate area
+# Clean parcel geometries & calculate area
 # ---------------------------------------------------------------------------
 
 def _process_parcels(parcels_gdf: GeoDataFrame) -> GeoDataFrame:
@@ -267,27 +341,48 @@ def _process_parcels(parcels_gdf: GeoDataFrame) -> GeoDataFrame:
 
 
 # ---------------------------------------------------------------------------
-# Steps 4–8 — Land cover processing
+# Land cover processing (matches FME: read → clip → clean results → area)
 # ---------------------------------------------------------------------------
 
 def _process_landcover(
     parcels_gdf: GeoDataFrame,
     gpkg_path: str,
 ) -> DataFrame:
-    """Read LC, clean, clip by parcels, calc area, classify green space."""
-    # Step 4 — Read land cover with bbox pre-filter
-    logger.info("Step 4/9 — Reading land cover (bbox pre-filter)")
+    """Read LC per parcel, clip, repair clipped results, calc area, classify.
+
+    Processes each parcel individually so each gets a tight bbox,
+    avoiding loading LC features for the entire bounding box of all parcels.
+    """
+    n = len(parcels_gdf)
+    logger.info("  Clipping land cover for %d parcels", n)
+    chunks: list[DataFrame] = []
+    for i, (_, parcel) in enumerate(parcels_gdf.iterrows(), 1):
+        parcel_gdf = GeoDataFrame([parcel], geometry=parcels_gdf.geometry.name, crs=parcels_gdf.crs)
+        lc = _clip_landcover_group(parcel_gdf, gpkg_path)
+        if not lc.empty:
+            chunks.append(lc)
+
+    total_lc = sum(len(c) for c in chunks)
+    logger.info("  Clipped %d land cover rows from %d parcels", total_lc, n)
+
+    if not chunks:
+        return _empty_landcover_df()
+    return pd.concat(chunks, ignore_index=True)
+
+
+def _clip_landcover_group(
+    parcels_gdf: GeoDataFrame,
+    gpkg_path: str,
+) -> DataFrame:
+    """Read LC for one tight bbox, clip by parcels, repair, calc area, classify."""
+    # 1. Read land cover with tight bbox (R-tree spatial index)
     bbox = tuple(parcels_gdf.total_bounds)
     lcsf = read_landcover(gpkg_path, bbox=bbox)
 
     if lcsf.empty:
         return _empty_landcover_df()
 
-    # Step 5 — Clean land cover geometries
-    logger.info("Step 5/9 — Cleaning %d land cover geometries", len(lcsf))
-    lcsf = clean_geometries(lcsf, group_col="fid")
-
-    # Prepare parcel GDF for overlay (only need ID, EGRID, geometry)
+    # 2. Prepare parcel GDF for overlay (only need ID, EGRID, geometry)
     parcel_cols = ["EGRIS_EGRID", "geometry"]
     if "ID" in parcels_gdf.columns:
         parcel_cols.insert(0, "ID")
@@ -295,16 +390,21 @@ def _process_landcover(
         parcel_cols.insert(1, "EGRID")
     parcels_for_overlay = parcels_gdf[parcel_cols].copy()
 
-    # Step 6 — Clip land cover by parcels
-    logger.info("Step 6/9 — Clipping land cover by %d parcels (overlay)", len(parcels_for_overlay))
-    result = _gpd.overlay(lcsf, parcels_for_overlay, how="intersection")
+    # 3. Clip land cover by parcels — NO pre-cleaning (like FME Clipper)
+    import warnings
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", message=".*keep_geom_type.*")
+        result = _gpd.overlay(lcsf, parcels_for_overlay, how="intersection")
 
     if result.empty:
         return _empty_landcover_df()
 
     result = GeoDataFrame(result, geometry=result.geometry.name, crs=lcsf.crs)
 
-    # Filter out non-polygon results and slivers
+    # 4. Repair clipped geometries (small set now)
+    result.geometry = shapely.make_valid(result.geometry.values)
+
+    # 5. Filter out non-polygon results and slivers
     n_before = len(result)
     result = filter_clip_results(result)
     n_dropped = n_before - len(result)
@@ -320,12 +420,10 @@ def _process_landcover(
     if "ID" not in result.columns:
         result["ID"] = result.get("EGRID", result.get("EGRIS_EGRID", ""))
 
-    # Step 7 — Calculate clipped area
-    logger.info("Step 7/9 — Calculating area for %d clipped features", len(result))
+    # 6. Calculate clipped area
     result["area_m2"] = result.geometry.area
 
-    # Step 8 — Classify green space
-    logger.info("Step 8/9 — Classifying green space")
+    # 7. Classify green space
     result["Check_Gruenflaeche"] = result["Art"].map(GREEN_SPACE).fillna(DEFAULT_GREEN_SPACE)
 
     # Build output (drop geometry)

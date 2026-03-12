@@ -1,6 +1,6 @@
 [build-system]
 requires = ["setuptools>=68.0", "wheel"]
-build-backend = "setuptools.backends._legacy:_Backend"
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "landcover-survey"
@@ -11,7 +11,6 @@ dependencies = [
     "geopandas>=0.14",
     "pandas>=2.0",
     "shapely>=2.0",
-    "openpyxl>=3.1",
 ]
 
 [tool.setuptools.packages.find]

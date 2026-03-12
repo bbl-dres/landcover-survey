@@ -60,13 +60,28 @@ def _validate_crs(gdf: GeoDataFrame, layer: str) -> None:
 
 def _read_gpkg(gpkg_path: str, layer: str, **kwargs) -> GeoDataFrame:
     """Read a GeoPackage layer and expose the ``fid`` as a regular column."""
-    gdf = gpd.read_file(gpkg_path, layer=layer, **kwargs)
-    # fid lives in the GeoPackage but geopandas doesn't load it as a column.
-    # Re-read with fid_as_index to get the fid values.
-    if "fid" not in gdf.columns and not gdf.empty:
-        gdf_fid = gpd.read_file(gpkg_path, layer=layer, fid_as_index=True, **kwargs)
-        gdf["fid"] = gdf_fid.index.values
+    gdf = gpd.read_file(gpkg_path, layer=layer, fid_as_index=True, **kwargs)
+    if "fid" not in gdf.columns:
+        gdf["fid"] = gdf.index
+    gdf = gdf.reset_index(drop=True)
     return gdf
+
+
+def _get_rtree_table(gpkg_path: str, layer: str) -> str | None:
+    """Return the R-tree spatial index table name, or None if not available."""
+    with sqlite3.connect(gpkg_path) as conn:
+        row = conn.execute(
+            "SELECT column_name FROM gpkg_geometry_columns WHERE table_name = ?",
+            (layer,),
+        ).fetchone()
+        if row is None:
+            return None
+        rtree_table = f"rtree_{layer}_{row[0]}"
+        exists = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+            (rtree_table,),
+        ).fetchone()
+        return rtree_table if exists else None
 
 
 def read_parcels(
@@ -116,16 +131,41 @@ def read_landcover(
     gpkg_path: str | Path,
     bbox: tuple[float, float, float, float] | None = None,
 ) -> GeoDataFrame:
-    """Read the ``lcsf`` layer with an optional bounding-box pre-filter."""
+    """Read the ``lcsf`` layer with an optional bounding-box pre-filter.
+
+    When *bbox* is given and a GeoPackage R-tree spatial index exists,
+    uses a direct SQL query against the index (like FME ENVELOPE_INTERSECTS).
+    Falls back to geopandas bbox filtering otherwise.
+    """
     gpkg_path = str(gpkg_path)
 
     if bbox is not None:
-        gdf = _read_gpkg(gpkg_path, layer=LAYER_LANDCOVER, bbox=bbox)
+        rtree = _get_rtree_table(gpkg_path, LAYER_LANDCOVER)
+        if rtree is not None:
+            minx, miny, maxx, maxy = bbox
+            sql = (
+                f'SELECT * FROM "{LAYER_LANDCOVER}" '
+                f"WHERE fid IN ("
+                f'SELECT id FROM "{rtree}" '
+                f"WHERE minx <= {maxx} AND maxx >= {minx} "
+                f"AND miny <= {maxy} AND maxy >= {miny})"
+            )
+            gdf = gpd.read_file(gpkg_path, sql=sql)
+            # Ensure fid is exposed as a column
+            if "fid" not in gdf.columns:
+                if hasattr(gdf.index, "name") and gdf.index.name == "fid":
+                    gdf["fid"] = gdf.index
+                    gdf = gdf.reset_index(drop=True)
+        else:
+            logger.debug("No R-tree index found — falling back to bbox filter")
+            gdf = _read_gpkg(gpkg_path, layer=LAYER_LANDCOVER, bbox=bbox)
+            logger.info("Read %d land cover features from %s", len(gdf), LAYER_LANDCOVER)
     else:
         gdf = _read_gpkg(gpkg_path, layer=LAYER_LANDCOVER)
+        logger.info("Read %d land cover features from %s", len(gdf), LAYER_LANDCOVER)
 
-    _validate_crs(gdf, LAYER_LANDCOVER)
-    logger.info("Read %d land cover features from %s", len(gdf), LAYER_LANDCOVER)
+    if not gdf.empty:
+        _validate_crs(gdf, LAYER_LANDCOVER)
     return gdf
 
 
@@ -146,9 +186,9 @@ def get_bfsnr_list(gpkg_path: str | Path) -> list[int]:
 # Output writers
 # ---------------------------------------------------------------------------
 
-def write_excel(df: DataFrame, path: str | Path) -> None:
-    """Write *df* to an Excel ``.xlsx`` file."""
+def write_csv(df: DataFrame, path: str | Path) -> None:
+    """Write *df* to a CSV file."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    df.to_excel(path, index=False, engine="openpyxl")
+    df.to_csv(path, index=False)
     logger.info("Wrote %d rows to %s", len(df), path.name)

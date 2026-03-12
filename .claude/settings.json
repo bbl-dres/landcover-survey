@@ -59,7 +59,13 @@
       "Bash(python -c \"from data_io import read_parcels; print\\(''data_io OK''\\)\")",
       "Bash(python -c \"from pipeline import run; print\\(''pipeline OK''\\)\")",
       "Bash(python -c \":*)",
-      "Bash(python cli.py --mode 1 --input ../data/Liegenschaften.csv --output-dir ../output -v)"
+      "Bash(python cli.py --mode 1 --input ../data/Liegenschaften.csv --output-dir ../output -v)",
+      "Bash(python cli.py --mode 1 --input ../data/Liegenschaften.csv --output-dir ../data --limit 10 -v)",
+      "Bash(python cli.py --mode 1 --input ../data/Liegenschaften.csv --output-dir ../data --limit 10)",
+      "Bash(python cli.py --mode 1 --input ../data/Liegenschaften.csv --output-dir ../data --limit 5)",
+      "Bash(python python/cli.py --mode 1 --input data/Liegenschaften.csv)",
+      "Bash(python python/cli.py --mode 1 --input data/Liegenschaften.csv --limit 10)",
+      "Bash(python python/cli.py --mode 1 --input data/Liegenschaften.csv --limit 100)"
     ]
   }
 }

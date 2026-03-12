@@ -408,12 +408,17 @@ Arguments:
   --mode {1,2}            Processing mode (default: 1)
   --input PATH            Path to user CSV/Excel (required for Mode 1)
   --gpkg PATH             Path to AV GeoPackage (default: D:\AV_lv95\av_2056.gpkg)
-  --output-dir PATH       Output directory (default: ./output)
+  --output-dir PATH       Output directory (default: ./data)
+  --limit N               Limit parcels (Mode 1: first N rows, Mode 2: first N municipalities)
+  --verbose, -v           Enable DEBUG logging
 ```
 
+Logging goes to both console and `<output-dir>/landcover_survey.log`.
+
 #### `config.py` — Constants and Classification
-- `BBART_GREEN_SPACE: dict[str, str]` — maps each `Art` value to its green space category
-- `DEFAULT_GPKG_PATH`, `SLIVER_THRESHOLD` (0.001 m²), `CRS_EPSG` (2056)
+- `GREEN_SPACE: dict[str, str]` — maps each `Art` value to its green space category
+- `SIA416: dict[str, str]` — maps each `Art` value to SIA 416 Umgebungsfläche category
+- `DEFAULT_GPKG_PATH`, `SLIVER_THRESHOLD` (0.001 m²), `CRS_EPSG` (2056), `COL_FLAECHE`
 - No runtime state — pure constants
 
 #### `geometry.py` — Geometry Cleanup Pipeline
@@ -435,7 +440,7 @@ def filter_clip_results(gdf: GeoDataFrame, threshold: float = 0.001) -> GeoDataF
     """
 ```
 
-#### `io.py` — Input/Output
+#### `data_io.py` — Input/Output
 Handles all file reading and writing. Isolates file format dependencies.
 
 ```python

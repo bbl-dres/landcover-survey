@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+from datetime import datetime
 from pathlib import Path
 
 from config import DEFAULT_GPKG_PATH
@@ -43,6 +44,12 @@ def main(argv: list[str] | None = None) -> None:
         help="Limit number of parcels to process (for testing). Mode 1: first N rows, Mode 2: first N municipalities.",
     )
     parser.add_argument(
+        "--chunk-size",
+        type=int,
+        default=10000,
+        help="Mode 1: number of rows per processing chunk (default: 1000)",
+    )
+    parser.add_argument(
         "--verbose", "-v",
         action="store_true",
         help="Enable verbose (DEBUG) logging",
@@ -65,7 +72,11 @@ def main(argv: list[str] | None = None) -> None:
 
     handlers: list[logging.Handler] = [
         logging.StreamHandler(),
-        logging.FileHandler(output_dir / "landcover_survey.log", mode="w", encoding="utf-8"),
+        logging.FileHandler(
+            output_dir / f"landcover_survey_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log",
+            mode="w",
+            encoding="utf-8",
+        ),
     ]
 
     logging.basicConfig(
@@ -91,6 +102,7 @@ def main(argv: list[str] | None = None) -> None:
         gpkg_path=args.gpkg,
         output_dir=args.output_dir,
         limit=args.limit,
+        chunk_size=args.chunk_size,
     )
 
 
