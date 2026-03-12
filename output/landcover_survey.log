@@ -1,0 +1,3 @@
+19:05:49 INFO     __main__ — Landcover Survey started — mode=1, output=..\output
+19:05:50 INFO     data_io — Read 2144 rows from Liegenschaften.csv
+19:06:22 INFO     data_io — Read 1223 parcels from resf
