@@ -381,26 +381,20 @@ flowchart TD
 
 ```
 landcover-survey/
+├── assets/                       # Images for README
+├── data/                         # Input CSVs and output results
+│   └── Liegenschaften.csv        # Sample input (Mode 1)
 ├── docs/
 │   └── REQUIREMENTS.md
 ├── fme/                          # Original FME workflow (reference only)
 │   └── Landcover Survey FME.fmw
-├── python/                       # Python source root
-│   └── landcover_survey/         # Python package
-│       ├── __init__.py           # Package init, version
-│       ├── __main__.py           # Entry point: python -m landcover_survey
-│       ├── cli.py                # Argument parsing (argparse)
-│       ├── config.py             # Constants, BBArt domain, green space mapping, defaults
-│       ├── geometry.py           # Geometry cleanup pipeline
-│       ├── io.py                 # Read/write CSV, Excel, GeoPackage layers
-│       └── pipeline.py           # Main processing orchestration
-├── tests/
-│   ├── conftest.py               # Shared fixtures (small test GeoPackage, sample CSV)
-│   ├── test_geometry.py
-│   ├── test_io.py
-│   ├── test_pipeline.py
-│   └── test_classification.py
-├── pyproject.toml                # Project metadata, dependencies, entry point
+├── python/                       # Python scripts (flat, no package)
+│   ├── cli.py                    # Entry point: python cli.py (argparse)
+│   ├── config.py                 # Constants, BBArt domain, green space mapping, defaults
+│   ├── geometry.py               # Geometry cleanup pipeline
+│   ├── data_io.py                # Read/write CSV, Excel, GeoPackage layers
+│   └── pipeline.py               # Main processing orchestration
+├── pyproject.toml                # Project metadata, dependencies
 └── LICENSE
 ```
 

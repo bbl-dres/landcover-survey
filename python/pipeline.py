@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from pathlib import Path
 
 import geopandas as _gpd
@@ -30,6 +31,18 @@ from data_io import (
 logger = logging.getLogger(__name__)
 
 
+def _fmt_eta(elapsed: float, done: int, total: int) -> str:
+    """Format an ETA string from elapsed time and progress."""
+    if done == 0:
+        return "ETA: --:--"
+    remaining = elapsed / done * (total - done)
+    mins, secs = divmod(int(remaining), 60)
+    hours, mins = divmod(mins, 60)
+    if hours > 0:
+        return f"ETA: {hours}h{mins:02d}m"
+    return f"ETA: {mins}m{secs:02d}s"
+
+
 # ---------------------------------------------------------------------------
 # Public entry point
 # ---------------------------------------------------------------------------
@@ -39,6 +52,7 @@ def run(
     input_path: str | None,
     gpkg_path: str,
     output_dir: str,
+    limit: int | None = None,
 ) -> None:
     """Run the landcover survey pipeline.
 
@@ -52,21 +66,31 @@ def run(
         Path to the AV GeoPackage.
     output_dir : str
         Directory for output Excel files.
+    limit : int | None
+        Limit processing for testing. Mode 1: first N rows. Mode 2: first N municipalities.
     """
+    t0 = time.time()
     output_dir = Path(output_dir)
 
     # Step 1 — Load parcel identifiers
-    user_df = _load_parcel_identifiers(mode, input_path)
+    user_df = _load_parcel_identifiers(mode, input_path, limit)
 
     if mode == 1:
         parcels_out, lc_out = _run_mode1(user_df, gpkg_path)
     else:
-        parcels_out, lc_out = _run_mode2(gpkg_path)
+        parcels_out, lc_out = _run_mode2(gpkg_path, limit)
 
     # Export
+    logger.info("Step 9/9 — Exporting results")
     write_excel(parcels_out, output_dir / "parcels.xlsx")
     write_excel(lc_out, output_dir / "landcover.xlsx")
-    logger.info("Done. Output written to %s", output_dir)
+
+    elapsed = time.time() - t0
+    mins, secs = divmod(int(elapsed), 60)
+    logger.info(
+        "Done in %dm%02ds — %d parcels, %d land cover rows → %s",
+        mins, secs, len(parcels_out), len(lc_out), output_dir,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -79,11 +103,14 @@ def _run_mode1(
 ) -> tuple[DataFrame, DataFrame]:
     """Mode 1: process user-provided EGRID list."""
     egrids = user_df["EGRID"].dropna().unique().tolist()
+    logger.info("Step 1/9 — Loaded %d unique EGRIDs from user input", len(egrids))
 
     # Step 2 — Look up parcel geometries
+    logger.info("Step 2/9 — Looking up parcel geometries in AV data")
     parcels_gdf = _lookup_parcel_geometries(egrids, gpkg_path)
 
     # Step 3 — Clean & calculate parcel area
+    logger.info("Step 3/9 — Cleaning parcel geometries & calculating area")
     parcels_gdf = _process_parcels(parcels_gdf)
 
     # Left-join user data onto parcel results (preserve all user rows)
@@ -92,6 +119,7 @@ def _run_mode1(
     # Steps 4-8 — Land cover processing
     found = parcels_gdf[parcels_gdf.geometry.notna() & ~parcels_gdf.geometry.is_empty]
     if found.empty:
+        logger.warning("No parcel geometries found — skipping land cover processing")
         lc_out = _empty_landcover_df()
     else:
         lc_out = _process_landcover(found, gpkg_path)
@@ -99,16 +127,22 @@ def _run_mode1(
     return parcels_out, lc_out
 
 
-def _run_mode2(gpkg_path: str) -> tuple[DataFrame, DataFrame]:
+def _run_mode2(gpkg_path: str, limit: int | None = None) -> tuple[DataFrame, DataFrame]:
     """Mode 2: process all parcels, batched by BFSNr."""
     bfsnr_list = get_bfsnr_list(gpkg_path)
-    logger.info("Mode 2: processing %d municipalities", len(bfsnr_list))
+    if limit is not None:
+        bfsnr_list = bfsnr_list[:limit]
+        logger.info("Mode 2: processing %d municipalities (limited from full set)", len(bfsnr_list))
+    else:
+        logger.info("Mode 2: processing %d municipalities", len(bfsnr_list))
 
     all_parcels: list[DataFrame] = []
     all_lc: list[DataFrame] = []
+    t0 = time.time()
 
     for i, bfsnr in enumerate(bfsnr_list, 1):
-        logger.info("Processing BFSNr %d (%d/%d)", bfsnr, i, len(bfsnr_list))
+        eta = _fmt_eta(time.time() - t0, i - 1, len(bfsnr_list))
+        logger.info("Processing BFSNr %d (%d/%d) — %s", bfsnr, i, len(bfsnr_list), eta)
 
         parcels_gdf = read_parcels(gpkg_path, bfsnr=bfsnr)
         if parcels_gdf.empty:
@@ -149,12 +183,17 @@ def _run_mode2(gpkg_path: str) -> tuple[DataFrame, DataFrame]:
 def _load_parcel_identifiers(
     mode: int,
     input_path: str | None,
+    limit: int | None = None,
 ) -> DataFrame | None:
     """Load EGRID list from user file (Mode 1) or return None (Mode 2)."""
     if mode == 1:
         if input_path is None:
             raise ValueError("Mode 1 requires --input path to a CSV or Excel file.")
-        return read_user_input(input_path)
+        df = read_user_input(input_path)
+        if limit is not None:
+            logger.info("Limiting to first %d rows (of %d)", limit, len(df))
+            df = df.head(limit)
+        return df
     return None
 
 
@@ -237,13 +276,15 @@ def _process_landcover(
 ) -> DataFrame:
     """Read LC, clean, clip by parcels, calc area, classify green space."""
     # Step 4 — Read land cover with bbox pre-filter
-    bbox = tuple(parcels_gdf.total_bounds)  # (minx, miny, maxx, maxy)
+    logger.info("Step 4/9 — Reading land cover (bbox pre-filter)")
+    bbox = tuple(parcels_gdf.total_bounds)
     lcsf = read_landcover(gpkg_path, bbox=bbox)
 
     if lcsf.empty:
         return _empty_landcover_df()
 
     # Step 5 — Clean land cover geometries
+    logger.info("Step 5/9 — Cleaning %d land cover geometries", len(lcsf))
     lcsf = clean_geometries(lcsf, group_col="fid")
 
     # Prepare parcel GDF for overlay (only need ID, EGRID, geometry)
@@ -254,7 +295,8 @@ def _process_landcover(
         parcel_cols.insert(1, "EGRID")
     parcels_for_overlay = parcels_gdf[parcel_cols].copy()
 
-    # Step 6 — Clip land cover by parcels using gpd.overlay (vectorised, uses spatial index)
+    # Step 6 — Clip land cover by parcels
+    logger.info("Step 6/9 — Clipping land cover by %d parcels (overlay)", len(parcels_for_overlay))
     result = _gpd.overlay(lcsf, parcels_for_overlay, how="intersection")
 
     if result.empty:
@@ -263,7 +305,11 @@ def _process_landcover(
     result = GeoDataFrame(result, geometry=result.geometry.name, crs=lcsf.crs)
 
     # Filter out non-polygon results and slivers
+    n_before = len(result)
     result = filter_clip_results(result)
+    n_dropped = n_before - len(result)
+    if n_dropped > 0:
+        logger.debug("Dropped %d non-polygon/sliver results after clip", n_dropped)
 
     if result.empty:
         return _empty_landcover_df()
@@ -275,9 +321,11 @@ def _process_landcover(
         result["ID"] = result.get("EGRID", result.get("EGRIS_EGRID", ""))
 
     # Step 7 — Calculate clipped area
+    logger.info("Step 7/9 — Calculating area for %d clipped features", len(result))
     result["area_m2"] = result.geometry.area
 
     # Step 8 — Classify green space
+    logger.info("Step 8/9 — Classifying green space")
     result["Check_Gruenflaeche"] = result["Art"].map(GREEN_SPACE).fillna(DEFAULT_GREEN_SPACE)
 
     # Build output (drop geometry)

@@ -33,8 +33,14 @@ def main(argv: list[str] | None = None) -> None:
     )
     parser.add_argument(
         "--output-dir",
-        default="./output",
-        help="Output directory for Excel result files (default: ./output)",
+        default="./data",
+        help="Output directory for Excel result files (default: ./data)",
+    )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Limit number of parcels to process (for testing). Mode 1: first N rows, Mode 2: first N municipalities.",
     )
     parser.add_argument(
         "--verbose", "-v",
@@ -70,7 +76,12 @@ def main(argv: list[str] | None = None) -> None:
     )
 
     logger = logging.getLogger(__name__)
-    logger.info("Landcover Survey started — mode=%d, output=%s", args.mode, output_dir)
+    logger.info(
+        "Landcover Survey started — mode=%d, output=%s%s",
+        args.mode,
+        output_dir,
+        f", limit={args.limit}" if args.limit else "",
+    )
 
     from pipeline import run
 
@@ -79,6 +90,7 @@ def main(argv: list[str] | None = None) -> None:
         input_path=args.input_path,
         gpkg_path=args.gpkg,
         output_dir=args.output_dir,
+        limit=args.limit,
     )
 
 

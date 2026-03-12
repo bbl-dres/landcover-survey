@@ -1,4 +1,11 @@
+![Landcover Survey](assets/Social1.jpg)
+
 # Landcover Survey
+
+![Python](https://img.shields.io/badge/python-%3E%3D3.10-blue)
+![GeoPandas](https://img.shields.io/badge/geopandas-%3E%3D0.14-green)
+![License](https://img.shields.io/badge/license-MIT-lightgrey)
+![Status](https://img.shields.io/badge/status-alpha-orange)
 
 Aggregate land cover usage (m²) per Swiss cadastral parcel from official survey data (Amtliche Vermessung).
 
@@ -9,7 +16,7 @@ For each parcel, the tool clips every intersecting land cover polygon to the par
 1. **Parcels** (`parcels.xlsx`) — One row per parcel with identifiers, official and calculated area. In Mode 1, includes user-provided columns and error messages for unresolved EGRIDs.
 2. **Land Cover** (`landcover.xlsx`) — One row per clipped land cover feature per parcel with type, area, EGRID, and green space classification.
 
-Both outputs are alphanumeric (no geometry exported).
+Both outputs are alphanumeric (no geometry exported). A log file (`landcover_survey.log`) is written to the output directory.
 
 ## Modes of Operation
 
@@ -21,32 +28,51 @@ Both outputs are alphanumeric (no geometry exported).
 ## Requirements
 
 - Python >= 3.10
+- Dependencies: `geopandas`, `pandas`, `shapely >= 2.0`, `openpyxl`
 - AV GeoPackage (`av_2056.gpkg`) from [geodienste.ch](https://www.geodienste.ch/services/av)
 
 ## Installation
 
 ```bash
-pip install -e .
+pip install geopandas pandas shapely openpyxl
 ```
 
 ## Usage
 
+Run from the `python/` directory:
+
 ```bash
+cd python
+
 # Mode 1: User-provided parcel list
-landcover-survey --mode 1 --input parcels.csv --gpkg D:\AV_lv95\av_2056.gpkg --output-dir ./output
+python cli.py --mode 1 --input ../data/Liegenschaften.csv
+
+# Mode 1: Test with first 10 parcels
+python cli.py --mode 1 --input ../data/Liegenschaften.csv --limit 10
 
 # Mode 2: All parcels (batched by BFSNr)
-landcover-survey --mode 2 --gpkg D:\AV_lv95\av_2056.gpkg --output-dir ./output
+python cli.py --mode 2
+
+# Mode 2: Test with first 5 municipalities
+python cli.py --mode 2 --limit 5
+
+# Custom GeoPackage and output directory
+python cli.py --mode 1 --input parcels.csv --gpkg D:\AV_lv95\av_2056.gpkg --output-dir ../output
 
 # Verbose logging
-landcover-survey --mode 1 --input parcels.csv -v
+python cli.py --mode 1 --input ../data/Liegenschaften.csv --limit 10 -v
 ```
 
-Or run as a Python module:
+### CLI Arguments
 
-```bash
-python -m landcover_survey --mode 1 --input parcels.csv
-```
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `--mode {1,2}` | `1` | Processing mode |
+| `--input PATH` | *(required for Mode 1)* | Path to user CSV or Excel file |
+| `--gpkg PATH` | `D:\AV_lv95\av_2056.gpkg` | Path to the AV GeoPackage |
+| `--output-dir PATH` | `./data` | Output directory for results and log file |
+| `--limit N` | *(all)* | Limit processing for testing. Mode 1: first N rows. Mode 2: first N municipalities. |
+| `--verbose`, `-v` | off | Enable DEBUG-level logging |
 
 ## Input File Format (Mode 1)
 
@@ -67,12 +93,13 @@ Official Swiss cadastral survey data (Amtliche Vermessung), data model DM.01-AV-
 ## Project Structure
 
 ```
-python/landcover_survey/     Source package
-  cli.py                     CLI argument parsing
+python/                      Python scripts (flat, no package)
+  cli.py                     CLI entry point
   config.py                  Constants, BBArt classification, green space mapping
   geometry.py                Geometry cleanup (deaggregate → dissolve → make_valid)
-  io.py                      Read/write CSV, Excel, GeoPackage
+  data_io.py                 Read/write CSV, Excel, GeoPackage
   pipeline.py                Main processing orchestration
+data/                        Input and output data
 docs/REQUIREMENTS.md         Detailed requirements and data model
 fme/                         Original FME workflow (reference only)
 ```
@@ -85,6 +112,7 @@ See [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md) for the full specification incl
 - Data model tables and output schemas
 - Processing pipeline with Mermaid flowchart
 - Architecture and design decisions
+- Limitations, error handling, and logging
 - Legal framework and references
 
 ## License
