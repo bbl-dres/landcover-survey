@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import sqlite3
 import time
 from datetime import datetime
 from pathlib import Path
@@ -15,15 +16,19 @@ from pandas import DataFrame
 
 from config import (
     COL_FLAECHE,
+    CRS_EPSG,
     DEFAULT_GREEN_SPACE,
     GREEN_SPACE,
+    LAYER_LANDCOVER,
     MSG_EGRID_FOUND,
     MSG_EGRID_MERGED,
     MSG_EGRID_NOT_FOUND,
+    SQL_BATCH_SIZE,
 )
 from geometry import clean_geometries, filter_clip_results
 from data_io import (
     get_bfsnr_list,
+    get_rtree_table,
     read_landcover,
     read_parcels,
     read_user_input,
@@ -56,6 +61,7 @@ def run(
     output_dir: str,
     limit: int | None = None,
     chunk_size: int = 1000,
+    ts: str | None = None,
 ) -> None:
     """Run the landcover survey pipeline.
 
@@ -73,22 +79,26 @@ def run(
         Limit processing for testing. Mode 1: first N rows. Mode 2: first N municipalities.
     chunk_size : int
         Mode 1: number of rows per processing chunk (default 1000).
+    ts : str | None
+        Timestamp string for output filenames. Generated if not provided.
     """
     t0 = time.time()
     output_dir = Path(output_dir)
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    if ts is None:
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     user_df = _load_parcel_identifiers(mode, input_path, limit)
+    prefix = Path(input_path).stem + "_" if input_path else ""
 
     if mode == 1:
-        parcels_out, lc_out = _run_mode1(user_df, gpkg_path, output_dir, ts, chunk_size)
+        parcels_out, lc_out = _run_mode1(user_df, gpkg_path, output_dir, ts, chunk_size, prefix)
     else:
         parcels_out, lc_out = _run_mode2(gpkg_path, limit)
 
     # Export final results
     logger.info("Exporting final results")
-    write_csv(parcels_out, output_dir / f"parcels_{ts}.csv")
-    write_csv(lc_out, output_dir / f"landcover_{ts}.csv")
+    write_csv(parcels_out, output_dir / f"{prefix}parcels_{ts}.csv")
+    write_csv(lc_out, output_dir / f"{prefix}landcover_{ts}.csv")
 
     elapsed = time.time() - t0
     mins, secs = divmod(int(elapsed), 60)
@@ -108,6 +118,7 @@ def _run_mode1(
     output_dir: Path,
     ts: str,
     chunk_size: int = 1000,
+    prefix: str = "",
 ) -> tuple[DataFrame, DataFrame]:
     """Mode 1: process user-provided EGRID list in chunks."""
     total_rows = len(user_df)
@@ -140,8 +151,8 @@ def _run_mode1(
         parcels_out, lc_out = _process_mode1_chunk(chunk_df, gpkg_path)
 
         # Write chunk CSV
-        p_path = output_dir / f"parcels_{ts}_chunk{chunk_idx + 1:03d}.csv"
-        l_path = output_dir / f"landcover_{ts}_chunk{chunk_idx + 1:03d}.csv"
+        p_path = output_dir / f"{prefix}parcels_{ts}_chunk{chunk_idx + 1:03d}.csv"
+        l_path = output_dir / f"{prefix}landcover_{ts}_chunk{chunk_idx + 1:03d}.csv"
         write_csv(parcels_out, p_path)
         write_csv(lc_out, l_path)
         chunk_parcels_paths.append(p_path)
@@ -348,17 +359,86 @@ def _process_landcover(
     parcels_gdf: GeoDataFrame,
     gpkg_path: str,
 ) -> DataFrame:
-    """Read LC per parcel, clip, repair clipped results, calc area, classify.
+    """Batch-read LC features via R-tree, then clip per parcel.
 
-    Processes each parcel individually so each gets a tight bbox,
-    avoiding loading LC features for the entire bounding box of all parcels.
+    Opens a single sqlite3 connection for R-tree queries and performs
+    one bulk gpd.read_file call, avoiding per-parcel file open overhead.
+    Falls back to per-parcel reads when no R-tree index is available.
     """
     n = len(parcels_gdf)
     logger.info("  Clipping land cover for %d parcels", n)
+
+    gpkg_str = str(gpkg_path)
+    rtree = get_rtree_table(gpkg_str, LAYER_LANDCOVER)
+
+    if rtree is None:
+        logger.debug("No R-tree index — falling back to per-parcel reads")
+        return _process_landcover_no_rtree(parcels_gdf, gpkg_path)
+
+    # Phase 1: Collect fids per parcel from R-tree (single connection)
+    parcel_fids: dict[int, set[int]] = {}  # row index -> set of fids
+    all_fids: set[int] = set()
+
+    with sqlite3.connect(gpkg_str) as conn:
+        for idx, parcel in parcels_gdf.iterrows():
+            minx, miny, maxx, maxy = parcel.geometry.bounds
+            rows = conn.execute(
+                f'SELECT id FROM "{rtree}" '
+                "WHERE minx <= ? AND maxx >= ? AND miny <= ? AND maxy >= ?",
+                (maxx, minx, maxy, miny),
+            ).fetchall()
+            fids = {r[0] for r in rows}
+            parcel_fids[idx] = fids
+            all_fids.update(fids)
+
+    if not all_fids:
+        return _empty_landcover_df()
+
+    # Phase 2: Bulk-read all LC features (batched to stay within SQL limits)
+    fid_list = sorted(all_fids)
+    frames: list[GeoDataFrame] = []
+    for i in range(0, len(fid_list), SQL_BATCH_SIZE):
+        batch = fid_list[i : i + SQL_BATCH_SIZE]
+        fid_csv = ", ".join(str(f) for f in batch)
+        sql = f'SELECT * FROM "{LAYER_LANDCOVER}" WHERE fid IN ({fid_csv})'
+        gdf = _gpd.read_file(gpkg_str, sql=sql, fid_as_index=True)
+        if "fid" not in gdf.columns:
+            if hasattr(gdf.index, "name") and gdf.index.name == "fid":
+                gdf["fid"] = gdf.index
+                gdf = gdf.reset_index(drop=True)
+        frames.append(gdf)
+
+    if not frames or all(f.empty for f in frames):
+        return _empty_landcover_df()
+
+    crs = frames[0].crs
+    geom_col = frames[0].geometry.name
+    lcsf_all = pd.concat(frames, ignore_index=True)
+    lcsf_all = GeoDataFrame(lcsf_all, geometry=geom_col, crs=crs)
+
+    if not lcsf_all.empty:
+        if lcsf_all.crs is None or lcsf_all.crs.to_epsg() != CRS_EPSG:
+            raise ValueError(
+                f"Layer '{LAYER_LANDCOVER}' CRS is {lcsf_all.crs}"
+                f" — expected EPSG:{CRS_EPSG}"
+            )
+
+    # Index by fid for fast subset selection
+    lcsf_all = lcsf_all.set_index("fid", drop=False)
+
+    # Phase 3: Clip per parcel using vectorised shapely.intersection
     chunks: list[DataFrame] = []
-    for i, (_, parcel) in enumerate(parcels_gdf.iterrows(), 1):
-        parcel_gdf = GeoDataFrame([parcel], geometry=parcels_gdf.geometry.name, crs=parcels_gdf.crs)
-        lc = _clip_landcover_group(parcel_gdf, gpkg_path)
+    for idx, parcel in parcels_gdf.iterrows():
+        fids = parcel_fids.get(idx, set())
+        if not fids:
+            continue
+        valid_fids = list(fids & set(lcsf_all.index))
+        if not valid_fids:
+            continue
+        lcsf = lcsf_all.loc[valid_fids].copy().reset_index(drop=True)
+        if lcsf.empty:
+            continue
+        lc = _clip_single_parcel(lcsf, parcel)
         if not lc.empty:
             chunks.append(lc)
 
@@ -370,41 +450,44 @@ def _process_landcover(
     return pd.concat(chunks, ignore_index=True)
 
 
-def _clip_landcover_group(
+def _process_landcover_no_rtree(
     parcels_gdf: GeoDataFrame,
     gpkg_path: str,
 ) -> DataFrame:
-    """Read LC for one tight bbox, clip by parcels, repair, calc area, classify."""
-    # 1. Read land cover with tight bbox (R-tree spatial index)
-    bbox = tuple(parcels_gdf.total_bounds)
-    lcsf = read_landcover(gpkg_path, bbox=bbox)
+    """Fallback: per-parcel LC read when no R-tree index is available."""
+    chunks: list[DataFrame] = []
+    for _, parcel in parcels_gdf.iterrows():
+        bbox = tuple(parcel.geometry.bounds)
+        lcsf = read_landcover(gpkg_path, bbox=bbox)
+        if lcsf.empty:
+            continue
+        lc = _clip_single_parcel(lcsf, parcel)
+        if not lc.empty:
+            chunks.append(lc)
 
-    if lcsf.empty:
+    if not chunks:
         return _empty_landcover_df()
+    return pd.concat(chunks, ignore_index=True)
 
-    # 2. Prepare parcel GDF for overlay (only need ID, EGRID, geometry)
-    parcel_cols = ["EGRIS_EGRID", "geometry"]
-    if "ID" in parcels_gdf.columns:
-        parcel_cols.insert(0, "ID")
-    if "EGRID" in parcels_gdf.columns:
-        parcel_cols.insert(1, "EGRID")
-    parcels_for_overlay = parcels_gdf[parcel_cols].copy()
 
-    # 3. Clip land cover by parcels — NO pre-cleaning (like FME Clipper)
-    import warnings
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", message=".*keep_geom_type.*")
-        result = _gpd.overlay(lcsf, parcels_for_overlay, how="intersection")
+def _clip_single_parcel(
+    lcsf: GeoDataFrame,
+    parcel: pd.Series,
+) -> DataFrame:
+    """Clip LC features against one parcel using vectorised shapely.intersection."""
+    parcel_geom = parcel.geometry
 
-    if result.empty:
-        return _empty_landcover_df()
+    # Vectorised intersection (replaces gpd.overlay for single-parcel case)
+    clipped_geoms = shapely.intersection(lcsf.geometry.values, parcel_geom)
 
+    result = lcsf.copy()
+    result[result.geometry.name] = clipped_geoms
     result = GeoDataFrame(result, geometry=result.geometry.name, crs=lcsf.crs)
 
-    # 4. Repair clipped geometries (small set now)
+    # Repair clipped geometries
     result.geometry = shapely.make_valid(result.geometry.values)
 
-    # 5. Filter out non-polygon results and slivers
+    # Filter out non-polygon results and slivers
     n_before = len(result)
     result = filter_clip_results(result)
     n_dropped = n_before - len(result)
@@ -414,16 +497,19 @@ def _clip_landcover_group(
     if result.empty:
         return _empty_landcover_df()
 
-    # Inherit parcel identifiers if not already present from overlay
-    if "EGRID" not in result.columns and "EGRIS_EGRID" in result.columns:
-        result["EGRID"] = result["EGRIS_EGRID"]
+    # Add parcel identifiers
+    for col in ("EGRID", "ID"):
+        if col in parcel.index:
+            result[col] = parcel[col]
+    if "EGRID" not in result.columns and "EGRIS_EGRID" in parcel.index:
+        result["EGRID"] = parcel["EGRIS_EGRID"]
     if "ID" not in result.columns:
-        result["ID"] = result.get("EGRID", result.get("EGRIS_EGRID", ""))
+        result["ID"] = result.get("EGRID", "")
 
-    # 6. Calculate clipped area
+    # Calculate clipped area
     result["area_m2"] = result.geometry.area
 
-    # 7. Classify green space
+    # Classify green space
     result["Check_Gruenflaeche"] = result["Art"].map(GREEN_SPACE).fillna(DEFAULT_GREEN_SPACE)
 
     # Build output (drop geometry)

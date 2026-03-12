@@ -34,8 +34,8 @@ def main(argv: list[str] | None = None) -> None:
     )
     parser.add_argument(
         "--output-dir",
-        default="./data",
-        help="Output directory for Excel result files (default: ./data)",
+        default=None,
+        help="Output directory for CSV result files (default: same directory as input file, or ./data for Mode 2)",
     )
     parser.add_argument(
         "--limit",
@@ -47,7 +47,7 @@ def main(argv: list[str] | None = None) -> None:
         "--chunk-size",
         type=int,
         default=10000,
-        help="Mode 1: number of rows per processing chunk (default: 1000)",
+        help="Mode 1: number of rows per processing chunk (default: 10000)",
     )
     parser.add_argument(
         "--verbose", "-v",
@@ -61,9 +61,18 @@ def main(argv: list[str] | None = None) -> None:
     if args.mode == 1 and args.input_path is None:
         parser.error("Mode 1 requires --input <path to CSV or Excel file>")
 
-    # Ensure output directory exists
-    output_dir = Path(args.output_dir)
+    # Resolve output directory: default to input file's parent (Mode 1) or ./data (Mode 2)
+    if args.output_dir is not None:
+        output_dir = Path(args.output_dir)
+    elif args.input_path is not None:
+        output_dir = Path(args.input_path).resolve().parent
+    else:
+        output_dir = Path("./data")
     output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Single timestamp for all output files (log + CSVs)
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    prefix = Path(args.input_path).stem + "_" if args.input_path else ""
 
     # Configure logging — console + log file in output directory
     level = logging.DEBUG if args.verbose else logging.INFO
@@ -73,7 +82,7 @@ def main(argv: list[str] | None = None) -> None:
     handlers: list[logging.Handler] = [
         logging.StreamHandler(),
         logging.FileHandler(
-            output_dir / f"landcover_survey_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log",
+            output_dir / f"{prefix}{ts}.log",
             mode="w",
             encoding="utf-8",
         ),
@@ -100,9 +109,10 @@ def main(argv: list[str] | None = None) -> None:
         mode=args.mode,
         input_path=args.input_path,
         gpkg_path=args.gpkg,
-        output_dir=args.output_dir,
+        output_dir=str(output_dir),
         limit=args.limit,
         chunk_size=args.chunk_size,
+        ts=ts,
     )
 
 

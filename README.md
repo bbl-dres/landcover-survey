@@ -13,10 +13,10 @@ For each parcel, the tool clips every intersecting land cover polygon to the par
 
 ## Outputs
 
-1. **Parcels** (`parcels.xlsx`) — One row per parcel with identifiers, official and calculated area. In Mode 1, includes user-provided columns and error messages for unresolved EGRIDs.
-2. **Land Cover** (`landcover.xlsx`) — One row per clipped land cover feature per parcel with type, area, EGRID, and green space classification.
+1. **Parcels** — One row per parcel with identifiers, official and calculated area. In Mode 1, includes user-provided columns and error messages for unresolved EGRIDs.
+2. **Land Cover** — One row per clipped land cover feature per parcel with type, area, EGRID, and green space classification.
 
-Both outputs are alphanumeric (no geometry exported). A log file (`landcover_survey.log`) is written to the output directory.
+Output files are CSV, named `{input}_parcels_{timestamp}.csv` and `{input}_landcover_{timestamp}.csv` (e.g. `Liegenschaften_parcels_20260312_195209.csv`). In Mode 2 (no input file), the input prefix is omitted. Both outputs are alphanumeric (no geometry exported). A log file is written to the output directory.
 
 ## Modes of Operation
 
@@ -45,10 +45,10 @@ Run from the `python/` directory:
 cd python
 
 # Mode 1: User-provided parcel list
-python cli.py --mode 1 --input ../data/Liegenschaften.csv
+python cli.py --mode 1 --input ../data/test_data.csv
 
 # Mode 1: Test with first 10 parcels
-python cli.py --mode 1 --input ../data/Liegenschaften.csv --limit 10
+python cli.py --mode 1 --input ../data/test_data.csv --limit 10
 
 # Mode 2: All parcels (batched by BFSNr)
 python cli.py --mode 2
@@ -60,7 +60,7 @@ python cli.py --mode 2 --limit 5
 python cli.py --mode 1 --input parcels.csv --gpkg D:\AV_lv95\av_2056.gpkg --output-dir ../output
 
 # Verbose logging
-python cli.py --mode 1 --input ../data/Liegenschaften.csv --limit 10 -v
+python cli.py --mode 1 --input ../data/test_data.csv --limit 10 -v
 ```
 
 ### CLI Arguments
@@ -70,7 +70,7 @@ python cli.py --mode 1 --input ../data/Liegenschaften.csv --limit 10 -v
 | `--mode {1,2}` | `1` | Processing mode |
 | `--input PATH` | *(required for Mode 1)* | Path to user CSV or Excel file |
 | `--gpkg PATH` | `D:\AV_lv95\av_2056.gpkg` | Path to the AV GeoPackage |
-| `--output-dir PATH` | `./data` | Output directory for results and log file |
+| `--output-dir PATH` | *(input file's directory, or `./data` for Mode 2)* | Output directory for results and log file |
 | `--limit N` | *(all)* | Limit processing for testing. Mode 1: first N rows. Mode 2: first N municipalities. |
 | `--verbose`, `-v` | off | Enable DEBUG-level logging |
 

@@ -1,0 +1,12 @@
+20:30:38 INFO     __main__ — Landcover Survey started — mode=1, output=C:\Users\DavidRasner\Documents\GitHub\landcover-survey\data
+20:30:39 INFO     data_io — Read 1000 rows from test_data.csv
+20:30:39 INFO     pipeline — Loaded 1000 rows — processing in 1 chunk(s) of 10000
+20:30:39 INFO     pipeline —   Looking up 961 unique EGRIDs
+20:30:47 INFO     data_io — Read 944 parcels from resf
+20:30:47 WARNING  pipeline — 2 EGRIDs have multiple entries — dissolving: ['CH149410876583', 'CH827795831257']
+20:30:47 INFO     pipeline —   Clipping land cover for 940 parcels
+20:30:57 INFO     pipeline —   Clipped 4330 land cover rows from 940 parcels
+20:30:57 INFO     pipeline — Exporting final results
+20:30:57 INFO     data_io — Wrote 1000 rows to test_data_parcels_20260312_203038.csv
+20:30:57 INFO     data_io — Wrote 4330 rows to test_data_landcover_20260312_203038.csv
+20:30:57 INFO     pipeline — Done in 0m18s — 1000 parcels, 4330 land cover rows → C:\Users\DavidRasner\Documents\GitHub\landcover-survey\data

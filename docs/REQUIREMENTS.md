@@ -346,13 +346,13 @@ flowchart TD
 - `geopandas` — reading GeoPackage layers, spatial operations (clip, dissolve, area calculation)
 - `pandas` — tabular data manipulation, CSV/Excel reading, Excel writing
 - `shapely` (>= 2.0) — geometry operations (`make_valid()`, dissolve, intersection)
-- `openpyxl` — Excel (.xlsx) writing
+- `openpyxl` — Excel (.xlsx) input reading
 
 ### Input Parameters
 - **Mode 1**: Path to user CSV or Excel file (must contain `ID` and `EGRID` columns)
 - **Mode 2**: No user file needed (processes all parcels)
 - Path to the AV GeoPackage (default: `D:\AV_lv95\av_2056.gpkg`)
-- Output directory for the Excel result files
+- Output directory for the CSV result files
 
 ### Performance Considerations
 - **Mode 2** processes all parcels in the GeoPackage. Switzerland has ~3.5 million parcels and a corresponding number of land cover features. Loading the entire `lcsf` table into memory may fail on typical machines.
@@ -383,7 +383,7 @@ flowchart TD
 landcover-survey/
 ├── assets/                       # Images for README
 ├── data/                         # Input CSVs and output results
-│   └── Liegenschaften.csv        # Sample input (Mode 1)
+│   └── test_data.csv              # Sample input (Mode 1)
 ├── docs/
 │   └── REQUIREMENTS.md
 ├── fme/                          # Original FME workflow (reference only)
@@ -454,8 +454,8 @@ def read_parcels(gpkg_path: str, egrids: list[str] | None = None) -> GeoDataFram
 def read_landcover(gpkg_path: str, bbox: tuple | None = None) -> GeoDataFrame:
     """Read lcsf layer with optional bounding box pre-filter."""
 
-def write_excel(df: DataFrame, path: str) -> None:
-    """Write DataFrame to Excel (.xlsx)."""
+def write_csv(df: DataFrame, path: str) -> None:
+    """Write DataFrame to CSV."""
 ```
 
 #### `pipeline.py` — Main Processing Orchestration
@@ -475,11 +475,10 @@ def _process_parcels(parcels_gdf) -> GeoDataFrame:
     """Steps 3: Clean parcel geometries, calculate parcel_area_m2."""
 
 def _process_landcover(parcels_gdf, gpkg_path) -> DataFrame:
-    """Steps 4–8: Read LC, clean, clip by parcels, calc area, classify green space."""
+    """Steps 4–8: Batch-read LC via R-tree, clip per parcel, calc area, classify."""
 
-def _process_batch(parcels_gdf, gpkg_path) -> DataFrame:
-    """Process a single batch of parcels against land cover.
-    Used directly in Mode 1; called per-municipality in Mode 2."""
+def _clip_single_parcel(lcsf, parcel) -> DataFrame:
+    """Clip LC features against one parcel using vectorised shapely.intersection."""
 ```
 
 ### Key Design Decisions

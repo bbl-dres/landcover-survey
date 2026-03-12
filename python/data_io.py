@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
+from functools import lru_cache
 from pathlib import Path
 
 import geopandas as gpd
@@ -67,7 +68,8 @@ def _read_gpkg(gpkg_path: str, layer: str, **kwargs) -> GeoDataFrame:
     return gdf
 
 
-def _get_rtree_table(gpkg_path: str, layer: str) -> str | None:
+@lru_cache(maxsize=None)
+def get_rtree_table(gpkg_path: str, layer: str) -> str | None:
     """Return the R-tree spatial index table name, or None if not available."""
     with sqlite3.connect(gpkg_path) as conn:
         row = conn.execute(
@@ -140,7 +142,7 @@ def read_landcover(
     gpkg_path = str(gpkg_path)
 
     if bbox is not None:
-        rtree = _get_rtree_table(gpkg_path, LAYER_LANDCOVER)
+        rtree = get_rtree_table(gpkg_path, LAYER_LANDCOVER)
         if rtree is not None:
             minx, miny, maxx, maxy = bbox
             sql = (
