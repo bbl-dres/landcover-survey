@@ -12,10 +12,10 @@ For each parcel, the tool clips every intersecting land cover polygon to the par
 
 ## Outputs
 
-1. **Parcels** — One row per parcel with identifiers, official and calculated area. In Mode 1, includes user-provided columns and error messages for unresolved EGRIDs.
-2. **Land Cover** — One row per clipped land cover feature per parcel with type, area, EGRID, and green space classification.
+1. **Parcels** — One row per parcel with identifiers, official and calculated area. In Mode 1, includes user-provided columns and error messages for unresolved EGRIDs. Disable with `--no-parcels`.
+2. **Land Cover** — One row per clipped land cover feature per parcel with type, area, EGRID, and green space classification. Disable with `--no-landcover`.
 
-Output files are CSV, named `{input}_parcels_{timestamp}.csv` and `{input}_landcover_{timestamp}.csv` (e.g. `Liegenschaften_parcels_20260312_195209.csv`). In Mode 2 (no input file), the input prefix is omitted. Both outputs are alphanumeric (no geometry exported). A log file is written to the output directory.
+Output files are CSV, named `{input}_parcels_{timestamp}.csv` and `{input}_landcover_{timestamp}.csv` (e.g. `Liegenschaften_parcels_20260312_195209.csv`). In Mode 2 (no input file), the input prefix is omitted. Both outputs are exported by default (no geometry). A log file is written to the output directory.
 
 ## Modes of Operation
 
@@ -74,6 +74,7 @@ python cli.py --mode 1 --input ../data/test_data.csv --limit 10 -v
 | `--chunk-size N` | `10000` | Mode 1: number of rows per processing chunk |
 | `--no-aggregate` | off | Disable land cover area aggregation on parcels output |
 | `--no-parcels` | off | Skip exporting the parcels CSV |
+| `--no-landcover` | off | Skip exporting the land cover CSV |
 | `--verbose`, `-v` | off | Enable DEBUG-level logging |
 
 ## Input File Format (Mode 1)
@@ -109,6 +110,8 @@ python cli.py --mode 1 --input ../data/test_data.csv --limit 10 -v
 
 ### Land Cover (`{input}_landcover_{timestamp}.csv`)
 
+Exported by default; disable with `--no-landcover`.
+
 | Column | Required | Description |
 |--------|----------|-------------|
 | `ID` | Always | Parcel identifier (same as Parcels output) |
@@ -138,18 +141,19 @@ python/                      Python scripts (flat, no package)
   data_io.py                 Read/write CSV, Excel, GeoPackage
   pipeline.py                Main processing orchestration
 data/                        Input and output data
-docs/REQUIREMENTS.md         Detailed requirements and data model
+docs/SPECIFICATION.md        Technical specification and data model
 fme/                         Original FME workflow (reference only)
 ```
 
 ## Documentation
 
-See [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md) for the full specification including:
+See [docs/SPECIFICATION.md](docs/SPECIFICATION.md) for the full technical specification including:
 
 - Swiss land cover classification (BBArt) with SIA 416 and green space mappings
 - Data model tables and output schemas
 - Processing pipeline with Mermaid flowchart
 - Architecture and design decisions
+- Terminology glossary
 - Limitations, error handling, and logging
 - Legal framework and references
 

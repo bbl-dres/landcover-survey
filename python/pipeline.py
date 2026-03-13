@@ -66,6 +66,7 @@ def run(
     ts: str | None = None,
     aggregate: bool = True,
     export_parcels: bool = True,
+    export_landcover: bool = True,
 ) -> None:
     """Run the landcover survey pipeline.
 
@@ -90,6 +91,8 @@ def run(
         (GGF_m2, BUF_m2, UUF_m2) to the parcels output.
     export_parcels : bool
         If True (default), export the parcels CSV.
+    export_landcover : bool
+        If True (default), export the land cover CSV.
     """
     t0 = time.time()
     output_dir = Path(output_dir)
@@ -112,7 +115,8 @@ def run(
     logger.info("Exporting final results")
     if export_parcels:
         write_csv(parcels_out, output_dir / f"{prefix}parcels_{ts}.csv")
-    write_csv(lc_out, output_dir / f"{prefix}landcover_{ts}.csv")
+    if export_landcover:
+        write_csv(lc_out, output_dir / f"{prefix}landcover_{ts}.csv")
 
     elapsed = time.time() - t0
     mins, secs = divmod(int(elapsed), 60)

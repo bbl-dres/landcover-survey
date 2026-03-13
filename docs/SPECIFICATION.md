@@ -1,20 +1,18 @@
-# Landcover Survey - Requirements
+# Landcover Survey — Technical Specification
 
 ## Goal
 
-Aggregate **land cover usage in square meters** for cadastral parcels (Grundstücke) using official Swiss survey data (Amtliche Vermessung).
+Calculate **how much area (m²) of each land cover type** exists within each cadastral parcel, using official Swiss survey data.
 
-For each parcel, we clip every intersecting land cover polygon to the parcel boundary, then calculate the 2D planar area (on the LV95 projection) of each clipped piece. This produces a breakdown of how much area (m²) of each land cover type exists within each parcel.
-
-Correct area measurement requires geometry cleanup: official survey data sometimes has multi-part polygons, self-intersections, or slivers. Every geometry (parcel and land cover) must be deaggregated, dissolved by feature ID, and repaired before area calculation.
+The tool clips every land cover polygon that intersects a parcel to the parcel boundary, then computes the 2D area of each clipped piece on the LV95 projection (EPSG:2056). The result is a per-parcel breakdown of land cover usage in square meters.
 
 ### Outputs
 
-The tool produces **two alphanumeric output tables** (no geometry exported):
+Two CSV output tables (no geometry exported). Both are exported by default and can be individually disabled:
 
-1. **Parcels** — One row per parcel. Contains the parcel identifiers, official and calculated area, and (in Mode 1) any user-provided columns. If a user-provided EGRID cannot be found in the survey data, the row is kept with an error message.
+1. **Parcels** (`--no-parcels` to disable) — One row per parcel with identifiers, official area, calculated area, and optional aggregation columns (SIA 416, sealed area, green space, per-type breakdown). In Mode 1, user-provided columns and error messages for unresolved EGRIDs are included.
 
-2. **Land Cover** — One row per clipped land cover feature per parcel. Contains the land cover type, clipped area, EGRID, ID, and land cover `fid` for every parcel processed.
+2. **Land Cover** (`--no-landcover` to disable) — One row per clipped land cover piece per parcel, with the land cover type, clipped area, and green space classification.
 
 ---
 
@@ -32,22 +30,23 @@ All parcels from the official survey GeoPackage (`resf` table) are processed. No
 
 ---
 
-## Data Quality Note
+## Geometry Cleanup
 
-Official survey polygon data sometimes contains geometry issues (self-intersections, multi-part geometries, slivers). To calculate correct 2D polygon areas, every feature must be:
-1. **Deaggregated** — split multi-part geometries into single parts
-2. **Dissolved** — merge all parts back into a single clean polygon, grouped by `fid` (official survey feature ID)
-3. **Repaired** — fix invalid geometries (using `shapely.make_valid()`, not `buffer(0)` which can collapse narrow polygons)
+Survey polygons can have self-intersections, multi-part geometries, or slivers. To get correct areas, parcel geometries go through a three-step cleanup before clipping:
 
-Only then can reliable 2D polygon area be calculated.
+1. **Deaggregate** — split multi-part geometries into single parts
+2. **Dissolve** — merge parts back into one polygon per `fid` (survey feature ID)
+3. **Repair** — fix invalid geometries via `shapely.make_valid()` (not `buffer(0)`, which can collapse narrow polygons)
+
+Land cover geometries are **not** cleaned before clipping (matching the original FME workflow). Instead, clipped results are repaired and filtered afterwards — non-polygon artifacts and slivers < 0.001 m² are dropped.
 
 ### Official vs. Calculated Area
 
-The official area (`Flaechenmass`) is the *legal* area and may intentionally differ from the computed polygon area. It can include projection reductions or be rounded per legal requirements (VAV Art. 16). Small discrepancies (sub-m² for small parcels, several m² for large ones) are normal and expected. The calculated `area_m2` is the 2D planar area on the LV95 projection — useful for QA comparison, and as a fallback when `Flaechenmass` is missing.
+The official area (`Flaechenmass`) is the *legal* area and may differ from the computed polygon area due to projection reductions or rounding per legal requirements (VAV Art. 16). Small discrepancies (sub-m² for small parcels, several m² for large ones) are normal. The calculated `parcel_area_m2` is useful for QA comparison and as a fallback when `Flaechenmass` is missing.
 
 ### Duplicate EGRIDs
 
-A single EGRID can map to multiple `fid` entries in `resf` (e.g. during ongoing mutations, or when selbständige und dauernde Rechte / SDR overlap Liegenschaften). When duplicates are found, all matching geometries are dissolved into a single polygon per EGRID before processing continues. This is flagged in `Check_EGRID`.
+A single EGRID can map to multiple `fid` entries in `resf` — e.g. during ongoing mutations, or when building rights (SDR) overlap properties. When this happens, all matching geometries are dissolved into one polygon per EGRID. This is flagged in `Check_EGRID`.
 
 ---
 
@@ -95,11 +94,9 @@ The `resf` table contains both Liegenschaften (real property) and selbständige 
 
 ---
 
-## Swiss Land Cover Classification (BBArt)
+## Land Cover Classification (BBArt)
 
-The land cover types are defined in the Swiss data model **DM.01-AV-CH** (INTERLIS 1, SN 612030) as the `BBArt` domain. This is a **purely Swiss national classification** — it does not follow INSPIRE, ISO, or CORINE/CLC standards. The classification is defined in the technical ordinance on official surveying (TVAV/VAV-VBS, SR 211.432.21), Articles 14–19.
-
-The data model will be replaced by **DMAV** by December 31, 2027.
+The 26 land cover types are defined in the Swiss data model **DM.01-AV-CH** as the `BBArt` domain. This is a Swiss national classification (not INSPIRE or CORINE) defined in the technical ordinance on official surveying (TVAV, SR 211.432.21, Art. 14–19). The data model will be replaced by **DMAV** by 2027-12-31.
 
 ### Complete Land Cover Type Hierarchy
 
@@ -164,11 +161,10 @@ BBArt = (
 
 ### Green Space Classification (Project-Specific)
 
-For this project, land cover types are additionally classified into green space categories.
+Each land cover type is also classified as green space or not. Two special cases:
 
-> **Note:** `Wytweide_dicht` and `Wytweide_offen` are officially classified as "bestockt" (wooded) in the BBArt hierarchy, but are treated as "Humusiert" here because they are primarily open pasture land with partial tree cover — the green/soil surface dominates.
->
-> **Note:** `uebrige_Intensivkultur` (orchards, nurseries, allotment gardens) is intentionally classified as "Not green space" because these are typically managed/sealed horticultural surfaces, not natural green space.
+- **Wytweide** (`Wytweide_dicht`, `Wytweide_offen`) — officially "wooded" (bestockt), but treated as soil-covered green space because pasture dominates over tree cover.
+- **`uebrige_Intensivkultur`** — officially "soil-covered" (humusiert), but classified as not green space because these are typically managed horticultural surfaces (orchards, nurseries).
 
 | Green Space Category | DE | `Art` Values |
 |---------------------|-----|-------------|
@@ -180,7 +176,7 @@ For this project, land cover types are additionally classified into green space 
 
 ## Output Tables (Alphanumeric — No Geometry)
 
-### Output 1: Parcels
+### Parcels (`{input}_parcels_{timestamp}.csv`)
 
 One row per parcel. In Mode 1, includes user-provided columns and an error message for unresolved EGRIDs. Exported by default; disable with `--no-parcels`.
 
@@ -203,9 +199,9 @@ One row per parcel. In Mode 1, includes user-provided columns and an error messa
 
 > **Note:** All aggregation columns are included by default. Use `--no-aggregate` to omit them. The sum of `GGF_m2 + BUF_m2 + UUF_m2` should approximate `parcel_area_m2` (small differences are expected due to topology gaps in the source data).
 
-### Output 2: Land Cover
+### Land Cover (`{input}_landcover_{timestamp}.csv`)
 
-One row per clipped land cover feature per parcel.
+One row per clipped land cover feature per parcel. Exported by default; disable with `--no-landcover`.
 
 | Attribute | Format | Required | Alias EN | Alias DE | Description EN | Description DE |
 |-----------|--------|----------|----------|----------|----------------|----------------|
@@ -262,31 +258,30 @@ flowchart TD
     D4 --> OUT1[/"**Output 1: Parcels**<br>(CSV)"/]
 
     subgraph "4 — Read Land Cover"
-        E1["Read lcsf from GeoPackage<br>(bbox pre-filter for performance)"]
+        E1["Read lcsf from GeoPackage<br>(R-tree / bbox pre-filter)"]
         E2["Keep: fid, Art, BFSNr, GWR_EGID"]
         E1 --> E2
     end
 
     A2 --> E1
 
-    subgraph "5 — Clean Land Cover Geometries"
-        F1["Deaggregate<br>multi-part → single parts"]
-        F2["Dissolve by fid<br>→ single clean polygon"]
-        F3["Repair: make_valid()"]
-        F1 --> F2 --> F3
+    subgraph "5 — Clip Land Cover by Parcel"
+        F1["Clip raw lcsf polygons<br>to parcel boundaries"]
+        F2["Repair: make_valid()"]
+        F1 --> F2
     end
 
+    D4 --> F1
     E2 --> F1
 
-    subgraph "6 — Clip Land Cover by Parcel"
-        G1["Clip lcsf polygons<br>to parcel boundaries"]
-        G2["Drop non-polygon results<br>and slivers < 0.001 m²"]
+    subgraph "6 — Clean Clipped Results"
+        G1["Extract polygon parts<br>(drop lines, points)"]
+        G2["Drop slivers < 0.001 m²"]
         G3["Inherit ID, EGRID +<br>land cover attributes"]
         G1 --> G2 --> G3
     end
 
-    D4 --> G1
-    F3 --> G1
+    F2 --> G1
 
     subgraph "7–9 — Area, Classification & Export"
         H1["Calculate area_m2<br>(2D planar on LV95)"]
@@ -322,18 +317,17 @@ flowchart TD
 
 ### 4. Read Land Cover Surfaces
 - Read `lcsf` table from GeoPackage
-- Bounding-box pre-filter for performance (this is an optimization only — the actual spatial test is the clip in step 6)
+- R-tree spatial index or bounding-box pre-filter for performance (optimization only — the actual spatial test is the clip in step 5)
 - Keep attributes: `fid`, `Art`, `BFSNr`, `GWR_EGID`
 
-### 5. Clean Land Cover Geometries
-- Deaggregate multi-part geometries
-- Dissolve/merge parts by `fid` into single clean polygons
-- Repair invalid geometries using `make_valid()`
-- Note: this produces clean *source* geometries. No further dissolve is done after clipping — each clipped piece is a separate output row.
+### 5. Clip Land Cover by Parcel
+- Clip raw land cover polygons to parcel boundaries using vectorised `shapely.intersection()`
+- Repair clipped geometries using `make_valid()`
+- Note: LC geometries are **not** cleaned before clipping (matching the FME workflow). Cleanup happens on the clipped results in step 6.
 
-### 6. Clip Land Cover by Parcel
-- Clip land cover polygons to parcel boundaries
-- Filter out non-polygon results (linestrings, points) and slivers below 0.001 m² that arise from shared boundary clipping
+### 6. Clean Clipped Results
+- Extract only Polygon/MultiPolygon parts from clip results (shared boundaries can produce LineStrings, Points, or GeometryCollections)
+- Drop slivers below 0.001 m² that arise from shared boundary clipping
 - Each clip result inherits the parcel's `ID`, `EGRID` and the land cover attributes
 
 ### 7. Calculate Clipped Land Cover Area
@@ -347,24 +341,18 @@ flowchart TD
 
 ---
 
-## Requirements for Python Implementation
+## Implementation
 
-### Core Libraries
-- `geopandas` — reading GeoPackage layers, spatial operations (clip, dissolve, area calculation)
-- `pandas` — tabular data manipulation, CSV/Excel reading, Excel writing
-- `shapely` (>= 2.0) — geometry operations (`make_valid()`, dissolve, intersection)
+### Dependencies
+- `geopandas` — GeoPackage reading, spatial operations (clip, dissolve, area)
+- `pandas` — tabular data, CSV/Excel I/O
+- `shapely` (>= 2.0) — geometry operations (`make_valid()`, intersection)
 - `openpyxl` — Excel (.xlsx) input reading
 
-### Input Parameters
-- **Mode 1**: Path to user CSV or Excel file (must contain `ID` and `EGRID` columns)
-- **Mode 2**: No user file needed (processes all parcels)
-- Path to the AV GeoPackage (default: `D:\AV_lv95\av_2056.gpkg`)
-- Output directory for the CSV result files
-
-### Performance Considerations
-- **Mode 2** processes all parcels in the GeoPackage. Switzerland has ~3.5 million parcels and a corresponding number of land cover features. Loading the entire `lcsf` table into memory may fail on typical machines.
-- Consider municipality-level batching (by `BFSNr`) or spatial partitioning for large-scale runs.
-- The bbox pre-filter in step 4 significantly reduces the number of land cover features loaded per batch.
+### Performance
+- **Mode 2** processes ~3.5M Swiss parcels. Loading all land cover into memory at once is not feasible.
+- Municipality-level batching (by `BFSNr`) keeps memory bounded: load parcels for one municipality, use the bounding box to pre-filter land cover, process, append results.
+- R-tree spatial index on the GeoPackage significantly speeds up land cover lookups.
 
 ### Key Operations
 1. Read user input (CSV/Excel) or enumerate all parcels from `resf`
@@ -373,16 +361,16 @@ flowchart TD
 4. Deaggregate + dissolve + `make_valid()` parcel geometries by `fid`
 5. Calculate parcel 2D planar area
 6. Export Parcels output
-7. Read `lcsf` layer (bbox pre-filter), keep selected attributes
-8. Deaggregate + dissolve + `make_valid()` land cover geometries by `fid`
-9. Clip land cover by parcel boundaries, drop non-polygon slivers
+7. Read `lcsf` layer (R-tree / bbox pre-filter), keep selected attributes
+8. Clip raw land cover by parcel boundaries, `make_valid()` clipped results
+9. Extract polygon parts, drop non-polygon results and slivers < 0.001 m²
 10. Calculate clipped land cover 2D planar area
 11. Classify green space
 12. Export Land Cover output
 
 ---
 
-## Python Solution Architecture
+## Architecture
 
 ### Project Structure
 
@@ -392,7 +380,7 @@ landcover-survey/
 ├── data/                         # Input CSVs and output results
 │   └── test_data.csv              # Sample input (Mode 1)
 ├── docs/
-│   └── REQUIREMENTS.md
+│   └── SPECIFICATION.md
 ├── fme/                          # Original FME workflow (reference only)
 │   └── Landcover Survey FME.fmw
 ├── python/                       # Python scripts (flat, no package)
@@ -420,6 +408,7 @@ Arguments:
   --chunk-size N          Mode 1: rows per processing chunk (default: 10000)
   --no-aggregate          Disable land cover area aggregation on parcels output
   --no-parcels            Skip exporting the parcels CSV
+  --no-landcover          Skip exporting the land cover CSV
   --verbose, -v           Enable DEBUG logging
 ```
 
@@ -431,8 +420,8 @@ Logging goes to both console and `<output-dir>/landcover_survey.log`.
 - `DEFAULT_GPKG_PATH`, `SLIVER_THRESHOLD` (0.001 m²), `CRS_EPSG` (2056), `COL_FLAECHE`
 - No runtime state — pure constants
 
-#### `geometry.py` — Geometry Cleanup Pipeline
-Core reusable function applied to both parcel and land cover geometries.
+#### `geometry.py` — Geometry Cleanup
+Reusable functions for geometry cleanup and clip result filtering.
 
 ```python
 def clean_geometries(gdf: GeoDataFrame, group_col: str) -> GeoDataFrame:
@@ -493,21 +482,19 @@ def _clip_single_parcel(lcsf, parcel) -> DataFrame:
 
 ### Key Design Decisions
 
-**Single `clean_geometries()` function** — The same deaggregate → dissolve → `make_valid()` pipeline applies to both `resf` and `lcsf`. A single function avoids duplicated logic and ensures consistent cleanup.
+**SQL-level filtering** — Read from GeoPackage using SQL `WHERE` clauses, not full table loads. Critical for Mode 1 where only a few EGRIDs are needed from a ~3.5M row table.
 
-**SQL-level filtering** — When reading from GeoPackage, use SQL `WHERE` clauses (via `geopandas.read_file(where=...)`) rather than loading full tables and filtering in Python. This is critical for Mode 1 where only a few EGRIDs are needed from a ~3.5M row table.
+**BFSNr batching (Mode 2)** — Process one municipality at a time: load parcels, compute bounding box, pre-filter land cover, process, append. Keeps memory bounded regardless of dataset size.
 
-**Batching by BFSNr for Mode 2** — In Mode 2 (all parcels), process one municipality at a time. Load parcels for one BFSNr, compute the bounding box, use it to pre-filter `lcsf`, process, and append results. This keeps memory bounded regardless of the national dataset size.
+**Left join (Mode 1)** — Unfound EGRIDs produce output rows with a `Check_EGRID` error message and null area. User columns are always preserved. Mirrors the FME FeatureJoiner left-join behavior.
 
-**Left join semantics for Mode 1** — Unfound EGRIDs produce output rows with `Check_EGRID` error message and null geometry/area fields. The user's extra columns are always preserved. This mirrors the FME FeatureJoiner's left-join behavior.
-
-**No geometry in outputs** — Both output tables are pure DataFrames (not GeoDataFrames). Geometry is used internally for clipping and area calculation, then dropped before export.
+**No geometry in outputs** — Both outputs are plain DataFrames. Geometry is used internally for clipping and area calculation, then dropped before CSV export.
 
 ### Important Considerations
 
 1. **GeoPackage reading with `where` clause** — `geopandas.read_file()` accepts `where="EGRIS_EGRID IN ('CH...', 'CH...')"` for efficient SQL-level filtering. For large EGRID lists, batch the SQL IN clause (e.g. 500 EGRIDs per query).
 
-2. **Dissolve before clip, not after** — The cleanup dissolve (step 3/5) runs on raw source geometries grouped by `fid`. After clipping (step 6), each clipped piece is a separate output row — no further dissolve is needed.
+2. **Parcel cleanup before clip, LC cleanup after** — Parcel geometries are deaggregated + dissolved + repaired before clipping (step 3). Land cover geometries are clipped raw, then repaired and filtered after clipping (steps 5–6). This matches the FME workflow and avoids the cost of cleaning millions of LC features upfront.
 
 3. **GeometryCollection handling** — `shapely.intersection()` can return mixed GeometryCollections (polygons + linestrings from shared edges). Extract only Polygon/MultiPolygon parts using `shapely.get_parts()` with `extract_type=3` (Polygon).
 
@@ -619,3 +606,33 @@ Examples:
 - Handbuch Amtliche Vermessung: https://www.cadastre-manual.admin.ch/
 - Rechtliche Grundlagen: https://www.cadastre.ch/de/rechtliche-grundlagen
 - Survey data download: https://www.geodienste.ch/services/av
+
+---
+
+## Terminology
+
+| Term | DE | Description |
+|------|----|-------------|
+| AV | Amtliche Vermessung | Official cadastral survey of Switzerland |
+| BBArt | Bodenabdeckungsart | Land cover type domain (26 values) in the DM.01-AV-CH data model |
+| BFSNr | BFS-Nummer | Federal municipality number assigned by the Swiss Federal Statistical Office |
+| BUF | Bearbeitete Umgebungsfläche | Developed surrounding area (sealed + soil-covered surfaces) — SIA 416 |
+| CRS | Koordinatenreferenzsystem | Coordinate reference system — this project uses EPSG:2056 (LV95) |
+| DMAV | Datenmodell der AV | New data model replacing DM.01-AV-CH (deadline: 2027-12-31) |
+| DM.01-AV-CH | Datenmodell der AV | Current INTERLIS data model for the official cadastral survey |
+| EGRID | E-GRID | Federal parcel identifier (14-character string, e.g. `CH427760110057`) |
+| EGRIS | EGRIS | Swiss land register information system (source of EGRID identifiers) |
+| Flaechenmass | Flächenmass | Official legal area of a parcel in m² (may differ from calculated area) |
+| GeoPackage | — | SQLite-based format for geospatial data (OGC standard, `.gpkg` extension) |
+| GGF | Gebäudegrundfläche | Building footprint area — SIA 416 |
+| GWR_EGID | GWR-EGID | Federal building register ID from the GWR (Gebäude- und Wohnungsregister) |
+| INTERLIS | — | Swiss standard for geodata description and transfer (SN 612030) |
+| lcsf | — | GeoPackage table name for land cover surfaces (Bodenabdeckungsflächen) |
+| LV95 | Landesvermessung 1995 | Swiss national survey coordinate system (EPSG:2056, CH1903+) |
+| Nummer | Grundstücknummer | Official parcel number within a municipality |
+| resf | — | GeoPackage table name for parcels (Liegenschaften and SDR) |
+| SDR | Selbständige und dauernde Rechte | Independent permanent rights (e.g. building rights / Baurecht) — a type of parcel in the land register |
+| SIA 416 | — | Swiss standard for area calculation: GSF = GGF + UF, UF = BUF + UUF |
+| UF | Umgebungsfläche | Surrounding area = BUF + UUF — SIA 416 |
+| UUF | Unbearbeitete Umgebungsfläche | Undeveloped surrounding area (water + wooded + unvegetated) — SIA 416 |
+| VAV | Verordnung über die amtliche Vermessung | Ordinance on the official cadastral survey (SR 211.432.2) |

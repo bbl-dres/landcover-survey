@@ -60,6 +60,11 @@ def main(argv: list[str] | None = None) -> None:
         help="Skip exporting the parcels CSV (exported by default)",
     )
     parser.add_argument(
+        "--no-landcover",
+        action="store_true",
+        help="Skip exporting the land cover CSV (exported by default)",
+    )
+    parser.add_argument(
         "--verbose", "-v",
         action="store_true",
         help="Enable verbose (DEBUG) logging",
@@ -125,6 +130,7 @@ def main(argv: list[str] | None = None) -> None:
         ts=ts,
         aggregate=not args.no_aggregate,
         export_parcels=not args.no_parcels,
+        export_landcover=not args.no_landcover,
     )
 
 
