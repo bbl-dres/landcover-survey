@@ -225,8 +225,8 @@ One row per clipped land cover feature per parcel.
 ```mermaid
 flowchart TD
     subgraph Input
-        A1[/"CSV / Excel<br>(ID, EGRID)"/]
-        A2[("AV GeoPackage<br>av_2056.gpkg")]
+        A1[/"CSV / Excel<br>(ID, EGRID) — optional"/]
+        A2[("AV GeoPackage<br>av_2056.gpkg — required")]
     end
 
     subgraph "1 — Load Parcel Identifiers"
