@@ -72,7 +72,8 @@
       "Bash(python cli.py --mode 1 --input ../data/example.csv)",
       "Read(//d//**)",
       "Bash(git mv:*)",
-      "Bash(python cli.py --help)"
+      "Bash(python cli.py --help)",
+      "WebSearch"
     ]
   }
 }

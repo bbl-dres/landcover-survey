@@ -578,61 +578,58 @@ Examples:
 ## Legal Framework & References
 
 ### Data Model
-- **DM.01-AV-CH** — Current INTERLIS data model for the official cadastral survey
-  - Reference: https://www.cadastre-manual.admin.ch/de/datenmodell-der-amtlichen-vermessung-dm01-av-ch
-  - Will be replaced by **DMAV** by December 31, 2027
-- **INTERLIS** (SN 612030) — Swiss standard for geodata description and transfer
+- [DM.01-AV-CH](https://www.cadastre-manual.admin.ch/de/datenmodell-der-amtlichen-vermessung-dm01-av-ch) — Current INTERLIS data model for the official cadastral survey (replaced by DMAV by 2027-12-31)
+- [INTERLIS](https://www.interlis.ch/en) (SN 612030) — Swiss standard for geodata description and transfer
 
 ### Geoinformation Law
-- Art. 75a Vermessung, Bundesverfassung der Schweizerischen Eidgenossenschaft (SR 101)
-- Bundesgesetz über Geoinformation (Geoinformationsgesetz, GeoIG) (SR 510.62)
-- Verordnung über Geoinformation (Geoinformationsverordnung, GeoIV) (SR 510.620)
-- Verordnung des Bundesamtes für Landestopografie über Geoinformation (GeoIV-swisstopo) (SR 510.620.1)
+- [Bundesverfassung (SR 101)](https://www.fedlex.admin.ch/eli/cc/1999/404/de) — Art. 75a Vermessung
+- [Geoinformationsgesetz, GeoIG (SR 510.62)](https://www.fedlex.admin.ch/eli/cc/2008/388/de) — Federal Act on Geoinformation
+- [Geoinformationsverordnung, GeoIV (SR 510.620)](https://www.fedlex.admin.ch/eli/cc/2008/389/de) — Geoinformation Ordinance
+- [GeoIV-swisstopo (SR 510.620.1)](https://www.fedlex.admin.ch/eli/cc/2008/390/de) — swisstopo Ordinance on Geoinformation
 
 ### Official Cadastral Survey (Amtliche Vermessung)
-- Verordnung über die amtliche Vermessung (VAV) (SR 211.432.2)
-- Verordnung des VBS über die amtliche Vermessung (VAV-VBS / TVAV) (SR 211.432.21)
-  - Art. 14–19: Definition of land cover categories (Bodenabdeckung)
-- Verordnung über die Ingenieur-Geometerinnen und Ingenieur-Geometer (Geometerverordnung, GeomV) (SR 211.432.261)
+- [VAV (SR 211.432.2)](https://www.fedlex.admin.ch/eli/cc/1992/2446_2446_2446/de) — Ordinance on the Official Cadastral Survey
+- [TVAV / VAV-VBS (SR 211.432.21)](https://www.fedlex.admin.ch/eli/cc/2023/530/de) — Technical Ordinance on the Official Cadastral Survey (Art. 14–19: land cover categories)
+- [GeomV (SR 211.432.261)](https://www.fedlex.admin.ch/eli/cc/2008/387/de) — Ordinance on Engineer-Surveyors
 
 ### ÖREB-Kataster
-- Verordnung über den Kataster der öffentlich-rechtlichen Eigentumsbeschränkungen (ÖREBKV) (SR 510.622.4)
+- [ÖREBKV (SR 510.622.4)](https://www.fedlex.admin.ch/eli/cc/2009/553/de) — Ordinance on the Cadastre of Public-Law Restrictions on Landownership
 
 ### Land Register (Grundbuch)
-- Grundbuchverordnung (GBV) (SR 211.432.1)
-- Technische Verordnung des EJPD und des VBS über das Grundbuch (TGBV) (SR 211.432.11)
+- [GBV (SR 211.432.1)](https://www.fedlex.admin.ch/eli/cc/2011/667/de) — Land Register Ordinance
+- [TGBV (SR 211.432.11)](https://www.fedlex.admin.ch/eli/cc/2013/3/de) — Technical Ordinance on the Land Register
 
 ### Online Resources
-- Handbuch Amtliche Vermessung: https://www.cadastre-manual.admin.ch/
-- Rechtliche Grundlagen: https://www.cadastre.ch/de/rechtliche-grundlagen
-- Survey data download: https://www.geodienste.ch/services/av
+- [Cadastre Manual](https://www.cadastre-manual.admin.ch/) — Handbuch der Amtlichen Vermessung
+- [Legal Framework](https://www.cadastre.ch/de/rechtliche-grundlagen) — Rechtliche Grundlagen
+- [Survey Data Download](https://www.geodienste.ch/services/av) — AV GeoPackage download
 
 ---
 
 ## Terminology
 
-| Term | DE | Description |
-|------|----|-------------|
-| AV | Amtliche Vermessung | Official cadastral survey of Switzerland |
-| BBArt | Bodenabdeckungsart | Land cover type domain (26 values) in the DM.01-AV-CH data model |
-| BFSNr | BFS-Nummer | Federal municipality number assigned by the Swiss Federal Statistical Office |
-| BUF | Bearbeitete Umgebungsfläche | Developed surrounding area (sealed + soil-covered surfaces) — SIA 416 |
-| CRS | Koordinatenreferenzsystem | Coordinate reference system — this project uses EPSG:2056 (LV95) |
-| DMAV | Datenmodell der AV | New data model replacing DM.01-AV-CH (deadline: 2027-12-31) |
-| DM.01-AV-CH | Datenmodell der AV | Current INTERLIS data model for the official cadastral survey |
-| EGRID | E-GRID | Federal parcel identifier (14-character string, e.g. `CH427760110057`) |
-| EGRIS | EGRIS | Swiss land register information system (source of EGRID identifiers) |
-| Flaechenmass | Flächenmass | Official legal area of a parcel in m² (may differ from calculated area) |
-| GeoPackage | — | SQLite-based format for geospatial data (OGC standard, `.gpkg` extension) |
-| GGF | Gebäudegrundfläche | Building footprint area — SIA 416 |
-| GWR_EGID | GWR-EGID | Federal building register ID from the GWR (Gebäude- und Wohnungsregister) |
-| INTERLIS | — | Swiss standard for geodata description and transfer (SN 612030) |
-| lcsf | — | GeoPackage table name for land cover surfaces (Bodenabdeckungsflächen) |
-| LV95 | Landesvermessung 1995 | Swiss national survey coordinate system (EPSG:2056, CH1903+) |
-| Nummer | Grundstücknummer | Official parcel number within a municipality |
-| resf | — | GeoPackage table name for parcels (Liegenschaften and SDR) |
-| SDR | Selbständige und dauernde Rechte | Independent permanent rights (e.g. building rights / Baurecht) — a type of parcel in the land register |
-| SIA 416 | — | Swiss standard for area calculation: GSF = GGF + UF, UF = BUF + UUF |
-| UF | Umgebungsfläche | Surrounding area = BUF + UUF — SIA 416 |
-| UUF | Unbearbeitete Umgebungsfläche | Undeveloped surrounding area (water + wooded + unvegetated) — SIA 416 |
-| VAV | Verordnung über die amtliche Vermessung | Ordinance on the official cadastral survey (SR 211.432.2) |
+| Term | EN | DE | Description |
+|------|----|----|-------------|
+| AV | Official Cadastral Survey | Amtliche Vermessung | Official cadastral survey of Switzerland |
+| BBArt | Land Cover Type | Bodenabdeckungsart | Land cover type domain (26 values) in the DM.01-AV-CH data model |
+| BFSNr | BFS Municipality Number | BFS-Nummer | Federal municipality number assigned by the Swiss Federal Statistical Office |
+| BUF | Developed Surrounding Area | Bearbeitete Umgebungsfläche | Sealed + soil-covered surfaces around buildings — SIA 416 |
+| CRS | Coordinate Reference System | Koordinatenreferenzsystem | This project uses EPSG:2056 (LV95) |
+| DMAV | AV Data Model (new) | Datenmodell der AV | New data model replacing DM.01-AV-CH (deadline: 2027-12-31) |
+| DM.01-AV-CH | AV Data Model (current) | Datenmodell der AV | Current INTERLIS data model for the official cadastral survey |
+| EGRID | Federal Parcel Identifier | E-GRID | 14-character string (e.g. `CH427760110057`) uniquely identifying a parcel |
+| EGRIS | Land Register Information System | EGRIS | Swiss land register information system (source of EGRID identifiers) |
+| Flaechenmass | Official Area | Flächenmass | Official legal area of a parcel in m² (may differ from calculated area) |
+| GeoPackage | GeoPackage | — | SQLite-based format for geospatial data (OGC standard, `.gpkg` extension) |
+| GGF | Building Footprint Area | Gebäudegrundfläche | Building footprint area — SIA 416 |
+| GWR_EGID | Federal Building ID | GWR-EGID | Federal building register ID from the GWR (Gebäude- und Wohnungsregister) |
+| INTERLIS | INTERLIS | — | Swiss standard for geodata description and transfer (SN 612030) |
+| lcsf | Land Cover Surfaces | — | GeoPackage table name for land cover surfaces (Bodenabdeckungsflächen) |
+| LV95 | National Survey 1995 | Landesvermessung 1995 | Swiss national survey coordinate system (EPSG:2056, CH1903+) |
+| Nummer | Parcel Number | Grundstücknummer | Official parcel number within a municipality |
+| resf | Real Estate Surfaces | — | GeoPackage table name for parcels (Liegenschaften and SDR) |
+| SDR | Independent Permanent Rights | Selbständige und dauernde Rechte | E.g. building rights (Baurecht) — a type of parcel in the land register |
+| SIA 416 | SIA 416 | — | Swiss standard for area calculation: GSF = GGF + UF, UF = BUF + UUF |
+| UF | Surrounding Area | Umgebungsfläche | Surrounding area = BUF + UUF — SIA 416 |
+| UUF | Undeveloped Surrounding Area | Unbearbeitete Umgebungsfläche | Water + wooded + unvegetated surfaces — SIA 416 |
+| VAV | Cadastral Survey Ordinance | Verordnung über die amtliche Vermessung | Ordinance on the official cadastral survey (SR 211.432.2) |
