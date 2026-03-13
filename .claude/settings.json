@@ -68,7 +68,9 @@
       "Bash(python python/cli.py --mode 1 --input data/Liegenschaften.csv --limit 100)",
       "Bash(python cli.py --mode 1 --input ../data/Liegenschaften.csv)",
       "Bash(python cli.py --mode 1 --input ../data/Liegenschaften.csv --limit 5)",
-      "Bash(python cli.py --mode 1 --input ../data/test_data.csv)"
+      "Bash(python cli.py --mode 1 --input ../data/test_data.csv)",
+      "Bash(python cli.py --mode 1 --input ../data/example.csv)",
+      "Read(//d//**)"
     ]
   }
 }
