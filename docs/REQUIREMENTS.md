@@ -225,23 +225,23 @@ One row per clipped land cover feature per parcel.
 ```mermaid
 flowchart TD
     subgraph Input
-        A1[/"CSV / Excel\n(ID, EGRID)"/]
-        A2[("AV GeoPackage\nav_2056.gpkg")]
+        A1[/"CSV / Excel<br>(ID, EGRID)"/]
+        A2[("AV GeoPackage<br>av_2056.gpkg")]
     end
 
     subgraph "1 — Load Parcel Identifiers"
         B1{"Mode?"}
-        B1 -->|"Mode 1:\nUser file"| B2["Read CSV/Excel\nextract ID + EGRID"]
-        B1 -->|"Mode 2:\nAll parcels"| B3["Read all resf\ngenerate ID from EGRIS_EGRID"]
+        B1 -->|"Mode 1:<br>User file"| B2["Read CSV/Excel<br>extract ID + EGRID"]
+        B1 -->|"Mode 2:<br>All parcels"| B3["Read all resf<br>generate ID from EGRIS_EGRID"]
     end
 
     A1 --> B2
     A2 --> B3
 
     subgraph "2 — Look Up Parcel Geometries"
-        C1["Query resf by EGRIS_EGRID\n(dissolve duplicates per EGRID)"]
-        C2["Set Check_EGRID\n(found / not found / duplicates)"]
-        C3["Validate CRS = EPSG:2056\n(fail if not LV95)"]
+        C1["Query resf by EGRIS_EGRID<br>(dissolve duplicates per EGRID)"]
+        C2["Set Check_EGRID<br>(found / not found / duplicates)"]
+        C3["Validate CRS = EPSG:2056<br>(fail if not LV95)"]
         C1 --> C2 --> C3
     end
 
@@ -250,19 +250,19 @@ flowchart TD
     A2 --> C1
 
     subgraph "3 — Clean Parcels & Calculate Area"
-        D1["Deaggregate\nmulti-part → single parts"]
-        D2["Dissolve by fid\n→ single clean polygon"]
+        D1["Deaggregate<br>multi-part → single parts"]
+        D2["Dissolve by fid<br>→ single clean polygon"]
         D3["Repair: make_valid()"]
-        D4["Calculate parcel_area_m2\n(2D planar on LV95)"]
+        D4["Calculate parcel_area_m2<br>(2D planar on LV95)"]
         D1 --> D2 --> D3 --> D4
     end
 
     C3 --> D1
 
-    D4 --> OUT1[/"**Output 1: Parcels**\n(Excel)"/]
+    D4 --> OUT1[/"**Output 1: Parcels**<br>(CSV)"/]
 
     subgraph "4 — Read Land Cover"
-        E1["Read lcsf from GeoPackage\n(bbox pre-filter for performance)"]
+        E1["Read lcsf from GeoPackage<br>(bbox pre-filter for performance)"]
         E2["Keep: fid, Art, BFSNr, GWR_EGID"]
         E1 --> E2
     end
@@ -270,8 +270,8 @@ flowchart TD
     A2 --> E1
 
     subgraph "5 — Clean Land Cover Geometries"
-        F1["Deaggregate\nmulti-part → single parts"]
-        F2["Dissolve by fid\n→ single clean polygon"]
+        F1["Deaggregate<br>multi-part → single parts"]
+        F2["Dissolve by fid<br>→ single clean polygon"]
         F3["Repair: make_valid()"]
         F1 --> F2 --> F3
     end
@@ -279,9 +279,9 @@ flowchart TD
     E2 --> F1
 
     subgraph "6 — Clip Land Cover by Parcel"
-        G1["Clip lcsf polygons\nto parcel boundaries"]
-        G2["Drop non-polygon results\nand slivers < 0.001 m²"]
-        G3["Inherit ID, EGRID +\nland cover attributes"]
+        G1["Clip lcsf polygons<br>to parcel boundaries"]
+        G2["Drop non-polygon results<br>and slivers < 0.001 m²"]
+        G3["Inherit ID, EGRID +<br>land cover attributes"]
         G1 --> G2 --> G3
     end
 
@@ -289,14 +289,14 @@ flowchart TD
     F3 --> G1
 
     subgraph "7–9 — Area, Classification & Export"
-        H1["Calculate area_m2\n(2D planar on LV95)"]
-        H2["Classify Check_GreenSpace\n(Art → green space category)"]
+        H1["Calculate area_m2<br>(2D planar on LV95)"]
+        H2["Classify Check_GreenSpace<br>(Art → green space category)"]
         H1 --> H2
     end
 
     G3 --> H1
 
-    H2 --> OUT2[/"**Output 2: Land Cover**\n(Excel)"/]
+    H2 --> OUT2[/"**Output 2: Land Cover**<br>(CSV)"/]
 ```
 
 ### 1. Load Parcel Identifiers
