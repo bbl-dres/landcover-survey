@@ -1,6 +1,5 @@
-![Landcover Survey](assets/Social1.jpg)
-
 # Landcover Survey
+![Landcover Survey](assets/Social1.jpg)
 
 ![Python](https://img.shields.io/badge/python-%3E%3D3.10-blue)
 ![GeoPandas](https://img.shields.io/badge/geopandas-%3E%3D0.14-green)
