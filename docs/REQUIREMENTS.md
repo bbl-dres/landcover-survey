@@ -70,28 +70,28 @@ Available at: https://www.geodienste.ch/services/av
 
 The `resf` table contains both Liegenschaften (real property) and selbständige und dauernde Rechte (SDR / independent permanent rights, e.g. Baurecht). Both types carry an EGRID and are processed uniformly.
 
-| Attribute | Format | Alias EN | Alias DE | Description EN | Description DE |
-|-----------|--------|----------|----------|----------------|----------------|
-| `fid` | `integer` | Feature ID | Feature-ID | Internal GeoPackage feature ID | Interne GeoPackage Feature-ID |
-| `EGRIS_EGRID` | `varchar(14)` | E-GRID | E-GRID | Federal parcel identifier | Eidgenössischer Grundstücksidentifikator |
-| `Nummer` | `varchar` | Parcel Number | Grundstücknummer | Official parcel number | Offizielle Grundstücknummer |
-| `NBIdent` | `varchar` | NB Ident | NB-Ident | Surveying office identifier | Nachführungsstellenidentifikator |
-| `BFSNr` | `integer` | BFS Number | BFS-Nummer | Federal municipality number | Gemeindenummer des BFS |
-| `Flaechenmass` | `integer` | Official Area (m²) | Fläche amtlich (m²) | Legal area in square meters (may be missing; may differ from calculated area — see note above) | Amtliche Fläche in Quadratmetern (kann fehlen; kann von berechneter Fläche abweichen — siehe Hinweis oben) |
-| `area_m2` | `float` | **Derived:** Calculated Area (m²) | **Abgeleitet:** Berechnete Fläche (m²) | 2D planar area on LV95 after deaggregate + dissolve + repair | 2D-Planfläche auf LV95 nach Deaggregation + Dissolve + Reparatur |
-| `GWR_EGID` | `integer` | GWR Building ID | GWR-Gebäude-ID | Federal building register ID | Eidg. Gebäudeidentifikator |
-| `geom` | `MULTIPOLYGON` | Geometry | Geometrie | Parcel polygon geometry (used internally, not exported) | Grundstück-Polygongeometrie (intern verwendet, nicht exportiert) |
+| Attribute | Format | Required | Alias EN | Alias DE | Description EN | Description DE |
+|-----------|--------|----------|----------|----------|----------------|----------------|
+| `fid` | `integer` | Always | Feature ID | Feature-ID | Internal GeoPackage feature ID | Interne GeoPackage Feature-ID |
+| `EGRIS_EGRID` | `varchar(14)` | Always | E-GRID | E-GRID | Federal parcel identifier | Eidgenössischer Grundstücksidentifikator |
+| `Nummer` | `varchar` | Always | Parcel Number | Grundstücknummer | Official parcel number | Offizielle Grundstücknummer |
+| `NBIdent` | `varchar` | Always | NB Ident | NB-Ident | Surveying office identifier | Nachführungsstellenidentifikator |
+| `BFSNr` | `integer` | Always | BFS Number | BFS-Nummer | Federal municipality number | Gemeindenummer des BFS |
+| `Flaechenmass` | `integer` | Optional | Official Area (m²) | Fläche amtlich (m²) | Legal area in square meters (may be missing; may differ from calculated area — see note above) | Amtliche Fläche in Quadratmetern (kann fehlen; kann von berechneter Fläche abweichen — siehe Hinweis oben) |
+| `area_m2` | `float` | Always | **Derived:** Calculated Area (m²) | **Abgeleitet:** Berechnete Fläche (m²) | 2D planar area on LV95 after deaggregate + dissolve + repair | 2D-Planfläche auf LV95 nach Deaggregation + Dissolve + Reparatur |
+| `GWR_EGID` | `integer` | Optional | GWR Building ID | GWR-Gebäude-ID | Federal building register ID | Eidg. Gebäudeidentifikator |
+| `geom` | `MULTIPOLYGON` | Always | Geometry | Geometrie | Parcel polygon geometry (used internally, not exported) | Grundstück-Polygongeometrie (intern verwendet, nicht exportiert) |
 
 #### Table: `lcsf` — Land Cover Surfaces (Bodenabdeckung)
 
-| Attribute | Format | Alias EN | Alias DE | Description EN | Description DE |
-|-----------|--------|----------|----------|----------------|----------------|
-| `fid` | `integer` | Feature ID | Feature-ID | Internal GeoPackage feature ID | Interne GeoPackage Feature-ID |
-| `Art` | `varchar` | Land Cover Type | Bodenabdeckungsart | Type of land cover (BBArt domain) | Art der Bodenabdeckung (BBArt-Domäne) |
-| `BFSNr` | `integer` | BFS Number | BFS-Nummer | Federal municipality number | Gemeindenummer des BFS |
-| `area_m2` | `float` | **Derived:** Calculated Area (m²) | **Abgeleitet:** Berechnete Fläche (m²) | 2D planar area on LV95 after deaggregate + dissolve + repair | 2D-Planfläche auf LV95 nach Deaggregation + Dissolve + Reparatur |
-| `GWR_EGID` | `integer` | GWR Building ID | GWR-Gebäude-ID | Federal building register ID | Eidg. Gebäudeidentifikator |
-| `geom` | `MULTIPOLYGON` | Geometry | Geometrie | Land cover polygon geometry (used internally, not exported) | Bodenabdeckung-Polygongeometrie (intern verwendet, nicht exportiert) |
+| Attribute | Format | Required | Alias EN | Alias DE | Description EN | Description DE |
+|-----------|--------|----------|----------|----------|----------------|----------------|
+| `fid` | `integer` | Always | Feature ID | Feature-ID | Internal GeoPackage feature ID | Interne GeoPackage Feature-ID |
+| `Art` | `varchar` | Always | Land Cover Type | Bodenabdeckungsart | Type of land cover (BBArt domain) | Art der Bodenabdeckung (BBArt-Domäne) |
+| `BFSNr` | `integer` | Always | BFS Number | BFS-Nummer | Federal municipality number | Gemeindenummer des BFS |
+| `area_m2` | `float` | Always | **Derived:** Calculated Area (m²) | **Abgeleitet:** Berechnete Fläche (m²) | 2D planar area on LV95 after deaggregate + dissolve + repair | 2D-Planfläche auf LV95 nach Deaggregation + Dissolve + Reparatur |
+| `GWR_EGID` | `integer` | Optional | GWR Building ID | GWR-Gebäude-ID | Federal building register ID | Eidg. Gebäudeidentifikator |
+| `geom` | `MULTIPOLYGON` | Always | Geometry | Geometrie | Land cover polygon geometry (used internally, not exported) | Bodenabdeckung-Polygongeometrie (intern verwendet, nicht exportiert) |
 
 ---
 
@@ -554,7 +554,7 @@ The pipeline follows a **fail-soft** approach: individual feature errors are log
 | `make_valid()` returns empty geometry | Feature kept with zero area | `parcel_area_m2` or `area_m2` = 0, logged as WARNING |
 | Clip produces only lines/points (no polygon) | Feature dropped | Logged as DEBUG |
 | Clip produces sliver < 0.001 m² | Feature dropped | Logged as DEBUG |
-| Unknown `Art` value (not in BBArt domain) | Feature kept | `Check_GreenSpace` = `"Keine Grünfläche"`, logged as WARNING |
+| Unknown `Art` value (not in BBArt domain) | Feature kept | `Check_GreenSpace` = `"Not green space"`, logged as WARNING |
 | CRS is not EPSG:2056 | **Pipeline aborts** | `ValueError` with clear message |
 | Input file missing `ID` or `EGRID` column | **Pipeline aborts** | `ValueError` with clear message |
 | GeoPackage file not found or unreadable | **Pipeline aborts** | `FileNotFoundError` or driver error |
