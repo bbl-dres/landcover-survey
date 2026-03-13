@@ -55,12 +55,11 @@ A single EGRID can map to multiple `fid` entries in `resf` (e.g. during ongoing 
 
 ### Input: User Parcel List (Mode 1)
 
-| Attribute | Format | Alias EN | Alias DE | Description EN | Description DE |
-|-----------|--------|----------|----------|----------------|----------------|
-| `ID` | `varchar` | ID | ID | User-defined feature identifier | Benutzerdefinierte Objektkennung |
-| `EGRID` | `varchar(14)` | E-GRID | E-GRID | Federal parcel identifier (foreign key to AV) | Eidgenössischer Grundstücksidentifikator (Fremdschlüssel zu AV) |
-
-Additional columns provided by the user are passed through unchanged to the Parcels output.
+| Attribute | Format | Required | Alias EN | Alias DE | Description EN | Description DE |
+|-----------|--------|----------|----------|----------|----------------|----------------|
+| `ID` | `varchar` | Yes | ID | ID | User-defined feature identifier | Benutzerdefinierte Objektkennung |
+| `EGRID` | `varchar(14)` | Yes | E-GRID | E-GRID | Federal parcel identifier (foreign key to AV) | Eidgenössischer Grundstücksidentifikator (Fremdschlüssel zu AV) |
+| *(other columns)* | *(varies)* | No | — | — | Passed through unchanged to the Parcels output | Werden unverändert in die Parzellen-Ausgabe übernommen |
 
 ### Input: Official Survey GeoPackage (AV)
 
@@ -104,40 +103,40 @@ The data model will be replaced by **DMAV** by December 31, 2027.
 
 ### Complete Land Cover Type Hierarchy
 
-| AVS Code | Main Category | Sub-category | `Art` Value | Alias DE | Alias EN | SIA 416 | Versiegelt | Grünfläche |
-|----------|---------------|--------------|-------------|----------|----------|---------|------------|------------|
-| 0 | Gebäude | — | `Gebaeude` | Gebäude | Buildings | GGF | Ja | — |
-| 1 | Befestigt | — | `Strasse_Weg` | Strasse, Weg | Road, path | HF | Ja | — |
-| 2 | Befestigt | — | `Trottoir` | Trottoir | Sidewalk | HF | Ja | — |
-| 3 | Befestigt | — | `Verkehrsinsel` | Verkehrsinsel | Traffic island | HF | Ja | — |
-| 4 | Befestigt | — | `Bahn` | Bahn | Railway | HF | Ja | — |
-| 5 | Befestigt | — | `Flugplatz` | Flugplatz | Airfield | HF | Ja | — |
-| 6 | Befestigt | — | `Wasserbecken` | Wasserbecken | Water basin | HF | Ja | — |
-| 7 | Befestigt | — | `uebrige_befestigte` | Übrige befestigte | Other sealed surfaces | HF | Ja | — |
-| 8 | Humusiert | — | `Acker_Wiese_Weide` | Acker, Wiese, Weide | Arable land, meadow, pasture | GF | Nein | Humusiert |
-| 9 | Humusiert | Intensivkultur | `Reben` | Reben | Vineyards | GF | Nein | Humusiert |
-| 10 | Humusiert | Intensivkultur | `uebrige_Intensivkultur` | Übrige Intensivkultur | Other intensive cultivation | GF | Nein | — * |
-| 11 | Humusiert | — | `Gartenanlage` | Gartenanlage | Garden area | GF | Nein | Humusiert |
-| 12 | Humusiert | — | `Hoch_Flachmoor` | Hoch-/Flachmoor | Raised/flat bog | GF | Nein | Humusiert |
-| 13 | Humusiert | — | `uebrige_humusierte` | Übrige humusierte | Other soil-covered | GF | Nein | Humusiert |
-| 14 | Gewässer | — | `stehendes` | Stehendes Gewässer | Standing water | WF | Nein | — |
-| 15 | Gewässer | — | `fliessendes` | Fliessendes Gewässer | Flowing water | WF | Nein | — |
-| 16 | Gewässer | — | `Schilfguertel` | Schilfgürtel | Reed belt | GF | Nein | — |
-| 17 | Bestockt | — | `geschlossener_Wald` | Geschlossener Wald | Closed forest | GF | Nein | Bestockt |
-| 18 | Bestockt | Wytweide | `Wytweide_dicht` | Wytweide dicht | Dense wooded pasture | GF | Nein | Humusiert ** |
-| 19 | Bestockt | Wytweide | `Wytweide_offen` | Wytweide offen | Open wooded pasture | GF | Nein | Humusiert ** |
-| 20 | Bestockt | — | `uebrige_bestockte` | Übrige bestockte | Other wooded | GF | Nein | Bestockt |
-| 21 | Vegetationslos | — | `Fels` | Fels | Rock | üF | Nein | — |
-| 22 | Vegetationslos | — | `Gletscher_Firn` | Gletscher, Firn | Glacier, firn | üF | Nein | — |
-| 23 | Vegetationslos | — | `Geroell_Sand` | Geröll, Sand | Scree, sand | üF | Nein | — |
-| 24 | Vegetationslos | — | `Abbau_Deponie` | Abbau, Deponie | Extraction, landfill | üF | Nein | — |
-| 25 | Vegetationslos | — | `uebrige_vegetationslose` | Übrige vegetationslose | Other unvegetated | üF | Nein | — |
+| AVS Code | Main Category | Sub-category | `Art` Value | EN | DE | SIA 416 | Sealed | Green Space |
+|----------|---------------|--------------|-------------|-----|-----|---------|--------|-------------|
+| 0 | Buildings | — | `Gebaeude` | Buildings | Gebäude | GGF | Yes | — |
+| 1 | Sealed | — | `Strasse_Weg` | Road, path | Strasse, Weg | BUF | Yes | — |
+| 2 | Sealed | — | `Trottoir` | Sidewalk | Trottoir | BUF | Yes | — |
+| 3 | Sealed | — | `Verkehrsinsel` | Traffic island | Verkehrsinsel | BUF | Yes | — |
+| 4 | Sealed | — | `Bahn` | Railway | Bahn | BUF | Yes | — |
+| 5 | Sealed | — | `Flugplatz` | Airfield | Flugplatz | BUF | Yes | — |
+| 6 | Sealed | — | `Wasserbecken` | Water basin | Wasserbecken | BUF | Yes | — |
+| 7 | Sealed | — | `uebrige_befestigte` | Other sealed surfaces | Übrige befestigte | BUF | Yes | — |
+| 8 | Soil-covered | — | `Acker_Wiese_Weide` | Arable land, meadow, pasture | Acker, Wiese, Weide | BUF | No | Soil-covered |
+| 9 | Soil-covered | Intensive | `Reben` | Vineyards | Reben | BUF | No | Soil-covered |
+| 10 | Soil-covered | Intensive | `uebrige_Intensivkultur` | Other intensive cultivation | Übrige Intensivkultur | BUF | No | — * |
+| 11 | Soil-covered | — | `Gartenanlage` | Garden area | Gartenanlage | BUF | No | Soil-covered |
+| 12 | Soil-covered | — | `Hoch_Flachmoor` | Raised/flat bog | Hoch-/Flachmoor | BUF | No | Soil-covered |
+| 13 | Soil-covered | — | `uebrige_humusierte` | Other soil-covered | Übrige humusierte | BUF | No | Soil-covered |
+| 14 | Water | — | `stehendes` | Standing water | Stehendes Gewässer | UUF | No | — |
+| 15 | Water | — | `fliessendes` | Flowing water | Fliessendes Gewässer | UUF | No | — |
+| 16 | Water | — | `Schilfguertel` | Reed belt | Schilfgürtel | UUF | No | — |
+| 17 | Wooded | — | `geschlossener_Wald` | Closed forest | Geschlossener Wald | UUF | No | Wooded |
+| 18 | Wooded | Wytweide | `Wytweide_dicht` | Dense wooded pasture | Wytweide dicht | UUF | No | Soil-covered ** |
+| 19 | Wooded | Wytweide | `Wytweide_offen` | Open wooded pasture | Wytweide offen | UUF | No | Soil-covered ** |
+| 20 | Wooded | — | `uebrige_bestockte` | Other wooded | Übrige bestockte | UUF | No | Wooded |
+| 21 | Unvegetated | — | `Fels` | Rock | Fels | UUF | No | — |
+| 22 | Unvegetated | — | `Gletscher_Firn` | Glacier, firn | Gletscher, Firn | UUF | No | — |
+| 23 | Unvegetated | — | `Geroell_Sand` | Scree, sand | Geröll, Sand | UUF | No | — |
+| 24 | Unvegetated | — | `Abbau_Deponie` | Extraction, landfill | Abbau, Deponie | UUF | No | — |
+| 25 | Unvegetated | — | `uebrige_vegetationslose` | Other unvegetated | Übrige vegetationslose | UUF | No | — |
 
-> **SIA 416 Legend:** **GGF** = Gebäudegrundfläche (building footprint — not part of Umgebungsfläche), **HF** = Hartfläche (hard/sealed surface), **GF** = Grünfläche (green/vegetated surface), **WF** = Wasserfläche (water surface), **üF** = übrige Fläche (other surface — natural unvegetated).
-> **Versiegelte Fläche** = GGF + HF (all types with Versiegelt = Ja).
+> **SIA 416 Legend:** **GSF** = Grundstücksfläche / total parcel area = GGF + UF. **GGF** = Gebäudegrundfläche / building footprint. **UF** = Umgebungsfläche / surrounding area = BUF + UUF. **BUF** = Bearbeitete Umgebungsfläche / developed surrounding (sealed + soil-covered). **UUF** = Unbearbeitete Umgebungsfläche / undeveloped surrounding (water + wooded + unvegetated).
+> **Sealed area** = GGF + all sealed types (all types with Sealed = Yes).
 >
-> **Grünfläche Legend:** **Humusiert** = green space (soil-covered), **Bestockt** = green space (wooded), **—** = keine Grünfläche.
-> \* `uebrige_Intensivkultur` is officially "humusiert" but classified as keine Grünfläche — typically managed/sealed horticultural surfaces (orchards, nurseries).
+> **Green Space Legend:** **Soil-covered** = green space (humusiert), **Wooded** = green space (bestockt), **—** = not green space.
+> \* `uebrige_Intensivkultur` is officially "soil-covered" (humusiert) but classified as not green space — typically managed/sealed horticultural surfaces (orchards, nurseries).
 > \*\* `Wytweide_dicht` and `Wytweide_offen` are officially "bestockt" but treated as Humusiert — primarily open pasture with partial tree cover.
 
 ### INTERLIS Hierarchy (DM.01-AV-CH)
@@ -169,13 +168,13 @@ For this project, land cover types are additionally classified into green space 
 
 > **Note:** `Wytweide_dicht` and `Wytweide_offen` are officially classified as "bestockt" (wooded) in the BBArt hierarchy, but are treated as "Humusiert" here because they are primarily open pasture land with partial tree cover — the green/soil surface dominates.
 >
-> **Note:** `uebrige_Intensivkultur` (orchards, nurseries, allotment gardens) is intentionally classified as "Keine Grünfläche" because these are typically managed/sealed horticultural surfaces, not natural green space.
+> **Note:** `uebrige_Intensivkultur` (orchards, nurseries, allotment gardens) is intentionally classified as "Not green space" because these are typically managed/sealed horticultural surfaces, not natural green space.
 
-| Green Space Category | `Art` Values |
-|---------------------|-------------|
-| Grünfläche (Humusiert) / Green space (Humus) | `Acker_Wiese_Weide`, `Gartenanlage`, `Reben`, `Hoch_Flachmoor`, `uebrige_humusierte`, `Wytweide_dicht`, `Wytweide_offen` |
-| Grünfläche (Bestockt) / Green space (Wooded) | `geschlossener_Wald`, `uebrige_bestockte` |
-| Keine Grünfläche / Not green space | All others |
+| Green Space Category | DE | `Art` Values |
+|---------------------|-----|-------------|
+| Green space (soil-covered) | Grünfläche (Humusiert) | `Acker_Wiese_Weide`, `Gartenanlage`, `Reben`, `Hoch_Flachmoor`, `uebrige_humusierte`, `Wytweide_dicht`, `Wytweide_offen` |
+| Green space (wooded) | Grünfläche (Bestockt) | `geschlossener_Wald`, `uebrige_bestockte` |
+| Not green space | Keine Grünfläche | All others |
 
 ---
 
@@ -183,33 +182,41 @@ For this project, land cover types are additionally classified into green space 
 
 ### Output 1: Parcels
 
-One row per parcel. In Mode 1, includes user-provided columns and an error message for unresolved EGRIDs.
+One row per parcel. In Mode 1, includes user-provided columns and an error message for unresolved EGRIDs. Exported by default; disable with `--no-parcels`.
 
-| Attribute | Format | Alias EN | Alias DE | Description EN | Description DE |
-|-----------|--------|----------|----------|----------------|----------------|
-| `ID` | `varchar` | ID | ID | User-defined identifier (Mode 1) or generated from AV (Mode 2) | Benutzerdefinierte Kennung (Modus 1) oder aus AV generiert (Modus 2) |
-| `EGRID` | `varchar(14)` | E-GRID | E-GRID | Federal parcel identifier | Eidgenössischer Grundstücksidentifikator |
-| `Nummer` | `varchar` | Parcel Number | Grundstücknummer | Official parcel number from AV | Offizielle Grundstücknummer aus AV |
-| `BFSNr` | `integer` | BFS Number | BFS-Nummer | Federal municipality number | Gemeindenummer des BFS |
-| `Check_EGRID` | `varchar` | EGRID Status | EGRID-Status | "EGRID in AV gefunden" if found, error message if not | "EGRID in AV gefunden" falls gefunden, Fehlermeldung falls nicht |
-| `Flaechenmass` | `integer` | Official Area (m²) | Fläche amtlich (m²) | Legal area from AV (may be missing) | Amtliche Fläche aus AV (kann fehlen) |
-| `parcel_area_m2` | `float` | Parcel Area (m²) | Grundstückfläche (m²) | Calculated 2D planar area of the cleaned parcel polygon | Berechnete 2D-Planfläche des bereinigten Grundstück-Polygons |
-| *(user columns)* | *(varies)* | — | — | Additional columns from user input (Mode 1 only) | Zusätzliche Spalten aus Benutzereingabe (nur Modus 1) |
+| Attribute | Format | Required | Alias EN | Alias DE | Description EN | Description DE |
+|-----------|--------|----------|----------|----------|----------------|----------------|
+| `ID` | `varchar` | Always | ID | ID | User-defined identifier (Mode 1) or generated from AV (Mode 2) | Benutzerdefinierte Kennung (Modus 1) oder aus AV generiert (Modus 2) |
+| `EGRID` | `varchar(14)` | Always | E-GRID | E-GRID | Federal parcel identifier | Eidgenössischer Grundstücksidentifikator |
+| `Nummer` | `varchar` | Always | Parcel Number | Grundstücknummer | Official parcel number from AV | Offizielle Grundstücknummer aus AV |
+| `BFSNr` | `integer` | Always | BFS Number | BFS-Nummer | Federal municipality number | Gemeindenummer des BFS |
+| `Check_EGRID` | `varchar` | Always | EGRID Status | EGRID-Status | "EGRID found in AV" if found, error message if not | "EGRID found in AV" falls gefunden, Fehlermeldung falls nicht |
+| `Flaeche` | `integer` | Always | Official Area (m²) | Fläche amtlich (m²) | Legal area from AV (may be missing) | Amtliche Fläche aus AV (kann fehlen) |
+| `parcel_area_m2` | `float` | Always | Parcel Area (m²) | Grundstückfläche (m²) | Calculated 2D planar area of the cleaned parcel polygon | Berechnete 2D-Planfläche des bereinigten Grundstück-Polygons |
+| `GGF_m2` | `float` | Optional | Building Footprint (m²) | Gebäudegrundfläche (m²) | Aggregated building footprint area (SIA 416 GGF) | Aggregierte Gebäudegrundfläche (SIA 416 GGF) |
+| `BUF_m2` | `float` | Optional | Developed Surrounding (m²) | Bearbeitete Umgebungsfläche (m²) | Aggregated developed surrounding area (SIA 416 BUF: sealed + soil-covered) | Aggregierte bearbeitete Umgebungsfläche (SIA 416 BUF: befestigt + humusiert) |
+| `UUF_m2` | `float` | Optional | Undeveloped Surrounding (m²) | Unbearbeitete Umgebungsfläche (m²) | Aggregated undeveloped surrounding area (SIA 416 UUF: water + wooded + unvegetated) | Aggregierte unbearbeitete Umgebungsfläche (SIA 416 UUF: Gewässer + bestockt + vegetationslos) |
+| `Sealed_m2` | `float` | Optional | Sealed Area (m²) | Versiegelte Fläche (m²) | GGF + sealed surfaces (buildings + all befestigt) | GGF + befestigte Flächen (Gebäude + alle befestigt) |
+| `GreenSpace_m2` | `float` | Optional | Green Space (m²) | Grünfläche (m²) | Total green space area (soil-covered + wooded types from green space classification) | Gesamte Grünfläche (humusiert + bestockt gemäss Grünfläche-Klassifizierung) |
+| `{Art}_m2` | `float` | Optional | Per-Type Area (m²) | Fläche pro Typ (m²) | One column per land cover type present (e.g. `Gebaeude_m2`, `Strasse_Weg_m2`) | Eine Spalte pro vorhandener Bodenabdeckungsart |
+| *(user columns)* | *(varies)* | Optional | — | — | Additional columns from user input (Mode 1 only) | Zusätzliche Spalten aus Benutzereingabe (nur Modus 1) |
+
+> **Note:** All aggregation columns are included by default. Use `--no-aggregate` to omit them. The sum of `GGF_m2 + BUF_m2 + UUF_m2` should approximate `parcel_area_m2` (small differences are expected due to topology gaps in the source data).
 
 ### Output 2: Land Cover
 
 One row per clipped land cover feature per parcel.
 
-| Attribute | Format | Alias EN | Alias DE | Description EN | Description DE |
-|-----------|--------|----------|----------|----------------|----------------|
-| `ID` | `varchar` | ID | ID | Parcel identifier (same as in Parcels output) | Grundstückskennung (gleich wie in Parzellen-Ausgabe) |
-| `EGRID` | `varchar(14)` | E-GRID | E-GRID | Parcel identifier (links to Parcels output) | Grundstücksidentifikator (Verknüpfung zu Parzellen-Ausgabe) |
-| `fid` | `integer` | LC Feature ID | BA Feature-ID | Land cover feature ID from AV | Bodenabdeckung Feature-ID aus AV |
-| `Art` | `varchar` | Land Cover Type | Bodenabdeckungsart | Type of land cover | Art der Bodenabdeckung |
-| `BFSNr` | `integer` | BFS Number | BFS-Nummer | Federal municipality number | Gemeindenummer des BFS |
-| `GWR_EGID` | `integer` | GWR Building ID | GWR-Gebäude-ID | Federal building register ID | Eidg. Gebäudeidentifikator |
-| `Check_Gruenflaeche` | `varchar` | Green Space Check | Grünfläche-Prüfung | Green space classification based on `Art` | Grünfläche-Klassifizierung basierend auf `Art` |
-| `area_m2` | `float` | LC Area (m²) | BA-Fläche (m²) | Calculated 2D planar area of clipped land cover polygon | Berechnete 2D-Planfläche des geschnittenen Bodenabdeckung-Polygons |
+| Attribute | Format | Required | Alias EN | Alias DE | Description EN | Description DE |
+|-----------|--------|----------|----------|----------|----------------|----------------|
+| `ID` | `varchar` | Always | ID | ID | Parcel identifier (same as in Parcels output) | Grundstückskennung (gleich wie in Parzellen-Ausgabe) |
+| `EGRID` | `varchar(14)` | Always | E-GRID | E-GRID | Parcel identifier (links to Parcels output) | Grundstücksidentifikator (Verknüpfung zu Parzellen-Ausgabe) |
+| `fid` | `integer` | Always | LC Feature ID | BA Feature-ID | Land cover feature ID from AV | Bodenabdeckung Feature-ID aus AV |
+| `Art` | `varchar` | Always | Land Cover Type | Bodenabdeckungsart | Type of land cover | Art der Bodenabdeckung |
+| `BFSNr` | `integer` | Always | BFS Number | BFS-Nummer | Federal municipality number | Gemeindenummer des BFS |
+| `GWR_EGID` | `integer` | Always | GWR Building ID | GWR-Gebäude-ID | Federal building register ID (may be empty) | Eidg. Gebäudeidentifikator (kann leer sein) |
+| `Check_GreenSpace` | `varchar` | Always | Green Space Check | Grünfläche-Prüfung | Green space classification based on `Art`: "Green space (soil-covered)", "Green space (wooded)", or "Not green space" | Grünfläche-Klassifizierung basierend auf `Art` |
+| `area_m2` | `float` | Always | LC Area (m²) | BA-Fläche (m²) | Calculated 2D planar area of clipped land cover polygon | Berechnete 2D-Planfläche des geschnittenen Bodenabdeckung-Polygons |
 
 ---
 
@@ -283,7 +290,7 @@ flowchart TD
 
     subgraph "7–9 — Area, Classification & Export"
         H1["Calculate area_m2\n(2D planar on LV95)"]
-        H2["Classify Check_Gruenflaeche\n(Art → green space category)"]
+        H2["Classify Check_GreenSpace\n(Art → green space category)"]
         H1 --> H2
     end
 
@@ -301,9 +308,9 @@ flowchart TD
 - Handle duplicate EGRIDs: dissolve all matching geometries into a single polygon per EGRID
 - Extract parcel polygon geometries
 - Set `Check_EGRID`:
-  - `"EGRID in AV gefunden"` — single match found
-  - `"EGRID in AV gefunden (n Einträge zusammengeführt)"` — multiple `fid` entries dissolved
-  - `"EGRID fehlt oder nicht in AV"` — not found (Mode 1: row kept with error)
+  - `"EGRID found in AV"` — single match found
+  - `"EGRID found in AV (n entries merged)"` — multiple `fid` entries dissolved
+  - `"EGRID missing or not in AV"` — not found (Mode 1: row kept with error)
 - Validate CRS is EPSG:2056 (CH1903+ / LV95) — fail with a clear error if not
 
 ### 3. Clean Parcel Geometries & Calculate Area
@@ -333,7 +340,7 @@ flowchart TD
 - Calculate 2D planar area on LV95 of each clipped land cover polygon (`area_m2`)
 
 ### 8. Classify Green Space
-- Create `Check_Gruenflaeche` based on `Art` value (see classification table above)
+- Create `Check_GreenSpace` based on `Art` value (see classification table above)
 
 ### 9. Export Land Cover
 - **Write Output 2: Land Cover**
@@ -410,6 +417,9 @@ Arguments:
   --gpkg PATH             Path to AV GeoPackage (default: D:\AV_lv95\av_2056.gpkg)
   --output-dir PATH       Output directory (default: ./data)
   --limit N               Limit parcels (Mode 1: first N rows, Mode 2: first N municipalities)
+  --chunk-size N          Mode 1: rows per processing chunk (default: 10000)
+  --no-aggregate          Disable land cover area aggregation on parcels output
+  --no-parcels            Skip exporting the parcels CSV
   --verbose, -v           Enable DEBUG logging
 ```
 
@@ -417,7 +427,7 @@ Logging goes to both console and `<output-dir>/landcover_survey.log`.
 
 #### `config.py` — Constants and Classification
 - `GREEN_SPACE: dict[str, str]` — maps each `Art` value to its green space category
-- `SIA416: dict[str, str]` — maps each `Art` value to SIA 416 Umgebungsfläche category
+- `SIA416: dict[str, str]` — maps each `Art` value to SIA 416 category (GGF / BUF / UUF)
 - `DEFAULT_GPKG_PATH`, `SLIVER_THRESHOLD` (0.001 m²), `CRS_EPSG` (2056), `COL_FLAECHE`
 - No runtime state — pure constants
 
@@ -539,12 +549,12 @@ The pipeline follows a **fail-soft** approach: individual feature errors are log
 
 | Situation | Behaviour | Output |
 |-----------|-----------|--------|
-| EGRID not found in AV | Row kept in parcels output | `Check_EGRID` = `"EGRID fehlt oder nicht in AV"`, `parcel_area_m2` = null |
-| Duplicate EGRIDs (multiple fid per EGRID) | Geometries dissolved into one | `Check_EGRID` = `"EGRID in AV gefunden (n Einträge zusammengeführt)"` |
+| EGRID not found in AV | Row kept in parcels output | `Check_EGRID` = `"EGRID missing or not in AV"`, `parcel_area_m2` = null |
+| Duplicate EGRIDs (multiple fid per EGRID) | Geometries dissolved into one | `Check_EGRID` = `"EGRID found in AV (n entries merged)"` |
 | `make_valid()` returns empty geometry | Feature kept with zero area | `parcel_area_m2` or `area_m2` = 0, logged as WARNING |
 | Clip produces only lines/points (no polygon) | Feature dropped | Logged as DEBUG |
 | Clip produces sliver < 0.001 m² | Feature dropped | Logged as DEBUG |
-| Unknown `Art` value (not in BBArt domain) | Feature kept | `Check_Gruenflaeche` = `"Keine Grünfläche"`, logged as WARNING |
+| Unknown `Art` value (not in BBArt domain) | Feature kept | `Check_GreenSpace` = `"Keine Grünfläche"`, logged as WARNING |
 | CRS is not EPSG:2056 | **Pipeline aborts** | `ValueError` with clear message |
 | Input file missing `ID` or `EGRID` column | **Pipeline aborts** | `ValueError` with clear message |
 | GeoPackage file not found or unreadable | **Pipeline aborts** | `FileNotFoundError` or driver error |

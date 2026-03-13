@@ -23,7 +23,9 @@ from config import (
     MSG_EGRID_FOUND,
     MSG_EGRID_MERGED,
     MSG_EGRID_NOT_FOUND,
+    SIA416,
     SQL_BATCH_SIZE,
+    VERSIEGELT_ARTS,
 )
 from geometry import clean_geometries, filter_clip_results
 from data_io import (
@@ -62,6 +64,8 @@ def run(
     limit: int | None = None,
     chunk_size: int = 1000,
     ts: str | None = None,
+    aggregate: bool = True,
+    export_parcels: bool = True,
 ) -> None:
     """Run the landcover survey pipeline.
 
@@ -81,6 +85,11 @@ def run(
         Mode 1: number of rows per processing chunk (default 1000).
     ts : str | None
         Timestamp string for output filenames. Generated if not provided.
+    aggregate : bool
+        If True (default), add per-parcel land cover area summary columns
+        (GGF_m2, BUF_m2, UUF_m2) to the parcels output.
+    export_parcels : bool
+        If True (default), export the parcels CSV.
     """
     t0 = time.time()
     output_dir = Path(output_dir)
@@ -95,9 +104,14 @@ def run(
     else:
         parcels_out, lc_out = _run_mode2(gpkg_path, limit)
 
+    # Aggregate land cover areas onto parcels
+    if aggregate:
+        parcels_out = _aggregate_landcover(parcels_out, lc_out)
+
     # Export final results
     logger.info("Exporting final results")
-    write_csv(parcels_out, output_dir / f"{prefix}parcels_{ts}.csv")
+    if export_parcels:
+        write_csv(parcels_out, output_dir / f"{prefix}parcels_{ts}.csv")
     write_csv(lc_out, output_dir / f"{prefix}landcover_{ts}.csv")
 
     elapsed = time.time() - t0
@@ -510,10 +524,10 @@ def _clip_single_parcel(
     result["area_m2"] = result.geometry.area
 
     # Classify green space
-    result["Check_Gruenflaeche"] = result["Art"].map(GREEN_SPACE).fillna(DEFAULT_GREEN_SPACE)
+    result["Check_GreenSpace"] = result["Art"].map(GREEN_SPACE).fillna(DEFAULT_GREEN_SPACE)
 
     # Build output (drop geometry)
-    output_cols = ["ID", "EGRID", "fid", "Art", "BFSNr", "GWR_EGID", "Check_Gruenflaeche", "area_m2"]
+    output_cols = ["ID", "EGRID", "fid", "Art", "BFSNr", "GWR_EGID", "Check_GreenSpace", "area_m2"]
     output_cols = [c for c in output_cols if c in result.columns]
     return result[output_cols].reset_index(drop=True)
 
@@ -521,6 +535,90 @@ def _clip_single_parcel(
 # ---------------------------------------------------------------------------
 # Output helpers
 # ---------------------------------------------------------------------------
+
+_SIA416_CATEGORIES = ("GGF", "BUF", "UUF")
+
+
+def _aggregate_landcover(
+    parcels_df: DataFrame,
+    lc_df: DataFrame,
+) -> DataFrame:
+    """Add per-parcel land cover area summary columns to the parcels output.
+
+    Columns added:
+    - ``GGF_m2``, ``BUF_m2``, ``UUF_m2`` — SIA 416 area breakdown
+    - ``Sealed_m2`` — sealed area (GGF + befestigt)
+    - ``GreenSpace_m2`` — green space area (humusiert + bestockt)
+    - One column per ``Art`` value present (e.g. ``Gebaeude_m2``)
+    """
+    sia_cols = [f"{c}_m2" for c in _SIA416_CATEGORIES]
+    fixed_cols = sia_cols + ["Sealed_m2", "GreenSpace_m2"]
+
+    if lc_df.empty:
+        for col in fixed_cols:
+            parcels_df[col] = 0.0
+        return parcels_df
+
+    lc = lc_df[["EGRID", "Art", "area_m2"]].copy()
+
+    # --- SIA 416 pivot (GGF / BUF / UUF) ---
+    lc["SIA416"] = lc["Art"].map(SIA416).fillna("UUF")
+
+    sia_pivot = (
+        lc.groupby(["EGRID", "SIA416"])["area_m2"]
+        .sum()
+        .unstack(fill_value=0.0)
+    )
+    for cat in _SIA416_CATEGORIES:
+        if cat not in sia_pivot.columns:
+            sia_pivot[cat] = 0.0
+    sia_pivot = sia_pivot[list(_SIA416_CATEGORIES)]
+    sia_pivot.columns = sia_cols
+    sia_pivot = sia_pivot.reset_index()
+
+    # --- Versiegelt (sealed = GGF + befestigt) ---
+    lc["is_versiegelt"] = lc["Art"].isin(VERSIEGELT_ARTS)
+    versiegelt = (
+        lc[lc["is_versiegelt"]]
+        .groupby("EGRID")["area_m2"]
+        .sum()
+        .reset_index()
+        .rename(columns={"area_m2": "Sealed_m2"})
+    )
+
+    # --- Green space ---
+    lc["green"] = lc["Art"].map(GREEN_SPACE)
+    green = (
+        lc[lc["green"].notna()]
+        .groupby("EGRID")["area_m2"]
+        .sum()
+        .reset_index()
+        .rename(columns={"area_m2": "GreenSpace_m2"})
+    )
+
+    # --- Per-Art pivot ---
+    art_pivot = (
+        lc.groupby(["EGRID", "Art"])["area_m2"]
+        .sum()
+        .unstack(fill_value=0.0)
+    )
+    art_pivot.columns = [f"{a}_m2" for a in art_pivot.columns]
+    art_pivot = art_pivot.reset_index()
+
+    # --- Merge all onto parcels ---
+    result = parcels_df
+    result = result.merge(sia_pivot, on="EGRID", how="left")
+    result = result.merge(versiegelt, on="EGRID", how="left")
+    result = result.merge(green, on="EGRID", how="left")
+    result = result.merge(art_pivot, on="EGRID", how="left")
+
+    # Fill NaN for parcels with no LC data
+    fill = {col: 0.0 for col in result.columns if col.endswith("_m2")}
+    result = result.fillna(fill)
+
+    logger.info("Aggregated land cover areas onto %d parcels", len(result))
+    return result
+
 
 def _merge_user_parcels(
     user_df: DataFrame,
@@ -577,4 +675,4 @@ def _empty_parcels_df() -> DataFrame:
 
 def _empty_landcover_df() -> DataFrame:
     return DataFrame(columns=["ID", "EGRID", "fid", "Art", "BFSNr",
-                               "GWR_EGID", "Check_Gruenflaeche", "area_m2"])
+                               "GWR_EGID", "Check_GreenSpace", "area_m2"])

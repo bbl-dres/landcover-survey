@@ -71,6 +71,9 @@ python cli.py --mode 1 --input ../data/test_data.csv --limit 10 -v
 | `--gpkg PATH` | `D:\AV_lv95\av_2056.gpkg` | Path to the AV GeoPackage |
 | `--output-dir PATH` | *(input file's directory, or `./data` for Mode 2)* | Output directory for results and log file |
 | `--limit N` | *(all)* | Limit processing for testing. Mode 1: first N rows. Mode 2: first N municipalities. |
+| `--chunk-size N` | `10000` | Mode 1: number of rows per processing chunk |
+| `--no-aggregate` | off | Disable land cover area aggregation on parcels output |
+| `--no-parcels` | off | Skip exporting the parcels CSV |
 | `--verbose`, `-v` | off | Enable DEBUG-level logging |
 
 ## Input File Format (Mode 1)
@@ -80,6 +83,42 @@ python cli.py --mode 1 --input ../data/test_data.csv --limit 10 -v
 | `ID` | Yes | User-defined feature identifier |
 | `EGRID` | Yes | E-GRID foreign key to look up the official parcel in AV data |
 | *(others)* | No | Additional columns are preserved in the parcels output |
+
+## Output Tables
+
+### Parcels (`{input}_parcels_{timestamp}.csv`)
+
+| Column | Required | Description |
+|--------|----------|-------------|
+| `ID` | Always | User-defined identifier (Mode 1) or EGRID (Mode 2) |
+| `EGRID` | Always | Federal parcel identifier |
+| `Nummer` | Always | Official parcel number from AV |
+| `BFSNr` | Always | Federal municipality number |
+| `Check_EGRID` | Always | EGRID lookup status or error message |
+| `Flaeche` | Always | Official legal area from AV (m²) |
+| `parcel_area_m2` | Always | Calculated 2D planar area (m²) |
+| `GGF_m2` | Optional | Building footprint area — SIA 416 |
+| `BUF_m2` | Optional | Developed surrounding area — SIA 416 (sealed + soil-covered) |
+| `UUF_m2` | Optional | Undeveloped surrounding area — SIA 416 (water + wooded + unvegetated) |
+| `Sealed_m2` | Optional | Sealed area (buildings + all sealed surfaces) |
+| `GreenSpace_m2` | Optional | Green space area (soil-covered + wooded) |
+| `{Art}_m2` | Optional | One column per land cover type (e.g. `Gebaeude_m2`, `Strasse_Weg_m2`) |
+| *(user columns)* | Optional | Additional columns from input file (Mode 1 only) |
+
+> All aggregation columns are included by default. Use `--no-aggregate` to omit them.
+
+### Land Cover (`{input}_landcover_{timestamp}.csv`)
+
+| Column | Required | Description |
+|--------|----------|-------------|
+| `ID` | Always | Parcel identifier (same as Parcels output) |
+| `EGRID` | Always | Federal parcel identifier |
+| `fid` | Always | Land cover feature ID from AV |
+| `Art` | Always | Land cover type (BBArt domain) |
+| `BFSNr` | Always | Federal municipality number |
+| `GWR_EGID` | Always | GWR building register ID (may be empty) |
+| `Check_GreenSpace` | Always | Green space classification |
+| `area_m2` | Always | Clipped land cover area (m²) |
 
 ## Data Source
 

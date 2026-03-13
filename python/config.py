@@ -20,63 +20,72 @@ COL_FLAECHE = "Flaeche"  # official area column in resf
 SQL_BATCH_SIZE = 500
 
 # ---------------------------------------------------------------------------
-# Green space classification  (Art → Check_Grünfläche)
+# Green space classification  (Art → Check_GreenSpace)
 # ---------------------------------------------------------------------------
 GREEN_SPACE: dict[str, str] = {
-    # Humusiert
-    "Acker_Wiese_Weide": "Grünfläche (Humusiert)",
-    "Reben": "Grünfläche (Humusiert)",
-    "Gartenanlage": "Grünfläche (Humusiert)",
-    "Hoch_Flachmoor": "Grünfläche (Humusiert)",
-    "uebrige_humusierte": "Grünfläche (Humusiert)",
-    # Wytweide — officially bestockt, treated as Humusiert (pasture dominates)
-    "Wytweide_dicht": "Grünfläche (Humusiert)",
-    "Wytweide_offen": "Grünfläche (Humusiert)",
-    # Bestockt
-    "geschlossener_Wald": "Grünfläche (Bestockt)",
-    "uebrige_bestockte": "Grünfläche (Bestockt)",
+    # Soil-covered (humusiert)
+    "Acker_Wiese_Weide": "Green space (soil-covered)",
+    "Reben": "Green space (soil-covered)",
+    "Gartenanlage": "Green space (soil-covered)",
+    "Hoch_Flachmoor": "Green space (soil-covered)",
+    "uebrige_humusierte": "Green space (soil-covered)",
+    # Wytweide — officially wooded (bestockt), treated as soil-covered (pasture dominates)
+    "Wytweide_dicht": "Green space (soil-covered)",
+    "Wytweide_offen": "Green space (soil-covered)",
+    # Wooded (bestockt)
+    "geschlossener_Wald": "Green space (wooded)",
+    "uebrige_bestockte": "Green space (wooded)",
 }
 
-DEFAULT_GREEN_SPACE = "Keine Grünfläche"
+DEFAULT_GREEN_SPACE = "Not green space"
 
 # ---------------------------------------------------------------------------
 # SIA 416 classification  (Art → SIA 416 category)
+#
+# GSF (Grundstücksfläche) = GGF + UF
+# UF  (Umgebungsfläche)   = BUF + UUF
 # ---------------------------------------------------------------------------
 SIA416: dict[str, str] = {
+    # GGF — Gebäudegrundfläche
     "Gebaeude": "GGF",
-    "Strasse_Weg": "HF",
-    "Trottoir": "HF",
-    "Verkehrsinsel": "HF",
-    "Bahn": "HF",
-    "Flugplatz": "HF",
-    "Wasserbecken": "HF",
-    "uebrige_befestigte": "HF",
-    "Acker_Wiese_Weide": "GF",
-    "Reben": "GF",
-    "uebrige_Intensivkultur": "GF",
-    "Gartenanlage": "GF",
-    "Hoch_Flachmoor": "GF",
-    "uebrige_humusierte": "GF",
-    "stehendes": "WF",
-    "fliessendes": "WF",
-    "Schilfguertel": "GF",
-    "geschlossener_Wald": "GF",
-    "Wytweide_dicht": "GF",
-    "Wytweide_offen": "GF",
-    "uebrige_bestockte": "GF",
-    "Fels": "üF",
-    "Gletscher_Firn": "üF",
-    "Geroell_Sand": "üF",
-    "Abbau_Deponie": "üF",
-    "uebrige_vegetationslose": "üF",
+    # BUF — Bearbeitete Umgebungsfläche (befestigt + humusiert)
+    "Strasse_Weg": "BUF",
+    "Trottoir": "BUF",
+    "Verkehrsinsel": "BUF",
+    "Bahn": "BUF",
+    "Flugplatz": "BUF",
+    "Wasserbecken": "BUF",
+    "uebrige_befestigte": "BUF",
+    "Acker_Wiese_Weide": "BUF",
+    "Reben": "BUF",
+    "uebrige_Intensivkultur": "BUF",
+    "Gartenanlage": "BUF",
+    "Hoch_Flachmoor": "BUF",
+    "uebrige_humusierte": "BUF",
+    # UUF — Unbearbeitete Umgebungsfläche (Gewässer + bestockt + vegetationslos)
+    "stehendes": "UUF",
+    "fliessendes": "UUF",
+    "Schilfguertel": "UUF",
+    "geschlossener_Wald": "UUF",
+    "Wytweide_dicht": "UUF",
+    "Wytweide_offen": "UUF",
+    "uebrige_bestockte": "UUF",
+    "Fels": "UUF",
+    "Gletscher_Firn": "UUF",
+    "Geroell_Sand": "UUF",
+    "Abbau_Deponie": "UUF",
+    "uebrige_vegetationslose": "UUF",
 }
 
-# Versiegelt = GGF + HF
-VERSIEGELT_CATEGORIES = {"GGF", "HF"}
+# Versiegelt = GGF + befestigt (subset of BUF)
+VERSIEGELT_ARTS: set[str] = {
+    "Gebaeude", "Strasse_Weg", "Trottoir", "Verkehrsinsel",
+    "Bahn", "Flugplatz", "Wasserbecken", "uebrige_befestigte",
+}
 
 # ---------------------------------------------------------------------------
 # Check_EGRID messages
 # ---------------------------------------------------------------------------
-MSG_EGRID_FOUND = "EGRID in AV gefunden"
-MSG_EGRID_MERGED = "EGRID in AV gefunden ({n} Einträge zusammengeführt)"
-MSG_EGRID_NOT_FOUND = "EGRID fehlt oder nicht in AV"
+MSG_EGRID_FOUND = "EGRID found in AV"
+MSG_EGRID_MERGED = "EGRID found in AV ({n} entries merged)"
+MSG_EGRID_NOT_FOUND = "EGRID missing or not in AV"

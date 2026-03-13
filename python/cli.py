@@ -50,6 +50,16 @@ def main(argv: list[str] | None = None) -> None:
         help="Mode 1: number of rows per processing chunk (default: 10000)",
     )
     parser.add_argument(
+        "--no-aggregate",
+        action="store_true",
+        help="Disable land cover area aggregation on the parcels output (aggregation is ON by default)",
+    )
+    parser.add_argument(
+        "--no-parcels",
+        action="store_true",
+        help="Skip exporting the parcels CSV (exported by default)",
+    )
+    parser.add_argument(
         "--verbose", "-v",
         action="store_true",
         help="Enable verbose (DEBUG) logging",
@@ -113,6 +123,8 @@ def main(argv: list[str] | None = None) -> None:
         limit=args.limit,
         chunk_size=args.chunk_size,
         ts=ts,
+        aggregate=not args.no_aggregate,
+        export_parcels=not args.no_parcels,
     )
 
 
