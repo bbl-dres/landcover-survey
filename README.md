@@ -123,7 +123,7 @@ Exported by default; disable with `--no-landcover`.
 | `Check_GreenSpace` | Always | Green space classification |
 | `area_m2` | Always | Clipped land cover area (m²) |
 
-### Complete Land Cover Type Hierarchy ({`Art}`)
+### Complete Land Cover Type Hierarchy (`{Art}`)
 
 | AVS Code | Main Category | Sub-category | `Art` Value | EN | DE | SIA 416 | Sealed | Green Space |
 |----------|---------------|--------------|-------------|-----|-----|---------|--------|-------------|
