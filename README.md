@@ -10,6 +10,11 @@ Aggregate land cover usage (m²) per Swiss cadastral parcel from official survey
 
 For each parcel, the tool clips every intersecting land cover polygon to the parcel boundary and calculates the 2D planar area of each clipped piece on the LV95 projection (EPSG:2056). This produces a breakdown of how much area of each land cover type exists within each parcel.
 
+The solution is available in two variants that produce the same results:
+
+- **[Python](python/)** — open-source, requires Python >= 3.10 and free dependencies.
+- **[FME](fme/)** — requires a licensed copy of [FME Form](https://fme.safe.com/fme-form/).
+
 ## Outputs
 
 1. **Parcels** — One row per parcel with identifiers, official and calculated area. In Mode 1, includes user-provided columns and error messages for unresolved EGRIDs. Disable with `--no-parcels`.
