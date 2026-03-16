@@ -15,6 +15,8 @@ The solution is available in two variants that produce the same results:
 - **[Python](python/)** — open-source, requires Python >= 3.10 and free dependencies.
 - **[FME](fme/)** — requires a licensed copy of [FME Form](https://fme.safe.com/fme-form/).
 
+See [docs/SPECIFICATION.md](docs/SPECIFICATION.md) for a detailed description.
+
 ## Outputs
 
 1. **Parcels** — One row per parcel with identifiers, official and calculated area. In Mode 1, includes user-provided columns and error messages for unresolved EGRIDs. Disable with `--no-parcels`.
