@@ -127,32 +127,32 @@ Exported by default; disable with `--no-landcover`.
 
 | AVS Code | Main Category | Sub-category | `Art` Value | EN | DE | SIA 416 | Sealed | Green Space |
 |----------|---------------|--------------|-------------|-----|-----|---------|--------|-------------|
-| 0 | Buildings | — | `Gebaeude` | Buildings | Gebäude | GGF | Yes | — |
-| 1 | Sealed | — | `Strasse_Weg` | Road, path | Strasse, Weg | BUF | Yes | — |
-| 2 | Sealed | — | `Trottoir` | Sidewalk | Trottoir | BUF | Yes | — |
-| 3 | Sealed | — | `Verkehrsinsel` | Traffic island | Verkehrsinsel | BUF | Yes | — |
-| 4 | Sealed | — | `Bahn` | Railway | Bahn | BUF | Yes | — |
-| 5 | Sealed | — | `Flugplatz` | Airfield | Flugplatz | BUF | Yes | — |
-| 6 | Sealed | — | `Wasserbecken` | Water basin | Wasserbecken | BUF | Yes | — |
-| 7 | Sealed | — | `uebrige_befestigte` | Other sealed surfaces | Übrige befestigte | BUF | Yes | — |
-| 8 | Soil-covered | — | `Acker_Wiese_Weide` | Arable land, meadow, pasture | Acker, Wiese, Weide | BUF | No | Soil-covered |
-| 9 | Soil-covered | Intensive | `Reben` | Vineyards | Reben | BUF | No | Soil-covered |
-| 10 | Soil-covered | Intensive | `uebrige_Intensivkultur` | Other intensive cultivation | Übrige Intensivkultur | BUF | No | — * |
-| 11 | Soil-covered | — | `Gartenanlage` | Garden area | Gartenanlage | BUF | No | Soil-covered |
-| 12 | Soil-covered | — | `Hoch_Flachmoor` | Raised/flat bog | Hoch-/Flachmoor | BUF | No | Soil-covered |
-| 13 | Soil-covered | — | `uebrige_humusierte` | Other soil-covered | Übrige humusierte | BUF | No | Soil-covered |
-| 14 | Water | — | `stehendes` | Standing water | Stehendes Gewässer | UUF | No | — |
-| 15 | Water | — | `fliessendes` | Flowing water | Fliessendes Gewässer | UUF | No | — |
-| 16 | Water | — | `Schilfguertel` | Reed belt | Schilfgürtel | UUF | No | — |
-| 17 | Wooded | — | `geschlossener_Wald` | Closed forest | Geschlossener Wald | UUF | No | Wooded |
-| 18 | Wooded | Wytweide | `Wytweide_dicht` | Dense wooded pasture | Wytweide dicht | UUF | No | Soil-covered ** |
-| 19 | Wooded | Wytweide | `Wytweide_offen` | Open wooded pasture | Wytweide offen | UUF | No | Soil-covered ** |
-| 20 | Wooded | — | `uebrige_bestockte` | Other wooded | Übrige bestockte | UUF | No | Wooded |
-| 21 | Unvegetated | — | `Fels` | Rock | Fels | UUF | No | — |
-| 22 | Unvegetated | — | `Gletscher_Firn` | Glacier, firn | Gletscher, Firn | UUF | No | — |
-| 23 | Unvegetated | — | `Geroell_Sand` | Scree, sand | Geröll, Sand | UUF | No | — |
-| 24 | Unvegetated | — | `Abbau_Deponie` | Extraction, landfill | Abbau, Deponie | UUF | No | — |
-| 25 | Unvegetated | — | `uebrige_vegetationslose` | Other unvegetated | Übrige vegetationslose | UUF | No | — |
+| 0 | Buildings (Gebäude) | — | `Gebaeude` | Buildings | Gebäude | GGF | Yes | — |
+| 1 | Sealed (Befestigt) | — | `Strasse_Weg` | Road, path | Strasse, Weg | BUF | Yes | — |
+| 2 | Sealed (Befestigt) | — | `Trottoir` | Sidewalk | Trottoir | BUF | Yes | — |
+| 3 | Sealed (Befestigt) | — | `Verkehrsinsel` | Traffic island | Verkehrsinsel | BUF | Yes | — |
+| 4 | Sealed (Befestigt) | — | `Bahn` | Railway | Bahn | BUF | Yes | — |
+| 5 | Sealed (Befestigt) | — | `Flugplatz` | Airfield | Flugplatz | BUF | Yes | — |
+| 6 | Sealed (Befestigt) | — | `Wasserbecken` | Water basin | Wasserbecken | BUF | Yes | — |
+| 7 | Sealed (Befestigt) | — | `uebrige_befestigte` | Other sealed surfaces | Übrige befestigte | BUF | Yes | — |
+| 8 | Soil-covered (Humusiert) | — | `Acker_Wiese_Weide` | Arable land, meadow, pasture | Acker, Wiese, Weide | BUF | No | Soil-covered |
+| 9 | Soil-covered (Humusiert) | Intensive | `Reben` | Vineyards | Reben | BUF | No | Soil-covered |
+| 10 | Soil-covered (Humusiert) | Intensive | `uebrige_Intensivkultur` | Other intensive cultivation | Übrige Intensivkultur | BUF | No | — * |
+| 11 | Soil-covered (Humusiert) | — | `Gartenanlage` | Garden area | Gartenanlage | BUF | No | Soil-covered |
+| 12 | Soil-covered (Humusiert) | — | `Hoch_Flachmoor` | Raised/flat bog | Hoch-/Flachmoor | BUF | No | Soil-covered |
+| 13 | Soil-covered (Humusiert) | — | `uebrige_humusierte` | Other soil-covered | Übrige humusierte | BUF | No | Soil-covered |
+| 14 | Water (Gewässer) | — | `stehendes` | Standing water | Stehendes Gewässer | UUF | No | — |
+| 15 | Water (Gewässer) | — | `fliessendes` | Flowing water | Fliessendes Gewässer | UUF | No | — |
+| 16 | Water (Gewässer) | — | `Schilfguertel` | Reed belt | Schilfgürtel | UUF | No | — |
+| 17 | Wooded (Bestockt) | — | `geschlossener_Wald` | Closed forest | Geschlossener Wald | UUF | No | Wooded |
+| 18 | Wooded (Bestockt) | Wytweide | `Wytweide_dicht` | Dense wooded pasture | Wytweide dicht | UUF | No | Soil-covered ** |
+| 19 | Wooded (Bestockt) | Wytweide | `Wytweide_offen` | Open wooded pasture | Wytweide offen | UUF | No | Soil-covered ** |
+| 20 | Wooded (Bestockt) | — | `uebrige_bestockte` | Other wooded | Übrige bestockte | UUF | No | Wooded |
+| 21 | Unvegetated (Vegetationslos) | — | `Fels` | Rock | Fels | UUF | No | — |
+| 22 | Unvegetated (Vegetationslos) | — | `Gletscher_Firn` | Glacier, firn | Gletscher, Firn | UUF | No | — |
+| 23 | Unvegetated (Vegetationslos) | — | `Geroell_Sand` | Scree, sand | Geröll, Sand | UUF | No | — |
+| 24 | Unvegetated (Vegetationslos) | — | `Abbau_Deponie` | Extraction, landfill | Abbau, Deponie | UUF | No | — |
+| 25 | Unvegetated (Vegetationslos) | — | `uebrige_vegetationslose` | Other unvegetated | Übrige vegetationslose | UUF | No | — |
 
 > **SIA 416 Legend:** **GSF** = Grundstücksfläche / total parcel area = GGF + UF. **GGF** = Gebäudegrundfläche / building footprint. **UF** = Umgebungsfläche / surrounding area = BUF + UUF. **BUF** = Bearbeitete Umgebungsfläche / developed surrounding (sealed + soil-covered). **UUF** = Unbearbeitete Umgebungsfläche / undeveloped surrounding (water + wooded + unvegetated).
 > **Sealed area** = GGF + all sealed types (all types with Sealed = Yes).
