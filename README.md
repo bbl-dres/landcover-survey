@@ -15,6 +15,8 @@ The solution is available in two variants that produce the same results:
 - **[Python](python/)** — open-source, requires Python >= 3.10 and free dependencies.
 - **[FME](fme/)** — requires a licensed copy of [FME Form](https://fme.safe.com/fme-form/).
 
+See [docs/SPECIFICATION.md](docs/SPECIFICATION.md) for a detailed description.
+
 ## Outputs
 
 1. **Parcels** — One row per parcel with identifiers, official and calculated area. In Mode 1, includes user-provided columns and error messages for unresolved EGRIDs. Disable with `--no-parcels`.
@@ -199,6 +201,35 @@ See [docs/SPECIFICATION.md](docs/SPECIFICATION.md) for the full technical specif
 - Terminology glossary
 - Limitations, error handling, and logging
 - Legal framework and references
+
+## Legal Framework & References
+
+### Data Model
+- [DM.01-AV-CH](https://www.cadastre-manual.admin.ch/de/datenmodell-der-amtlichen-vermessung-dm01-av-ch) — Current INTERLIS data model for the official cadastral survey (replaced by DMAV by 2027-12-31)
+- [INTERLIS](https://www.interlis.ch/en) (SN 612030) — Swiss standard for geodata description and transfer
+
+### Geoinformation Law
+- [Bundesverfassung (SR 101)](https://www.fedlex.admin.ch/eli/cc/1999/404/de) — Art. 75a Vermessung
+- [Geoinformationsgesetz, GeoIG (SR 510.62)](https://www.fedlex.admin.ch/eli/cc/2008/388/de) — Federal Act on Geoinformation
+- [Geoinformationsverordnung, GeoIV (SR 510.620)](https://www.fedlex.admin.ch/eli/cc/2008/389/de) — Geoinformation Ordinance
+- [GeoIV-swisstopo (SR 510.620.1)](https://www.fedlex.admin.ch/eli/cc/2008/390/de) — swisstopo Ordinance on Geoinformation
+
+### Official Cadastral Survey (Amtliche Vermessung)
+- [VAV (SR 211.432.2)](https://www.fedlex.admin.ch/eli/cc/1992/2446_2446_2446/de) — Ordinance on the Official Cadastral Survey
+- [TVAV / VAV-VBS (SR 211.432.21)](https://www.fedlex.admin.ch/eli/cc/2023/530/de) — Technical Ordinance on the Official Cadastral Survey (Art. 14–19: land cover categories)
+- [GeomV (SR 211.432.261)](https://www.fedlex.admin.ch/eli/cc/2008/387/de) — Ordinance on Engineer-Surveyors
+
+### ÖREB-Kataster
+- [ÖREBKV (SR 510.622.4)](https://www.fedlex.admin.ch/eli/cc/2009/553/de) — Ordinance on the Cadastre of Public-Law Restrictions on Landownership
+
+### Land Register (Grundbuch)
+- [GBV (SR 211.432.1)](https://www.fedlex.admin.ch/eli/cc/2011/667/de) — Land Register Ordinance
+- [TGBV (SR 211.432.11)](https://www.fedlex.admin.ch/eli/cc/2013/3/de) — Technical Ordinance on the Land Register
+
+### Online Resources
+- [Cadastre Manual](https://www.cadastre-manual.admin.ch/) — Handbuch der Amtlichen Vermessung
+- [Legal Framework](https://www.cadastre.ch/de/rechtliche-grundlagen) — Rechtliche Grundlagen
+- [Survey Data Download](https://www.geodienste.ch/services/av) — AV GeoPackage download
 
 ## License
 
