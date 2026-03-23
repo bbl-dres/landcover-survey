@@ -73,7 +73,30 @@
       "Read(//d//**)",
       "Bash(git mv:*)",
       "Bash(python cli.py --help)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(find /c/Users/DavidRasner/Documents/GitHub/landcover-survey -type f \\\\\\(-name *.py -o -name *.md -o -name *.json -o -name *.yaml -o -name *.yml \\\\\\))",
+      "WebFetch(domain:docs.geo.admin.ch)",
+      "Bash(ls /c/Users/DavidRasner/Documents/GitHub/landcover-survey/data/*.gpkg)",
+      "Bash(python test_bauzonen.py)",
+      "Bash(python -c \"import pipeline; print\\(''OK''\\)\")",
+      "Bash(python -c \"import pipeline; import swisstopo; import bauzonen; import habitat; import geometry; import data_io; print\\(''All modules OK''\\)\")",
+      "Bash(python -c \"import pipeline; import config; print\\(''Modules OK''\\); print\\(''SIA416 water keys:'', [k for k in config.SIA416 if ''Gewaesser'' in k or ''stehendes'' in k or ''fliessendes'' in k]\\)\")",
+      "Bash(pip install:*)",
+      "Read(//c/Users/DavidRasner/Downloads/**)",
+      "Read(//d/AV_lv95/**)",
+      "Bash(python cli.py --mode 1 --input \"C:\\\\Users\\\\DavidRasner\\\\Downloads\\\\SAP Grundstücke 260323.csv\" --gpkg \"D:\\\\AV_lv95\\\\av_2056.gpkg\" --bauzonen --habitat)",
+      "Bash(python cli.py --mode 1 --input \"C:\\\\Users\\\\DavidRasner\\\\Downloads\\\\SAP Grundstücke 260323.csv\" --gpkg \"D:\\\\AV_lv95\\\\av_2056.gpkg\" --limit 10 --bauzonen --habitat --verbose)",
+      "Bash(python main.py --help)",
+      "Bash(python main.py --input \"C:\\\\Users\\\\DavidRasner\\\\Downloads\\\\SAP Grundstücke 260323.csv\" --gpkg \"D:\\\\AV_lv95\\\\av_2056.gpkg\" --limit 10 --bauzonen --habitat)",
+      "Bash(python -m py_compile python/pipeline.py)",
+      "Bash(python -m py_compile python/data_io.py)",
+      "Bash(for f:*)",
+      "Bash(do echo:*)",
+      "Bash(python -m py_compile \"$f\")",
+      "Bash(done)",
+      "Bash(python python/main.py --input data/example.csv --gpkg \"D:\\\\AV_lv95\\\\av_2056.gpkg\" --limit 10 --bauzonen --habitat -v)",
+      "Bash(python python/main.py --input data/example.csv --gpkg \"D:\\\\AV_lv95\\\\av_2056.gpkg\" --limit 3)",
+      "Bash(python python/main.py --input \"C:\\\\Users\\\\DavidRasner\\\\Downloads\\\\SAP Grundstücke 260323.csv\" --gpkg \"D:\\\\AV_lv95\\\\av_2056.gpkg\" --bauzonen --habitat -v)"
     ]
   }
 }

@@ -21,8 +21,10 @@ See [docs/SPECIFICATION.md](docs/SPECIFICATION.md) for a detailed description.
 
 1. **Parcels** — One row per parcel with identifiers, official and calculated area. In Mode 1, includes user-provided columns and error messages for unresolved EGRIDs. Disable with `--no-parcels`.
 2. **Land Cover** — One row per clipped land cover feature per parcel with type, area, EGRID, and green space classification. Disable with `--no-landcover`.
+3. **Bauzonen** *(optional, `--bauzonen`)* — Adds `bauzonen` and `bauzonen_m2` columns to both Parcels and Land Cover outputs (semicolon-separated building zone names and intersection areas).
+4. **Habitat** *(optional, `--habitat`)* — Adds `habitat` and `habitat_m2` columns to both Parcels and Land Cover outputs (semicolon-separated habitat types and intersection areas).
 
-Output files are CSV, named `{input}_parcels_{timestamp}.csv` and `{input}_landcover_{timestamp}.csv` (e.g. `Liegenschaften_parcels_20260312_195209.csv`). In Mode 2 (no input file), the input prefix is omitted. Both outputs are exported by default (no geometry). A log file is written to the output directory.
+Output files are CSV, named `{input}_parcels_{timestamp}.csv` and `{input}_landcover_{timestamp}.csv` (e.g. `Liegenschaften_parcels_20260312_195209.csv`). In Mode 2 (no input file), the input prefix is omitted. All outputs include user-provided extra columns from the input (Mode 1). A log file is written to the output directory.
 
 ## Modes of Operation
 
@@ -51,22 +53,31 @@ Run from the `python/` directory:
 cd python
 
 # Mode 1: User-provided parcel list
-python cli.py --mode 1 --input ../data/test_data.csv
+python main.py --mode 1 --input ../data/test_data.csv
 
 # Mode 1: Test with first 10 parcels
-python cli.py --mode 1 --input ../data/test_data.csv --limit 10
+python main.py --mode 1 --input ../data/test_data.csv --limit 10
 
 # Mode 2: All parcels (batched by BFSNr)
-python cli.py --mode 2
+python main.py --mode 2
 
 # Mode 2: Test with first 5 municipalities
-python cli.py --mode 2 --limit 5
+python main.py --mode 2 --limit 5
 
 # Custom GeoPackage and output directory
-python cli.py --mode 1 --input parcels.csv --gpkg D:\AV_lv95\av_2056.gpkg --output-dir ../output
+python main.py --mode 1 --input parcels.csv --gpkg D:\AV_lv95\av_2056.gpkg --output-dir ../output
+
+# With Bauzonen analysis (requires internet)
+python main.py --mode 1 --input ../data/test_data.csv --bauzonen
+
+# With Habitat map analysis (requires internet)
+python main.py --mode 1 --input ../data/test_data.csv --habitat
+
+# Both optional analyses combined
+python main.py --mode 1 --input ../data/test_data.csv --bauzonen --habitat --limit 10
 
 # Verbose logging
-python cli.py --mode 1 --input ../data/test_data.csv --limit 10 -v
+python main.py --mode 1 --input ../data/test_data.csv --limit 10 -v
 ```
 
 ### CLI Arguments
@@ -82,6 +93,8 @@ python cli.py --mode 1 --input ../data/test_data.csv --limit 10 -v
 | `--no-aggregate` | off | Disable land cover area aggregation on parcels output |
 | `--no-parcels` | off | Skip exporting the parcels CSV |
 | `--no-landcover` | off | Skip exporting the land cover CSV |
+| `--bauzonen` | off | Intersect parcels and green spaces with [Bauzonen Schweiz](https://map.geo.admin.ch/?layers=ch.are.bauzonen) (requires internet) |
+| `--habitat` | off | Intersect parcels and green spaces with [BAFU Lebensraumkarte](https://map.geo.admin.ch/?layers=ch.bafu.lebensraumkarte-schweiz) (requires internet) |
 | `--verbose`, `-v` | off | Enable DEBUG-level logging |
 
 ## Input File Format (Mode 1)
@@ -90,7 +103,7 @@ python cli.py --mode 1 --input ../data/test_data.csv --limit 10 -v
 |--------|----------|-------------|
 | `ID` | Yes | User-defined feature identifier |
 | `EGRID` | Yes | E-GRID foreign key to look up the official parcel in AV data |
-| *(others)* | No | Additional columns are preserved in the parcels output |
+| *(others)* | No | Additional columns are passed through to all outputs, prefixed with `input_` (e.g. `Address` → `input_Address`) |
 
 ## Output Tables
 
@@ -106,12 +119,18 @@ python cli.py --mode 1 --input ../data/test_data.csv --limit 10 -v
 | `Flaeche` | Always | Official legal area from AV (m²) |
 | `parcel_area_m2` | Always | Calculated 2D planar area (m²) |
 | `GGF_m2` | Optional | Building footprint area — SIA 416 |
-| `BUF_m2` | Optional | Developed surrounding area — SIA 416 (sealed + soil-covered) |
-| `UUF_m2` | Optional | Undeveloped surrounding area — SIA 416 (water + wooded + unvegetated) |
+| `BUF_m2` | Optional | Developed surrounding area — SIA 416 (sealed + soil-covered + Wytweide) |
+| `UUF_m2` | Optional | Undeveloped surrounding area — SIA 416 (water + forest + unvegetated) |
+| `DIN277_BF_m2` | Optional | Built-up area — DIN 277 (Bebaute Fläche) |
+| `DIN277_UF_m2` | Optional | Non-built-up area — DIN 277 (Unbebaute Fläche) |
 | `Sealed_m2` | Optional | Sealed area (buildings + all sealed surfaces) |
 | `GreenSpace_m2` | Optional | Green space area (soil-covered + wooded) |
 | `{Art}_m2` | Optional | One column per land cover type (e.g. `Gebaeude_m2`, `Strasse_Weg_m2`) |
-| *(user columns)* | Optional | Additional columns from input file (Mode 1 only) |
+| `bauzonen` | Optional | Semicolon-separated building zone names (`--bauzonen`) |
+| `bauzonen_m2` | Optional | Semicolon-separated intersection areas per zone (`--bauzonen`) |
+| `habitat` | Optional | Semicolon-separated habitat types (`--habitat`) |
+| `habitat_m2` | Optional | Semicolon-separated intersection areas per habitat (`--habitat`) |
+| `input_*` | Optional | User-provided columns from input file, prefixed with `input_` (Mode 1 only) |
 
 > All aggregation columns are included by default. Use `--no-aggregate` to omit them.
 
@@ -129,44 +148,78 @@ Exported by default; disable with `--no-landcover`.
 | `GWR_EGID` | Always | GWR building register ID (may be empty) |
 | `Check_GreenSpace` | Always | Green space classification |
 | `area_m2` | Always | Clipped land cover area (m²) |
+| `bauzonen` | Optional | Semicolon-separated building zone names (`--bauzonen`, green spaces only) |
+| `bauzonen_m2` | Optional | Semicolon-separated intersection areas (`--bauzonen`, green spaces only) |
+| `habitat` | Optional | Semicolon-separated habitat types (`--habitat`, green spaces only) |
+| `habitat_m2` | Optional | Semicolon-separated intersection areas (`--habitat`, green spaces only) |
+| `input_*` | Optional | User-provided columns from input file, prefixed with `input_` (Mode 1 only) |
 
 ### Complete Land Cover Type Hierarchy (`{Art}`)
 
-| AVS Code | Main Category | Sub-category | `Art` Value | EN | DE | SIA 416 | Sealed | Green Space |
-|----------|---------------|--------------|-------------|-----|-----|---------|--------|-------------|
-| 0 | Buildings (Gebäude) | — | `Gebaeude` | Buildings | Gebäude | GGF | Yes | — |
-| 1 | Sealed (Befestigt) | — | `Strasse_Weg` | Road, path | Strasse, Weg | BUF | Yes | — |
-| 2 | Sealed (Befestigt) | — | `Trottoir` | Sidewalk | Trottoir | BUF | Yes | — |
-| 3 | Sealed (Befestigt) | — | `Verkehrsinsel` | Traffic island | Verkehrsinsel | BUF | Yes | — |
-| 4 | Sealed (Befestigt) | — | `Bahn` | Railway | Bahn | BUF | Yes | — |
-| 5 | Sealed (Befestigt) | — | `Flugplatz` | Airfield | Flugplatz | BUF | Yes | — |
-| 6 | Sealed (Befestigt) | — | `Wasserbecken` | Water basin | Wasserbecken | BUF | Yes | — |
-| 7 | Sealed (Befestigt) | — | `uebrige_befestigte` | Other sealed surfaces | Übrige befestigte | BUF | Yes | — |
-| 8 | Soil-covered (Humusiert) | — | `Acker_Wiese_Weide` | Arable land, meadow, pasture | Acker, Wiese, Weide | BUF | No | Soil-covered |
-| 9 | Soil-covered (Humusiert) | Intensive (Intensivkultur) | `Reben` | Vineyards | Reben | BUF | No | Soil-covered |
-| 10 | Soil-covered (Humusiert) | Intensive (Intensivkultur) | `uebrige_Intensivkultur` | Other intensive cultivation | Übrige Intensivkultur | BUF | No | — * |
-| 11 | Soil-covered (Humusiert) | — | `Gartenanlage` | Garden area | Gartenanlage | BUF | No | Soil-covered |
-| 12 | Soil-covered (Humusiert) | — | `Hoch_Flachmoor` | Raised/flat bog | Hoch-/Flachmoor | BUF | No | Soil-covered |
-| 13 | Soil-covered (Humusiert) | — | `uebrige_humusierte` | Other soil-covered | Übrige humusierte | BUF | No | Soil-covered |
-| 14 | Water (Gewässer) | — | `stehendes` | Standing water | Stehendes Gewässer | UUF | No | — |
-| 15 | Water (Gewässer) | — | `fliessendes` | Flowing water | Fliessendes Gewässer | UUF | No | — |
-| 16 | Water (Gewässer) | — | `Schilfguertel` | Reed belt | Schilfgürtel | UUF | No | — |
-| 17 | Wooded (Bestockt) | — | `geschlossener_Wald` | Closed forest | Geschlossener Wald | UUF | No | Wooded |
-| 18 | Wooded (Bestockt) | Wooded pasture (Wytweide) | `Wytweide_dicht` | Dense wooded pasture | Wytweide dicht | UUF | No | Soil-covered ** |
-| 19 | Wooded (Bestockt) | Wooded pasture (Wytweide) | `Wytweide_offen` | Open wooded pasture | Wytweide offen | UUF | No | Soil-covered ** |
-| 20 | Wooded (Bestockt) | — | `uebrige_bestockte` | Other wooded | Übrige bestockte | UUF | No | Wooded |
-| 21 | Unvegetated (Vegetationslos) | — | `Fels` | Rock | Fels | UUF | No | — |
-| 22 | Unvegetated (Vegetationslos) | — | `Gletscher_Firn` | Glacier, firn | Gletscher, Firn | UUF | No | — |
-| 23 | Unvegetated (Vegetationslos) | — | `Geroell_Sand` | Scree, sand | Geröll, Sand | UUF | No | — |
-| 24 | Unvegetated (Vegetationslos) | — | `Abbau_Deponie` | Extraction, landfill | Abbau, Deponie | UUF | No | — |
-| 25 | Unvegetated (Vegetationslos) | — | `uebrige_vegetationslose` | Other unvegetated | Übrige vegetationslose | UUF | No | — |
+| AVS Code | `Art` Value | DE | SIA 416 | DIN 277 | Sealed | Green Space | Comment |
+|----------|-------------|-----|---------|---------|--------|-------------|---------|
+| 0 | `Gebaeude` | Gebäude | GGF | BF | Yes | — | |
+| 1 | `Strasse_Weg` | Strasse, Weg | BUF | UF | Yes | — | |
+| 2 | `Trottoir` | Trottoir | BUF | UF | Yes | — | |
+| 3 | `Verkehrsinsel` | Verkehrsinsel | BUF | UF | Yes | — | |
+| 4 | `Bahn` | Bahn | BUF | UF | Yes | — | |
+| 5 | `Flugplatz` | Flugplatz | BUF | UF | Yes | — | |
+| 6 | `Wasserbecken` | Wasserbecken | BUF | UF | Yes | — | Künstliches Becken (Pool, Brunnen) |
+| 7 | `uebrige_befestigte` | Übrige befestigte | BUF | UF | Yes | — | |
+| 8 | `Acker_Wiese_Weide` | Acker, Wiese, Weide | BUF | UF | No | Soil-covered | |
+| 9 | `Reben` | Reben | BUF | UF | No | Soil-covered | |
+| 10 | `uebrige_Intensivkultur` | Übrige Intensivkultur | BUF | UF | No | — | Offiziell humusiert, aber oft versiegelt (Baumschulen, Gewächshäuser) — kein Grünraum \* |
+| 11 | `Gartenanlage` | Gartenanlage | BUF | UF | No | Soil-covered | |
+| 12 | `Hoch_Flachmoor` | Hoch-/Flachmoor | BUF | UF | No | Soil-covered | Oft geschützt; SIA 416 BUF fragwürdig (eher naturnah), aber offiziell humusiert |
+| 13 | `uebrige_humusierte` | Übrige humusierte | BUF | UF | No | Soil-covered | |
+| 14 | `Gewaesser_stehendes` | Stehendes Gewässer | UUF | UF | No | — | See, Teich |
+| 15 | `Gewaesser_fliessendes` | Fliessendes Gewässer | UUF | UF | No | — | Bach, Fluss |
+| 16 | `Schilfguertel` | Schilfgürtel | UUF | UF | No | — | Nicht in Beispieldaten verifiziert |
+| 17 | `geschlossener_Wald` | Geschlossener Wald | UUF | UF | No | Wooded | |
+| 18 | `Wytweide_dicht` | Wytweide dicht | BUF | UF | No | Soil-covered | Offiziell bestockt, aber bewirtschaftete Weide = bearbeitet (SIA 416 BUF) \*\* |
+| 19 | `Wytweide_offen` | Wytweide offen | BUF | UF | No | Soil-covered | Offiziell bestockt, aber bewirtschaftete Weide = bearbeitet (SIA 416 BUF) \*\* |
+| 20 | `uebrige_bestockte` | Übrige bestockte | UUF | UF | No | Wooded | |
+| 21 | `Fels` | Fels | UUF | UF | No | — | |
+| 22 | `Gletscher_Firn` | Gletscher, Firn | UUF | UF | No | — | |
+| 23 | `Geroell_Sand` | Geröll, Sand | UUF | UF | No | — | |
+| 24 | `Abbau_Deponie` | Abbau, Deponie | UUF | UF | No | — | Menschlich verändert, aber vegetationslos — UUF beibehalten |
+| 25 | `uebrige_vegetationslose` | Übrige vegetationslose | UUF | UF | No | — | |
 
-> **SIA 416 Legend:** **GSF** = Grundstücksfläche / total parcel area = GGF + UF. **GGF** = Gebäudegrundfläche / building footprint. **UF** = Umgebungsfläche / surrounding area = BUF + UUF. **BUF** = Bearbeitete Umgebungsfläche / developed surrounding (sealed + soil-covered). **UUF** = Unbearbeitete Umgebungsfläche / undeveloped surrounding (water + wooded + unvegetated).
-> **Sealed area** = GGF + all sealed types (all types with Sealed = Yes).
+> **SIA 416:2003** — GSF (Grundstücksfläche) = GGF + UF. GGF = Gebäudegrundfläche. UF = Umgebungsfläche = BUF + UUF. BUF = Bearbeitete Umgebungsfläche (Hart- und Grünflächen). UUF = Unbearbeitete Umgebungsfläche.
 >
-> **Green Space Legend:** **Soil-covered** = green space (humusiert), **Wooded** = green space (bestockt), **—** = not green space.
-> \* `uebrige_Intensivkultur` is officially "soil-covered" (humusiert) but classified as not green space — typically managed/sealed horticultural surfaces (orchards, nurseries).
-> \*\* `Wytweide_dicht` and `Wytweide_offen` are officially "bestockt" but treated as Humusiert — primarily open pasture with partial tree cover.
+> **DIN 277:2021** — GF (Grundstücksfläche) = BF + UF. BF = Bebaute Fläche (überbaut/unterbaut). UF = Unbebaute Fläche. AF (Außenanlagenfläche) kann nach DIN 276 KG 500 weiter untergliedert werden.
+>
+> **Sealed** = GGF + alle befestigten Typen (Sealed = Yes).
+>
+> **Green Space:** Soil-covered = Grünraum (humusiert), Wooded = Grünraum (bestockt), — = kein Grünraum.
+>
+> \* `uebrige_Intensivkultur` ist offiziell humusiert, wird aber nicht als Grünraum klassifiziert — typischerweise befestigte Nutzflächen (Baumschulen, Gewächshäuser).
+>
+> \*\* `Wytweide_dicht` und `Wytweide_offen` sind offiziell bestockt (AV-Datenmodell), werden aber als bewirtschaftete Weide = BUF (bearbeitete Umgebungsfläche, SIA 416) und Grünraum (humusiert) behandelt.
+
+## Optional Analyses (Swisstopo API)
+
+The tool can optionally intersect parcels and green spaces with additional spatial datasets from the [Swisstopo REST API](https://api3.geo.admin.ch). These analyses require internet access and are disabled by default.
+
+### Bauzonen (`--bauzonen`)
+
+Intersects parcels and green spaces with harmonised building zones ([Bauzonen Schweiz](https://www.are.admin.ch/bauzonen), `ch.are.bauzonen`). Adds two columns to each output CSV:
+
+- **Parcels**: `bauzonen` (semicolon-separated zone names, e.g. "Wohnzonen; Mischzonen") and `bauzonen_m2` (corresponding intersection areas)
+- **Land Cover**: same columns, but only populated for green space features
+
+### Lebensraumkarte (`--habitat`)
+
+Intersects parcels and green spaces with the [BAFU Habitat Map of Switzerland](https://www.bafu.admin.ch/de/biodiversitaet-geodaten) (`ch.bafu.lebensraumkarte-schweiz`). Adds two columns to each output CSV:
+
+- **Parcels**: `habitat` (semicolon-separated habitat types, e.g. "6.2.3 Waldmeister-Buchenwald") and `habitat_m2` (corresponding intersection areas)
+- **Land Cover**: same columns, but only populated for green space features
+
+### API Strategy
+
+To minimise API calls, features are fetched once per municipality (BFSNr) using the convex hull of all parcels in that group as a polygon spatial filter (`esriGeometryPolygon`). This is tighter than a bounding box and reduces false positives and pagination pressure from the API. Results are cached in memory so that the same municipality is never queried twice. All spatial intersections are performed locally using Shapely.
+
+> **Note:** The Swisstopo API offers many more potentially relevant datasets — see [BAFU Biodiversität Geodaten](https://www.bafu.admin.ch/de/biodiversitaet-geodaten) for a comprehensive list. The generic API client (`swisstopo.py`) makes it straightforward to add new layers.
 
 ## Data Source
 
@@ -180,14 +233,19 @@ Official Swiss cadastral survey data (Amtliche Vermessung), data model DM.01-AV-
 
 ```
 python/                      Python scripts (flat, no package)
-  cli.py                     CLI entry point
+  main.py                    Entry point — run this
   config.py                  Constants, BBArt classification, green space mapping
   geometry.py                Geometry cleanup (deaggregate → dissolve → make_valid)
   data_io.py                 Read/write CSV, Excel, GeoPackage
   pipeline.py                Main processing orchestration
+  swisstopo.py               Generic Swisstopo REST API client (fetch, cache, intersect)
+  bauzonen.py                Bauzonen layer configuration (ch.are.bauzonen)
+  habitat.py                 Lebensraumkarte layer configuration (ch.bafu.lebensraumkarte-schweiz)
 data/                        Input and output data
 docs/SPECIFICATION.md        Technical specification and data model
 fme/                         Original FME workflow (reference only)
+assets/                      Images (README banner)
+pyproject.toml               Package metadata and dependencies
 ```
 
 ## Documentation
@@ -203,6 +261,11 @@ See [docs/SPECIFICATION.md](docs/SPECIFICATION.md) for the full technical specif
 - Legal framework and references
 
 ## Legal Framework & References
+
+### Area Standards
+- **SIA 416:2003** — Flächen und Volumen von Gebäuden (Areas and volumes of buildings). Defines GSF = GGF + UF (BUF + UUF).
+- **DIN 277:2021** — Grundflächen und Rauminhalte im Hochbau (Areas and volumes in building construction). Defines GF = BF + UF.
+- **DIN 276** — Kosten im Bauwesen. KG 500 (Außenanlagen) for further AF subdivision.
 
 ### Data Model
 - [DM.01-AV-CH](https://www.cadastre-manual.admin.ch/de/datenmodell-der-amtlichen-vermessung-dm01-av-ch) — Current INTERLIS data model for the official cadastral survey (replaced by DMAV by 2027-12-31)

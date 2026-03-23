@@ -1,0 +1,53 @@
+ID,EGRID,fid,Art,BFSNr,GWR_EGID,Check_GreenSpace,area_m2,Bemerkung,bauzonen,bauzonen_m2,habitat,habitat_m2
+TEST-00905,CH157852083037,6033235665,Gartenanlage,6034,,Green space (soil-covered),40.3115445008217,,Zentrumszonen,25.0,4.6 Grasbrachen; 9.3.2 Asphalt- und Betonstrasse,40.2; 0.1
+TEST-00957,CH916358659411,6038004386,uebrige_befestigte,6633,,Not green space,303.6091642246671,,,,,
+TEST-00957,CH916358659411,6038005251,Gartenanlage,6633,,Green space (soil-covered),51.05744800068168,,Wohnzonen,51.1,"8.2.3 Hackfruchtacker (Sommerkultur), Garten; 9.0.2 Versiegelte vegetationslose Fläche ohne erkennbare Nutzung",50.9; 0.1
+TEST-00957,CH916358659411,6038001638,Gartenanlage,6633,,Green space (soil-covered),257.93459559975946,,Wohnzonen,257.9,"8.2.3 Hackfruchtacker (Sommerkultur), Garten; 9.0.2 Versiegelte vegetationslose Fläche ohne erkennbare Nutzung; 9.2 Bauten; 9.2 Bauten",257.2; 0.5; 0.1; 0.1
+TEST-00957,CH916358659411,6038110214,Gartenanlage,6633,,Green space (soil-covered),7.340736499487074,,Wohnzonen,7.3,"8.2.3 Hackfruchtacker (Sommerkultur), Garten; 9.0.2 Versiegelte vegetationslose Fläche ohne erkennbare Nutzung; 9.2 Bauten",7.2; 0.0; 0.1
+TEST-00957,CH916358659411,6038006697,Gebaeude,6633,295090422,Not green space,51.95782100069569,,,,,
+TEST-00957,CH916358659411,6038008085,Gebaeude,6633,1023310,Not green space,99.36515399830765,,,,,
+TEST-00644,CH885846358217,6044286886,Gebaeude,354,1270670,Not green space,138.61438849911548,,,,,
+TEST-00644,CH885846358217,6044286770,Gartenanlage,354,,Green space (soil-covered),491.7684290042484,,Wohnzonen; Zentrumszonen,491.3; 0.5,"9.2 Bauten; 8.2.3 Hackfruchtacker (Sommerkultur), Garten",0.3; 488.5
+TEST-00644,CH885846358217,6044428694,Strasse_Weg,354,,Not green space,56.688451000812,,,,,
+TEST-00020,CH427760110057,6048484476,Acker_Wiese_Weide,4436,,Green space (soil-covered),428.5912254985633,,Verkehrszonen innerhalb der Bauzonen,0.7,"4.5.1 Talfettwiesen (Fromentalwiese); 9.3.3 Naturstrasse, Weg",428.0; 0.6
+TEST-00495,CH915439087137,6049778859,Gartenanlage,2939,,Green space (soil-covered),852.0742329305739,,Wohnzonen,851.4,"9.2 Bauten; 6.2.1 Orchideen-Buchenwald; 6.2.1 Orchideen-Buchenwald; 8.2.3 Hackfruchtacker (Sommerkultur), Garten; 9.0.2 Versiegelte vegetationslose Fläche ohne erkennbare Nutzung",0.6; 0.6; 763.5; 87.2; 0.2
+TEST-00495,CH915439087137,6049779536,Gebaeude,2939,190025538,Not green space,136.23266050314598,,,,,
+TEST-00495,CH915439087137,6049779568,uebrige_befestigte,2939,,Not green space,22.51057806387235,,,,,
+TEST-00276,CH690292570744,6051614437,Acker_Wiese_Weide,5236,,Green space (soil-covered),22.3311757648305,,Zentrumszonen; Zentrumszonen; Zentrumszonen; Zentrumszonen; Zentrumszonen,0.0; 0.1; 0.8; 0.5; 20.9,"4.0.0.0.3 Rasen, nicht dynamisch; 9.0.2 Versiegelte vegetationslose Fläche ohne erkennbare Nutzung",22.3; 0.0
+TEST-00276,CH690292570744,6051735564,Gartenanlage,5236,,Green space (soil-covered),4.940871477709779,,Zentrumszonen; Zentrumszonen,0.4; 4.3,"9.0.2 Versiegelte vegetationslose Fläche ohne erkennbare Nutzung; 8.2.3 Hackfruchtacker (Sommerkultur), Garten",0.1; 4.9
+TEST-00276,CH690292570744,6051923410,Strasse_Weg,5236,,Not green space,19.920407861270743,,,,,
+TEST-00276,CH690292570744,6051614547,uebrige_befestigte,5236,,Not green space,4.497731894494825,,,,,
+TEST-00191,CH427798124555,6052860640,uebrige_befestigte,67,,Not green space,22.47967456925584,,,,,
+TEST-00191,CH427798124555,6052860643,Gartenanlage,67,,Green space (soil-covered),235.38504126534505,,Wohnzonen,235.0,"9.2 Bauten; 9.0.2 Versiegelte vegetationslose Fläche ohne erkennbare Nutzung; 9.0.2 Versiegelte vegetationslose Fläche ohne erkennbare Nutzung; 8.2.3 Hackfruchtacker (Sommerkultur), Garten",0.1; 0.0; 0.2; 235.1
+TEST-00191,CH427798124555,6052860646,Gartenanlage,67,,Green space (soil-covered),6.951442000602295,,Wohnzonen,7.0,"9.2 Bauten; 9.0.2 Versiegelte vegetationslose Fläche ohne erkennbare Nutzung; 8.2.3 Hackfruchtacker (Sommerkultur), Garten",0.0; 0.2; 6.7
+TEST-00191,CH427798124555,6052860265,uebrige_befestigte,67,,Not green space,31.343274604791688,,,,,
+TEST-00191,CH427798124555,6053348458,Strasse_Weg,67,,Not green space,0.0035456283569281766,,,,,
+TEST-00191,CH427798124555,6052860638,Gebaeude,67,210196112,Not green space,96.63072448308118,,,,,
+TEST-00357,CH210398947781,6052934696,Gartenanlage,191,,Green space (soil-covered),0.08934749918865328,,Wohnzonen,0.1,"8.2.3 Hackfruchtacker (Sommerkultur), Garten",0.1
+TEST-00357,CH210398947781,6052934714,uebrige_befestigte,191,,Not green space,0.0047006763934512395,,,,,
+TEST-00357,CH210398947781,6052934727,Gartenanlage,191,,Green space (soil-covered),0.012305717349444823,,Wohnzonen,0.0,"8.2.3 Hackfruchtacker (Sommerkultur), Garten",0.0
+TEST-00357,CH210398947781,6052934728,uebrige_befestigte,191,,Not green space,0.006993870073232544,,,,,
+TEST-00357,CH210398947781,6052934804,Gartenanlage,191,,Green space (soil-covered),0.024996165143494824,,Wohnzonen,0.0,"8.2.3 Hackfruchtacker (Sommerkultur), Garten",0.0
+TEST-00357,CH210398947781,6052934830,Trottoir,191,,Not green space,309.17121619035004,,,,,
+TEST-00357,CH210398947781,6052935872,Gartenanlage,191,,Green space (soil-covered),0.053573441794819,,Wohnzonen,0.1,"8.2.3 Hackfruchtacker (Sommerkultur), Garten",0.0
+TEST-00357,CH210398947781,6052932974,uebrige_befestigte,191,,Not green space,0.007173852010699117,,,,,
+TEST-00357,CH210398947781,6052934594,Trottoir,191,,Not green space,6.830751023066603,,,,,
+TEST-00357,CH210398947781,6052935114,Trottoir,191,,Not green space,103.13955846403167,,,,,
+TEST-00357,CH210398947781,6053314509,Strasse_Weg,191,,Not green space,1745.7325245548188,,,,,
+TEST-00357,CH210398947781,6052940773,uebrige_befestigte,191,,Not green space,0.021104094818475194,,,,,
+TEST-00357,CH210398947781,6052940777,uebrige_befestigte,191,,Not green space,0.019271403561103812,,,,,
+TEST-00357,CH210398947781,6052934636,Gartenanlage,191,,Green space (soil-covered),0.002039006873597882,,Wohnzonen,0.0,,
+TEST-00357,CH210398947781,6052940778,uebrige_befestigte,191,,Not green space,0.0028679574939247648,,,,,
+TEST-00357,CH210398947781,6052934639,Gartenanlage,191,,Green space (soil-covered),0.002132501271187031,,Wohnzonen,0.0,"8.2.3 Hackfruchtacker (Sommerkultur), Garten",0.0
+TEST-00357,CH210398947781,6052940283,uebrige_befestigte,191,,Not green space,0.0019699339071782888,,,,,
+TEST-00357,CH210398947781,6052940284,uebrige_befestigte,191,,Not green space,0.016832186738500027,,,,,
+TEST-00357,CH210398947781,6052940799,uebrige_befestigte,191,,Not green space,0.010931131009364471,,,,,
+TEST-00002,CH333077237248,6054725695,uebrige_befestigte,3237,,Not green space,357.02357147948874,,,,,
+TEST-00002,CH333077237248,6054725902,uebrige_befestigte,3237,,Not green space,0.0016329883477700512,,,,,
+TEST-00002,CH333077237248,6054725693,Gartenanlage,3237,,Green space (soil-covered),373.8295335221925,,Mischzonen; Zentrumszonen; Verkehrszonen innerhalb der Bauzonen,258.6; 114.8; 0.4,"4.0.0.0.1 Rasen, dynamisch; 8.2.3 Hackfruchtacker (Sommerkultur), Garten; 9.0.2 Versiegelte vegetationslose Fläche ohne erkennbare Nutzung",0.1; 373.6; 0.2
+TEST-00777,CH508133760622,6056880234,Strasse_Weg,4259,,Not green space,0.057636501097840576,,,,,
+TEST-00777,CH508133760622,6056464811,uebrige_befestigte,4259,,Not green space,76.00152499782769,,,,,
+TEST-00777,CH508133760622,6056465932,Gartenanlage,4259,,Green space (soil-covered),357.2179650230251,,Wohnzonen,357.2,"9.2 Bauten; 9.2 Bauten; 8.2.3 Hackfruchtacker (Sommerkultur), Garten",0.3; 0.1; 356.7
+TEST-00777,CH508133760622,6056464812,uebrige_befestigte,4259,,Not green space,5.51839247817132,,,,,
+TEST-00777,CH508133760622,6056465916,Gebaeude,4259,263021989,Not green space,8.240989999838863,,,,,
+TEST-00777,CH508133760622,6056465661,Gebaeude,4259,190255048,Not green space,110.30796299707563,,,,,

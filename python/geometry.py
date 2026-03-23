@@ -28,15 +28,22 @@ def clean_geometries(gdf: GeoDataFrame, group_col: str) -> GeoDataFrame:
     non_geom_cols = [c for c in gdf.columns if c != gdf.geometry.name and c != group_col]
     agg = {c: "first" for c in non_geom_cols}
 
-    # Split: only explode/dissolve rows that are actually multi-part
+    # Identify groups that need dissolving: any group with >1 row or multi-part geoms
+    counts = gdf.groupby(group_col).size()
     geom_types = gdf.geometry.geom_type
     multi_mask = geom_types.isin(["MultiPolygon", "MultiLineString", "GeometryCollection"])
+    groups_with_multi = set(gdf.loc[multi_mask, group_col])
+    groups_with_dups = set(counts[counts > 1].index)
+    groups_to_dissolve = groups_with_multi | groups_with_dups
 
-    if multi_mask.any():
-        singles = gdf[~multi_mask].copy()
-        multis = gdf[multi_mask].explode(index_parts=False)
-        multis = multis.dissolve(by=group_col, aggfunc=agg).reset_index()
-        result = pd.concat([singles, multis], ignore_index=True)
+    if groups_to_dissolve:
+        needs_dissolve = gdf[gdf[group_col].isin(groups_to_dissolve)]
+        passthrough = gdf[~gdf[group_col].isin(groups_to_dissolve)].copy()
+
+        dissolved = needs_dissolve.explode(index_parts=False)
+        dissolved = dissolved.dissolve(by=group_col, aggfunc=agg).reset_index()
+
+        result = pd.concat([passthrough, dissolved], ignore_index=True)
         result = GeoDataFrame(result, geometry=gdf.geometry.name, crs=gdf.crs)
     else:
         result = gdf.copy()

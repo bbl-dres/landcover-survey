@@ -11,10 +11,18 @@ dependencies = [
     "geopandas>=0.14",
     "pandas>=2.0",
     "shapely>=2.0",
+    "openpyxl",
 ]
 
-[tool.setuptools.packages.find]
-where = ["python"]
+[tool.setuptools]
+packages = []
+py-modules = [
+    "main", "config", "data_io", "geometry", "pipeline",
+    "swisstopo", "bauzonen", "habitat",
+]
+
+[tool.setuptools.package-dir]
+"" = "python"
 
 [project.scripts]
-landcover-survey = "landcover_survey.cli:main"
+landcover-survey = "main:main"

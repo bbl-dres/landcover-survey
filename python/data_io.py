@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import sqlite3
 from functools import lru_cache
 from pathlib import Path
@@ -18,6 +19,9 @@ from config import (
     LAYER_PARCELS,
     SQL_BATCH_SIZE,
 )
+
+# Compiled once — validates Swiss EGRID format (e.g. CH123456789012)
+_EGRID_RE = re.compile(r"^CH[0-9A-Za-z]+$")
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +41,12 @@ def read_user_input(path: str | Path) -> DataFrame:
     else:
         raise ValueError(f"Unsupported file format: {suffix}  (expected .csv or .xlsx)")
 
+    # Strip whitespace from column names and string values (common in SAP/ERP exports)
+    df.columns = df.columns.str.strip()
+    for col in df.columns:
+        if df[col].dtype == object:
+            df[col] = df[col].str.strip()
+
     missing = {"ID", "EGRID"} - set(df.columns)
     if missing:
         raise ValueError(f"Input file is missing required columns: {missing}")
@@ -49,7 +59,16 @@ def read_user_input(path: str | Path) -> DataFrame:
 # GeoPackage readers
 # ---------------------------------------------------------------------------
 
-def _validate_crs(gdf: GeoDataFrame, layer: str) -> None:
+def ensure_fid_column(gdf: GeoDataFrame) -> GeoDataFrame:
+    """Ensure ``fid`` is a regular column (not just the index)."""
+    if "fid" not in gdf.columns:
+        if hasattr(gdf.index, "name") and gdf.index.name == "fid":
+            gdf["fid"] = gdf.index
+            gdf = gdf.reset_index(drop=True)
+    return gdf
+
+
+def validate_crs(gdf: GeoDataFrame, layer: str) -> None:
     """Raise if the CRS is not EPSG:2056."""
     if gdf.crs is None:
         raise ValueError(f"Layer '{layer}' has no CRS defined.")
@@ -103,12 +122,17 @@ def read_parcels(
     gpkg_path = str(gpkg_path)
 
     if egrids is not None:
+        invalid = [e for e in egrids if not _EGRID_RE.match(e)]
+        if invalid:
+            logger.warning("Skipping %d invalid EGRIDs: %s", len(invalid), invalid[:5])
+            egrids = [e for e in egrids if _EGRID_RE.match(e)]
+
         # Batch the SQL IN clause to avoid very long queries
         frames: list[GeoDataFrame] = []
         for i in range(0, len(egrids), SQL_BATCH_SIZE):
             batch = egrids[i : i + SQL_BATCH_SIZE]
             values = ", ".join(f"'{e}'" for e in batch)
-            where = f"EGRIS_EGRID IN ({values})"
+            where = f'EGRIS_EGRID IN ({values})'
             gdf = _read_gpkg(gpkg_path, layer=LAYER_PARCELS, where=where)
             frames.append(gdf)
         if frames:
@@ -119,12 +143,12 @@ def read_parcels(
         else:
             gdf = gpd.read_file(gpkg_path, layer=LAYER_PARCELS, rows=0)
     elif bfsnr is not None:
-        where = f"BFSNr = {bfsnr}"
+        where = f"BFSNr = {int(bfsnr)}"
         gdf = _read_gpkg(gpkg_path, layer=LAYER_PARCELS, where=where)
     else:
         gdf = _read_gpkg(gpkg_path, layer=LAYER_PARCELS)
 
-    _validate_crs(gdf, LAYER_PARCELS)
+    validate_crs(gdf, LAYER_PARCELS)
     logger.info("Read %d parcels from %s", len(gdf), LAYER_PARCELS)
     return gdf
 
@@ -153,11 +177,7 @@ def read_landcover(
                 f"AND miny <= {maxy} AND maxy >= {miny})"
             )
             gdf = gpd.read_file(gpkg_path, sql=sql)
-            # Ensure fid is exposed as a column
-            if "fid" not in gdf.columns:
-                if hasattr(gdf.index, "name") and gdf.index.name == "fid":
-                    gdf["fid"] = gdf.index
-                    gdf = gdf.reset_index(drop=True)
+            gdf = ensure_fid_column(gdf)
         else:
             logger.debug("No R-tree index found — falling back to bbox filter")
             gdf = _read_gpkg(gpkg_path, layer=LAYER_LANDCOVER, bbox=bbox)
@@ -167,7 +187,7 @@ def read_landcover(
         logger.info("Read %d land cover features from %s", len(gdf), LAYER_LANDCOVER)
 
     if not gdf.empty:
-        _validate_crs(gdf, LAYER_LANDCOVER)
+        validate_crs(gdf, LAYER_LANDCOVER)
     return gdf
 
 
@@ -179,7 +199,7 @@ def get_bfsnr_list(gpkg_path: str | Path) -> list[int]:
     gpkg_path = str(gpkg_path)
     with sqlite3.connect(gpkg_path) as conn:
         rows = conn.execute(
-            f"SELECT DISTINCT BFSNr FROM {LAYER_PARCELS} ORDER BY BFSNr"
+            f'SELECT DISTINCT BFSNr FROM "{LAYER_PARCELS}" ORDER BY BFSNr'
         ).fetchall()
     return [r[0] for r in rows if r[0] is not None]
 

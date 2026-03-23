@@ -7,6 +7,7 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 DEFAULT_GPKG_PATH = Path(r"D:\AV_lv95\av_2056.gpkg")
 CRS_EPSG = 2056
+CRS_STRING = f"EPSG:{CRS_EPSG}"
 SLIVER_THRESHOLD = 0.001  # m² — clip results smaller than this are dropped
 
 # GeoPackage layer names
@@ -62,13 +63,14 @@ SIA416: dict[str, str] = {
     "Gartenanlage": "BUF",
     "Hoch_Flachmoor": "BUF",
     "uebrige_humusierte": "BUF",
+    # BUF — Wytweide: officially bestockt, but actively managed pasture = bearbeitet (SIA 416)
+    "Wytweide_dicht": "BUF",
+    "Wytweide_offen": "BUF",
     # UUF — Unbearbeitete Umgebungsfläche (Gewässer + bestockt + vegetationslos)
-    "stehendes": "UUF",
-    "fliessendes": "UUF",
+    "Gewaesser_stehendes": "UUF",
+    "Gewaesser_fliessendes": "UUF",
     "Schilfguertel": "UUF",
     "geschlossener_Wald": "UUF",
-    "Wytweide_dicht": "UUF",
-    "Wytweide_offen": "UUF",
     "uebrige_bestockte": "UUF",
     "Fels": "UUF",
     "Gletscher_Firn": "UUF",
@@ -81,6 +83,43 @@ SIA416: dict[str, str] = {
 VERSIEGELT_ARTS: set[str] = {
     "Gebaeude", "Strasse_Weg", "Trottoir", "Verkehrsinsel",
     "Bahn", "Flugplatz", "Wasserbecken", "uebrige_befestigte",
+}
+
+# ---------------------------------------------------------------------------
+# DIN 277:2021 classification  (Art → DIN 277 category)
+#
+# GF  (Grundstücksfläche) = BF + UF
+# AF  (Außenanlagenfläche) overlaps both — area outside the building
+# ---------------------------------------------------------------------------
+DIN277: dict[str, str] = {
+    # BF — Bebaute Fläche (überbaut / unterbaut)
+    "Gebaeude": "BF",
+    # UF — Unbebaute Fläche (nicht überbaut)
+    "Strasse_Weg": "UF",
+    "Trottoir": "UF",
+    "Verkehrsinsel": "UF",
+    "Bahn": "UF",
+    "Flugplatz": "UF",
+    "Wasserbecken": "UF",
+    "uebrige_befestigte": "UF",
+    "Acker_Wiese_Weide": "UF",
+    "Reben": "UF",
+    "uebrige_Intensivkultur": "UF",
+    "Gartenanlage": "UF",
+    "Hoch_Flachmoor": "UF",
+    "uebrige_humusierte": "UF",
+    "Wytweide_dicht": "UF",
+    "Wytweide_offen": "UF",
+    "Gewaesser_stehendes": "UF",
+    "Gewaesser_fliessendes": "UF",
+    "Schilfguertel": "UF",
+    "geschlossener_Wald": "UF",
+    "uebrige_bestockte": "UF",
+    "Fels": "UF",
+    "Gletscher_Firn": "UF",
+    "Geroell_Sand": "UF",
+    "Abbau_Deponie": "UF",
+    "uebrige_vegetationslose": "UF",
 }
 
 # ---------------------------------------------------------------------------

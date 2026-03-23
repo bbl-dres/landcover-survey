@@ -10,7 +10,7 @@ The tool clips every land cover polygon that intersects a parcel to the parcel b
 
 Two CSV output tables (no geometry exported). Both are exported by default and can be individually disabled:
 
-1. **Parcels** (`--no-parcels` to disable) — One row per parcel with identifiers, official area, calculated area, and optional aggregation columns (SIA 416, sealed area, green space, per-type breakdown). In Mode 1, user-provided columns and error messages for unresolved EGRIDs are included.
+1. **Parcels** (`--no-parcels` to disable) — One row per parcel with identifiers, official area, calculated area, and optional aggregation columns (SIA 416, sealed area, green space, per-type breakdown). In Mode 1, user-provided columns (prefixed with `input_`) and error messages for unresolved EGRIDs are included.
 
 2. **Land Cover** (`--no-landcover` to disable) — One row per clipped land cover piece per parcel, with the land cover type, clipped area, and green space classification.
 
@@ -23,7 +23,7 @@ The user provides a CSV or Excel file containing at minimum:
 - `ID` — user-defined feature identifier
 - `EGRID` — E-GRID foreign key used to look up the official parcel geometry in the AV data
 
-Additional user columns are preserved and carried through to the Parcels output. If an EGRID is not found in the survey data, the row appears in the Parcels output with an error message (`Check_EGRID`).
+Additional user columns are preserved and carried through to all outputs, prefixed with `input_` to distinguish them from tool-generated columns (e.g. `Address` → `input_Address`). If an EGRID is not found in the survey data, the row appears in the Parcels output with an error message (`Check_EGRID`).
 
 ### Mode 2: Full Survey Processing
 All parcels from the official survey GeoPackage (`resf` table) are processed. No user input file is needed.
@@ -58,7 +58,7 @@ A single EGRID can map to multiple `fid` entries in `resf` — e.g. during ongoi
 |-----------|--------|----------|----------|----------|----------------|----------------|
 | `ID` | `varchar` | Yes | ID | ID | User-defined feature identifier | Benutzerdefinierte Objektkennung |
 | `EGRID` | `varchar(14)` | Yes | E-GRID | E-GRID | Federal parcel identifier (foreign key to AV) | Eidgenössischer Grundstücksidentifikator (Fremdschlüssel zu AV) |
-| *(other columns)* | *(varies)* | No | — | — | Passed through unchanged to the Parcels output | Werden unverändert in die Parzellen-Ausgabe übernommen |
+| *(other columns)* | *(varies)* | No | — | — | Passed through to all outputs, prefixed with `input_` (e.g. `Address` → `input_Address`) | Werden mit Präfix `input_` in alle Ausgaben übernommen (z.B. `Adresse` → `input_Adresse`) |
 
 ### Input: Official Survey GeoPackage (AV)
 
@@ -120,8 +120,8 @@ The 26 land cover types are defined in the Swiss data model **DM.01-AV-CH** as t
 | 15 | Water (Gewässer) | — | `fliessendes` | Flowing water | Fliessendes Gewässer | UUF | No | — |
 | 16 | Water (Gewässer) | — | `Schilfguertel` | Reed belt | Schilfgürtel | UUF | No | — |
 | 17 | Wooded (Bestockt) | — | `geschlossener_Wald` | Closed forest | Geschlossener Wald | UUF | No | Wooded |
-| 18 | Wooded (Bestockt) | Wooded pasture (Wytweide) | `Wytweide_dicht` | Dense wooded pasture | Wytweide dicht | UUF | No | Soil-covered ** |
-| 19 | Wooded (Bestockt) | Wooded pasture (Wytweide) | `Wytweide_offen` | Open wooded pasture | Wytweide offen | UUF | No | Soil-covered ** |
+| 18 | Wooded (Bestockt) | Wooded pasture (Wytweide) | `Wytweide_dicht` | Dense wooded pasture | Wytweide dicht | BUF | No | Soil-covered ** |
+| 19 | Wooded (Bestockt) | Wooded pasture (Wytweide) | `Wytweide_offen` | Open wooded pasture | Wytweide offen | BUF | No | Soil-covered ** |
 | 20 | Wooded (Bestockt) | — | `uebrige_bestockte` | Other wooded | Übrige bestockte | UUF | No | Wooded |
 | 21 | Unvegetated (Vegetationslos) | — | `Fels` | Rock | Fels | UUF | No | — |
 | 22 | Unvegetated (Vegetationslos) | — | `Gletscher_Firn` | Glacier, firn | Gletscher, Firn | UUF | No | — |
@@ -192,10 +192,16 @@ One row per parcel. In Mode 1, includes user-provided columns and an error messa
 | `GGF_m2` | `float` | Optional | Building Footprint (m²) | Gebäudegrundfläche (m²) | Aggregated building footprint area (SIA 416 GGF) | Aggregierte Gebäudegrundfläche (SIA 416 GGF) |
 | `BUF_m2` | `float` | Optional | Developed Surrounding (m²) | Bearbeitete Umgebungsfläche (m²) | Aggregated developed surrounding area (SIA 416 BUF: sealed + soil-covered) | Aggregierte bearbeitete Umgebungsfläche (SIA 416 BUF: befestigt + humusiert) |
 | `UUF_m2` | `float` | Optional | Undeveloped Surrounding (m²) | Unbearbeitete Umgebungsfläche (m²) | Aggregated undeveloped surrounding area (SIA 416 UUF: water + wooded + unvegetated) | Aggregierte unbearbeitete Umgebungsfläche (SIA 416 UUF: Gewässer + bestockt + vegetationslos) |
+| `DIN277_BF_m2` | `float` | Optional | Built-Up Area (m²) | Bebaute Fläche (m²) | Buildings (DIN 277 BF) | Gebäude (DIN 277 BF) |
+| `DIN277_UF_m2` | `float` | Optional | Non-Built-Up Area (m²) | Unbebaute Fläche (m²) | Everything except buildings (DIN 277 UF) | Alles ausser Gebäuden (DIN 277 UF) |
 | `Sealed_m2` | `float` | Optional | Sealed Area (m²) | Versiegelte Fläche (m²) | GGF + sealed surfaces (buildings + all befestigt) | GGF + befestigte Flächen (Gebäude + alle befestigt) |
 | `GreenSpace_m2` | `float` | Optional | Green Space (m²) | Grünfläche (m²) | Total green space area (soil-covered + wooded types from green space classification) | Gesamte Grünfläche (humusiert + bestockt gemäss Grünfläche-Klassifizierung) |
 | `{Art}_m2` | `float` | Optional | Per-Type Area (m²) | Fläche pro Typ (m²) | One column per land cover type present (e.g. `Gebaeude_m2`, `Strasse_Weg_m2`) | Eine Spalte pro vorhandener Bodenabdeckungsart |
-| *(user columns)* | *(varies)* | Optional | — | — | Additional columns from user input (Mode 1 only) | Zusätzliche Spalten aus Benutzereingabe (nur Modus 1) |
+| `bauzonen` | `varchar` | Optional | Building Zones | Bauzonen | Semicolon-separated building zone names intersecting the parcel (`--bauzonen`) | Semikolon-getrennte Bauzonennamen, die die Parzelle schneiden |
+| `bauzonen_m2` | `varchar` | Optional | Building Zone Areas (m²) | Bauzonen-Flächen (m²) | Semicolon-separated intersection areas per building zone (`--bauzonen`) | Semikolon-getrennte Schnittflächen pro Bauzone |
+| `habitat` | `varchar` | Optional | Habitat Types | Lebensraumtypen | Semicolon-separated habitat type names intersecting the parcel (`--habitat`) | Semikolon-getrennte Lebensraumtypen, die die Parzelle schneiden |
+| `habitat_m2` | `varchar` | Optional | Habitat Areas (m²) | Lebensraum-Flächen (m²) | Semicolon-separated intersection areas per habitat type (`--habitat`) | Semikolon-getrennte Schnittflächen pro Lebensraumtyp |
+| `input_*` | *(varies)* | Optional | — | — | User-provided columns from input file, prefixed with `input_` (Mode 1 only) | Benutzerdefinierte Spalten aus der Eingabedatei, mit Präfix `input_` (nur Modus 1) |
 
 > **Note:** All aggregation columns are included by default. Use `--no-aggregate` to omit them. The sum of `GGF_m2 + BUF_m2 + UUF_m2` should approximate `parcel_area_m2` (small differences are expected due to topology gaps in the source data).
 
@@ -213,6 +219,10 @@ One row per clipped land cover feature per parcel. Exported by default; disable 
 | `GWR_EGID` | `integer` | Always | GWR Building ID | GWR-Gebäude-ID | Federal building register ID (may be empty) | Eidg. Gebäudeidentifikator (kann leer sein) |
 | `Check_GreenSpace` | `varchar` | Always | Green Space Check | Grünfläche-Prüfung | Green space classification based on `Art`: "Green space (soil-covered)", "Green space (wooded)", or "Not green space" | Grünfläche-Klassifizierung basierend auf `Art` |
 | `area_m2` | `float` | Always | LC Area (m²) | BA-Fläche (m²) | Calculated 2D planar area of clipped land cover polygon | Berechnete 2D-Planfläche des geschnittenen Bodenabdeckung-Polygons |
+| `bauzonen` | `varchar` | Optional | Building Zones | Bauzonen | Semicolon-separated building zone names intersecting this green space feature (`--bauzonen`, green spaces only) | Semikolon-getrennte Bauzonennamen (nur Grünflächen) |
+| `bauzonen_m2` | `varchar` | Optional | Building Zone Areas (m²) | Bauzonen-Flächen (m²) | Semicolon-separated intersection areas (`--bauzonen`, green spaces only) | Semikolon-getrennte Schnittflächen (nur Grünflächen) |
+| `habitat` | `varchar` | Optional | Habitat Types | Lebensraumtypen | Semicolon-separated habitat types intersecting this green space feature (`--habitat`, green spaces only) | Semikolon-getrennte Lebensraumtypen (nur Grünflächen) |
+| `habitat_m2` | `varchar` | Optional | Habitat Areas (m²) | Lebensraum-Flächen (m²) | Semicolon-separated intersection areas (`--habitat`, green spaces only) | Semikolon-getrennte Schnittflächen (nur Grünflächen) |
 
 ---
 
@@ -339,6 +349,21 @@ flowchart TD
 ### 9. Export Land Cover
 - **Write Output 2: Land Cover**
 
+### 10–11. Optional Analyses (Swisstopo API)
+
+When `--bauzonen` or `--habitat` is specified, the pipeline performs additional intersection analyses using the [Swisstopo REST API](https://api3.geo.admin.ch):
+
+1. **Fetch** — Features are fetched once per municipality (BFSNr) using the convex hull of all parcels in that group as the spatial filter (`esriGeometryPolygon`). This is tighter than a bounding box and reduces false positives from the API. Results are cached in memory.
+2. **Intersect parcels** — Each parcel is intersected with the fetched features. Results are aggregated per EGRID as semicolon-separated lists of feature names and areas.
+3. **Intersect green spaces** — Each green space land cover feature (from the LC output) is intersected with the fetched features. Results are aggregated per EGRID + fid.
+4. **Merge** — Aggregated results are joined onto the parcels and land cover outputs as additional columns (`{label}`, `{label}_m2`).
+
+Available layers:
+- **Bauzonen** (`--bauzonen`) — [Bauzonen Schweiz](https://www.are.admin.ch/bauzonen) (`ch.are.bauzonen`): harmonised building zones
+- **Habitat** (`--habitat`) — [BAFU Lebensraumkarte](https://www.bafu.admin.ch/de/biodiversitaet-geodaten) (`ch.bafu.lebensraumkarte-schweiz`): habitat type map
+
+The generic API client (`swisstopo.py`) makes it straightforward to add new layers by defining a `LayerConfig`.
+
 ---
 
 ## Implementation
@@ -384,19 +409,22 @@ landcover-survey/
 ├── fme/                          # Original FME workflow (reference only)
 │   └── Landcover Survey FME.fmw
 ├── python/                       # Python scripts (flat, no package)
-│   ├── cli.py                    # Entry point: python cli.py (argparse)
+│   ├── main.py                   # Entry point: python main.py (argparse + logging)
 │   ├── config.py                 # Constants, BBArt domain, green space mapping, defaults
 │   ├── geometry.py               # Geometry cleanup pipeline
 │   ├── data_io.py                # Read/write CSV, Excel, GeoPackage layers
-│   └── pipeline.py               # Main processing orchestration
+│   ├── pipeline.py               # Main processing orchestration
+│   ├── swisstopo.py              # Generic Swisstopo REST API client (fetch, cache, intersect)
+│   ├── bauzonen.py               # Bauzonen layer configuration (ch.are.bauzonen)
+│   └── habitat.py                # Lebensraumkarte layer configuration (ch.bafu.lebensraumkarte-schweiz)
 ├── pyproject.toml                # Project metadata, dependencies
 └── LICENSE
 ```
 
 ### Module Responsibilities
 
-#### `cli.py` — Command-Line Interface
-Parses arguments and calls the pipeline. Minimal logic — delegates immediately.
+#### `main.py` — Entry Point
+Parses arguments, configures logging, and calls the pipeline.
 
 ```
 Arguments:
@@ -409,14 +437,18 @@ Arguments:
   --no-aggregate          Disable land cover area aggregation on parcels output
   --no-parcels            Skip exporting the parcels CSV
   --no-landcover          Skip exporting the land cover CSV
+  --bauzonen              Intersect with Swisstopo Bauzonen (requires internet)
+  --habitat               Intersect with BAFU Lebensraumkarte (requires internet)
   --verbose, -v           Enable DEBUG logging
 ```
 
-Logging goes to both console and `<output-dir>/landcover_survey.log`.
+Logging goes to both console and `<output-dir>/{prefix}{timestamp}.log`.
 
 #### `config.py` — Constants and Classification
 - `GREEN_SPACE: dict[str, str]` — maps each `Art` value to its green space category
 - `SIA416: dict[str, str]` — maps each `Art` value to SIA 416 category (GGF / BUF / UUF)
+- `DIN277: dict[str, str]` — maps each `Art` value to DIN 277 category (BF / UF)
+- `VERSIEGELT_ARTS: set[str]` — Art values that count as sealed
 - `DEFAULT_GPKG_PATH`, `SLIVER_THRESHOLD` (0.001 m²), `CRS_EPSG` (2056), `COL_FLAECHE`
 - No runtime state — pure constants
 
@@ -440,7 +472,7 @@ def filter_clip_results(gdf: GeoDataFrame, threshold: float = 0.001) -> GeoDataF
 ```
 
 #### `data_io.py` — Input/Output
-Handles all file reading and writing. Isolates file format dependencies.
+Handles all file reading and writing. Isolates file format dependencies. Validates EGRIDs against the Swiss format (`CH[0-9A-Za-z]+`) before constructing SQL queries.
 
 ```python
 def read_user_input(path: str) -> DataFrame:
@@ -458,7 +490,7 @@ def write_csv(df: DataFrame, path: str) -> None:
 ```
 
 #### `pipeline.py` — Main Processing Orchestration
-Coordinates the full workflow. Two entry points, one shared core.
+Coordinates the full workflow. Parcel geometries and clipped LC geometries are retained in memory throughout the pipeline to avoid redundant GeoPackage reads during optional layer analyses.
 
 ```python
 def run(mode: int, input_path: str | None, gpkg_path: str, output_dir: str) -> None:
@@ -479,6 +511,23 @@ def _process_landcover(parcels_gdf, gpkg_path) -> DataFrame:
 def _clip_single_parcel(lcsf, parcel) -> DataFrame:
     """Clip LC features against one parcel using vectorised shapely.intersection."""
 ```
+
+#### `swisstopo.py` — Generic Swisstopo REST API Client
+Fetches features from any geo.admin.ch MapServer layer via the [Identify endpoint](https://api3.geo.admin.ch/rest/services/ech/MapServer/identify). Uses polygon geometry (`esriGeometryPolygon`) for a tighter spatial filter than a bounding box. Results are cached per BFSNr to avoid duplicate API calls.
+
+```python
+def fetch_features_for_polygon(geom, cfg: LayerConfig) -> GeoDataFrame:
+    """Fetch features intersecting a polygon geometry (paginated)."""
+
+def fetch_features_cached(parcels_gdf: GeoDataFrame, cfg: LayerConfig) -> GeoDataFrame:
+    """Fetch features for all parcels, cached by BFSNr (convex hull per municipality)."""
+
+def intersect_with_features(geom_gdf, features_gdf, cfg, id_cols) -> DataFrame:
+    """Intersect geometries with fetched features and return area breakdown."""
+```
+
+#### `bauzonen.py` / `habitat.py` — Layer Configurations
+Thin wrappers around `swisstopo.py` that define the layer ID and column mappings for Bauzonen (`ch.are.bauzonen`) and Lebensraumkarte (`ch.bafu.lebensraumkarte-schweiz`) respectively.
 
 ### Key Design Decisions
 
