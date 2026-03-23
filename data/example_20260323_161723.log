@@ -1,0 +1,21 @@
+16:17:23 INFO     __main__ — Landcover Survey started — mode=1, output=C:\Users\DavidRasner\Documents\GitHub\landcover-survey\data, limit=10
+16:17:23 INFO     data_io — Read 1000 rows from example.csv
+16:17:23 INFO     pipeline — Limiting to first 10 rows (of 1000)
+16:17:23 INFO     pipeline — Loaded 10 rows — processing in 1 chunk(s) of 10000
+16:17:23 INFO     pipeline —   Looking up 10 unique EGRIDs
+16:17:27 INFO     data_io — Read 10 parcels from resf
+16:17:27 INFO     pipeline —   Clipping land cover for 10 parcels
+16:17:27 INFO     pipeline —   Clipped 52 land cover rows from 10 parcels
+16:17:27 INFO     pipeline — Aggregated land cover areas onto 10 parcels
+16:17:27 INFO     pipeline — bauzonen — processing 10 parcels (ch.are.bauzonen)
+16:17:27 INFO     pipeline — bauzonen — parcels 10/10
+16:17:29 INFO     pipeline — bauzonen — green spaces 19/19
+16:17:29 INFO     pipeline — bauzonen complete
+16:17:29 INFO     pipeline — habitat — processing 10 parcels (ch.bafu.lebensraumkarte-schweiz)
+16:17:34 INFO     pipeline — habitat — parcels 10/10
+16:17:36 INFO     pipeline — habitat — green spaces 19/19
+16:17:36 INFO     pipeline — habitat complete
+16:17:36 INFO     pipeline — Exporting final results
+16:17:36 INFO     data_io — Wrote 10 rows to example_parcels_20260323_161723.csv
+16:17:36 INFO     data_io — Wrote 52 rows to example_landcover_20260323_161723.csv
+16:17:36 INFO     pipeline — Done in 0m13s — 10 parcels, 52 land cover rows → C:\Users\DavidRasner\Documents\GitHub\landcover-survey\data

@@ -96,7 +96,11 @@
       "Bash(done)",
       "Bash(python python/main.py --input data/example.csv --gpkg \"D:\\\\AV_lv95\\\\av_2056.gpkg\" --limit 10 --bauzonen --habitat -v)",
       "Bash(python python/main.py --input data/example.csv --gpkg \"D:\\\\AV_lv95\\\\av_2056.gpkg\" --limit 3)",
-      "Bash(python python/main.py --input \"C:\\\\Users\\\\DavidRasner\\\\Downloads\\\\SAP Grundstücke 260323.csv\" --gpkg \"D:\\\\AV_lv95\\\\av_2056.gpkg\" --bauzonen --habitat -v)"
+      "Bash(python python/main.py --input \"C:\\\\Users\\\\DavidRasner\\\\Downloads\\\\SAP Grundstücke 260323.csv\" --gpkg \"D:\\\\AV_lv95\\\\av_2056.gpkg\" --bauzonen --habitat -v)",
+      "Bash(python -m py_compile python/swisstopo.py)",
+      "Bash(python python/main.py --input data/example.csv --gpkg \"D:\\\\AV_lv95\\\\av_2056.gpkg\" --limit 5 --bauzonen --habitat)",
+      "Bash(python python/main.py --input data/example.csv --gpkg \"D:\\\\AV_lv95\\\\av_2056.gpkg\" --limit 10 --bauzonen --habitat)",
+      "Bash(python python/main.py --input \"C:\\\\Users\\\\DavidRasner\\\\Downloads\\\\SAP Grundstücke 260323.csv\" --gpkg \"D:\\\\AV_lv95\\\\av_2056.gpkg\" --bauzonen --habitat)"
     ]
   }
 }

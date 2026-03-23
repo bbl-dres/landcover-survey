@@ -353,7 +353,7 @@ flowchart TD
 
 When `--bauzonen` or `--habitat` is specified, the pipeline performs additional intersection analyses using the [Swisstopo REST API](https://api3.geo.admin.ch):
 
-1. **Fetch** — Features are fetched once per municipality (BFSNr) using the convex hull of all parcels in that group as the spatial filter (`esriGeometryPolygon`). This is tighter than a bounding box and reduces false positives from the API. Results are cached in memory.
+1. **Fetch** — Features are fetched per-parcel using each parcel's polygon as the spatial filter (`esriGeometryPolygon`). This keeps API responses small and targeted.
 2. **Intersect parcels** — Each parcel is intersected with the fetched features. Results are aggregated per EGRID as semicolon-separated lists of feature names and areas.
 3. **Intersect green spaces** — Each green space land cover feature (from the LC output) is intersected with the fetched features. Results are aggregated per EGRID + fid.
 4. **Merge** — Aggregated results are joined onto the parcels and land cover outputs as additional columns (`{label}`, `{label}_m2`).

@@ -31,7 +31,7 @@ from config import (
     VERSIEGELT_ARTS,
 )
 from geometry import clean_geometries, filter_clip_results
-from swisstopo import LayerConfig, fetch_features_cached, intersect_with_features
+from swisstopo import LayerConfig, intersect_with_features
 from bauzonen import BAUZONEN_CONFIG
 from habitat import HABITAT_CONFIG
 from data_io import (
@@ -553,11 +553,7 @@ def _clip_single_parcel(
     result.geometry = shapely.make_valid(result.geometry.values)
 
     # Filter out non-polygon results and slivers
-    n_before = len(result)
     result = filter_clip_results(result)
-    n_dropped = n_before - len(result)
-    if n_dropped > 0:
-        logger.debug("Dropped %d non-polygon/sliver results after clip", n_dropped)
 
     if result.empty:
         return _empty_landcover_df()
@@ -791,6 +787,44 @@ def _empty_landcover_df() -> DataFrame:
 
 
 
+API_MAX_WORKERS = 10
+
+
+def _fetch_and_intersect_single(
+    geom,
+    row_data: dict,
+    cfg: LayerConfig,
+    id_cols: list[str],
+    crs: str,
+) -> list[dict]:
+    """Fetch API features for one geometry and intersect locally.
+
+    Thread-safe: each call makes its own API request and local intersection.
+    Returns a list of result dicts (may be empty).
+    """
+    from swisstopo import fetch_features_for_polygon
+
+    row_id = row_data.get("EGRID", row_data.get("fid", "?"))
+
+    if geom is None or geom.is_empty:
+        return []
+    if not geom.is_valid:
+        geom = shapely.make_valid(geom)
+
+    try:
+        features = fetch_features_for_polygon(geom, cfg)
+    except Exception as e:
+        logger.error("%s — API error for %s: %s", cfg.layer_id, row_id, e)
+        return []
+
+    if features.empty:
+        return []
+
+    row_gdf = GeoDataFrame([row_data], geometry="geometry", crs=crs)
+    hits = intersect_with_features(row_gdf, features, cfg, id_cols=id_cols)
+    return [h.to_dict() for _, h in hits.iterrows()]
+
+
 def _run_layer_analysis(
     cfg: LayerConfig,
     label: str,
@@ -800,77 +834,93 @@ def _run_layer_analysis(
 ) -> tuple[DataFrame, DataFrame]:
     """Intersect parcels and green spaces with a Swisstopo layer.
 
+    Fetches per-geometry using parallel API calls (up to API_MAX_WORKERS).
     Aggregates results as semicolon-separated arrays onto parcels_out and lc_out.
-    Returns the updated (parcels_out, lc_out) DataFrames.
     """
-    logger.info("Starting %s analysis (%s)", label, cfg.layer_id)
-    cfg.clear_cache()
+    from concurrent.futures import ThreadPoolExecutor, as_completed
 
-    # Pick the first mapped column as the "name" column for aggregation
+    n_parcels = len(parcels_gdf)
+    logger.info("%s — processing %d parcels (%s)", label, n_parcels, cfg.layer_id)
+
     name_col = list(cfg.column_map.values())[0]
 
-    # Fetch features (cached per BFSNr)
-    features_gdf = fetch_features_cached(parcels_gdf, cfg)
-    if features_gdf.empty:
-        logger.warning("No %s features found for any parcel — skipping", label)
-        parcels_out[f"{label}"] = ""
-        parcels_out[f"{label}_m2"] = ""
-        lc_out[f"{label}"] = ""
-        lc_out[f"{label}_m2"] = ""
-        return parcels_out, lc_out
+    # --- 1) Parcels × layer → parallel fetch + intersect ---
+    parcel_results: list[dict] = []
+    futures = {}
+    with ThreadPoolExecutor(max_workers=API_MAX_WORKERS) as pool:
+        for _, row in parcels_gdf.iterrows():
+            row_data = {col: row[col] for col in row.index}
+            row_data["geometry"] = row.geometry
+            fut = pool.submit(
+                _fetch_and_intersect_single,
+                row.geometry, row_data, cfg,
+                id_cols=["ID", "EGRID"], crs=CRS_STRING,
+            )
+            futures[fut] = row.get("EGRID", "")
 
-    logger.info("Total %s features for intersection: %d", label, len(features_gdf))
+        done = 0
+        for fut in as_completed(futures):
+            done += 1
+            results = fut.result()
+            parcel_results.extend(results)
+            if done % 50 == 0 or done == n_parcels:
+                logger.info("%s — parcels %d/%d", label, done, n_parcels)
 
-    # --- 1) Parcels × layer → aggregate per EGRID ---
-    logger.info("Intersecting %d parcels with %s", len(parcels_gdf), label)
-    raw_parcels = intersect_with_features(
-        parcels_gdf, features_gdf, cfg, id_cols=["ID", "EGRID"],
-    )
+    raw_parcels = DataFrame(parcel_results) if parcel_results else DataFrame()
     parcel_agg = _aggregate_layer_results(raw_parcels, "EGRID", name_col, label)
     parcels_out = parcels_out.merge(parcel_agg, on="EGRID", how="left")
     parcels_out[f"{label}"] = parcels_out[f"{label}"].fillna("")
     parcels_out[f"{label}_m2"] = parcels_out[f"{label}_m2"].fillna("")
 
-    # --- 2) Green spaces × layer → aggregate per EGRID + fid ---
-    # Use retained geometry from LC output (avoids re-reading from GeoPackage)
+    # --- 2) Green spaces × layer → parallel fetch + intersect ---
     has_geometry = "geometry" in lc_out.columns
-    green_lc = lc_out[lc_out["Check_GreenSpace"] != "Not green space"].copy()
+    green_lc = lc_out[lc_out["Check_GreenSpace"] != "Not green space"].copy() if has_geometry else DataFrame()
 
-    if green_lc.empty or "fid" not in green_lc.columns:
-        logger.info("No green spaces to intersect with %s", label)
-        lc_out[f"{label}"] = ""
-        lc_out[f"{label}_m2"] = ""
-    elif not has_geometry:
-        logger.warning("No geometry in LC output — skipping green space × %s", label)
+    if green_lc.empty or "fid" not in green_lc.columns or not has_geometry:
         lc_out[f"{label}"] = ""
         lc_out[f"{label}_m2"] = ""
     else:
-        # Build GeoDataFrame from the retained clipped geometries
         green_gs_gdf = GeoDataFrame(
             green_lc[["ID", "EGRID", "fid", "Art", "Check_GreenSpace", "geometry"]],
-            geometry="geometry",
-            crs=CRS_STRING,
+            geometry="geometry", crs=CRS_STRING,
         )
         green_gs_gdf = green_gs_gdf[
             green_gs_gdf.geometry.notna() & ~green_gs_gdf.geometry.is_empty
         ]
+        n_green = len(green_gs_gdf)
 
-        if green_gs_gdf.empty:
+        if n_green == 0:
             lc_out[f"{label}"] = ""
             lc_out[f"{label}_m2"] = ""
         else:
-            logger.info("Intersecting %d green space polygons with %s", len(green_gs_gdf), label)
-            raw_green = intersect_with_features(
-                green_gs_gdf, features_gdf, cfg,
-                id_cols=["ID", "EGRID", "fid", "Art", "Check_GreenSpace"],
-            )
-            # Aggregate per EGRID + fid (one LC row)
+            green_results: list[dict] = []
+            futures = {}
+            with ThreadPoolExecutor(max_workers=API_MAX_WORKERS) as pool:
+                for _, row in green_gs_gdf.iterrows():
+                    row_data = {col: row[col] for col in row.index}
+                    row_data["geometry"] = row.geometry
+                    fut = pool.submit(
+                        _fetch_and_intersect_single,
+                        row.geometry, row_data, cfg,
+                        id_cols=["ID", "EGRID", "fid", "Art", "Check_GreenSpace"],
+                        crs=CRS_STRING,
+                    )
+                    futures[fut] = row.get("fid", "")
+
+                done = 0
+                for fut in as_completed(futures):
+                    done += 1
+                    green_results.extend(fut.result())
+                    if done % 50 == 0 or done == n_green:
+                        logger.info("%s — green spaces %d/%d", label, done, n_green)
+
+            raw_green = DataFrame(green_results) if green_results else DataFrame()
             lc_agg = _aggregate_layer_results(raw_green, ["EGRID", "fid"], name_col, label)
             lc_out = lc_out.merge(lc_agg, on=["EGRID", "fid"], how="left")
             lc_out[f"{label}"] = lc_out[f"{label}"].fillna("")
             lc_out[f"{label}_m2"] = lc_out[f"{label}_m2"].fillna("")
 
-    logger.info("%s analysis complete — columns added: %s, %s_m2", label, label, label)
+    logger.info("%s complete", label)
     return parcels_out, lc_out
 
 

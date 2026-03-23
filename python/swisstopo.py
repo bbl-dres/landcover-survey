@@ -122,7 +122,6 @@ def _fetch_page(
 ) -> list[dict[str, Any]]:
     params = _build_params(geometry_json, geometry_type, bbox, layer_id, offset=offset)
     url = f"{IDENTIFY_URL}?{urllib.parse.urlencode(params)}"
-    logger.debug("  API request: offset=%d, url=%s", offset, url)
 
     req = urllib.request.Request(url, headers={"User-Agent": "landcover-survey/1.0"})
     last_err: Exception | None = None
@@ -133,6 +132,9 @@ def _fetch_page(
             return data.get("results", [])
         except urllib.error.HTTPError as e:
             last_err = e
+            if e.code in (400, 414):
+                logger.debug("  HTTP %d for %s — geometry invalid or too complex, skipping", e.code, layer_id)
+                return []
             if e.code == 429 or e.code >= 500:
                 wait = API_PAUSE * (2 ** attempt)
                 logger.warning("  HTTP %d — retrying in %.1fs (attempt %d/%d)",
@@ -213,8 +215,11 @@ def _fetch_and_parse(
 
     gdf = GeoDataFrame(rows, geometry="geometry", crs=CRS_STRING)
     gdf = gdf.drop_duplicates(subset=cfg.id_column).reset_index(drop=True)
-    logger.info("  Fetched %d %s features from API", len(gdf), cfg.layer_id)
+    logger.debug("  Fetched %d %s features from API", len(gdf), cfg.layer_id)
     return gdf
+
+
+MAX_URL_COORDS = 200  # simplify polygons with more vertices than this
 
 
 def fetch_features_for_polygon(
@@ -225,7 +230,14 @@ def fetch_features_for_polygon(
 
     Uses ``esriGeometryPolygon`` for a tighter spatial filter than a
     bounding box, reducing false positives and pagination pressure.
+    Simplifies complex geometries to stay within URL length limits.
     """
+    # Fall back to bounding box for complex polygons to avoid HTTP 414 (URI too long)
+    n_coords = shapely.get_num_coordinates(geom)
+    if n_coords > MAX_URL_COORDS:
+        logger.debug("Geometry has %d coords — falling back to bbox", n_coords)
+        return fetch_features_for_bbox(geom.bounds, cfg)
+
     geom_json = _geom_to_esri_json(geom)
     bbox = geom.bounds
     return _fetch_and_parse(geom_json, "esriGeometryPolygon", bbox, cfg)
@@ -271,8 +283,8 @@ def fetch_features_cached(
 
         hull = group.union_all().convex_hull
         bounds = hull.bounds
-        logger.info("  Fetching %s for BFSNr %s (polygon, bbox: %.0f,%.0f,%.0f,%.0f)",
-                     cfg.layer_id, bfsnr, *bounds)
+        logger.debug("  Fetching %s for BFSNr %s (polygon, bbox: %.0f,%.0f,%.0f,%.0f)",
+                      cfg.layer_id, bfsnr, *bounds)
         gdf = fetch_features_for_polygon(hull, cfg)
         cfg.cache[cache_key] = gdf
         frames.append(gdf)

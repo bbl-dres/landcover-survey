@@ -217,7 +217,7 @@ Intersects parcels and green spaces with the [BAFU Habitat Map of Switzerland](h
 
 ### API Strategy
 
-To minimise API calls, features are fetched once per municipality (BFSNr) using the convex hull of all parcels in that group as a polygon spatial filter (`esriGeometryPolygon`). This is tighter than a bounding box and reduces false positives and pagination pressure from the API. Results are cached in memory so that the same municipality is never queried twice. All spatial intersections are performed locally using Shapely.
+Features are fetched per-parcel using each parcel's polygon as the spatial filter (`esriGeometryPolygon`). This keeps API responses small and avoids fetching thousands of irrelevant features. For green space analysis, each green space polygon is queried individually as well. All spatial intersections are performed locally using Shapely for precise area calculation.
 
 > **Note:** The Swisstopo API offers many more potentially relevant datasets — see [BAFU Biodiversität Geodaten](https://www.bafu.admin.ch/de/biodiversitaet-geodaten) for a comprehensive list. The generic API client (`swisstopo.py`) makes it straightforward to add new layers.
 
