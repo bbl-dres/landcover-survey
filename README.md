@@ -18,6 +18,11 @@ The solution is available in three variants:
 - **[Python CLI](python/)** — Open-source, requires Python >= 3.10 and free dependencies. Processes locally with exact LV95 areas.
 - **[FME](fme/)** — Requires a licensed copy of [FME Form](https://fme.safe.com/fme-form/).
 
+<p align="center">
+  <img src="assets/images/preview5.jpg" width="45%" style="vertical-align: top;"/>
+  <img src="assets/images/preview6.jpg" width="45%" style="vertical-align: top;"/>
+</p>
+
 ## Web App
 
 The browser-based version runs entirely client-side — no backend, no installation. Upload a CSV with `ID` and `EGRID` columns and the app will:
