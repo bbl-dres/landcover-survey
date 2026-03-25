@@ -440,14 +440,30 @@ function showResults() {
   showState("results");
   updateSummaryPanel();
 
-  document.getElementById("summary-panel").classList.remove("collapsed");
-  setSummaryToggleVisible(false);
+  const isMobile = window.innerWidth <= 767;
+
+  // On mobile: collapse summary & table to give map full space
+  if (isMobile) {
+    document.getElementById("summary-panel").classList.add("collapsed");
+    setSummaryToggleVisible(true);
+  } else {
+    document.getElementById("summary-panel").classList.remove("collapsed");
+    setSummaryToggleVisible(false);
+  }
 
   initTable(document.getElementById("results-table-container"), {
     onParcelSelect: (index) => highlightParcel(index),
     onLandcoverSelect: (lcIndex) => highlightLandcover(lcIndex),
   });
   populateTable(processedResults.parcels, processedResults.landcover);
+
+  // On mobile: start with table collapsed so map gets full space
+  if (isMobile) {
+    const tablePanel = document.getElementById("results-table-container");
+    const tblBtn = document.getElementById("tbl-toggle");
+    tablePanel.classList.add("collapsed");
+    tblBtn.classList.add("collapsed");
+  }
 
   // Show search bar + header buttons
   document.getElementById("search-wrapper").hidden = false;

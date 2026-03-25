@@ -1050,7 +1050,7 @@ main { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: 
   #btn-new { font-size: var(--text-2xs); }
   #btn-download span:last-child { display: none; }
 
-  /* Footer */
+  /* Footer — minimal on mobile */
   #footer { font-size: var(--text-2xs); padding: 0 var(--space-3); }
   #footer-coords { display: none; }
 
@@ -1058,29 +1058,41 @@ main { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: 
   .upload-container { padding: var(--space-4); }
   .upload-card { padding: var(--space-5) var(--space-4); }
   .intro-title { font-size: var(--text-lg); }
+  .intro-desc { font-size: var(--text-xs); }
   .steps { flex-direction: column; gap: var(--space-2); }
   .step-arrow { transform: rotate(90deg); }
-  .drop-zone { padding: var(--space-8) var(--space-4); }
+  .step { padding: var(--space-2) var(--space-4); }
+  .drop-zone { padding: var(--space-6) var(--space-4); }
+  .drop-zone h2 { font-size: var(--text-lg); }
+  .drop-zone-icon svg { width: 40px; height: 40px; }
 
-  /* Results layout: stack vertically */
+  /* Results layout: stack vertically, map takes priority */
   .results-container { flex-direction: column; }
+  .results-main { flex: 1; min-height: 0; }
 
-  /* Summary panel: bottom sheet */
+  /* Summary panel: overlay slide-up sheet on mobile */
   .summary-panel {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
     width: 100% !important;
-    max-height: 50vh;
+    max-height: 60vh;
     border-left: none;
     border-top: var(--space-px) solid var(--gray-300);
-    order: 3;
+    z-index: var(--z-accordion);
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
+    transition: max-height var(--duration-normal) ease, opacity var(--duration-normal) ease;
   }
-  .summary-panel.collapsed { max-height: 0; height: 0; }
+  .summary-panel.collapsed { max-height: 0; height: 0; opacity: 0; overflow: hidden; border-top: none; box-shadow: none; }
 
-  /* Map panel */
-  .map-panel { min-height: 200px; }
+  /* Map panel — full available height */
+  .map-panel { min-height: 250px; flex: 1; }
 
   /* Accordion menu — compact */
   #accordion-panel { width: 240px; }
-  #menu-toggle { font-size: var(--text-xs); }
+  #menu-toggle { font-size: var(--text-xs); padding: var(--space-2) var(--space-3); }
+  #menu-toggle-text { display: none; }
   .accordion-header { padding: var(--space-2) var(--space-3); }
   .accordion-content { padding: var(--space-2) var(--space-3); }
   .active-layer-item { padding: var(--space-2); min-height: var(--touch-target-min); }
@@ -1098,16 +1110,25 @@ main { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: 
   .sp-agg-select { font-size: var(--text-2xs); }
   .sp-donut { width: 100px; height: 100px; }
 
-  /* Table — compact touch-friendly */
-  .table-panel { height: 35vh; }
+  /* Table — hidden by default on mobile (toggled via JS), slide-up when shown */
+  .table-panel { height: 45vh; }
   .toolbar { flex-wrap: wrap; gap: var(--space-2); padding: var(--space-2) var(--space-3); min-height: auto; }
   .toolbar-search { min-width: 0; flex: 1; order: 10; width: 100%; }
   .toolbar-actions { order: 5; }
   .table-tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   .table-tab { padding: var(--space-1) var(--space-3); min-height: var(--touch-target-min); }
-  .list-table td, .list-table th { padding: var(--space-1) var(--space-2); }
-  .pagination-footer { flex-wrap: wrap; gap: var(--space-2); padding: var(--space-1) var(--space-3); }
+  .list-table td, .list-table th { padding: var(--space-2) var(--space-3); }
+  .list-table tbody tr { min-height: var(--touch-target-min); }
+  .pagination-footer { flex-wrap: wrap; gap: var(--space-2); padding: var(--space-2) var(--space-3); }
+  .pagination-info { flex: none; width: 100%; }
   .pagination-btn { min-width: var(--touch-target-min); min-height: var(--touch-target-min); }
+
+  /* Table toggle — larger touch target on mobile */
+  .tbl-toggle {
+    padding: var(--space-2) var(--space-5);
+    font-size: var(--text-sm);
+    bottom: var(--space-4);
+  }
 
   /* Popups compact */
   .map-popup { padding: var(--space-3); min-width: 160px; }
@@ -1117,12 +1138,20 @@ main { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: 
   /* Context menu — touch friendly */
   .map-context-menu .context-menu-item { min-height: var(--touch-target-min); }
 
-  /* Download modal */
-  .dl-modal { width: 95%; max-width: none; }
+  /* Download modal — full-width bottom sheet style */
+  .dl-overlay { align-items: flex-end; }
+  .dl-modal { width: 100%; max-width: none; border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
   .dl-option { min-height: var(--touch-target-min); }
+
+  /* Layer info modal */
   .layer-info-modal { padding: var(--space-3); }
   .layer-info-modal-content { max-height: 90vh; }
   .layer-info-body { padding: var(--space-3); }
+
+  /* Processing — tighter padding */
+  .processing-container { padding: var(--space-4); }
+  .processing-card { padding: var(--space-5) var(--space-4); }
+  .processing-card h2 { font-size: var(--text-lg); margin-bottom: var(--space-4); }
 }
 
 /* ══════════════════════════════════════════════
@@ -1137,14 +1166,27 @@ main { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: 
   #search-input { font-size: var(--text-2xs); }
 
   #accordion-wrapper { margin: var(--space-2); }
-  #accordion-panel { width: 200px; }
+  #accordion-panel { width: calc(100vw - var(--space-4)); max-width: 260px; }
 
   .style-switcher-btn img { width: 60px; height: 45px; }
   .style-option img { width: 50px; height: 36px; }
 
-  .tbl-toggle { padding: var(--space-1) var(--space-3); font-size: var(--text-xs); }
-  .tbl-toggle-label { display: none; }
+  .tbl-toggle { padding: var(--space-2) var(--space-4); font-size: var(--text-xs); }
 
   .sp-donut { width: 96px; height: 96px; }
   .sp-donut-value { font-size: var(--text-xs); }
+
+  /* Upload — even more compact */
+  .upload-card { padding: var(--space-4) var(--space-3); }
+  .intro-title { font-size: var(--text-base); }
+  .drop-zone { padding: var(--space-5) var(--space-3); }
+  .drop-zone h2 { font-size: var(--text-base); }
+  .privacy-note { flex-direction: column; text-align: center; }
+
+  /* Table panel shorter on tiny screens */
+  .table-panel { height: 50vh; }
+
+  /* Download modal: tighter */
+  .dl-header { padding: var(--space-3) var(--space-4); }
+  .dl-body { padding: var(--space-3) var(--space-4); gap: var(--space-2); }
 }
