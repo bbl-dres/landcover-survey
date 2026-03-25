@@ -9,6 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet">
 
   <!-- MapLibre GL JS -->
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
@@ -27,26 +28,28 @@
   <!-- Header -->
   <header id="header">
     <div class="header-left">
-      <svg class="header-flag" width="20" height="22" viewBox="0 0 32 32" aria-hidden="true">
-        <rect width="32" height="32" rx="2" fill="#d8232a"/>
-        <rect x="6" y="13" width="20" height="6" fill="#fff"/>
-        <rect x="13" y="6" width="6" height="20" fill="#fff"/>
-      </svg>
+      <img src="assets/swiss-logo-flag.svg" alt="" class="header-flag" width="20" height="22">
       <div class="header-title">
         <span class="header-agency">Bundesamt für Bauten und Logistik</span>
         <span class="header-app">Landcover Survey</span>
       </div>
     </div>
-    <div class="header-center" id="header-meta" hidden>
-      <span id="header-filename"></span>
-      <span class="header-meta-sep">&middot;</span>
-      <span id="header-timestamp"></span>
+
+    <!-- Search bar (center) -->
+    <div id="search-wrapper" class="search-wrapper" hidden>
+      <div class="search-container">
+        <span class="material-symbols-outlined search-icon">search</span>
+        <input type="search" id="search-input" placeholder="Suche nach Parzellen oder Orten" autocomplete="off">
+        <button id="search-clear-btn" class="search-clear" hidden>&times;</button>
+      </div>
+      <div id="search-results" class="search-results" role="listbox" hidden></div>
     </div>
+
     <div class="header-right">
       <button id="btn-new" class="btn btn-secondary" hidden>Neue Analyse</button>
       <button id="btn-download" class="btn btn-primary" hidden>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        <span>Ergebnisse herunterladen</span>
+        <span>Herunterladen</span>
       </button>
     </div>
   </header>
@@ -90,14 +93,10 @@
             </div>
             <h2>CSV- oder Excel-Datei hierher ziehen</h2>
             <p>oder klicken zum Durchsuchen</p>
-            <p class="drop-zone-hint">
-              Erforderlich: ID, EGRID &middot; Weitere Spalten werden durchgereicht
-            </p>
+            <p class="drop-zone-hint">Erforderlich: ID, EGRID &middot; Weitere Spalten werden durchgereicht</p>
           </div>
           <input type="file" id="file-input" accept=".csv,.xlsx,.xls,.tsv,.txt" hidden aria-label="Datei auswählen">
-          <p class="demo-link">
-            <span>Oder testen Sie mit </span><a href="#" id="load-demo">Beispieldaten</a>
-          </p>
+          <p class="demo-link"><span>Oder testen Sie mit </span><a href="#" id="load-demo">Beispieldaten</a></p>
 
           <div id="upload-error" class="upload-error" role="alert" hidden></div>
 
@@ -129,22 +128,60 @@
     <!-- STATE 3: Results -->
     <section id="state-results" class="app-state" aria-label="Ergebnisse" hidden>
       <div class="results-container">
+
+        <!-- Left accordion panel -->
+        <aside id="left-panel" class="left-panel">
+          <div class="left-panel-header">
+            <h3>Ergebnisse</h3>
+          </div>
+          <div class="left-panel-body" id="panel-content"></div>
+        </aside>
+        <button id="panel-toggle" class="panel-toggle" title="Panel ein-/ausblenden">
+          <span class="material-symbols-outlined">chevron_right</span>
+        </button>
+
+        <!-- Main: map + table -->
         <div class="results-main">
           <div id="map-panel" class="map-panel">
             <div id="results-map"></div>
-            <button id="table-toggle" class="table-toggle" aria-expanded="true" aria-controls="results-table-container">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
-              <span>Tabelle</span>
-            </button>
+
+            <!-- Basemap selector (bottom-right of map) -->
+            <div class="style-switcher" id="style-switcher">
+              <div class="style-switcher-panel" id="style-panel">
+                <button class="style-option active" data-style="positron" title="Hell">
+                  <img id="thumb-positron" src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" alt="Hell">
+                  <span>Hell</span>
+                </button>
+                <button class="style-option" data-style="voyager" title="Standard">
+                  <img id="thumb-voyager" src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" alt="Standard">
+                  <span>Standard</span>
+                </button>
+                <button class="style-option" data-style="swissimage" title="Luftbild">
+                  <img id="thumb-swissimage" src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" alt="Luftbild">
+                  <span>Luftbild</span>
+                </button>
+                <button class="style-option" data-style="dark-matter" title="Dunkel">
+                  <img id="thumb-dark-matter" src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" alt="Dunkel">
+                  <span>Dunkel</span>
+                </button>
+              </div>
+              <button class="style-switcher-btn" id="style-switcher-btn" title="Hintergrund wechseln">
+                <img id="current-style-thumb" src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" alt="">
+                <span>Hintergrund</span>
+              </button>
+            </div>
+
           </div>
           <div class="table-panel" id="results-table-container"></div>
         </div>
 
+        <!-- Right summary panel -->
         <aside id="summary-panel" class="summary-panel" aria-label="Zusammenfassung">
           <div class="sp-header">
             <h3>Zusammenfassung</h3>
             <button id="sp-close" class="close-btn" aria-label="Zusammenfassung schliessen">&times;</button>
           </div>
+          <div class="sp-meta" id="sp-meta"></div>
           <div class="sp-body" id="sp-body"></div>
         </aside>
       </div>
@@ -162,31 +199,19 @@
       <div class="dl-body">
         <button class="dl-option" id="dl-parcels-csv">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-          <div class="dl-option-text">
-            <strong>Parzellen CSV</strong>
-            <span>Aggregierte Flächen pro Parzelle (SIA 416, DIN 277)</span>
-          </div>
+          <div class="dl-option-text"><strong>Parzellen CSV</strong><span>Aggregierte Flächen pro Parzelle (SIA 416, DIN 277)</span></div>
         </button>
         <button class="dl-option" id="dl-lc-csv">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-          <div class="dl-option-text">
-            <strong>Bodenbedeckung CSV</strong>
-            <span>Detail-Zeilen pro geclipptem Polygon</span>
-          </div>
+          <div class="dl-option-text"><strong>Bodenbedeckung CSV</strong><span>Detail-Zeilen pro geclipptem Polygon</span></div>
         </button>
         <button class="dl-option" id="dl-xlsx">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-          <div class="dl-option-text">
-            <strong>Excel (.xlsx)</strong>
-            <span>Parzellen + Bodenbedeckung in einem Workbook</span>
-          </div>
+          <div class="dl-option-text"><strong>Excel (.xlsx)</strong><span>Parzellen + Bodenbedeckung in einem Workbook</span></div>
         </button>
         <button class="dl-option" id="dl-geojson">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-          <div class="dl-option-text">
-            <strong>GeoJSON</strong>
-            <span>Parzellen-Polygone mit Attributen</span>
-          </div>
+          <div class="dl-option-text"><strong>GeoJSON</strong><span>Parzellen-Polygone mit Attributen</span></div>
         </button>
       </div>
     </div>
@@ -194,11 +219,11 @@
 
   <!-- Footer -->
   <footer id="footer">
-    <div class="footer-info">Landcover Survey PoC</div>
+    <div class="footer-info"><span id="footer-coords">&mdash;</span></div>
     <div class="footer-links">
       <a href="https://github.com/bbl-dres/landcover-survey" target="_blank" rel="noopener">Quellcode</a>
-      <a href="https://api3.geo.admin.ch" target="_blank" rel="noopener">swisstopo API</a>
-      <a href="https://geodienste.ch" target="_blank" rel="noopener">geodienste.ch</a>
+      <a href="https://www.admin.ch/gov/de/start/rechtliches.html" target="_blank" rel="noopener">Rechtliches</a>
+      <a href="https://www.bbl.admin.ch/de/kontakt" target="_blank" rel="noopener">Kontakt</a>
     </div>
   </footer>
 </div>

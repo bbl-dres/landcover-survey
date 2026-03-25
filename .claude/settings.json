@@ -135,7 +135,8 @@
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://127.0.0.1:8081/js/main.js)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://127.0.0.1:8081/css/tokens.css)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://127.0.0.1:8081/data/example.csv)",
-      "Bash(curl -s http://127.0.0.1:8081/data/example.csv)"
+      "Bash(curl -s http://127.0.0.1:8081/data/example.csv)",
+      "Bash(do curl:*)"
     ]
   }
 }

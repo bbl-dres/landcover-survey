@@ -6,25 +6,20 @@ import { processRows, cancelProcessing } from "./processor.js";
 import { initMap, plotResults, highlightParcel, resizeMap, onSummaryToggle, setSummaryToggleVisible } from "./map.js";
 import { initTable, populateTable, highlightRow } from "./table.js";
 import { downloadParcelCSV, downloadLandcoverCSV, downloadXLSX, downloadGeoJSON } from "./export.js";
+import { initSearch, setSearchData } from "./search.js";
+import { initPanel, populatePanel } from "./panel.js";
 import { ART_LABELS, CATEGORY_COLORS } from "./config.js";
 
-let processedResults = null; // { parcels, landcover }
-let tableOpen = true;
+let processedResults = null;
 let currentFilename = "";
 
 document.addEventListener("DOMContentLoaded", () => {
   initUpload(onStartProcessing);
+  initSearch();
+  initPanel();
 
   // Cancel
   document.getElementById("btn-cancel").addEventListener("click", () => cancelProcessing());
-
-  // Table toggle
-  document.getElementById("table-toggle").addEventListener("click", () => {
-    tableOpen = !tableOpen;
-    document.getElementById("results-table-container").classList.toggle("collapsed", !tableOpen);
-    document.getElementById("table-toggle").classList.toggle("collapsed", !tableOpen);
-    setTimeout(() => resizeMap(), 280);
-  });
 
   // Reset
   function resetToUpload() {
@@ -34,7 +29,7 @@ document.addEventListener("DOMContentLoaded", () => {
     showState("upload");
     document.getElementById("btn-new").hidden = true;
     document.getElementById("btn-download").hidden = true;
-    document.getElementById("header-meta").hidden = true;
+    document.getElementById("search-wrapper").hidden = true;
     document.getElementById("file-input").value = "";
     const err = document.getElementById("upload-error");
     if (err) { err.hidden = true; err.textContent = ""; }
@@ -131,12 +126,9 @@ function updateProgress(progress, startTime) {
   const { processed, total, succeeded, failed } = progress;
   const pct = total > 0 ? ((processed / total) * 100).toFixed(1) : 0;
 
-  const progressBar = document.querySelector(".progress-bar");
   document.getElementById("progress-bar-fill").style.width = `${pct}%`;
-  progressBar.setAttribute("aria-valuenow", Math.round(pct));
-
-  document.getElementById("progress-text").textContent =
-    `Parzelle ${processed} von ${total} — ${pct}%`;
+  document.querySelector(".progress-bar").setAttribute("aria-valuenow", Math.round(pct));
+  document.getElementById("progress-text").textContent = `Parzelle ${processed} von ${total} — ${pct}%`;
 
   const elapsed = Date.now() - startTime;
   const perItem = processed > 0 ? elapsed / processed : 0;
@@ -146,9 +138,7 @@ function updateProgress(progress, startTime) {
   const etaSec = etaSeconds % 60;
   document.getElementById("progress-eta").textContent =
     processed < total ? `Noch ca. ${etaMin} Min ${etaSec} Sek` : "Wird abgeschlossen...";
-
-  document.getElementById("progress-stats").textContent =
-    `Gefunden: ${succeeded} · Fehler: ${failed}`;
+  document.getElementById("progress-stats").textContent = `Gefunden: ${succeeded} · Fehler: ${failed}`;
 }
 
 function updateSummaryPanel() {
@@ -158,7 +148,6 @@ function updateSummaryPanel() {
   const found = parcels.filter((r) => r.check_egrid === "EGRID gefunden").length;
   const notFound = total - found;
 
-  // Area totals
   let totalArea = 0, totalGGF = 0, totalBUF = 0, totalUUF = 0, totalSealed = 0, totalGreen = 0;
   for (const p of parcels) {
     totalArea += parseFloat(p.parcel_area_m2) || 0;
@@ -172,90 +161,53 @@ function updateSummaryPanel() {
   const fmt = (n) => n.toLocaleString("de-CH", { maximumFractionDigits: 1 });
   const pctOf = (part) => totalArea > 0 ? ((part / totalArea) * 100).toFixed(1) : "0";
 
-  // Donut chart for SIA 416
-  const donutRadius = 54;
-  const donutStroke = 10;
+  const donutRadius = 54, donutStroke = 10;
   const donutCirc = 2 * Math.PI * donutRadius;
-  const ggfPct = totalArea > 0 ? totalGGF / totalArea : 0;
-  const bufPct = totalArea > 0 ? totalBUF / totalArea : 0;
-  const uufPct = totalArea > 0 ? totalUUF / totalArea : 0;
-
-  const ggfArc = ggfPct * donutCirc;
-  const bufArc = bufPct * donutCirc;
-  const uufArc = uufPct * donutCirc;
-
+  const ggfArc = (totalArea > 0 ? totalGGF / totalArea : 0) * donutCirc;
+  const bufArc = (totalArea > 0 ? totalBUF / totalArea : 0) * donutCirc;
+  const uufArc = (totalArea > 0 ? totalUUF / totalArea : 0) * donutCirc;
   const ggfOffset = donutCirc * 0.25;
   const bufOffset = ggfOffset - ggfArc;
   const uufOffset = bufOffset - bufArc;
+
+  // File meta in summary panel
+  const now = new Date();
+  document.getElementById("sp-meta").innerHTML = `
+    <div class="sp-meta-row">
+      <span class="sp-meta-filename">${escHtml(currentFilename)}</span>
+      <span class="sp-meta-sep">&middot;</span>
+      <span>${now.toLocaleDateString("de-CH", { dateStyle: "medium" })}, ${now.toLocaleTimeString("de-CH", { timeStyle: "short" })}</span>
+    </div>
+  `;
 
   document.getElementById("sp-body").innerHTML = `
     <div class="sp-donut-wrap">
       <svg class="sp-donut" viewBox="0 0 128 128">
         <circle cx="64" cy="64" r="${donutRadius}" fill="none" stroke="var(--gray-200)" stroke-width="${donutStroke}" />
-        <circle cx="64" cy="64" r="${donutRadius}" fill="none"
-          stroke="${CATEGORY_COLORS.GGF}" stroke-width="${donutStroke}"
-          stroke-dasharray="${ggfArc} ${donutCirc - ggfArc}"
-          stroke-dashoffset="${ggfOffset}" />
-        <circle cx="64" cy="64" r="${donutRadius}" fill="none"
-          stroke="${CATEGORY_COLORS.BUF}" stroke-width="${donutStroke}"
-          stroke-dasharray="${bufArc} ${donutCirc - bufArc}"
-          stroke-dashoffset="${bufOffset}" />
-        <circle cx="64" cy="64" r="${donutRadius}" fill="none"
-          stroke="${CATEGORY_COLORS.UUF}" stroke-width="${donutStroke}"
-          stroke-dasharray="${uufArc} ${donutCirc - uufArc}"
-          stroke-dashoffset="${uufOffset}" />
+        <circle cx="64" cy="64" r="${donutRadius}" fill="none" stroke="${CATEGORY_COLORS.GGF}" stroke-width="${donutStroke}" stroke-dasharray="${ggfArc} ${donutCirc - ggfArc}" stroke-dashoffset="${ggfOffset}" />
+        <circle cx="64" cy="64" r="${donutRadius}" fill="none" stroke="${CATEGORY_COLORS.BUF}" stroke-width="${donutStroke}" stroke-dasharray="${bufArc} ${donutCirc - bufArc}" stroke-dashoffset="${bufOffset}" />
+        <circle cx="64" cy="64" r="${donutRadius}" fill="none" stroke="${CATEGORY_COLORS.UUF}" stroke-width="${donutStroke}" stroke-dasharray="${uufArc} ${donutCirc - uufArc}" stroke-dashoffset="${uufOffset}" />
       </svg>
       <div class="sp-donut-text">
         <div class="sp-donut-value">${fmt(totalArea)}</div>
         <div class="sp-donut-label">m² Total</div>
       </div>
     </div>
-
     <div class="sp-divider"></div>
-
     <div class="sp-section">
-      <div class="sp-section-header">
-        <span class="sp-section-title">SIA 416 Aufteilung</span>
-        <span class="sp-section-count">${total} Parzellen</span>
-      </div>
-      <div class="sp-dist-row">
-        <span class="sp-dist-dot" style="background:${CATEGORY_COLORS.GGF}"></span>
-        <span class="sp-dist-label">GGF (Gebäude)</span>
-        <span class="sp-dist-val">${fmt(totalGGF)} m² (${pctOf(totalGGF)}%)</span>
-      </div>
-      <div class="sp-dist-row">
-        <span class="sp-dist-dot" style="background:${CATEGORY_COLORS.BUF}"></span>
-        <span class="sp-dist-label">BUF (Bearbeitet)</span>
-        <span class="sp-dist-val">${fmt(totalBUF)} m² (${pctOf(totalBUF)}%)</span>
-      </div>
-      <div class="sp-dist-row">
-        <span class="sp-dist-dot" style="background:${CATEGORY_COLORS.UUF}"></span>
-        <span class="sp-dist-label">UUF (Unbearbeitet)</span>
-        <span class="sp-dist-val">${fmt(totalUUF)} m² (${pctOf(totalUUF)}%)</span>
-      </div>
+      <div class="sp-section-header"><span class="sp-section-title">SIA 416 Aufteilung</span><span class="sp-section-count">${total} Parzellen</span></div>
+      <div class="sp-dist-row"><span class="sp-dist-dot" style="background:${CATEGORY_COLORS.GGF}"></span><span class="sp-dist-label">GGF (Gebäude)</span><span class="sp-dist-val">${fmt(totalGGF)} m² (${pctOf(totalGGF)}%)</span></div>
+      <div class="sp-dist-row"><span class="sp-dist-dot" style="background:${CATEGORY_COLORS.BUF}"></span><span class="sp-dist-label">BUF (Bearbeitet)</span><span class="sp-dist-val">${fmt(totalBUF)} m² (${pctOf(totalBUF)}%)</span></div>
+      <div class="sp-dist-row"><span class="sp-dist-dot" style="background:${CATEGORY_COLORS.UUF}"></span><span class="sp-dist-label">UUF (Unbearbeitet)</span><span class="sp-dist-val">${fmt(totalUUF)} m² (${pctOf(totalUUF)}%)</span></div>
     </div>
-
     <div class="sp-divider"></div>
-
     <div class="sp-section">
       <div class="sp-section-title">Weitere Kennzahlen</div>
       <div class="sp-kpi-grid">
-        <div class="sp-kpi">
-          <div class="sp-kpi-value">${fmt(totalSealed)}</div>
-          <div class="sp-kpi-label">Versiegelt m²</div>
-        </div>
-        <div class="sp-kpi">
-          <div class="sp-kpi-value">${fmt(totalGreen)}</div>
-          <div class="sp-kpi-label">Grünfläche m²</div>
-        </div>
-        <div class="sp-kpi">
-          <div class="sp-kpi-value sp-color-good">${found}</div>
-          <div class="sp-kpi-label">Gefunden</div>
-        </div>
-        <div class="sp-kpi">
-          <div class="sp-kpi-value sp-color-poor">${notFound}</div>
-          <div class="sp-kpi-label">Nicht gefunden</div>
-        </div>
+        <div class="sp-kpi"><div class="sp-kpi-value">${fmt(totalSealed)}</div><div class="sp-kpi-label">Versiegelt m²</div></div>
+        <div class="sp-kpi"><div class="sp-kpi-value">${fmt(totalGreen)}</div><div class="sp-kpi-label">Grünfläche m²</div></div>
+        <div class="sp-kpi"><div class="sp-kpi-value sp-color-good">${found}</div><div class="sp-kpi-label">Gefunden</div></div>
+        <div class="sp-kpi"><div class="sp-kpi-value sp-color-poor">${notFound}</div><div class="sp-kpi-label">Nicht gefunden</div></div>
       </div>
     </div>
   `;
@@ -268,26 +220,26 @@ function showResults() {
   document.getElementById("summary-panel").classList.remove("collapsed");
   setSummaryToggleVisible(false);
 
-  tableOpen = true;
-  document.getElementById("results-table-container").classList.remove("collapsed");
-  document.getElementById("table-toggle").classList.remove("collapsed");
+  initTable(document.getElementById("results-table-container"), (index) => highlightParcel(index));
+  populateTable(processedResults.parcels, processedResults.landcover);
 
-  initTable(document.getElementById("results-table-container"), (index) => {
-    highlightParcel(index);
-  });
-
-  populateTable(processedResults.parcels);
-
+  // Show search bar + header buttons
+  document.getElementById("search-wrapper").hidden = false;
   document.getElementById("btn-download").hidden = false;
   document.getElementById("btn-new").hidden = false;
-  document.getElementById("header-filename").textContent = currentFilename;
-  const now = new Date();
-  document.getElementById("header-timestamp").textContent =
-    `${now.toLocaleDateString("de-CH", { dateStyle: "medium" })}, ${now.toLocaleTimeString("de-CH", { timeStyle: "short" })}`;
-  document.getElementById("header-meta").hidden = false;
+  setSearchData(processedResults.parcels);
+
+  // Populate left panel
+  populatePanel(processedResults);
 
   requestAnimationFrame(async () => {
     await initMap("results-map", (index) => highlightRow(index));
     plotResults(processedResults);
   });
+}
+
+function escHtml(s) {
+  const d = document.createElement("div");
+  d.textContent = s || "";
+  return d.innerHTML;
 }

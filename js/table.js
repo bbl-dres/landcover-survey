@@ -1,151 +1,483 @@
 /**
- * Results table with sorting and pagination
+ * Table widget with tabs (Parcels / Land Covers), toolbar with search,
+ * sortable headers, pagination, column visibility dropdown, resize handle
  */
 import { ART_LABELS } from "./config.js";
+import { highlightParcel, resizeMap } from "./map.js";
 
-let allResults = [];
-let sortField = "id";
-let sortAsc = true;
-let currentPage = 0;
-let pageSize = 25;
+/* ── State ── */
+
+let parcelsData = [];
+let landcoverData = [];
+let activeTab = "parcels";
 let onRowClick = null;
 let container = null;
 
-const PARCEL_COLUMNS = [
-  { key: "id", label: "ID" },
-  { key: "egrid", label: "EGRID" },
-  { key: "nummer", label: "Nr." },
-  { key: "bfsnr", label: "BFSNr" },
-  { key: "check_egrid", label: "Status" },
-  { key: "parcel_area_m2", label: "Parzelle m²", numeric: true },
-  { key: "GGF_m2", label: "GGF m²", numeric: true },
-  { key: "BUF_m2", label: "BUF m²", numeric: true },
-  { key: "UUF_m2", label: "UUF m²", numeric: true },
-  { key: "Sealed_m2", label: "Versiegelt m²", numeric: true },
-  { key: "GreenSpace_m2", label: "Grünfläche m²", numeric: true },
+// Parcel tab state
+let pSortField = "id";
+let pSortAsc = true;
+let pSearch = "";
+let pPage = 1;
+let pPageSize = 50;
+
+// Landcover tab state
+let lcSortField = "id";
+let lcSortAsc = true;
+let lcSearch = "";
+let lcPage = 1;
+let lcPageSize = 50;
+
+/* ── Column definitions ── */
+
+const PARCEL_COLS = [
+  { key: "id", label: "ID", cls: "col-p-id" },
+  { key: "egrid", label: "EGRID", cls: "col-p-egrid" },
+  { key: "nummer", label: "Nr.", cls: "col-p-nummer" },
+  { key: "bfsnr", label: "BFSNr", cls: "col-p-bfsnr" },
+  { key: "check_egrid", label: "Status", cls: "col-p-status" },
+  { key: "parcel_area_m2", label: "Parzelle m²", cls: "col-p-area", numeric: true },
+  { key: "GGF_m2", label: "GGF m²", cls: "col-p-ggf", numeric: true },
+  { key: "BUF_m2", label: "BUF m²", cls: "col-p-buf", numeric: true },
+  { key: "UUF_m2", label: "UUF m²", cls: "col-p-uuf", numeric: true },
+  { key: "Sealed_m2", label: "Versiegelt m²", cls: "col-p-sealed", numeric: true },
+  { key: "GreenSpace_m2", label: "Grünfläche m²", cls: "col-p-green", numeric: true },
 ];
+
+const LC_COLS = [
+  { key: "id", label: "Parzelle ID", cls: "col-lc-id" },
+  { key: "egrid", label: "EGRID", cls: "col-lc-egrid" },
+  { key: "fid", label: "FID", cls: "col-lc-fid" },
+  { key: "art", label: "Art", cls: "col-lc-art" },
+  { key: "art_label", label: "Typ", cls: "col-lc-type" },
+  { key: "bfsnr", label: "BFSNr", cls: "col-lc-bfsnr" },
+  { key: "gwr_egid", label: "GWR EGID", cls: "col-lc-gwregid" },
+  { key: "check_greenspace", label: "Grünfläche", cls: "col-lc-green" },
+  { key: "area_m2", label: "Fläche m²", cls: "col-lc-area", numeric: true },
+];
+
+/* ── Init ── */
 
 export function initTable(el, clickCallback) {
   container = el;
   onRowClick = clickCallback;
 }
 
-export function populateTable(results) {
-  allResults = results;
-  currentPage = 0;
-  render();
+export function populateTable(parcels, landcover) {
+  parcelsData = parcels || [];
+  landcoverData = (landcover || []).map((lc) => ({
+    ...lc,
+    art_label: ART_LABELS[lc.art] || lc.art,
+  }));
+  pPage = 1;
+  lcPage = 1;
+  pSearch = "";
+  lcSearch = "";
+  activeTab = "parcels";
+  renderShell();
+  renderActiveTab();
+  initResizeHandle();
 }
 
 export function highlightRow(index) {
   if (!container) return;
-  container.querySelectorAll("tr.highlighted").forEach((r) => r.classList.remove("highlighted"));
+  container.querySelectorAll("tr.row-active").forEach((r) => r.classList.remove("row-active"));
   const row = container.querySelector(`tr[data-index="${index}"]`);
   if (row) {
-    row.classList.add("highlighted");
+    row.classList.add("row-active");
     row.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }
 }
 
-function render() {
-  if (!container) return;
+/* ── Shell (toolbar + tab content containers) ── */
 
-  // Sort
-  const sorted = [...allResults].sort((a, b) => {
-    const col = PARCEL_COLUMNS.find((c) => c.key === sortField);
-    let va = a[sortField] ?? "";
-    let vb = b[sortField] ?? "";
-    if (col?.numeric) {
-      va = parseFloat(va) || 0;
-      vb = parseFloat(vb) || 0;
-    }
-    if (va < vb) return sortAsc ? -1 : 1;
-    if (va > vb) return sortAsc ? 1 : -1;
-    return 0;
-  });
-
-  // Paginate
-  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
-  if (currentPage >= totalPages) currentPage = totalPages - 1;
-  const start = currentPage * pageSize;
-  const page = sorted.slice(start, start + pageSize);
-
-  // Detect dynamic Art columns
-  const artCols = [];
-  const seen = new Set();
-  for (const row of allResults) {
-    for (const key of Object.keys(row)) {
-      if (key.endsWith("_m2") && !PARCEL_COLUMNS.some((c) => c.key === key) && !seen.has(key)) {
-        seen.add(key);
-        const artName = key.replace(/_m2$/, "");
-        artCols.push({ key, label: (ART_LABELS[artName] || artName) + " m²", numeric: true });
-      }
-    }
-  }
-
-  const allCols = [...PARCEL_COLUMNS, ...artCols];
-
-  let html = `
-    <div class="table-toolbar">
-      <span class="table-count">${allResults.length} Parzellen</span>
-      <div class="table-paging">
-        <button class="btn btn-sm btn-secondary" id="tbl-prev" ${currentPage === 0 ? "disabled" : ""}>&#9664;</button>
-        <span>${currentPage + 1} / ${totalPages}</span>
-        <button class="btn btn-sm btn-secondary" id="tbl-next" ${currentPage >= totalPages - 1 ? "disabled" : ""}>&#9654;</button>
+function renderShell() {
+  container.innerHTML = `
+    <div class="tbl-resize-handle" id="tbl-resize-handle" title="Grösse ändern"></div>
+    <div class="list-table-container">
+      <div class="toolbar">
+        <div class="table-tabs" role="tablist">
+          <button class="table-tab active" data-tab="parcels" role="tab" aria-selected="true">Parzellen</button>
+          <button class="table-tab" data-tab="landcover" role="tab" aria-selected="false">Bodenbedeckung</button>
+        </div>
+        <div class="toolbar-search">
+          <span class="material-symbols-outlined">search</span>
+          <input type="text" id="tbl-search-input" placeholder="Tabelle durchsuchen..." autocomplete="off">
+          <button class="toolbar-search-clear" id="tbl-search-clear" type="button" hidden>
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <div class="toolbar-actions">
+          <div class="dropdown-container">
+            <button class="dropdown-btn" id="columns-dropdown-btn">
+              <span class="material-symbols-outlined">view_column</span> Spalten
+              <span class="material-symbols-outlined">expand_more</span>
+            </button>
+            <div class="dropdown-menu columns-dropdown" id="columns-dropdown-menu">
+              <div class="dropdown-menu-header">Spalten anzeigen</div>
+              <div class="dropdown-menu-toggle-row">
+                <button class="dropdown-toggle-btn" id="col-toggle-all">Alle</button>
+                <button class="dropdown-toggle-btn" id="col-toggle-none">Keine</button>
+              </div>
+              <div class="columns-list" id="columns-list"></div>
+            </div>
+          </div>
+        </div>
       </div>
-    </div>
-    <div class="table-scroll">
-      <table class="results-table">
-        <thead>
-          <tr>
-            ${allCols
-              .map(
-                (c) =>
-                  `<th class="sortable ${sortField === c.key ? (sortAsc ? "sort-asc" : "sort-desc") : ""}" data-key="${c.key}">${esc(c.label)}</th>`
-              )
-              .join("")}
-          </tr>
-        </thead>
-        <tbody>
-          ${page
-            .map(
-              (row, i) =>
-                `<tr data-index="${start + i}" class="${row.check_egrid === 'EGRID gefunden' ? '' : 'row-error'}">
-                  ${allCols.map((c) => `<td class="${c.numeric ? 'num' : ''}">${esc(String(row[c.key] ?? ""))}</td>`).join("")}
-                </tr>`
-            )
-            .join("")}
-        </tbody>
-      </table>
+      <div class="table-tab-content active" id="tab-parcels">
+        <div class="list-table-wrapper">
+          <table class="base-table list-table" id="parcels-table">
+            <thead><tr id="parcels-header-row"></tr></thead>
+            <tbody id="parcels-body"></tbody>
+          </table>
+        </div>
+        <div class="pagination-footer" id="parcels-pagination"></div>
+      </div>
+      <div class="table-tab-content" id="tab-landcover">
+        <div class="list-table-wrapper">
+          <table class="base-table list-table" id="lc-table">
+            <thead><tr id="lc-header-row"></tr></thead>
+            <tbody id="lc-body"></tbody>
+          </table>
+        </div>
+        <div class="pagination-footer" id="lc-pagination"></div>
+      </div>
     </div>
   `;
 
-  container.innerHTML = html;
+  // Tab switching
+  container.querySelectorAll(".table-tab").forEach((tab) => {
+    tab.addEventListener("click", () => {
+      activeTab = tab.dataset.tab;
+      container.querySelectorAll(".table-tab").forEach((t) => {
+        t.classList.toggle("active", t.dataset.tab === activeTab);
+        t.setAttribute("aria-selected", t.dataset.tab === activeTab);
+      });
+      container.querySelector("#tab-parcels").classList.toggle("active", activeTab === "parcels");
+      container.querySelector("#tab-landcover").classList.toggle("active", activeTab === "landcover");
+      const input = container.querySelector("#tbl-search-input");
+      input.value = "";
+      container.querySelector("#tbl-search-clear").hidden = true;
+      pSearch = "";
+      lcSearch = "";
+      updateColumnsDropdown();
+      renderActiveTab();
+    });
+  });
 
-  // Event listeners
-  container.querySelectorAll("th.sortable").forEach((th) => {
+  // Search
+  let debounce = null;
+  const searchInput = container.querySelector("#tbl-search-input");
+  const searchClear = container.querySelector("#tbl-search-clear");
+  searchInput.addEventListener("input", () => {
+    searchClear.hidden = !searchInput.value;
+    clearTimeout(debounce);
+    debounce = setTimeout(() => {
+      if (activeTab === "parcels") { pSearch = searchInput.value.toLowerCase().trim(); pPage = 1; }
+      else { lcSearch = searchInput.value.toLowerCase().trim(); lcPage = 1; }
+      renderActiveTab();
+    }, 200);
+  });
+  searchClear.addEventListener("click", () => {
+    searchInput.value = "";
+    searchClear.hidden = true;
+    pSearch = ""; lcSearch = "";
+    pPage = 1; lcPage = 1;
+    renderActiveTab();
+    searchInput.focus();
+  });
+
+  // Columns dropdown
+  const colBtn = container.querySelector("#columns-dropdown-btn");
+  const colMenu = container.querySelector("#columns-dropdown-menu");
+  colBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    colMenu.classList.toggle("show");
+  });
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest("#columns-dropdown-menu") && !e.target.closest("#columns-dropdown-btn")) {
+      colMenu.classList.remove("show");
+    }
+  });
+  container.querySelector("#col-toggle-all").addEventListener("click", () => toggleAllCols(true));
+  container.querySelector("#col-toggle-none").addEventListener("click", () => toggleAllCols(false));
+
+  // Build headers
+  renderHeaders("parcels-header-row", PARCEL_COLS, "p");
+  renderHeaders("lc-header-row", LC_COLS, "lc");
+  updateColumnsDropdown();
+}
+
+/* ── Headers ── */
+
+function renderHeaders(rowId, cols, prefix) {
+  const row = container.querySelector(`#${rowId}`);
+  row.innerHTML = cols.map((c) =>
+    `<th class="${c.cls} sortable" data-key="${c.key}" data-prefix="${prefix}">
+      ${esc(c.label)} <span class="material-symbols-outlined sort-icon">unfold_more</span>
+    </th>`
+  ).join("");
+
+  row.querySelectorAll("th.sortable").forEach((th) => {
     th.addEventListener("click", () => {
       const key = th.dataset.key;
-      if (sortField === key) sortAsc = !sortAsc;
-      else {
-        sortField = key;
-        sortAsc = true;
+      if (prefix === "p") {
+        if (pSortField === key) pSortAsc = !pSortAsc;
+        else { pSortField = key; pSortAsc = true; }
+      } else {
+        if (lcSortField === key) lcSortAsc = !lcSortAsc;
+        else { lcSortField = key; lcSortAsc = true; }
       }
-      render();
+      renderActiveTab();
+      updateSortIndicators(rowId, key, prefix === "p" ? pSortAsc : lcSortAsc);
     });
   });
+}
 
-  container.querySelectorAll("tbody tr").forEach((tr) => {
+function updateSortIndicators(rowId, activeKey, asc) {
+  const row = container.querySelector(`#${rowId}`);
+  row.querySelectorAll("th.sortable").forEach((th) => {
+    const icon = th.querySelector(".sort-icon");
+    if (th.dataset.key === activeKey) {
+      icon.textContent = asc ? "expand_less" : "expand_more";
+      icon.style.color = "var(--swiss-red)";
+    } else {
+      icon.textContent = "unfold_more";
+      icon.style.color = "";
+    }
+  });
+}
+
+/* ── Columns dropdown ── */
+
+function updateColumnsDropdown() {
+  const list = container.querySelector("#columns-list");
+  const cols = activeTab === "parcels" ? PARCEL_COLS : LC_COLS;
+  list.innerHTML = cols.map((c) =>
+    `<label class="dropdown-menu-item">
+      <input type="checkbox" checked data-column="${c.cls}"> ${esc(c.label)}
+    </label>`
+  ).join("");
+
+  list.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
+    cb.addEventListener("change", () => toggleCol(cb));
+  });
+}
+
+function toggleCol(checkbox) {
+  const cls = checkbox.dataset.column;
+  const show = checkbox.checked;
+  container.querySelectorAll(`.${cls}`).forEach((el) => {
+    el.style.display = show ? "" : "none";
+  });
+}
+
+function toggleAllCols(showAll) {
+  container.querySelectorAll("#columns-list input[type='checkbox']").forEach((cb) => {
+    cb.checked = showAll;
+    toggleCol(cb);
+  });
+}
+
+/* ── Render active tab ── */
+
+function renderActiveTab() {
+  if (activeTab === "parcels") renderParcels();
+  else renderLandcover();
+}
+
+/* ── Parcels tab ── */
+
+function renderParcels() {
+  let data = [...parcelsData];
+
+  if (pSearch) {
+    data = data.filter((p) => {
+      const s = `${p.id} ${p.egrid} ${p.nummer} ${p.check_egrid}`.toLowerCase();
+      return s.includes(pSearch);
+    });
+  }
+
+  const col = PARCEL_COLS.find((c) => c.key === pSortField);
+  data.sort((a, b) => {
+    let va = a[pSortField] ?? "";
+    let vb = b[pSortField] ?? "";
+    if (col?.numeric) { va = parseFloat(va) || 0; vb = parseFloat(vb) || 0; }
+    if (va < vb) return pSortAsc ? -1 : 1;
+    if (va > vb) return pSortAsc ? 1 : -1;
+    return 0;
+  });
+
+  const total = data.length;
+  const totalPages = Math.max(1, Math.ceil(total / pPageSize));
+  if (pPage > totalPages) pPage = totalPages;
+  const start = (pPage - 1) * pPageSize;
+  const page = data.slice(start, start + pPageSize);
+
+  const body = container.querySelector("#parcels-body");
+  if (total === 0) {
+    body.innerHTML = `<tr><td colspan="${PARCEL_COLS.length}" class="empty-cell">
+      <span class="material-symbols-outlined">search_off</span> Keine Ergebnisse
+    </td></tr>`;
+  } else {
+    body.innerHTML = page.map((row) => {
+      const idx = parcelsData.indexOf(row);
+      const errCls = row.check_egrid === "EGRID gefunden" ? "" : "row-error";
+      return `<tr data-index="${idx}" class="${errCls}" tabindex="0">
+        ${PARCEL_COLS.map((c) => `<td class="${c.cls} ${c.numeric ? 'num' : ''}">${fmtCell(row[c.key], c.numeric)}</td>`).join("")}
+      </tr>`;
+    }).join("");
+  }
+
+  body.querySelectorAll("tr[data-index]").forEach((tr) => {
     tr.addEventListener("click", () => {
       const idx = parseInt(tr.dataset.index, 10);
+      body.querySelectorAll("tr.row-active").forEach((r) => r.classList.remove("row-active"));
+      tr.classList.add("row-active");
       if (onRowClick) onRowClick(idx);
-      highlightRow(idx);
+    });
+    tr.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); tr.click(); }
     });
   });
 
-  const prevBtn = container.querySelector("#tbl-prev");
-  const nextBtn = container.querySelector("#tbl-next");
-  if (prevBtn) prevBtn.addEventListener("click", () => { currentPage--; render(); });
-  if (nextBtn) nextBtn.addEventListener("click", () => { currentPage++; render(); });
+  renderPagination("parcels-pagination", pPage, totalPages, total, pPageSize, "Parzellen",
+    (p) => { pPage = p; renderParcels(); },
+    (s) => { pPageSize = s; pPage = 1; renderParcels(); }
+  );
+
+  container.querySelectorAll("#columns-list input[type='checkbox']").forEach((cb) => {
+    if (!cb.checked) toggleCol(cb);
+  });
+}
+
+/* ── Landcover tab ── */
+
+function renderLandcover() {
+  let data = [...landcoverData];
+
+  if (lcSearch) {
+    data = data.filter((lc) => {
+      const s = `${lc.id} ${lc.egrid} ${lc.art} ${lc.art_label} ${lc.check_greenspace}`.toLowerCase();
+      return s.includes(lcSearch);
+    });
+  }
+
+  const col = LC_COLS.find((c) => c.key === lcSortField);
+  data.sort((a, b) => {
+    let va = a[lcSortField] ?? "";
+    let vb = b[lcSortField] ?? "";
+    if (col?.numeric) { va = parseFloat(va) || 0; vb = parseFloat(vb) || 0; }
+    if (va < vb) return lcSortAsc ? -1 : 1;
+    if (va > vb) return lcSortAsc ? 1 : -1;
+    return 0;
+  });
+
+  const total = data.length;
+  const totalPages = Math.max(1, Math.ceil(total / lcPageSize));
+  if (lcPage > totalPages) lcPage = totalPages;
+  const start = (lcPage - 1) * lcPageSize;
+  const page = data.slice(start, start + lcPageSize);
+
+  const body = container.querySelector("#lc-body");
+  if (total === 0) {
+    body.innerHTML = `<tr><td colspan="${LC_COLS.length}" class="empty-cell">
+      <span class="material-symbols-outlined">search_off</span> Keine Ergebnisse
+    </td></tr>`;
+  } else {
+    body.innerHTML = page.map((row) =>
+      `<tr>${LC_COLS.map((c) => `<td class="${c.cls} ${c.numeric ? 'num' : ''}">${fmtCell(row[c.key], c.numeric)}</td>`).join("")}</tr>`
+    ).join("");
+  }
+
+  renderPagination("lc-pagination", lcPage, totalPages, total, lcPageSize, "Bodenbedeckungen",
+    (p) => { lcPage = p; renderLandcover(); },
+    (s) => { lcPageSize = s; lcPage = 1; renderLandcover(); }
+  );
+
+  container.querySelectorAll("#columns-list input[type='checkbox']").forEach((cb) => {
+    if (!cb.checked) toggleCol(cb);
+  });
+}
+
+/* ── Pagination ── */
+
+function renderPagination(elId, currentPage, totalPages, totalItems, pageSize, label, onPageChange, onPageSizeChange) {
+  const el = container.querySelector(`#${elId}`);
+  const start = totalItems === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const end = Math.min(currentPage * pageSize, totalItems);
+
+  el.innerHTML = `
+    <div class="pagination-info">${start}–${end} von ${totalItems} ${label}</div>
+    <div class="pagination-nav">
+      <button class="pagination-btn pg-prev" ${currentPage <= 1 ? "disabled" : ""}>
+        <span class="material-symbols-outlined">chevron_left</span>
+      </button>
+      <span class="pagination-page-info">Seite ${currentPage} von ${totalPages}</span>
+      <button class="pagination-btn pg-next" ${currentPage >= totalPages ? "disabled" : ""}>
+        <span class="material-symbols-outlined">chevron_right</span>
+      </button>
+    </div>
+    <div class="pagination-rows">
+      Zeilen:
+      <select class="pg-size">
+        ${[25, 50, 100].map((s) => `<option value="${s}" ${s === pageSize ? "selected" : ""}>${s}</option>`).join("")}
+      </select>
+    </div>
+  `;
+
+  el.querySelector(".pg-prev")?.addEventListener("click", () => { if (currentPage > 1) onPageChange(currentPage - 1); });
+  el.querySelector(".pg-next")?.addEventListener("click", () => { if (currentPage < totalPages) onPageChange(currentPage + 1); });
+  el.querySelector(".pg-size")?.addEventListener("change", (e) => onPageSizeChange(parseInt(e.target.value, 10)));
+}
+
+/* ── Resize handle ── */
+
+function initResizeHandle() {
+  const handle = container.querySelector("#tbl-resize-handle");
+  if (!handle) return;
+
+  const MIN_H = 120;
+  const MAX_FRAC = 0.75;
+
+  handle.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    handle.setPointerCapture(e.pointerId);
+    handle.classList.add("dragging");
+    container.style.transition = "none";
+    const startY = e.clientY;
+    const startH = container.getBoundingClientRect().height;
+
+    function onMove(ev) {
+      const delta = startY - ev.clientY;
+      const maxH = window.innerHeight * MAX_FRAC;
+      container.style.height = Math.min(maxH, Math.max(MIN_H, startH + delta)) + "px";
+      resizeMap();
+    }
+
+    function onUp() {
+      handle.classList.remove("dragging");
+      container.style.transition = "";
+      handle.removeEventListener("pointermove", onMove);
+      handle.removeEventListener("pointerup", onUp);
+      handle.removeEventListener("lostpointercapture", onUp);
+      resizeMap();
+    }
+
+    handle.addEventListener("pointermove", onMove);
+    handle.addEventListener("pointerup", onUp);
+    handle.addEventListener("lostpointercapture", onUp);
+  });
+}
+
+/* ── Helpers ── */
+
+function fmtCell(val, numeric) {
+  if (val === null || val === undefined || val === "") return "\u2013";
+  if (numeric) {
+    const n = parseFloat(val);
+    return isNaN(n) ? esc(String(val)) : n.toLocaleString("de-CH", { maximumFractionDigits: 2 });
+  }
+  return esc(String(val));
 }
 
 function esc(s) {

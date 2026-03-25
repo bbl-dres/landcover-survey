@@ -105,8 +105,49 @@ export function classify(art) {
 /** API endpoints */
 export const API = {
   PARCEL_FIND: "https://api3.geo.admin.ch/rest/services/all/MapServer/find",
+  SEARCH: "https://api3.geo.admin.ch/rest/services/ech/SearchServer",
   WFS_AV: "https://geodienste.ch/db/av_0/deu",
 };
+
+/** Basemap styles with thumbnails */
+export const MAP_STYLES = {
+  positron: {
+    name: "Hell",
+    url: "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json",
+    thumbnail: "https://basemaps.cartocdn.com/light_all/8/134/91.png",
+  },
+  voyager: {
+    name: "Standard",
+    url: "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json",
+    thumbnail: "https://basemaps.cartocdn.com/rastertiles/voyager/8/134/91.png",
+  },
+  swissimage: {
+    name: "Luftbild",
+    url: {
+      version: 8,
+      glyphs: "https://tiles.basemaps.cartocdn.com/fonts/{fontstack}/{range}.pbf",
+      sources: {
+        swissimage: {
+          type: "raster",
+          tiles: ["https://wmts.geo.admin.ch/1.0.0/ch.swisstopo.swissimage/default/current/3857/{z}/{x}/{y}.jpeg"],
+          tileSize: 256,
+          maxzoom: 20,
+          attribution: '&copy; <a href="https://www.swisstopo.admin.ch">swisstopo</a>',
+        },
+      },
+      layers: [{ id: "swissimage", type: "raster", source: "swissimage" }],
+    },
+    thumbnail: "https://wmts.geo.admin.ch/1.0.0/ch.swisstopo.swissimage/default/current/3857/8/134/91.jpeg",
+  },
+  "dark-matter": {
+    name: "Dunkel",
+    url: "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",
+    thumbnail: "https://basemaps.cartocdn.com/dark_all/8/134/91.png",
+  },
+};
+
+/** Default map center and zoom (Switzerland) */
+export const MAP_DEFAULT = { center: [8.2275, 46.8182], zoom: 7 };
 
 /** Sliver threshold in m² */
 export const SLIVER_THRESHOLD = 0.001;
