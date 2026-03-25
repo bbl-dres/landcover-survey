@@ -790,39 +790,24 @@ def _empty_landcover_df() -> DataFrame:
 API_MAX_WORKERS = 10
 
 
-def _fetch_and_intersect_single(
+def _fetch_for_parcel(
     geom,
-    row_data: dict,
+    egrid: str,
     cfg: LayerConfig,
-    id_cols: list[str],
-    crs: str,
-) -> list[dict]:
-    """Fetch API features for one geometry and intersect locally.
-
-    Thread-safe: each call makes its own API request and local intersection.
-    Returns a list of result dicts (may be empty).
-    """
+) -> GeoDataFrame:
+    """Fetch API features for one parcel geometry (thread-safe)."""
     from swisstopo import fetch_features_for_polygon
 
-    row_id = row_data.get("EGRID", row_data.get("fid", "?"))
-
     if geom is None or geom.is_empty:
-        return []
+        return GeoDataFrame()
     if not geom.is_valid:
         geom = shapely.make_valid(geom)
 
     try:
-        features = fetch_features_for_polygon(geom, cfg)
+        return fetch_features_for_polygon(geom, cfg, context=egrid)
     except Exception as e:
-        logger.error("%s — API error for %s: %s", cfg.layer_id, row_id, e)
-        return []
-
-    if features.empty:
-        return []
-
-    row_gdf = GeoDataFrame([row_data], geometry="geometry", crs=crs)
-    hits = intersect_with_features(row_gdf, features, cfg, id_cols=id_cols)
-    return [h.to_dict() for _, h in hits.iterrows()]
+        logger.error("%s — API error for EGRID %s: %s", cfg.layer_id, egrid, e)
+        return GeoDataFrame()
 
 
 def _run_layer_analysis(
@@ -834,37 +819,54 @@ def _run_layer_analysis(
 ) -> tuple[DataFrame, DataFrame]:
     """Intersect parcels and green spaces with a Swisstopo layer.
 
-    Fetches per-geometry using parallel API calls (up to API_MAX_WORKERS).
-    Aggregates results as semicolon-separated arrays onto parcels_out and lc_out.
+    Phase 1: Parallel API fetch per parcel → cache by EGRID.
+    Phase 2: Local intersection of parcels with cached features.
+    Phase 3: Local intersection of green-space land covers with cached features
+             (grouped by EGRID to avoid per-row GeoDataFrame overhead).
     """
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
     n_parcels = len(parcels_gdf)
-    logger.info("%s — processing %d parcels (%s)", label, n_parcels, cfg.layer_id)
-
     name_col = list(cfg.column_map.values())[0]
 
-    # --- 1) Parcels × layer → parallel fetch + intersect ---
-    parcel_results: list[dict] = []
-    futures = {}
+    # --- Phase 1: Fetch layer features per parcel (parallel API calls) ---
+    logger.info("%s — Step 1/3: Fetching %s features for %d parcels …",
+                label, cfg.layer_id, n_parcels)
+    t0 = time.time()
+
+    egrid_features: dict[str, GeoDataFrame] = {}
+    futures: dict = {}
     with ThreadPoolExecutor(max_workers=API_MAX_WORKERS) as pool:
         for _, row in parcels_gdf.iterrows():
-            row_data = {col: row[col] for col in row.index}
-            row_data["geometry"] = row.geometry
-            fut = pool.submit(
-                _fetch_and_intersect_single,
-                row.geometry, row_data, cfg,
-                id_cols=["ID", "EGRID"], crs=CRS_STRING,
-            )
-            futures[fut] = row.get("EGRID", "")
+            egrid = row.get("EGRID", "")
+            fut = pool.submit(_fetch_for_parcel, row.geometry, egrid, cfg)
+            futures[fut] = egrid
 
         done = 0
         for fut in as_completed(futures):
             done += 1
-            results = fut.result()
-            parcel_results.extend(results)
+            egrid = futures[fut]
+            egrid_features[egrid] = fut.result()
             if done % 50 == 0 or done == n_parcels:
-                logger.info("%s — parcels %d/%d", label, done, n_parcels)
+                eta = _fmt_eta(time.time() - t0, done, n_parcels)
+                logger.info("%s — Step 1/3: Fetched %d/%d parcels (%s)",
+                            label, done, n_parcels, eta)
+
+    # --- Phase 2: Intersect parcels with cached features (local) ---
+    logger.info("%s — Step 2/3: Intersecting %d parcels …", label, n_parcels)
+
+    parcel_results: list[dict] = []
+    for _, row in parcels_gdf.iterrows():
+        egrid = row.get("EGRID", "")
+        features = egrid_features.get(egrid)
+        if features is None or features.empty:
+            continue
+        row_gdf = GeoDataFrame(
+            [{col: row[col] for col in row.index} | {"geometry": row.geometry}],
+            geometry="geometry", crs=CRS_STRING,
+        )
+        hits = intersect_with_features(row_gdf, features, cfg, id_cols=["ID", "EGRID"])
+        parcel_results.extend(h.to_dict() for _, h in hits.iterrows())
 
     raw_parcels = DataFrame(parcel_results) if parcel_results else DataFrame()
     parcel_agg = _aggregate_layer_results(raw_parcels, "EGRID", name_col, label)
@@ -872,7 +874,7 @@ def _run_layer_analysis(
     parcels_out[f"{label}"] = parcels_out[f"{label}"].fillna("")
     parcels_out[f"{label}_m2"] = parcels_out[f"{label}_m2"].fillna("")
 
-    # --- 2) Green spaces × layer → parallel fetch + intersect ---
+    # --- Phase 3: Intersect green-space land covers with CACHED features ---
     has_geometry = "geometry" in lc_out.columns
     green_lc = lc_out[lc_out["Check_GreenSpace"] != "Not green space"].copy() if has_geometry else DataFrame()
 
@@ -893,26 +895,31 @@ def _run_layer_analysis(
             lc_out[f"{label}"] = ""
             lc_out[f"{label}_m2"] = ""
         else:
-            green_results: list[dict] = []
-            futures = {}
-            with ThreadPoolExecutor(max_workers=API_MAX_WORKERS) as pool:
-                for _, row in green_gs_gdf.iterrows():
-                    row_data = {col: row[col] for col in row.index}
-                    row_data["geometry"] = row.geometry
-                    fut = pool.submit(
-                        _fetch_and_intersect_single,
-                        row.geometry, row_data, cfg,
-                        id_cols=["ID", "EGRID", "fid", "Art", "Check_GreenSpace"],
-                        crs=CRS_STRING,
-                    )
-                    futures[fut] = row.get("fid", "")
+            logger.info("%s — Step 3/3: Intersecting %d land covers (green space) …",
+                        label, n_green)
+            t1 = time.time()
 
-                done = 0
-                for fut in as_completed(futures):
-                    done += 1
-                    green_results.extend(fut.result())
-                    if done % 50 == 0 or done == n_green:
-                        logger.info("%s — green spaces %d/%d", label, done, n_green)
+            # Group by EGRID to batch intersections and avoid per-row GeoDataFrame overhead
+            green_results: list[dict] = []
+            groups = green_gs_gdf.groupby("EGRID")
+            done_lc = 0
+            for egrid, group in groups:
+                features = egrid_features.get(egrid)
+                if features is None or features.empty:
+                    done_lc += len(group)
+                    continue
+                hits = intersect_with_features(
+                    group, features, cfg,
+                    id_cols=["ID", "EGRID", "fid", "Art", "Check_GreenSpace"],
+                )
+                green_results.extend(h.to_dict() for _, h in hits.iterrows())
+                done_lc += len(group)
+                if done_lc % 500 == 0:
+                    eta = _fmt_eta(time.time() - t1, done_lc, n_green)
+                    logger.info("%s — Step 3/3: Land covers %d/%d (%s)",
+                                label, done_lc, n_green, eta)
+
+            logger.info("%s — Step 3/3: Land covers %d/%d done", label, n_green, n_green)
 
             raw_green = DataFrame(green_results) if green_results else DataFrame()
             lc_agg = _aggregate_layer_results(raw_green, ["EGRID", "fid"], name_col, label)

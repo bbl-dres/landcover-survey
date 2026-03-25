@@ -97,17 +97,21 @@ def _build_params(
 
 
 def _geom_to_esri_json(geom) -> str:
-    """Convert a shapely Polygon/MultiPolygon to Esri JSON polygon string."""
+    """Convert a shapely Polygon/MultiPolygon to Esri JSON polygon string.
+
+    Rounds coordinates to 3 decimal places (mm precision in EPSG:2056)
+    to reduce URL length.
+    """
     if isinstance(geom, MultiPolygon):
         rings = []
         for poly in geom.geoms:
-            rings.append([[x, y] for x, y in poly.exterior.coords])
+            rings.append([[round(x, 3), round(y, 3)] for x, y in poly.exterior.coords])
             for interior in poly.interiors:
-                rings.append([[x, y] for x, y in interior.coords])
+                rings.append([[round(x, 3), round(y, 3)] for x, y in interior.coords])
     elif isinstance(geom, Polygon):
-        rings = [[[x, y] for x, y in geom.exterior.coords]]
+        rings = [[[round(x, 3), round(y, 3)] for x, y in geom.exterior.coords]]
         for interior in geom.interiors:
-            rings.append([[x, y] for x, y in interior.coords])
+            rings.append([[round(x, 3), round(y, 3)] for x, y in interior.coords])
     else:
         raise ValueError(f"Cannot convert {type(geom).__name__} to Esri polygon")
     return json.dumps({"rings": rings})
@@ -163,8 +167,10 @@ def _fetch_and_parse(
     geometry_type: str,
     bbox: tuple[float, float, float, float],
     cfg: LayerConfig,
+    context: str = "",
 ) -> GeoDataFrame:
     """Fetch all features (paginated) and parse into a GeoDataFrame."""
+    ctx = f" [{context}]" if context else ""
     all_features: list[dict[str, Any]] = []
     offset = 0
     seen_ids: set = set()
@@ -176,7 +182,7 @@ def _fetch_and_parse(
         # Detect stuck pagination: if all IDs were already seen, stop
         new_ids = {f.get("id") or f.get("featureId") for f in page}
         if new_ids <= seen_ids:
-            logger.warning("  Pagination returned duplicate page — stopping at offset %d", offset)
+            logger.warning("%s%s — pagination duplicate page at offset %d, stopping", cfg.layer_id, ctx, offset)
             break
         seen_ids.update(new_ids)
         all_features.extend(page)
@@ -185,7 +191,8 @@ def _fetch_and_parse(
         offset += len(page)
         time.sleep(API_PAUSE)
     else:
-        logger.warning("  Pagination hit safety cap (%d pages) for %s", API_MAX_PAGES, cfg.layer_id)
+        logger.warning("%s%s — pagination hit %d-page cap (%d features), results may be incomplete",
+                       cfg.layer_id, ctx, API_MAX_PAGES, len(all_features))
 
     if not all_features:
         return _empty_gdf(cfg)
@@ -225,6 +232,7 @@ MAX_URL_COORDS = 200  # simplify polygons with more vertices than this
 def fetch_features_for_polygon(
     geom,
     cfg: LayerConfig,
+    context: str = "",
 ) -> GeoDataFrame:
     """Fetch all features of *cfg.layer_id* intersecting a polygon geometry.
 
@@ -232,20 +240,24 @@ def fetch_features_for_polygon(
     bounding box, reducing false positives and pagination pressure.
     Simplifies complex geometries to stay within URL length limits.
     """
-    # Fall back to bounding box for complex polygons to avoid HTTP 414 (URI too long)
+    # Simplify complex polygons to stay within URL length limits
     n_coords = shapely.get_num_coordinates(geom)
     if n_coords > MAX_URL_COORDS:
-        logger.debug("Geometry has %d coords — falling back to bbox", n_coords)
-        return fetch_features_for_bbox(geom.bounds, cfg)
+        geom = geom.simplify(5.0, preserve_topology=True)
+        n_simplified = shapely.get_num_coordinates(geom)
+        if n_simplified > MAX_URL_COORDS:
+            logger.debug("Geometry still has %d coords after simplify — using bbox", n_simplified)
+            return fetch_features_for_bbox(geom.bounds, cfg, context=context)
 
     geom_json = _geom_to_esri_json(geom)
     bbox = geom.bounds
-    return _fetch_and_parse(geom_json, "esriGeometryPolygon", bbox, cfg)
+    return _fetch_and_parse(geom_json, "esriGeometryPolygon", bbox, cfg, context=context)
 
 
 def fetch_features_for_bbox(
     bbox: tuple[float, float, float, float],
     cfg: LayerConfig,
+    context: str = "",
 ) -> GeoDataFrame:
     """Fetch all features of *cfg.layer_id* intersecting *bbox* (paginated).
 
@@ -253,7 +265,7 @@ def fetch_features_for_bbox(
     """
     minx, miny, maxx, maxy = bbox
     geom_json = f"{minx},{miny},{maxx},{maxy}"
-    return _fetch_and_parse(geom_json, "esriGeometryEnvelope", bbox, cfg)
+    return _fetch_and_parse(geom_json, "esriGeometryEnvelope", bbox, cfg, context=context)
 
 
 def fetch_features_cached(

@@ -301,7 +301,20 @@ flowchart TD
 
     G3 --> H1
 
-    H2 --> OUT2[/"**Output 2: Land Cover**<br>(CSV)"/]
+    subgraph "10–11 — Optional Analyses (Swisstopo API)"
+        I1{"--bauzonen<br>or --habitat?"}
+        I2["Per parcel: fetch layer features<br>from Swisstopo API (parallel)"]
+        I3["Intersect parcels locally<br>→ aggregate per EGRID"]
+        I4["Intersect green space LC rows<br>with cached features (no API)"]
+        I1 -->|Yes| I2 --> I3 --> I4
+    end
+
+    H2 --> I1
+    D4 --> I3
+    I1 -->|No| OUT2
+
+    I3 --> OUT1
+    I4 --> OUT2[/"**Output 2: Land Cover**<br>(CSV)"/]
 ```
 
 ### 1. Load Parcel Identifiers
@@ -351,11 +364,14 @@ flowchart TD
 
 ### 10–11. Optional Analyses (Swisstopo API)
 
-When `--bauzonen` or `--habitat` is specified, the pipeline performs additional intersection analyses using the [Swisstopo REST API](https://api3.geo.admin.ch):
+When `--bauzonen` or `--habitat` is specified, the pipeline performs additional intersection analyses using the [Swisstopo REST API](https://api3.geo.admin.ch). Each layer analysis has three phases:
 
-1. **Fetch** — Features are fetched per-parcel using each parcel's polygon as the spatial filter (`esriGeometryPolygon`). This keeps API responses small and targeted.
-2. **Intersect parcels** — Each parcel is intersected with the fetched features. Results are aggregated per EGRID as semicolon-separated lists of feature names and areas.
-3. **Intersect green spaces** — Each green space land cover feature (from the LC output) is intersected with the fetched features. Results are aggregated per EGRID + fid.
+1. **Fetch per parcel** — For each parcel, the [Identify endpoint](https://docs.geo.admin.ch/access-data/identify-features.html) is called with the parcel polygon as the spatial filter (`esriGeometryPolygon`). This keeps API responses small (typically 1–5 features per parcel). Requests run in parallel (up to 10 concurrent). Polygons with many vertices automatically fall back to a bounding box query. Results are cached by EGRID.
+
+2. **Intersect parcels** — Each parcel is intersected locally with its fetched features using Shapely. Results are aggregated per EGRID as semicolon-separated lists of feature names and intersection areas.
+
+3. **Intersect green space land covers** — Each green space land cover row (i.e. LC rows where `Check_GreenSpace ≠ "Not green space"`) is intersected with the **cached** features from its parent parcel (looked up by EGRID). No additional API calls are made — since green spaces are clipped subsets of parcels, the parcel-level fetch already covers them. Results are aggregated per EGRID + fid.
+
 4. **Merge** — Aggregated results are joined onto the parcels and land cover outputs as additional columns (`{label}`, `{label}_m2`).
 
 Available layers:
@@ -363,6 +379,8 @@ Available layers:
 - **Habitat** (`--habitat`) — [BAFU Lebensraumkarte](https://www.bafu.admin.ch/de/biodiversitaet-geodaten) (`ch.bafu.lebensraumkarte-schweiz`): habitat type map
 
 The generic API client (`swisstopo.py`) makes it straightforward to add new layers by defining a `LayerConfig`.
+
+> **Note:** For large-scale processing (Mode 2 or thousands of parcels), users should download the relevant datasets locally rather than querying the API. The per-parcel API approach is optimized for typical Mode 1 workloads (tens to hundreds of parcels).
 
 ---
 

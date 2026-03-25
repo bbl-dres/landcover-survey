@@ -1,0 +1,62 @@
+17:08:40 INFO     __main__ — Landcover Survey started — mode=1, output=C:\Users\DavidRasner\Documents\GitHub\landcover-survey\data
+17:08:41 INFO     data_io — Read 1000 rows from example.csv
+17:08:41 INFO     pipeline — Loaded 1000 rows — processing in 1 chunk(s) of 10000
+17:08:41 INFO     pipeline —   Looking up 961 unique EGRIDs
+17:08:41 WARNING  data_io — Skipping 1 invalid EGRIDs: ['00000']
+17:09:09 INFO     data_io — Read 944 parcels from resf
+17:09:09 WARNING  pipeline — 2 EGRIDs have multiple entries — dissolving: ['CH149410876583', 'CH827795831257']
+17:09:09 INFO     pipeline —   Clipping land cover for 940 parcels
+17:09:31 INFO     pipeline —   Clipped 4330 land cover rows from 940 parcels
+17:09:32 INFO     pipeline — Aggregated land cover areas onto 1000 parcels
+17:09:32 INFO     pipeline — bauzonen — Step 1/3: Fetching ch.are.bauzonen features for 940 parcels …
+17:09:34 INFO     pipeline — bauzonen — Step 1/3: Fetched 50/940 parcels (ETA: 0m45s)
+17:09:37 INFO     pipeline — bauzonen — Step 1/3: Fetched 100/940 parcels (ETA: 0m41s)
+17:09:39 INFO     pipeline — bauzonen — Step 1/3: Fetched 150/940 parcels (ETA: 0m37s)
+17:09:41 INFO     pipeline — bauzonen — Step 1/3: Fetched 200/940 parcels (ETA: 0m34s)
+17:09:43 INFO     pipeline — bauzonen — Step 1/3: Fetched 250/940 parcels (ETA: 0m32s)
+17:09:45 INFO     pipeline — bauzonen — Step 1/3: Fetched 300/940 parcels (ETA: 0m29s)
+17:09:48 INFO     pipeline — bauzonen — Step 1/3: Fetched 350/940 parcels (ETA: 0m27s)
+17:09:51 INFO     pipeline — bauzonen — Step 1/3: Fetched 400/940 parcels (ETA: 0m25s)
+17:09:53 INFO     pipeline — bauzonen — Step 1/3: Fetched 450/940 parcels (ETA: 0m23s)
+17:09:55 INFO     pipeline — bauzonen — Step 1/3: Fetched 500/940 parcels (ETA: 0m20s)
+17:09:57 INFO     pipeline — bauzonen — Step 1/3: Fetched 550/940 parcels (ETA: 0m18s)
+17:10:00 INFO     pipeline — bauzonen — Step 1/3: Fetched 600/940 parcels (ETA: 0m15s)
+17:10:02 INFO     pipeline — bauzonen — Step 1/3: Fetched 650/940 parcels (ETA: 0m13s)
+17:10:05 INFO     pipeline — bauzonen — Step 1/3: Fetched 700/940 parcels (ETA: 0m11s)
+17:10:07 INFO     pipeline — bauzonen — Step 1/3: Fetched 750/940 parcels (ETA: 0m09s)
+17:10:10 INFO     pipeline — bauzonen — Step 1/3: Fetched 800/940 parcels (ETA: 0m06s)
+17:10:12 INFO     pipeline — bauzonen — Step 1/3: Fetched 850/940 parcels (ETA: 0m04s)
+17:10:15 INFO     pipeline — bauzonen — Step 1/3: Fetched 900/940 parcels (ETA: 0m01s)
+17:10:17 INFO     pipeline — bauzonen — Step 1/3: Fetched 940/940 parcels (ETA: 0m00s)
+17:10:17 INFO     pipeline — bauzonen — Step 2/3: Intersecting 940 parcels …
+17:10:20 INFO     pipeline — bauzonen — Step 3/3: Intersecting 1908 land covers (green space) …
+17:10:22 INFO     pipeline — bauzonen — Step 3/3: Land covers 1908/1908 done
+17:10:22 INFO     pipeline — bauzonen complete
+17:10:22 INFO     pipeline — habitat — Step 1/3: Fetching ch.bafu.lebensraumkarte-schweiz features for 940 parcels …
+17:10:28 INFO     pipeline — habitat — Step 1/3: Fetched 50/940 parcels (ETA: 1m47s)
+17:10:34 INFO     pipeline — habitat — Step 1/3: Fetched 100/940 parcels (ETA: 1m39s)
+17:10:41 INFO     pipeline — habitat — Step 1/3: Fetched 150/940 parcels (ETA: 1m37s)
+17:10:49 INFO     pipeline — habitat — Step 1/3: Fetched 200/940 parcels (ETA: 1m39s)
+17:10:54 INFO     pipeline — habitat — Step 1/3: Fetched 250/940 parcels (ETA: 1m27s)
+17:11:01 INFO     pipeline — habitat — Step 1/3: Fetched 300/940 parcels (ETA: 1m22s)
+17:11:11 INFO     pipeline — habitat — Step 1/3: Fetched 350/940 parcels (ETA: 1m22s)
+17:11:19 INFO     pipeline — habitat — Step 1/3: Fetched 400/940 parcels (ETA: 1m16s)
+17:11:26 INFO     pipeline — habitat — Step 1/3: Fetched 450/940 parcels (ETA: 1m09s)
+17:11:34 INFO     pipeline — habitat — Step 1/3: Fetched 500/940 parcels (ETA: 1m03s)
+17:11:40 INFO     pipeline — habitat — Step 1/3: Fetched 550/940 parcels (ETA: 0m55s)
+17:11:44 INFO     pipeline — habitat — Step 1/3: Fetched 600/940 parcels (ETA: 0m46s)
+17:11:52 INFO     pipeline — habitat — Step 1/3: Fetched 650/940 parcels (ETA: 0m40s)
+17:11:59 INFO     pipeline — habitat — Step 1/3: Fetched 700/940 parcels (ETA: 0m33s)
+17:12:06 INFO     pipeline — habitat — Step 1/3: Fetched 750/940 parcels (ETA: 0m26s)
+17:12:21 INFO     pipeline — habitat — Step 1/3: Fetched 800/940 parcels (ETA: 0m20s)
+17:12:33 INFO     pipeline — habitat — Step 1/3: Fetched 850/940 parcels (ETA: 0m13s)
+17:12:44 INFO     pipeline — habitat — Step 1/3: Fetched 900/940 parcels (ETA: 0m06s)
+17:13:58 INFO     pipeline — habitat — Step 1/3: Fetched 940/940 parcels (ETA: 0m00s)
+17:13:58 INFO     pipeline — habitat — Step 2/3: Intersecting 940 parcels …
+17:14:55 INFO     pipeline — habitat — Step 3/3: Intersecting 1908 land covers (green space) …
+17:16:31 INFO     pipeline — habitat — Step 3/3: Land covers 1908/1908 done
+17:16:31 INFO     pipeline — habitat complete
+17:16:31 INFO     pipeline — Exporting final results
+17:16:31 INFO     data_io — Wrote 1000 rows to example_parcels_20260323_170840.csv
+17:16:31 INFO     data_io — Wrote 4330 rows to example_landcover_20260323_170840.csv
+17:16:31 INFO     pipeline — Done in 7m50s — 1000 parcels, 4330 land cover rows → C:\Users\DavidRasner\Documents\GitHub\landcover-survey\data
