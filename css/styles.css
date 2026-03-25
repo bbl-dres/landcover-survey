@@ -302,7 +302,7 @@ main { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: 
 }
 
 #menu-toggle {
-  width: 300px;
+  align-self: center;
   background: var(--gray-900);
   color: var(--color-white);
   padding: var(--space-2) var(--space-5) var(--space-2) var(--space-3);
@@ -408,12 +408,46 @@ main { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: 
   font-family: inherit;
 }
 
-.geokatalog-empty {
+.geokatalog-empty, .geokatalog-loading {
   text-align: center;
   padding: var(--space-4);
   color: var(--gray-500);
   font-size: var(--text-xs);
 }
+
+/* Geokatalog tree */
+.catalog-item { }
+.catalog-node {
+  display: flex; align-items: center; gap: var(--space-2);
+  padding: var(--space-2) var(--space-2);
+  cursor: pointer; font-size: var(--text-xs); color: var(--gray-800);
+  transition: background var(--duration-fast); border-radius: var(--radius-sm);
+}
+.catalog-node:hover { background: var(--gray-100); }
+.catalog-node.leaf { padding-left: var(--space-4); }
+.node-arrow { display: flex; align-items: center; transition: transform var(--duration-fast); }
+.node-arrow .material-symbols-outlined { font-size: 16px; color: var(--gray-500); }
+.catalog-item.expanded > .catalog-node .node-arrow { transform: rotate(90deg); }
+.node-checkbox { width: 14px; height: 14px; cursor: pointer; accent-color: var(--swiss-red); flex-shrink: 0; }
+.node-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.catalog-children { display: none; padding-left: var(--space-4); }
+.catalog-item.expanded > .catalog-children { display: block; }
+
+/* Active layers empty state */
+.active-layers-empty {
+  text-align: center; padding: var(--space-3);
+  color: var(--gray-500); font-size: var(--text-2xs); line-height: var(--leading-relaxed);
+}
+
+/* Active layer remove button */
+.active-layer-remove {
+  display: flex; align-items: center; justify-content: center;
+  width: 20px; height: 20px; border: none;
+  background: var(--gray-600); cursor: pointer;
+  border-radius: var(--radius-full); color: var(--color-white); flex-shrink: 0; padding: 0;
+}
+.active-layer-remove:hover { background: var(--gray-800); }
+.active-layer-remove .material-symbols-outlined { font-size: 14px; font-weight: 600; }
 
 /* -- Table toggle button (pill, bottom center of map) -- */
 .tbl-toggle {

@@ -138,7 +138,8 @@
       "Bash(curl -s http://127.0.0.1:8081/data/example.csv)",
       "Bash(do curl:*)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"http://127.0.0.1:8082/index.html\")",
-      "Bash(grep -n \"api3.geo.admin.ch\\\\|SearchServer\\\\|type=layers\\\\|type=locations\" /c/Users/DavidRasner/Documents/GitHub/property-inventory/js/*.js)"
+      "Bash(grep -n \"api3.geo.admin.ch\\\\|SearchServer\\\\|type=layers\\\\|type=locations\" /c/Users/DavidRasner/Documents/GitHub/property-inventory/js/*.js)",
+      "Bash(curl -s \"https://api3.geo.admin.ch/rest/services/ech/SearchServer?type=layers&limit=5&lang=de&searchText=OEREB\")"
     ]
   }
 }
