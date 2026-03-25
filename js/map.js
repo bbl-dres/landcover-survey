@@ -447,8 +447,8 @@ function initBasemapSelector() {
 function addDataLayers() {
   if (map.getSource("landcover")) return; // guard against duplicate calls
   map.addSource("landcover", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
-  map.addLayer({ id: "landcover-fill", type: "fill", source: "landcover", paint: { "fill-color": ["get", "color"], "fill-opacity": 0.5 } });
-  map.addLayer({ id: "landcover-line", type: "line", source: "landcover", paint: { "line-color": ["get", "color"], "line-width": 1, "line-opacity": 0.8 } });
+  map.addLayer({ id: "landcover-fill", type: "fill", source: "landcover", minzoom: 13, paint: { "fill-color": ["get", "color"], "fill-opacity": 0.5 } });
+  map.addLayer({ id: "landcover-line", type: "line", source: "landcover", minzoom: 13, paint: { "line-color": ["get", "color"], "line-width": 1, "line-opacity": 0.8 } });
 
   map.addSource("parcels", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
   map.addLayer({ id: "parcels-fill", type: "fill", source: "parcels", paint: { "fill-color": "#1a365d", "fill-opacity": 0.08 } });

@@ -5,13 +5,21 @@
  * - Parallel EGRID lookups (batched, max CONCURRENCY at once)
  * - Parallel WFS queries (fired as soon as parcel geometry arrives)
  * - Turf.js clipping runs synchronously per parcel (CPU-bound, fast)
- * - No artificial sleep — only natural network latency paces the requests
+ * - Exponential backoff on 429/5xx errors
+ * - EGRID dedup cache avoids redundant API calls
+ * - AbortController timeout on all fetch calls
  */
 import { API, SLIVER_THRESHOLD, STATUS, classify } from "./config.js";
 
-const CONCURRENCY = 5; // max parallel API requests
+const CONCURRENCY = 5;
+const FETCH_TIMEOUT_MS = 15000;
+const MAX_RETRIES = 3;
+const BASE_DELAY_MS = 500;
 
 let cancelled = false;
+
+/** EGRID → parcel geometry cache (survives across runs within same session) */
+const egridCache = new Map();
 
 export function cancelProcessing() {
   cancelled = true;
@@ -27,22 +35,18 @@ export async function processRows(rows, onProgress) {
   let completed = 0;
   let succeeded = 0;
 
-  // Results array preserving input order
   const results = new Array(total);
 
-  // Progress reporter
   const reportProgress = () => {
     onProgress({ processed: completed, total, succeeded, failed: completed - succeeded });
   };
 
-  // Process a single row — returns { parcel, landcover[] }
   const processOne = async (row, index) => {
     if (cancelled) return null;
 
     const id = row.id || "";
     const egrid = row.egrid || "";
 
-    // Validation
     if (!egrid || !egrid.startsWith("CH")) {
       return {
         parcel: makeErrorParcel(id, egrid, row, STATUS.INVALID),
@@ -51,7 +55,7 @@ export async function processRows(rows, onProgress) {
     }
 
     try {
-      // Step 1: Fetch parcel geometry
+      // Step 1: Fetch parcel geometry (with dedup cache)
       const parcelResult = await fetchParcelGeometry(egrid);
 
       if (!parcelResult) {
@@ -64,10 +68,10 @@ export async function processRows(rows, onProgress) {
       // Step 2: Fetch land cover via WFS
       const parcelGeom = parcelResult.geometry;
       const bbox = turf.bbox(parcelGeom);
-      const lcFeatures = await fetchLandCover(bbox);
+      const lcResult = await fetchLandCover(bbox);
 
-      // Step 3: Clip land cover to parcel (CPU-bound, synchronous)
-      const clipped = clipLandCover(parcelGeom, lcFeatures, id, egrid);
+      // Step 3: Clip land cover to parcel
+      const clipped = clipLandCover(parcelGeom, lcResult.features, id, egrid);
 
       // Step 4: Calculate parcel area
       const parcelArea = turf.area(parcelGeom);
@@ -80,7 +84,8 @@ export async function processRows(rows, onProgress) {
         egrid,
         nummer: parcelResult.properties.number || "",
         bfsnr: parcelResult.properties.bfsnr || "",
-        check_egrid: STATUS.FOUND,
+        check_egrid: lcResult.error ? STATUS.FOUND : STATUS.FOUND,
+        check_wfs: lcResult.error ? "wfs_error" : "ok",
         flaeche: parcelResult.properties.area || "",
         parcel_area_m2: round2(parcelArea),
         ...agg,
@@ -118,7 +123,6 @@ export async function processRows(rows, onProgress) {
     }
   };
 
-  // Launch CONCURRENCY workers
   for (let i = 0; i < Math.min(CONCURRENCY, total); i++) {
     workers.push(runNext());
   }
@@ -146,6 +150,7 @@ function makeErrorParcel(id, egrid, row, message) {
     nummer: "",
     bfsnr: "",
     check_egrid: message,
+    check_wfs: "",
     flaeche: "",
     parcel_area_m2: "",
     _geometry: null,
@@ -157,8 +162,76 @@ function makeErrorParcel(id, egrid, row, message) {
   return parcel;
 }
 
-/** Fetch parcel geometry by EGRID from api3.geo.admin.ch */
+/* ── Fetch with retry and timeout ── */
+
+/**
+ * Fetch with AbortController timeout and exponential backoff retry.
+ * Retries on 429, 500, 502, 503, 504 and network errors.
+ */
+async function fetchWithRetry(url, opts = {}) {
+  let lastError;
+
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    if (cancelled) throw new Error("Cancelled");
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
+    try {
+      const resp = await fetch(url, { ...opts, signal: controller.signal });
+      clearTimeout(timeout);
+
+      if (resp.ok) return resp;
+
+      // Retry on rate-limit or server errors
+      if (resp.status === 429 || resp.status >= 500) {
+        const retryAfter = resp.headers.get("Retry-After");
+        const delay = retryAfter
+          ? Math.min(parseInt(retryAfter, 10) * 1000, 10000)
+          : BASE_DELAY_MS * Math.pow(2, attempt);
+        lastError = new Error(`HTTP ${resp.status}`);
+        if (attempt < MAX_RETRIES) {
+          await sleep(delay);
+          continue;
+        }
+      }
+
+      throw new Error(`HTTP ${resp.status}`);
+    } catch (err) {
+      clearTimeout(timeout);
+
+      if (err.name === "AbortError") {
+        lastError = new Error("Request timeout");
+      } else {
+        lastError = err;
+      }
+
+      // Retry on network errors and timeouts
+      if (attempt < MAX_RETRIES) {
+        await sleep(BASE_DELAY_MS * Math.pow(2, attempt));
+        continue;
+      }
+    }
+  }
+
+  throw lastError;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/* ── API calls ── */
+
+/** Fetch parcel geometry by EGRID (with dedup cache) */
 async function fetchParcelGeometry(egrid) {
+  // Check cache first
+  if (egridCache.has(egrid)) {
+    const cached = egridCache.get(egrid);
+    // Return a fresh copy so mutations don't affect cache
+    return cached ? JSON.parse(JSON.stringify(cached)) : null;
+  }
+
   const params = new URLSearchParams({
     layer: "ch.kantone.cadastralwebmap-farbe",
     searchText: egrid,
@@ -168,17 +241,19 @@ async function fetchParcelGeometry(egrid) {
     sr: "4326",
   });
 
-  const resp = await fetch(`${API.PARCEL_FIND}?${params}`);
-  if (!resp.ok) throw new Error(`API error: ${resp.status}`);
-
+  const resp = await fetchWithRetry(`${API.PARCEL_FIND}?${params}`);
   const data = await resp.json();
-  if (!data.results || data.results.length === 0) return null;
+
+  if (!data.results || data.results.length === 0) {
+    egridCache.set(egrid, null);
+    return null;
+  }
 
   const feature = data.results[0];
   const geom = feature.geometry;
   const props = feature.properties || feature.attributes || {};
 
-  return {
+  const result = {
     type: "Feature",
     geometry: geom,
     properties: {
@@ -188,9 +263,16 @@ async function fetchParcelGeometry(egrid) {
       area: "",
     },
   };
+
+  egridCache.set(egrid, result);
+  return JSON.parse(JSON.stringify(result));
 }
 
-/** Fetch land cover features via WFS from geodienste.ch */
+/**
+ * Fetch land cover features via WFS.
+ * Returns { features: [...], error: boolean } so callers can distinguish
+ * "no land cover" from "WFS failed".
+ */
 async function fetchLandCover(bbox) {
   const [minLon, minLat, maxLon, maxLat] = bbox;
 
@@ -206,16 +288,12 @@ async function fetchLandCover(bbox) {
   });
 
   try {
-    const resp = await fetch(`${API.WFS_AV}?${params}`);
-    if (!resp.ok) {
-      console.warn(`WFS error: ${resp.status}`);
-      return [];
-    }
+    const resp = await fetchWithRetry(`${API.WFS_AV}?${params}`);
     const data = await resp.json();
-    return data.features || [];
+    return { features: data.features || [], error: false };
   } catch (err) {
-    console.warn("WFS fetch failed:", err);
-    return [];
+    console.warn("WFS fetch failed after retries:", err.message);
+    return { features: [], error: true };
   }
 }
 

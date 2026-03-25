@@ -7,6 +7,14 @@ import { highlightRow } from "./table.js";
 import { addSwisstopoLayer } from "./swisstopo.js";
 import { t, getLang } from "./i18n.js";
 
+const SEARCH_TIMEOUT = 8000;
+
+function fetchTimeout(url, ms = SEARCH_TIMEOUT) {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), ms);
+  return fetch(url, { signal: controller.signal }).finally(() => clearTimeout(id));
+}
+
 let parcelsData = []; // set by main.js after processing
 let debounceTimer = null;
 
@@ -62,7 +70,8 @@ export function initSearch() {
     } else if (action === "location") {
       const lat = parseFloat(item.dataset.lat);
       const lng = parseFloat(item.dataset.lng);
-      const bbox = item.dataset.bbox ? JSON.parse(item.dataset.bbox) : null;
+      let bbox = null;
+      try { bbox = item.dataset.bbox ? JSON.parse(item.dataset.bbox) : null; } catch { /* malformed bbox */ }
       flyToLocation(lng, lat, bbox);
     } else if (action === "layer") {
       addSwisstopoLayer(item.dataset.layerId, item.dataset.title, false);
@@ -111,7 +120,7 @@ async function performSearch(query) {
         <div class="search-item" data-action="location" data-lat="${r.lat}" data-lng="${r.lng}" ${bboxAttr}>
           <span class="material-symbols-outlined search-item-icon">map</span>
           <div>
-            <div class="search-item-title">${r.label}</div>
+            <div class="search-item-title">${esc(r.label)}</div>
             <div class="search-item-sub">${esc(r.origin)}</div>
           </div>
         </div>
@@ -161,7 +170,7 @@ async function searchSwisstopo(query) {
     limit: "5",
   });
 
-  const resp = await fetch(`${API.SEARCH}?${params}`);
+  const resp = await fetchTimeout(`${API.SEARCH}?${params}`);
   if (!resp.ok) return [];
   const data = await resp.json();
 
@@ -185,7 +194,7 @@ async function searchSwisstopoLayers(query) {
     limit: "5",
   });
 
-  const resp = await fetch(`${API.SEARCH}?${params}`);
+  const resp = await fetchTimeout(`${API.SEARCH}?${params}`);
   if (!resp.ok) return [];
   const data = await resp.json();
 

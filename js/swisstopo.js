@@ -9,6 +9,15 @@ import { t, getLang } from "./i18n.js";
 /** Active swisstopo layers: [{ id, title, sourceId, mapLayerId, tileUrl, maxZoom, visible }] */
 export const activeSwisstopoLayers = [];
 
+const FETCH_TIMEOUT = 15000;
+
+/** Fetch with AbortController timeout */
+function fetchTimeout(url, ms = FETCH_TIMEOUT) {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), ms);
+  return fetch(url, { signal: controller.signal }).finally(() => clearTimeout(id));
+}
+
 let mapRef = null;
 
 export function setMap(map) { mapRef = map; }
@@ -30,7 +39,7 @@ export function addSwisstopoLayer(layerId, title, silent) {
   if (pendingLayerIds.has(layerId)) return;
   pendingLayerIds.add(layerId);
 
-  fetch(`https://api3.geo.admin.ch/rest/services/api/MapServer/${layerId}?lang=${getLang()}`)
+  fetchTimeout(`https://api3.geo.admin.ch/rest/services/api/MapServer/${layerId}?lang=${getLang()}`)
     .then((r) => { if (!r.ok) throw new Error("Metadata unavailable"); return r.json(); })
     .then((meta) => {
       const sourceId = `swisstopo-${layerId}`;
@@ -144,7 +153,7 @@ export function loadGeokatalog() {
 
   tree.innerHTML = `<div class="geokatalog-loading">${esc(t("geokatalog.loading"))}</div>`;
 
-  fetch(`https://api3.geo.admin.ch/rest/services/ech/CatalogServer?lang=${getLang()}`)
+  fetchTimeout(`https://api3.geo.admin.ch/rest/services/ech/CatalogServer?lang=${getLang()}`)
     .then((r) => { if (!r.ok) throw new Error("API error"); return r.json(); })
     .then((data) => {
       geokatalogLoaded = true;
@@ -302,7 +311,7 @@ export function showLayerInfo(layerId) {
   content.innerHTML = `<div class="layer-info-loading">${esc(t("layerinfo.loading"))}</div>`;
   modal.classList.add("show");
 
-  fetch(`https://api3.geo.admin.ch/rest/services/api/MapServer/${layerId}/legend?lang=${getLang()}`)
+  fetchTimeout(`https://api3.geo.admin.ch/rest/services/api/MapServer/${layerId}/legend?lang=${getLang()}`)
     .then((r) => { if (!r.ok) throw new Error("Unavailable"); return r.text(); })
     .then((html) => {
       // Sanitize: strip scripts and event handlers

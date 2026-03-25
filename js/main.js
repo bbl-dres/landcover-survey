@@ -155,23 +155,50 @@ async function onStartProcessing(parsedData) {
   currentFilename = parsedData.filename || "";
   const startTime = Date.now();
 
-  processedResults = await processRows(parsedData.rows, (progress) => {
-    updateProgress(progress, startTime);
-  });
+  try {
+    processedResults = await processRows(parsedData.rows, (progress) => {
+      updateProgress(progress, startTime);
+    });
 
-  document.getElementById("progress-bar-fill").style.width = "100%";
-  document.querySelector(".progress-bar").setAttribute("aria-valuenow", "100");
+    if (!processedResults || !processedResults.parcels.length) {
+      showState("upload");
+      const err = document.getElementById("upload-error");
+      if (err) { err.textContent = t("upload.error.empty"); err.hidden = false; }
+      return;
+    }
 
-  showResults();
+    progressEls.barFill.style.width = "100%";
+    progressEls.bar.setAttribute("aria-valuenow", "100");
+
+    showResults();
+  } catch (err) {
+    console.error("Processing failed:", err);
+    showState("upload");
+    const errEl = document.getElementById("upload-error");
+    if (errEl) { errEl.textContent = t("upload.error.read", { error: err.message }); errEl.hidden = false; }
+  }
+}
+
+// Cached DOM refs for the progress hot path (queried once, reused hundreds of times)
+const progressEls = {};
+
+function cacheProgressEls() {
+  progressEls.barFill = document.getElementById("progress-bar-fill");
+  progressEls.bar = document.querySelector(".progress-bar");
+  progressEls.text = document.getElementById("progress-text");
+  progressEls.eta = document.getElementById("progress-eta");
+  progressEls.stats = document.getElementById("progress-stats");
 }
 
 function updateProgress(progress, startTime) {
+  if (!progressEls.barFill) cacheProgressEls();
+
   const { processed, total, succeeded, failed } = progress;
   const pct = total > 0 ? ((processed / total) * 100).toFixed(1) : 0;
 
-  document.getElementById("progress-bar-fill").style.width = `${pct}%`;
-  document.querySelector(".progress-bar").setAttribute("aria-valuenow", Math.round(pct));
-  document.getElementById("progress-text").textContent = t("processing.parcel", { processed, total, pct });
+  progressEls.barFill.style.width = `${pct}%`;
+  progressEls.bar.setAttribute("aria-valuenow", Math.round(pct));
+  progressEls.text.textContent = t("processing.parcel", { processed, total, pct });
 
   const elapsed = Date.now() - startTime;
   const perItem = processed > 0 ? elapsed / processed : 0;
@@ -179,9 +206,9 @@ function updateProgress(progress, startTime) {
   const etaSeconds = Math.ceil(remaining / 1000);
   const etaMin = Math.floor(etaSeconds / 60);
   const etaSec = etaSeconds % 60;
-  document.getElementById("progress-eta").textContent =
+  progressEls.eta.textContent =
     processed < total ? t("processing.eta", { min: etaMin, sec: etaSec }) : t("processing.finishing");
-  document.getElementById("progress-stats").textContent = t("processing.stats", { succeeded, failed });
+  progressEls.stats.textContent = t("processing.stats", { succeeded, failed });
 }
 
 /* ── Aggregation modes for Flächenanalyse ── */
@@ -472,12 +499,16 @@ function showResults() {
   setSearchData(processedResults.parcels);
 
   requestAnimationFrame(async () => {
-    await initMap("results-map", {
-      onParcelSelect: (index) => highlightRow(index),
-      onLandcoverSelect: (lcIndex) => highlightLcRow(lcIndex),
-    });
-    plotResults(processedResults);
-    applyAggColorsToMap();
+    try {
+      await initMap("results-map", {
+        onParcelSelect: (index) => highlightRow(index),
+        onLandcoverSelect: (lcIndex) => highlightLcRow(lcIndex),
+      });
+      plotResults(processedResults);
+      applyAggColorsToMap();
+    } catch (err) {
+      console.error("Map initialization failed:", err);
+    }
   });
 }
 
