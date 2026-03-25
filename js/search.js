@@ -4,6 +4,7 @@
 import { API } from "./config.js";
 import { highlightParcel, flyToLocation } from "./map.js";
 import { highlightRow } from "./table.js";
+import { addSwisstopoLayer } from "./swisstopo.js";
 
 let parcelsData = []; // set by main.js after processing
 let debounceTimer = null;
@@ -62,6 +63,8 @@ export function initSearch() {
       const lng = parseFloat(item.dataset.lng);
       const bbox = item.dataset.bbox ? JSON.parse(item.dataset.bbox) : null;
       flyToLocation(lng, lat, bbox);
+    } else if (action === "layer") {
+      addSwisstopoLayer(item.dataset.layerId, item.dataset.title, false);
     }
 
     results.hidden = true;
@@ -112,6 +115,26 @@ async function performSearch(query) {
     console.warn("Swisstopo search failed:", err);
   }
 
+  // Swisstopo layer search
+  try {
+    const layerResults = await searchSwisstopoLayers(query);
+    if (layerResults.length) {
+      html.push('<div class="search-section-header">Karten</div>');
+      for (const r of layerResults) {
+        html.push(`
+          <div class="search-item" data-action="layer" data-layer-id="${esc(r.id)}" data-title="${esc(r.title)}">
+            <span class="material-symbols-outlined search-item-icon">layers</span>
+            <div>
+              <div class="search-item-title">${esc(r.title)}</div>
+            </div>
+          </div>
+        `);
+      }
+    }
+  } catch (err) {
+    console.warn("Layer search failed:", err);
+  }
+
   if (html.length === 0) {
     html.push('<div class="search-empty">Keine Ergebnisse</div>');
   }
@@ -154,6 +177,24 @@ async function searchSwisstopo(query) {
       bbox: attrs.geom_st_box2d ? parseBBox(attrs.geom_st_box2d) : null,
     };
   });
+}
+
+async function searchSwisstopoLayers(query) {
+  const params = new URLSearchParams({
+    searchText: query,
+    type: "layers",
+    lang: "de",
+    limit: "5",
+  });
+
+  const resp = await fetch(`${API.SEARCH}?${params}`);
+  if (!resp.ok) return [];
+  const data = await resp.json();
+
+  return (data.results || []).map((r) => ({
+    id: r.attrs?.layer || "",
+    title: (r.attrs?.label || r.attrs?.title || "").replace(/<[^>]*>/g, ""),
+  })).filter((r) => r.id);
 }
 
 function parseBBox(box2d) {

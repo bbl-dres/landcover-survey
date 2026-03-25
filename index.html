@@ -158,13 +158,7 @@
                     <span>Geokatalog</span>
                   </button>
                   <div class="accordion-content">
-                    <div class="geokatalog-search">
-                      <span class="material-symbols-outlined">search</span>
-                      <input type="text" id="geokatalog-search-input" placeholder="Karte suchen..." autocomplete="off">
-                    </div>
-                    <div id="geokatalog-results">
-                      <p class="geokatalog-empty">Suchen Sie nach swisstopo Karten um sie als Overlay hinzuzufügen.</p>
-                    </div>
+                    <div id="geokatalog-tree"></div>
                   </div>
                 </div>
                 <div class="accordion-item" id="active-layers-accordion">
@@ -186,6 +180,20 @@
                       <div class="active-layer-item">
                         <input type="checkbox" class="active-layer-checkbox" checked id="layer-toggle-labels">
                         <span class="active-layer-title">Beschriftungen</span>
+                      </div>
+                      <div class="active-layer-item">
+                        <input type="checkbox" class="active-layer-checkbox" id="layer-toggle-oereb" data-swisstopo="ch.astra.kataster-belasteter-standorte-oev.oereb">
+                        <span class="active-layer-title">Verfügbarkeit ÖREB</span>
+                      </div>
+                      <div class="active-layer-item">
+                        <input type="checkbox" class="active-layer-checkbox" id="layer-toggle-av" data-swisstopo="ch.kantone.cadastralwebmap-farbe">
+                        <span class="active-layer-title">Amtliche Vermessung</span>
+                      </div>
+                    </div>
+                    <div class="layer-group">
+                      <div class="layer-group-label">Externe Karten</div>
+                      <div id="external-layers-list">
+                        <div class="active-layers-empty">Keine externen Karten aktiv. Suchen Sie nach Karten über das Suchfeld oder den Geokatalog.</div>
                       </div>
                     </div>
                   </div>

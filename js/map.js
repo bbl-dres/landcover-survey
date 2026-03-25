@@ -3,6 +3,7 @@
  * Home/3D controls, and thumbnail basemap selector
  */
 import { ART_COLORS, CATEGORY_COLORS, ART_LABELS, MAP_STYLES, MAP_DEFAULT } from "./config.js";
+import { setMap, readdSwisstopoLayers, loadGeokatalog, addSwisstopoLayer, removeSwisstopoLayer } from "./swisstopo.js";
 
 let map = null;
 let popup = null;
@@ -168,6 +169,8 @@ export async function initMap(containerId, { onParcelSelect, onLandcoverSelect }
     attributionControl: false,
   });
 
+  setMap(map);
+
   // Top-right: Nav → Home → 3D
   map.addControl(new maplibregl.NavigationControl(), "top-right");
   const homeCtrl = new HomeControl();
@@ -252,6 +255,11 @@ function initAccordionMenu() {
         header.classList.add("active");
         header.setAttribute("aria-expanded", "true");
         content.classList.add("show");
+
+        // Load geokatalog on first open
+        if (header.closest("#geokatalog-accordion")) {
+          loadGeokatalog();
+        }
       }
     });
   });
@@ -273,6 +281,21 @@ function initAccordionMenu() {
   initLayerToggle("layer-toggle-parcels", ["parcels-fill", "parcels-line", "parcels-label"]);
   initLayerToggle("layer-toggle-landcover", ["landcover-fill", "landcover-line"]);
   initLayerToggle("layer-toggle-labels", ["parcels-label"]);
+
+  // Swisstopo overlay toggles (ÖREB, AV) — add/remove as swisstopo layers
+  initSwisstopoToggle("layer-toggle-oereb");
+  initSwisstopoToggle("layer-toggle-av");
+}
+
+function initSwisstopoToggle(checkboxId) {
+  const cb = document.getElementById(checkboxId);
+  if (!cb) return;
+  const layerId = cb.dataset.swisstopo;
+  if (!layerId) return;
+  cb.addEventListener("change", () => {
+    if (cb.checked) addSwisstopoLayer(layerId, cb.nextElementSibling?.textContent || layerId, true);
+    else removeSwisstopoLayer(layerId);
+  });
 }
 
 function initLayerToggle(checkboxId, layerIds) {
@@ -432,6 +455,7 @@ function reAddDataLayers() {
   if (currentParcelData) map.getSource("parcels").setData(currentParcelData);
   if (currentLandcoverData) map.getSource("landcover").setData(currentLandcoverData);
   if (is3D) show3DBuildings();
+  readdSwisstopoLayers();
 }
 
 export function plotResults(results) {
