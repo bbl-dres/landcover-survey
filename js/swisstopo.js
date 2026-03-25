@@ -14,10 +14,20 @@ export function setMap(map) { mapRef = map; }
 
 /* ── Add Layer ── */
 
+/** Layer IDs of static toggles in the HTML (not rendered dynamically) */
+const STATIC_LAYER_IDS = new Set([
+  "ch.kantone.cadastralwebmap-farbe",
+  "ch.bafu.lebensraumkarte-schweiz",
+]);
+
+const pendingLayerIds = new Set();
+
 export function addSwisstopoLayer(layerId, title, silent) {
   if (!layerId || !mapRef) return;
   if (!/^[a-zA-Z0-9._-]+$/.test(layerId)) return;
   if (activeSwisstopoLayers.some((l) => l.id === layerId)) return;
+  if (pendingLayerIds.has(layerId)) return;
+  pendingLayerIds.add(layerId);
 
   fetch(`https://api3.geo.admin.ch/rest/services/api/MapServer/${layerId}?lang=de`)
     .then((r) => { if (!r.ok) throw new Error("Metadata unavailable"); return r.json(); })
@@ -55,9 +65,14 @@ export function addSwisstopoLayer(layerId, title, silent) {
       }
 
       activeSwisstopoLayers.push({ id: layerId, title: title || layerId, sourceId, mapLayerId, tileUrl, maxZoom, visible: true });
+      pendingLayerIds.delete(layerId);
       renderActiveLayersList();
+      syncStaticCheckboxes();
     })
-    .catch((e) => { if (e.name !== "AbortError") console.error("Layer load failed:", layerId, e); });
+    .catch((e) => {
+      pendingLayerIds.delete(layerId);
+      if (e.name !== "AbortError") console.error("Layer load failed:", layerId, e);
+    });
 }
 
 /* ── Remove Layer ── */
@@ -75,6 +90,7 @@ export function removeSwisstopoLayer(layerId) {
   activeSwisstopoLayers.splice(idx, 1);
   renderActiveLayersList();
   updateGeokatalogCheckboxes();
+  syncStaticCheckboxes();
 }
 
 /* ── Toggle Visibility ── */
@@ -205,6 +221,15 @@ function renderCatalogTree(items, container) {
   }
 }
 
+/** Keep static HTML checkboxes in sync with activeSwisstopoLayers */
+function syncStaticCheckboxes() {
+  document.querySelectorAll("[data-swisstopo]").forEach((cb) => {
+    const layerId = cb.dataset.swisstopo;
+    const isActive = activeSwisstopoLayers.some((l) => l.id === layerId);
+    cb.checked = isActive;
+  });
+}
+
 function updateGeokatalogCheckboxes() {
   document.querySelectorAll("#geokatalog-tree .node-checkbox").forEach((cb) => {
     cb.checked = activeSwisstopoLayers.some((l) => l.id === cb.dataset.layerId);
@@ -217,21 +242,24 @@ export function renderActiveLayersList() {
   const container = document.getElementById("external-layers-list");
   if (!container) return;
 
-  if (activeSwisstopoLayers.length === 0) {
-    container.innerHTML = '';
+  // Only render dynamically added layers (not the static ones already in HTML)
+  const dynamicLayers = activeSwisstopoLayers.filter((l) => !STATIC_LAYER_IDS.has(l.id));
+
+  if (dynamicLayers.length === 0) {
+    container.innerHTML = "";
     return;
   }
 
-  container.innerHTML = activeSwisstopoLayers.map((layer) => {
+  container.innerHTML = dynamicLayers.map((layer) => {
     const isVisible = layer.visible !== false;
-    return `<div class="active-layer-item">
+    return `<label class="active-layer-item">
       <button class="active-layer-remove" data-layer-id="${esc(layer.id)}" title="Entfernen">
         <span class="material-symbols-outlined">close</span>
       </button>
       <input type="checkbox" class="active-layer-checkbox" ${isVisible ? "checked" : ""} data-layer-id="${esc(layer.id)}" title="${isVisible ? "Ausblenden" : "Einblenden"}">
       <span class="active-layer-title">${esc(layer.title)}</span>
       <button class="active-layer-info" data-info="swisstopo" data-layer-id="${esc(layer.id)}"><span class="material-symbols-outlined">info</span></button>
-    </div>`;
+    </label>`;
   }).join("");
 
   // Wire events
