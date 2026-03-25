@@ -283,8 +283,8 @@ function initAccordionMenu() {
   initLayerToggle("layer-toggle-labels", ["parcels-label"]);
 
   // Swisstopo overlay toggles (ÖREB, AV) — add/remove as swisstopo layers
-  initSwisstopoToggle("layer-toggle-oereb");
   initSwisstopoToggle("layer-toggle-av");
+  initSwisstopoToggle("layer-toggle-habitat");
 }
 
 function initSwisstopoToggle(checkboxId) {
@@ -476,7 +476,7 @@ export function plotResults(results) {
       if (!lc._geometry) continue;
       lcFeatures.push({
         type: "Feature", geometry: lc._geometry,
-        properties: { lc_index: lcIndex, art: lc.art, art_label: ART_LABELS[lc.art] || lc.art, area_m2: lc.area_m2, color: ART_COLORS[lc.art] || "#888", greenspace: lc.check_greenspace, parcel_id: p.id },
+        properties: { lc_index: lcIndex, art: lc.art, art_label: ART_LABELS[lc.art] || lc.art, area_m2: lc.area_m2, color: ART_COLORS[lc.art] || "#888", greenspace: lc.check_greenspace, sia416: lc._sia416 || "", parcel_id: p.id },
       });
       lcIndex++;
     }
@@ -537,15 +537,40 @@ export function fitAllParcels() {
   map.fitBounds([[bounds[0], bounds[1]], [bounds[2], bounds[3]]], { padding: 60, maxZoom: 18, duration: 800 });
 }
 
+const GREEN_SPACE_DE = {
+  "Green space (soil-covered)": "Humusiert",
+  "Green space (wooded)": "Bestockt",
+  "Not green space": "Keine Grünfläche",
+};
+
 function showParcelPopup(lngLat, props) {
+  const fmt = (n) => parseFloat(n) ? parseFloat(n).toLocaleString("de-CH", { maximumFractionDigits: 2 }) : "\u2013";
   popup.setLngLat(lngLat).setHTML(`
-    <div class="map-popup"><strong>${esc(props.id)}</strong><br>EGRID: ${esc(props.egrid)}<br>Nr: ${esc(props.nummer)}<br>Fläche: ${props.area} m²</div>
+    <div class="map-popup">
+      <div class="popup-layer">Parzelle</div>
+      <div class="popup-title">${esc(props.id)} &middot; ${esc(props.egrid)}</div>
+      <div class="popup-sub">Nr. ${esc(props.nummer)}</div>
+      <table class="popup-table">
+        <tr><td>Fläche</td><td>${fmt(props.area)} m²</td></tr>
+      </table>
+    </div>
   `).addTo(map);
 }
 
 function showLandcoverPopup(lngLat, props) {
+  const fmt = (n) => parseFloat(n) ? parseFloat(n).toLocaleString("de-CH", { maximumFractionDigits: 2 }) : "\u2013";
+  const gs = GREEN_SPACE_DE[props.greenspace] || props.greenspace || "\u2013";
   popup.setLngLat(lngLat).setHTML(`
-    <div class="map-popup"><strong>${esc(props.art_label)}</strong><br>Fläche: ${props.area_m2} m²<br>Grünfläche: ${esc(props.greenspace)}</div>
+    <div class="map-popup">
+      <div class="popup-layer">Bodenbedeckung</div>
+      <div class="popup-title">${esc(props.art_label)}</div>
+      <div class="popup-sub">Parzelle: ${esc(props.parcel_id)}</div>
+      <table class="popup-table">
+        <tr><td>Fläche</td><td>${fmt(props.area_m2)} m²</td></tr>
+        <tr><td>Grünfläche</td><td>${gs}</td></tr>
+        <tr><td>SIA 416</td><td>${esc(props.sia416)}</td></tr>
+      </table>
+    </div>
   `).addTo(map);
 }
 

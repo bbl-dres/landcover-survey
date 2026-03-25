@@ -256,11 +256,11 @@ function updateSummaryPanel() {
   ).join("");
 
   document.getElementById("sp-body").innerHTML = `
-    <!-- Section 1: Übersicht -->
+    <!-- Section 1: Parzellen-Zuordnung -->
     <div class="sp-collapse-section open" data-sp-section="overview">
       <div class="sp-collapse-header">
         <span class="material-symbols-outlined sp-collapse-arrow">expand_more</span>
-        <span>Übersicht</span>
+        <span>Parzellen-Zuordnung</span>
       </div>
       <div class="sp-collapse-content">
         <div class="sp-meta-row">

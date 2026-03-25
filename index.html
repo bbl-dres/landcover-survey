@@ -96,6 +96,7 @@
             <p class="drop-zone-hint">Erforderlich: ID, EGRID &middot; Weitere Spalten werden durchgereicht</p>
           </div>
           <input type="file" id="file-input" accept=".csv,.xlsx,.xls,.tsv,.txt" hidden aria-label="Datei auswählen">
+          <p class="demo-link"><a href="data/example.csv" download="vorlage-parzellen.csv">Vorlage herunterladen (CSV)</a></p>
           <p class="demo-link"><span>Oder testen Sie mit </span><a href="#" id="load-demo">Beispieldaten</a></p>
 
           <div id="upload-error" class="upload-error" role="alert" hidden></div>
@@ -169,13 +170,15 @@
                   <div class="accordion-content show">
                     <div class="layer-group">
                       <div class="layer-group-label">Analyseergebnisse</div>
-                      <div class="active-layer-item">
+                      <div class="active-layer-item" data-internal-layer="parcels">
                         <input type="checkbox" class="active-layer-checkbox" checked id="layer-toggle-parcels">
                         <span class="active-layer-title">Parzellen</span>
+                        <button class="active-layer-info" data-info="internal" data-layer-key="parcels"><span class="material-symbols-outlined">info</span></button>
                       </div>
-                      <div class="active-layer-item">
+                      <div class="active-layer-item" data-internal-layer="landcover">
                         <input type="checkbox" class="active-layer-checkbox" checked id="layer-toggle-landcover">
                         <span class="active-layer-title">Bodenbedeckung</span>
+                        <button class="active-layer-info" data-info="internal" data-layer-key="landcover"><span class="material-symbols-outlined">info</span></button>
                       </div>
                       <div class="active-layer-item">
                         <input type="checkbox" class="active-layer-checkbox" checked id="layer-toggle-labels">
@@ -185,16 +188,16 @@
                     <div class="layer-group">
                       <div class="layer-group-label">Externe Karten</div>
                       <div class="active-layer-item">
-                        <input type="checkbox" class="active-layer-checkbox" id="layer-toggle-oereb" data-swisstopo="ch.swisstopo-vd.stand-oerebkataster">
-                        <span class="active-layer-title">Verfügbarkeit ÖREB</span>
-                      </div>
-                      <div class="active-layer-item">
                         <input type="checkbox" class="active-layer-checkbox" id="layer-toggle-av" data-swisstopo="ch.kantone.cadastralwebmap-farbe">
                         <span class="active-layer-title">Amtliche Vermessung</span>
+                        <button class="active-layer-info" data-info="swisstopo" data-layer-id="ch.kantone.cadastralwebmap-farbe"><span class="material-symbols-outlined">info</span></button>
                       </div>
-                      <div id="external-layers-list">
-                        <div class="active-layers-empty">Keine externen Karten aktiv. Suchen Sie nach Karten über das Suchfeld oder den Geokatalog.</div>
+                      <div class="active-layer-item">
+                        <input type="checkbox" class="active-layer-checkbox" id="layer-toggle-habitat" data-swisstopo="ch.bafu.lebensraumkarte-schweiz">
+                        <span class="active-layer-title">Lebensraumkarte</span>
+                        <button class="active-layer-info" data-info="swisstopo" data-layer-id="ch.bafu.lebensraumkarte-schweiz"><span class="material-symbols-outlined">info</span></button>
                       </div>
+                      <div id="external-layers-list"></div>
                     </div>
                   </div>
                 </div>
@@ -268,6 +271,18 @@
     </section>
 
   </main>
+
+  <!-- Layer info modal -->
+  <div id="layer-info-modal" class="layer-info-modal" role="dialog" aria-modal="true">
+    <div class="layer-info-modal-content">
+      <button class="layer-info-modal-close" aria-label="Schliessen">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+      <div id="layer-info-content" class="layer-info-body">
+        <div class="layer-info-loading">Lade Informationen...</div>
+      </div>
+    </div>
+  </div>
 
   <!-- Download modal -->
   <div id="download-overlay" class="dl-overlay" role="dialog" aria-modal="true" aria-label="Ergebnisse herunterladen" hidden>

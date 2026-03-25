@@ -217,7 +217,7 @@ export function renderActiveLayersList() {
   if (!container) return;
 
   if (activeSwisstopoLayers.length === 0) {
-    container.innerHTML = '<div class="active-layers-empty">Keine externen Karten aktiv. Suchen Sie nach Karten über das Suchfeld oder den Geokatalog.</div>';
+    container.innerHTML = '';
     return;
   }
 
@@ -229,6 +229,7 @@ export function renderActiveLayersList() {
       </button>
       <input type="checkbox" class="active-layer-checkbox" ${isVisible ? "checked" : ""} data-layer-id="${esc(layer.id)}" title="${isVisible ? "Ausblenden" : "Einblenden"}">
       <span class="active-layer-title">${esc(layer.title)}</span>
+      <button class="active-layer-info" data-info="swisstopo" data-layer-id="${esc(layer.id)}"><span class="material-symbols-outlined">info</span></button>
     </div>`;
   }).join("");
 
@@ -239,7 +240,109 @@ export function renderActiveLayersList() {
   container.querySelectorAll(".active-layer-checkbox").forEach((cb) => {
     cb.addEventListener("change", () => toggleSwisstopoLayerVisibility(cb.dataset.layerId));
   });
+  container.querySelectorAll(".active-layer-info").forEach((btn) => {
+    btn.addEventListener("click", (e) => { e.stopPropagation(); showLayerInfo(btn.dataset.layerId); });
+  });
 }
+
+/* ── Layer Info Modal ── */
+
+const internalLayerMeta = {
+  parcels: {
+    title: "Parzellen (Landcover Survey)",
+    description: "Parzellen-Polygone aus der swisstopo Cadastralwebmap, abgefragt per EGRID über die geo.admin.ch API.",
+    source: "swisstopo / geo.admin.ch",
+    format: "GeoJSON (Polygon)",
+  },
+  landcover: {
+    title: "Bodenbedeckung (Landcover Survey)",
+    description: "Bodenbedeckungsflächen aus der amtlichen Vermessung (geodienste.ch WFS), geclippt auf Parzellengrenzen mit Turf.js. Klassifiziert nach SIA 416, DIN 277 und Versiegelungsgrad.",
+    source: "geodienste.ch / Amtliche Vermessung",
+    format: "GeoJSON (Polygon)",
+  },
+};
+
+export function showLayerInfo(layerId) {
+  const modal = document.getElementById("layer-info-modal");
+  const content = document.getElementById("layer-info-content");
+  if (!modal || !content || !layerId) return;
+
+  content.innerHTML = '<div class="layer-info-loading">Lade Informationen...</div>';
+  modal.classList.add("show");
+
+  fetch(`https://api3.geo.admin.ch/rest/services/api/MapServer/${layerId}/legend?lang=de`)
+    .then((r) => { if (!r.ok) throw new Error("Unavailable"); return r.text(); })
+    .then((html) => {
+      // Sanitize: strip scripts and event handlers
+      const doc = new DOMParser().parseFromString(html, "text/html");
+      doc.querySelectorAll("script, iframe, object, embed, form").forEach((el) => el.remove());
+      doc.querySelectorAll("*").forEach((el) => {
+        for (const attr of Array.from(el.attributes)) {
+          if (attr.name.startsWith("on") || attr.value.trim().toLowerCase().startsWith("javascript:")) {
+            el.removeAttribute(attr.name);
+          }
+        }
+      });
+      content.innerHTML = `<div class="layer-info-api-content">${doc.body?.innerHTML || ""}</div>`;
+    })
+    .catch((e) => {
+      console.error("Layer info error:", e);
+      content.innerHTML = '<div class="layer-info-loading">Informationen nicht verfügbar.</div>';
+    });
+}
+
+export function showInternalLayerInfo(layerKey) {
+  const modal = document.getElementById("layer-info-modal");
+  const content = document.getElementById("layer-info-content");
+  if (!modal || !content) return;
+
+  const meta = internalLayerMeta[layerKey];
+  if (!meta) return;
+
+  const today = new Date().toLocaleDateString("de-CH", { day: "2-digit", month: "2-digit", year: "numeric" });
+
+  content.innerHTML = `
+    <div class="legend-container">
+      <div class="bod-title">${esc(meta.title)}</div>
+      <div class="legend-abstract">${esc(meta.description)}</div>
+      <div class="legend-footer"><span>Informationen</span></div>
+      <table>
+        <tr><td>Quelle</td><td>${esc(meta.source)}</td></tr>
+        <tr><td>Format</td><td>${esc(meta.format)}</td></tr>
+        <tr><td>Datenstand</td><td>${today}</td></tr>
+      </table>
+    </div>
+  `;
+  modal.classList.add("show");
+}
+
+function hideLayerInfo() {
+  document.getElementById("layer-info-modal")?.classList.remove("show");
+}
+
+// Init modal events
+document.addEventListener("DOMContentLoaded", () => {
+  const modal = document.getElementById("layer-info-modal");
+  if (!modal) return;
+
+  modal.querySelector(".layer-info-modal-close")?.addEventListener("click", hideLayerInfo);
+  modal.addEventListener("click", (e) => { if (e.target === modal) hideLayerInfo(); });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && modal.classList.contains("show")) {
+      e.stopImmediatePropagation();
+      hideLayerInfo();
+    }
+  });
+
+  // Delegated info button clicks (for static buttons in HTML)
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest(".active-layer-info");
+    if (!btn) return;
+    e.stopPropagation();
+    if (btn.dataset.info === "swisstopo") showLayerInfo(btn.dataset.layerId);
+    else if (btn.dataset.info === "internal") showInternalLayerInfo(btn.dataset.layerKey);
+  });
+});
 
 function esc(s) {
   const d = document.createElement("div");
