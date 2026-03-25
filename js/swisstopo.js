@@ -3,7 +3,7 @@
  * Geokatalog tree, restore after basemap change
  */
 import { esc } from "./config.js";
-import { resizeMap } from "./map.js";
+import { resizeMap, is3DActive } from "./map.js";
 import { t, getLang } from "./i18n.js";
 
 /** Active swisstopo layers: [{ id, title, sourceId, mapLayerId, tileUrl, maxZoom, visible }] */
@@ -23,6 +23,17 @@ let mapRef = null;
 export function setMap(map) { mapRef = map; }
 
 /* ── Add Layer ── */
+
+/** Find the correct insertion point for raster overlay layers.
+ *  Order: basemap → swisstopo rasters → 3D buildings → data layers (landcover, parcels) */
+function findInsertionPoint() {
+  if (!mapRef) return null;
+  // Insert below 3D buildings if present, otherwise below data layers
+  if (mapRef.getLayer("3d-buildings")) return "3d-buildings";
+  if (mapRef.getLayer("landcover-fill")) return "landcover-fill";
+  if (mapRef.getLayer("parcels-fill")) return "parcels-fill";
+  return null;
+}
 
 /** Layer IDs of static toggles in the HTML (not rendered dynamically) */
 const STATIC_LAYER_IDS = new Set([
@@ -62,13 +73,13 @@ export function addSwisstopoLayer(layerId, title, silent) {
           attribution: '&copy; <a href="https://www.swisstopo.admin.ch">swisstopo</a>',
         });
 
-        let beforeLayer = null;
-        if (mapRef.getLayer("landcover-fill")) beforeLayer = "landcover-fill";
-        else if (mapRef.getLayer("parcels-fill")) beforeLayer = "parcels-fill";
+        // Insert below data layers AND below 3D buildings so raster
+        // tiles don't paint over extruded building faces
+        const beforeLayer = findInsertionPoint();
 
         mapRef.addLayer({
           id: mapLayerId, type: "raster", source: sourceId,
-          paint: { "raster-opacity": 0.7 },
+          paint: { "raster-opacity": is3DActive() ? 0.35 : 0.7 },
         }, beforeLayer);
       } catch (e) {
         console.error("Error adding swisstopo layer:", e);
@@ -129,9 +140,7 @@ export function readdSwisstopoLayers() {
         attribution: '&copy; <a href="https://www.swisstopo.admin.ch">swisstopo</a>',
       });
 
-      let beforeLayer = null;
-      if (mapRef.getLayer("landcover-fill")) beforeLayer = "landcover-fill";
-      else if (mapRef.getLayer("parcels-fill")) beforeLayer = "parcels-fill";
+      const beforeLayer = findInsertionPoint();
 
       mapRef.addLayer({
         id: layer.mapLayerId, type: "raster", source: layer.sourceId,

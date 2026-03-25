@@ -136,8 +136,8 @@ function hide3DBuildings() {
   dimDataLayersFor3D(false);
 }
 
-/** In 3D mode, reduce data layer opacity so buildings aren't washed out.
- *  In 2D mode, restore full opacity. */
+/** In 3D mode, reduce data layer and swisstopo raster opacity so buildings
+ *  aren't washed out by flat layers underneath. Restore on 2D. */
 function dimDataLayersFor3D(dim) {
   if (!map) return;
   if (map.getLayer("landcover-fill")) {
@@ -145,6 +145,12 @@ function dimDataLayersFor3D(dim) {
   }
   if (map.getLayer("parcels-fill")) {
     map.setPaintProperty("parcels-fill", "fill-opacity", dim ? 0.04 : 0.08);
+  }
+  // Dim active swisstopo raster overlays in 3D so they don't bleed through building bases
+  for (const layer of activeSwisstopoLayers) {
+    if (map.getLayer(layer.mapLayerId)) {
+      map.setPaintProperty(layer.mapLayerId, "raster-opacity", dim ? 0.35 : 0.7);
+    }
   }
 }
 
@@ -677,6 +683,7 @@ function showLandcoverPopup(lngLat, props) {
 }
 
 export function resizeMap() { if (map) map.resize(); }
+export function is3DActive() { return is3D; }
 
 /* ── Click-to-Identify for swisstopo reference layers ── */
 
