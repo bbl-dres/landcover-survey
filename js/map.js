@@ -4,6 +4,7 @@
  */
 import { ART_COLORS, CATEGORY_COLORS, ART_LABELS, MAP_STYLES, MAP_DEFAULT, GREEN_SPACE_DE, esc, fmtNum } from "./config.js";
 import { setMap, readdSwisstopoLayers, loadGeokatalog, addSwisstopoLayer, removeSwisstopoLayer } from "./swisstopo.js";
+import { t, getLang } from "./i18n.js";
 
 let map = null;
 let popup = null;
@@ -27,7 +28,7 @@ class HomeControl {
     this._container.className = "maplibregl-ctrl maplibregl-ctrl-group";
     const btn = document.createElement("button");
     btn.type = "button";
-    btn.title = "Schweiz-Übersicht";
+    btn.title = t("map.home");
     btn.innerHTML = '<span class="material-symbols-outlined">home</span>';
     btn.addEventListener("click", () => {
       map.flyTo({ center: MAP_DEFAULT.center, zoom: MAP_DEFAULT.zoom, pitch: 0, bearing: 0, duration: 1000 });
@@ -46,7 +47,7 @@ class Toggle3DControl {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "map-3d-btn";
-    btn.title = "2D/3D umschalten";
+    btn.title = t("map.3d");
     btn.textContent = "3D";
     btn.addEventListener("click", () => toggle3D());
     this._btn = btn;
@@ -139,7 +140,7 @@ class SummaryToggleControl {
     this._container.className = "maplibregl-ctrl maplibregl-ctrl-group";
     const btn = document.createElement("button");
     btn.type = "button";
-    btn.title = "Zusammenfassung";
+    btn.title = t("map.summary");
     btn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h7v7H3z"/><path d="M14 3h7v7h-7z"/><path d="M3 14h7v7H3z"/><path d="M14 14h7v7h-7z"/></svg>`;
     btn.addEventListener("click", () => { if (summaryToggleCallback) summaryToggleCallback(); });
     this._container.appendChild(btn);
@@ -273,14 +274,14 @@ function initAccordionMenu() {
   let menuOpen = window.innerWidth > 1400;
   if (!menuOpen) {
     accordionPanel.classList.add("collapsed");
-    toggleText.textContent = "Menü öffnen";
+    toggleText.textContent = t("menu.open");
     menuToggle.querySelector(".material-symbols-outlined").textContent = "expand_more";
   }
 
   menuToggle?.addEventListener("click", () => {
     menuOpen = !menuOpen;
     accordionPanel.classList.toggle("collapsed", !menuOpen);
-    toggleText.textContent = menuOpen ? "Menü schliessen" : "Menü öffnen";
+    toggleText.textContent = menuOpen ? t("menu.close") : t("menu.open");
     menuToggle.querySelector(".material-symbols-outlined").textContent = menuOpen ? "expand_less" : "expand_more";
   });
 
@@ -364,7 +365,8 @@ function initContextMenu() {
   // Share
   document.getElementById("ctx-share")?.addEventListener("click", () => {
     if (!contextLngLat) return;
-    const url = `${location.origin}${location.pathname}?center=${contextLngLat.lng.toFixed(5)},${contextLngLat.lat.toFixed(5)}&zoom=${Math.round(map.getZoom())}`;
+    const langParam = getLang() !== "de" ? `&lang=${getLang()}` : "";
+    const url = `${location.origin}${location.pathname}?center=${contextLngLat.lng.toFixed(5)},${contextLngLat.lat.toFixed(5)}&zoom=${Math.round(map.getZoom())}${langParam}`;
     menu.classList.remove("show");
     if (navigator.share) {
       navigator.share({ title: "Landcover Survey", url }).catch(() => {
@@ -381,8 +383,8 @@ function initContextMenu() {
     if (!contextLngLat) return;
     const lat = contextLngLat.lat.toFixed(5);
     const lon = contextLngLat.lng.toFixed(5);
-    const subject = encodeURIComponent("Problem melden - Landcover Survey");
-    const body = encodeURIComponent(`Problembeschreibung:\n\n\n---\nKoordinaten: ${lat}, ${lon}\nURL: ${location.href}`);
+    const subject = encodeURIComponent(t("ctx.report.subject"));
+    const body = encodeURIComponent(t("ctx.report.body", { lat, lon, url: location.href }));
     window.location.href = `mailto:?subject=${subject}&body=${body}`;
   });
 }
@@ -629,11 +631,11 @@ export function fitAllParcels() {
 function showParcelPopup(lngLat, props) {
   popup.setLngLat(lngLat).setHTML(`
     <div class="map-popup">
-      <div class="popup-layer">Parzelle</div>
+      <div class="popup-layer">${esc(t("popup.parcel"))}</div>
       <div class="popup-title">${esc(props.id)} &middot; ${esc(props.egrid)}</div>
-      <div class="popup-sub">Nr. ${esc(props.nummer)}</div>
+      <div class="popup-sub">${esc(t("col.nummer"))} ${esc(props.nummer)}</div>
       <table class="popup-table">
-        <tr><td>Fläche</td><td>${fmtNum(props.area, 2)} m²</td></tr>
+        <tr><td>${esc(t("popup.area"))}</td><td>${fmtNum(props.area, 2)} m²</td></tr>
       </table>
     </div>
   `).addTo(map);
@@ -643,12 +645,12 @@ function showLandcoverPopup(lngLat, props) {
   const gs = GREEN_SPACE_DE[props.greenspace] || props.greenspace || "\u2013";
   popup.setLngLat(lngLat).setHTML(`
     <div class="map-popup">
-      <div class="popup-layer">Bodenbedeckung</div>
+      <div class="popup-layer">${esc(t("popup.landcover"))}</div>
       <div class="popup-title">${esc(props.art_label)}</div>
-      <div class="popup-sub">Parzelle: ${esc(props.parcel_id)}</div>
+      <div class="popup-sub">${esc(t("popup.parcel.label"))} ${esc(props.parcel_id)}</div>
       <table class="popup-table">
-        <tr><td>Fläche</td><td>${fmtNum(props.area_m2, 2)} m²</td></tr>
-        <tr><td>Grünfläche</td><td>${gs}</td></tr>
+        <tr><td>${esc(t("popup.area"))}</td><td>${fmtNum(props.area_m2, 2)} m²</td></tr>
+        <tr><td>${esc(t("popup.greenspace"))}</td><td>${gs}</td></tr>
         <tr><td>SIA 416</td><td>${esc(props.sia416)}</td></tr>
       </table>
     </div>

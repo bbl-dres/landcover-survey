@@ -2,6 +2,7 @@
  * Export: CSV, XLSX, GeoJSON
  */
 import { loadScript } from "./config.js";
+import { t } from "./i18n.js";
 
 /** Escape a CSV cell value (semicolon-delimited) */
 function csvCell(val) {
@@ -38,7 +39,7 @@ export async function downloadXLSX(parcels, landcover, filename = "landcover-res
   try {
     await ensureXLSX();
   } catch {
-    alert("Excel-Export konnte nicht geladen werden.");
+    alert(t("export.xlsx.error"));
     return;
   }
 
@@ -50,7 +51,7 @@ export async function downloadXLSX(parcels, landcover, filename = "landcover-res
     for (const h of pHeaders) obj[h] = row[h] ?? "";
     return obj;
   }));
-  XLSX.utils.book_append_sheet(wb, ws1, "Parzellen");
+  XLSX.utils.book_append_sheet(wb, ws1, t("table.tab.parcels"));
 
   if (landcover.length) {
     const lcH = ["id", "egrid", "fid", "art", "bfsnr", "gwr_egid", "check_greenspace", "area_m2"];
@@ -59,7 +60,7 @@ export async function downloadXLSX(parcels, landcover, filename = "landcover-res
       for (const h of lcH) obj[h] = row[h] ?? "";
       return obj;
     }));
-    XLSX.utils.book_append_sheet(wb, ws2, "Bodenbedeckung");
+    XLSX.utils.book_append_sheet(wb, ws2, t("table.tab.landcover"));
   }
 
   const wbOut = XLSX.write(wb, { bookType: "xlsx", type: "array" });

@@ -8,11 +8,16 @@ import { initTable, populateTable, highlightRow, highlightLcRow } from "./table.
 import { downloadParcelCSV, downloadLandcoverCSV, downloadXLSX, downloadGeoJSON } from "./export.js";
 import { initSearch, setSearchData } from "./search.js";
 import { ART_LABELS, ART_COLORS, CATEGORY_COLORS, SIA416, DIN277, GREEN_SPACE, SEALED, STATUS, esc, fmtNum } from "./config.js";
+import { t, applyI18nDOM, setLang, getLang, getLocale } from "./i18n.js";
 
 let processedResults = null;
 let currentFilename = "";
 
 document.addEventListener("DOMContentLoaded", () => {
+  // Apply i18n to static DOM elements
+  applyI18nDOM();
+  initLangSelector();
+
   initUpload(onStartProcessing);
   initSearch();
 
@@ -109,6 +114,35 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 });
 
+function initLangSelector() {
+  const btn = document.getElementById("lang-btn");
+  const dropdown = document.getElementById("lang-dropdown");
+  const current = document.getElementById("lang-current");
+  if (!btn || !dropdown) return;
+
+  current.textContent = getLang().toUpperCase();
+
+  // Highlight active language
+  dropdown.querySelectorAll(".lang-option").forEach((opt) => {
+    opt.classList.toggle("active", opt.dataset.lang === getLang());
+  });
+
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    dropdown.classList.toggle("show");
+  });
+
+  dropdown.addEventListener("click", (e) => {
+    const opt = e.target.closest(".lang-option");
+    if (!opt) return;
+    setLang(opt.dataset.lang);
+  });
+
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest("#lang-selector")) dropdown.classList.remove("show");
+  });
+}
+
 function showState(state) {
   document.querySelectorAll(".app-state").forEach((el) => {
     el.hidden = el.id !== `state-${state}`;
@@ -137,7 +171,7 @@ function updateProgress(progress, startTime) {
 
   document.getElementById("progress-bar-fill").style.width = `${pct}%`;
   document.querySelector(".progress-bar").setAttribute("aria-valuenow", Math.round(pct));
-  document.getElementById("progress-text").textContent = `Parzelle ${processed} von ${total} — ${pct}%`;
+  document.getElementById("progress-text").textContent = t("processing.parcel", { processed, total, pct });
 
   const elapsed = Date.now() - startTime;
   const perItem = processed > 0 ? elapsed / processed : 0;
@@ -146,15 +180,15 @@ function updateProgress(progress, startTime) {
   const etaMin = Math.floor(etaSeconds / 60);
   const etaSec = etaSeconds % 60;
   document.getElementById("progress-eta").textContent =
-    processed < total ? `Noch ca. ${etaMin} Min ${etaSec} Sek` : "Wird abgeschlossen...";
-  document.getElementById("progress-stats").textContent = `Gefunden: ${succeeded} · Fehler: ${failed}`;
+    processed < total ? t("processing.eta", { min: etaMin, sec: etaSec }) : t("processing.finishing");
+  document.getElementById("progress-stats").textContent = t("processing.stats", { succeeded, failed });
 }
 
 /* ── Aggregation modes for Flächenanalyse ── */
 
 const AGGREGATION_MODES = {
   landcover: {
-    label: "Bodenbedeckung",
+    get label() { return t("agg.landcover"); },
     getEntries(lc) {
       const map = {};
       for (const f of lc) {
@@ -168,14 +202,14 @@ const AGGREGATION_MODES = {
     colorFn(props) { return ART_COLORS[props.art] || "#888"; },
   },
   sia416: {
-    label: "SIA 416",
+    get label() { return t("agg.sia416"); },
     getEntries(lc) {
       const map = { GGF: 0, BUF: 0, UUF: 0 };
       for (const f of lc) { const cls = SIA416[f.art] || "UUF"; map[cls] += f.area_m2; }
       return [
-        { label: "GGF (Gebäude)", area: map.GGF, color: CATEGORY_COLORS.GGF, key: "GGF" },
-        { label: "BUF (Bearbeitet)", area: map.BUF, color: CATEGORY_COLORS.BUF, key: "BUF" },
-        { label: "UUF (Unbearbeitet)", area: map.UUF, color: CATEGORY_COLORS.UUF, key: "UUF" },
+        { label: t("agg.ggf"), area: map.GGF, color: CATEGORY_COLORS.GGF, key: "GGF" },
+        { label: t("agg.buf"), area: map.BUF, color: CATEGORY_COLORS.BUF, key: "BUF" },
+        { label: t("agg.uuf"), area: map.UUF, color: CATEGORY_COLORS.UUF, key: "UUF" },
       ];
     },
     colorFn(props) {
@@ -184,19 +218,19 @@ const AGGREGATION_MODES = {
     },
   },
   din277: {
-    label: "DIN 277",
+    get label() { return t("agg.din277"); },
     getEntries(lc) {
       const map = { BF: 0, UF: 0 };
       for (const f of lc) { const cls = DIN277[f.art] || "UF"; map[cls] += f.area_m2; }
       return [
-        { label: "BF (Bebaute Fläche)", area: map.BF, color: "#c0392b", key: "BF" },
-        { label: "UF (Unbebaute Fläche)", area: map.UF, color: "#2980b9", key: "UF" },
+        { label: t("agg.bf"), area: map.BF, color: "#c0392b", key: "BF" },
+        { label: t("agg.uf"), area: map.UF, color: "#2980b9", key: "UF" },
       ];
     },
     colorFn(props) { return (DIN277[props.art] || "UF") === "BF" ? "#c0392b" : "#2980b9"; },
   },
   greenspace: {
-    label: "Grünfläche",
+    get label() { return t("agg.greenspace"); },
     getEntries(lc) {
       const map = { "soil": 0, "wooded": 0, "none": 0 };
       for (const f of lc) {
@@ -206,9 +240,9 @@ const AGGREGATION_MODES = {
         else map.none += f.area_m2;
       }
       return [
-        { label: "Grünfläche (humusiert)", area: map.soil, color: "#27ae60", key: "soil" },
-        { label: "Grünfläche (bestockt)", area: map.wooded, color: "#1e8449", key: "wooded" },
-        { label: "Keine Grünfläche", area: map.none, color: "#95a5a6", key: "none" },
+        { label: t("agg.green.soil"), area: map.soil, color: "#27ae60", key: "soil" },
+        { label: t("agg.green.wooded"), area: map.wooded, color: "#1e8449", key: "wooded" },
+        { label: t("agg.green.none"), area: map.none, color: "#95a5a6", key: "none" },
       ];
     },
     colorFn(props) {
@@ -219,13 +253,13 @@ const AGGREGATION_MODES = {
     },
   },
   sealed: {
-    label: "Versiegelung",
+    get label() { return t("agg.sealed"); },
     getEntries(lc) {
       let sealed = 0, unsealed = 0;
       for (const f of lc) { if (SEALED.has(f.art)) sealed += f.area_m2; else unsealed += f.area_m2; }
       return [
-        { label: "Versiegelt", area: sealed, color: "#c0392b", key: "sealed" },
-        { label: "Unversiegelt", area: unsealed, color: "#27ae60", key: "unsealed" },
+        { label: t("agg.sealed.yes"), area: sealed, color: "#c0392b", key: "sealed" },
+        { label: t("agg.sealed.no"), area: unsealed, color: "#27ae60", key: "unsealed" },
       ];
     },
     colorFn(props) { return SEALED.has(props.art) ? "#c0392b" : "#27ae60"; },
@@ -249,6 +283,7 @@ function updateSummaryPanel() {
   }
 
   const now = new Date();
+  const locale = getLocale();
   const fmt = (n) => fmtNum(n, 1);
 
   // Build dropdown options
@@ -261,17 +296,17 @@ function updateSummaryPanel() {
     <div class="sp-collapse-section open" data-sp-section="overview">
       <div class="sp-collapse-header">
         <span class="material-symbols-outlined sp-collapse-arrow">expand_more</span>
-        <span>Parzellen-Zuordnung</span>
+        <span>${esc(t("summary.parcels"))}</span>
       </div>
       <div class="sp-collapse-content">
         <div class="sp-meta-row">
           <span class="sp-meta-filename">${esc(currentFilename)}</span>
           <span class="sp-meta-sep">&middot;</span>
-          <span>${now.toLocaleDateString("de-CH", { dateStyle: "medium" })}, ${now.toLocaleTimeString("de-CH", { timeStyle: "short" })}</span>
+          <span>${now.toLocaleDateString(locale, { dateStyle: "medium" })}, ${now.toLocaleTimeString(locale, { timeStyle: "short" })}</span>
         </div>
         <div class="sp-kpi-grid" style="margin-top:var(--space-3)">
-          <div class="sp-kpi"><div class="sp-kpi-value sp-color-good">${found}</div><div class="sp-kpi-label">Gefunden</div></div>
-          <div class="sp-kpi"><div class="sp-kpi-value sp-color-poor">${notFound}</div><div class="sp-kpi-label">Nicht gefunden</div></div>
+          <div class="sp-kpi"><div class="sp-kpi-value sp-color-good">${found}</div><div class="sp-kpi-label">${esc(t("summary.found"))}</div></div>
+          <div class="sp-kpi"><div class="sp-kpi-value sp-color-poor">${notFound}</div><div class="sp-kpi-label">${esc(t("summary.notFound"))}</div></div>
         </div>
       </div>
     </div>
@@ -280,7 +315,7 @@ function updateSummaryPanel() {
     <div class="sp-collapse-section open" data-sp-section="area">
       <div class="sp-collapse-header">
         <span class="material-symbols-outlined sp-collapse-arrow">expand_more</span>
-        <span>Flächenanalyse</span>
+        <span>${esc(t("summary.area"))}</span>
         <select id="sp-agg-mode" class="sp-agg-select">${modeOptions}</select>
       </div>
       <div class="sp-collapse-content">
@@ -293,12 +328,12 @@ function updateSummaryPanel() {
     <div class="sp-collapse-section open" data-sp-section="extra">
       <div class="sp-collapse-header">
         <span class="material-symbols-outlined sp-collapse-arrow">expand_more</span>
-        <span>Weitere Kennzahlen</span>
+        <span>${esc(t("summary.extra"))}</span>
       </div>
       <div class="sp-collapse-content">
         <div class="sp-kpi-grid">
-          <div class="sp-kpi"><div class="sp-kpi-value">${fmt(totalSealed)}</div><div class="sp-kpi-label">Versiegelt m²</div></div>
-          <div class="sp-kpi"><div class="sp-kpi-value">${fmt(totalGreen)}</div><div class="sp-kpi-label">Grünfläche m²</div></div>
+          <div class="sp-kpi"><div class="sp-kpi-value">${fmt(totalSealed)}</div><div class="sp-kpi-label">${esc(t("summary.sealed"))}</div></div>
+          <div class="sp-kpi"><div class="sp-kpi-value">${fmt(totalGreen)}</div><div class="sp-kpi-label">${esc(t("summary.green"))}</div></div>
         </div>
       </div>
     </div>
@@ -366,7 +401,7 @@ function renderDonutAndLegend() {
   const centerVal = document.getElementById("sp-donut-val");
   const centerLbl = document.getElementById("sp-donut-lbl");
   const defaultVal = fmt(totalArea);
-  const defaultLbl = "m² Total";
+  const defaultLbl = t("summary.total");
 
   document.querySelectorAll(".donut-hit").forEach((hit) => {
     hit.addEventListener("mouseenter", () => {

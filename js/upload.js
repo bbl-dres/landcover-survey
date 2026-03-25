@@ -2,6 +2,7 @@
  * File parsing and validation — CSV with ID + EGRID columns
  */
 import { loadScript } from "./config.js";
+import { t } from "./i18n.js";
 
 const REQUIRED_COLUMNS = ["id", "egrid"];
 
@@ -47,7 +48,7 @@ async function loadDemoFile() {
     handleFile(file);
   } catch (err) {
     console.error("Failed to load demo file:", err);
-    showError("Beispieldaten konnten nicht geladen werden.");
+    showError(t("upload.error.demo"));
   }
 }
 
@@ -63,19 +64,19 @@ async function handleFile(file) {
     } else if (ext === "xlsx" || ext === "xls") {
       parsedData = await parseExcel(file);
     } else {
-      showError("Nicht unterstütztes Dateiformat. Bitte CSV oder XLSX hochladen.");
+      showError(t("upload.error.format"));
       return;
     }
 
     if (!parsedData.headers.length || !parsedData.rows.length) {
-      showError("Die Datei ist leer oder enthält keine Datenzeilen.");
+      showError(t("upload.error.empty"));
       return;
     }
 
     const lowerHeaders = parsedData.headers.map((h) => h.toLowerCase().trim());
     const missing = REQUIRED_COLUMNS.filter((c) => !lowerHeaders.includes(c));
     if (missing.length > 0) {
-      showError(`Fehlende Spalten: ${missing.join(", ")}. Gefunden: ${parsedData.headers.join(", ")}`);
+      showError(t("upload.error.columns", { missing: missing.join(", "), found: parsedData.headers.join(", ") }));
       return;
     }
 
@@ -93,7 +94,7 @@ async function handleFile(file) {
     if (onReady) onReady(parsedData);
   } catch (err) {
     console.error("File parse error:", err);
-    showError("Fehler beim Lesen der Datei: " + err.message);
+    showError(t("upload.error.read", { error: err.message }));
   }
 }
 
@@ -123,7 +124,7 @@ function parseCSV(file) {
       else if (tabs > commas) delimiter = "\t";
 
       const lines = text.split(/\r?\n/).filter((l) => l.trim());
-      if (lines.length < 2) return reject(new Error("Datei enthält nur eine Kopfzeile."));
+      if (lines.length < 2) return reject(new Error(t("upload.error.header")));
 
       const headers = parseLine(lines[0], delimiter);
       const rows = [];
@@ -183,7 +184,7 @@ async function parseExcel(file) {
         const wb = XLSX.read(e.target.result, { type: "array" });
         const ws = wb.Sheets[wb.SheetNames[0]];
         const jsonData = XLSX.utils.sheet_to_json(ws, { defval: "" });
-        if (!jsonData.length) return reject(new Error("Leeres Arbeitsblatt."));
+        if (!jsonData.length) return reject(new Error(t("upload.error.sheet")));
         const headers = Object.keys(jsonData[0]);
         const rows = jsonData.map((row) => {
           const clean = {};

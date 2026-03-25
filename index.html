@@ -26,8 +26,8 @@
 
 <noscript>
   <div style="padding:2rem;text-align:center;font-family:system-ui,sans-serif">
-    <h1>JavaScript erforderlich</h1>
-    <p>Diese Anwendung benötigt JavaScript. Bitte aktivieren Sie JavaScript in Ihren Browser-Einstellungen.</p>
+    <h1 data-i18n="noscript.title">JavaScript erforderlich</h1>
+    <p data-i18n="noscript.text">Diese Anwendung benötigt JavaScript. Bitte aktivieren Sie JavaScript in Ihren Browser-Einstellungen.</p>
   </div>
 </noscript>
 
@@ -37,8 +37,8 @@
     <div class="header-left">
       <img src="assets/swiss-logo-flag.svg" alt="" class="header-flag" width="20" height="22">
       <div class="header-title">
-        <span class="header-agency">Bundesamt für Bauten und Logistik</span>
-        <span class="header-app">Landcover Survey</span>
+        <span class="header-agency" data-i18n="header.agency">Bundesamt für Bauten und Logistik</span>
+        <span class="header-app" data-i18n="header.app">Landcover Survey</span>
       </div>
     </div>
 
@@ -46,17 +46,30 @@
     <div id="search-wrapper" class="search-wrapper" hidden>
       <div class="search-container">
         <span class="material-symbols-outlined search-icon" aria-hidden="true">search</span>
-        <input type="text" id="search-input" placeholder="Suche nach Parzellen oder Orten" autocomplete="off" aria-label="Suche nach Parzellen oder Orten">
-        <button id="search-clear-btn" class="search-clear" hidden aria-label="Suche löschen">&times;</button>
+        <input type="text" id="search-input" data-i18n-placeholder="search.placeholder" data-i18n-aria="search.placeholder" placeholder="Suche nach Parzellen oder Orten" autocomplete="off" aria-label="Suche nach Parzellen oder Orten">
+        <button id="search-clear-btn" class="search-clear" hidden data-i18n-aria="search.clear" aria-label="Suche löschen">&times;</button>
       </div>
-      <div id="search-results" class="search-results" role="listbox" aria-label="Suchergebnisse" hidden></div>
+      <div id="search-results" class="search-results" role="listbox" data-i18n-aria="search.results" aria-label="Suchergebnisse" hidden></div>
     </div>
 
     <div class="header-right">
-      <button id="btn-new" class="btn btn-secondary" hidden>Neue Analyse</button>
+      <!-- Language selector -->
+      <div class="lang-selector" id="lang-selector">
+        <button class="lang-btn" id="lang-btn" title="Language" aria-label="Language">
+          <span id="lang-current">DE</span>
+          <span class="material-symbols-outlined lang-arrow">expand_more</span>
+        </button>
+        <div class="lang-dropdown" id="lang-dropdown">
+          <button class="lang-option" data-lang="de">DE</button>
+          <button class="lang-option" data-lang="fr">FR</button>
+          <button class="lang-option" data-lang="it">IT</button>
+          <button class="lang-option" data-lang="en">EN</button>
+        </div>
+      </div>
+      <button id="btn-new" class="btn btn-secondary" hidden data-i18n="btn.new">Neue Analyse</button>
       <button id="btn-download" class="btn btn-primary" hidden>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        <span>Herunterladen</span>
+        <span data-i18n="btn.download">Herunterladen</span>
       </button>
     </div>
   </header>
@@ -65,12 +78,12 @@
   <main id="main-content">
 
     <!-- STATE 1: Upload -->
-    <section id="state-upload" class="app-state" aria-label="Datei hochladen">
+    <section id="state-upload" class="app-state" data-i18n-aria="upload.section" aria-label="Datei hochladen">
       <div class="upload-container">
         <div class="upload-card">
           <div class="intro">
-            <h1 class="intro-title">Bodenbedeckung pro Parzelle analysieren</h1>
-            <p class="intro-desc">
+            <h1 class="intro-title" data-i18n="upload.title">Bodenbedeckung pro Parzelle analysieren</h1>
+            <p class="intro-desc" data-i18n="upload.desc">
               Laden Sie eine CSV-Datei mit Parzellen-IDs und EGRID hoch.
               Die App ermittelt automatisch die Bodenbedeckung (BBArt) pro Parzelle
               und berechnet Flächenanteile nach SIA 416, DIN 277 und Versiegelungsgrad.
@@ -80,37 +93,37 @@
           <div class="steps" role="list">
             <div class="step" role="listitem">
               <div class="step-number">1</div>
-              <div class="step-label">Hochladen<br><span>CSV / XLSX</span></div>
+              <div class="step-label"><span data-i18n="upload.step1">Hochladen</span><br><span data-i18n="upload.step1sub">CSV / XLSX</span></div>
             </div>
             <div class="step-arrow" aria-hidden="true">&#9654;</div>
             <div class="step" role="listitem">
               <div class="step-number">2</div>
-              <div class="step-label">Analysieren<br><span>Karte + Tabelle</span></div>
+              <div class="step-label"><span data-i18n="upload.step2">Analysieren</span><br><span data-i18n="upload.step2sub">Karte + Tabelle</span></div>
             </div>
             <div class="step-arrow" aria-hidden="true">&#9654;</div>
             <div class="step" role="listitem">
               <div class="step-number">3</div>
-              <div class="step-label">Exportieren<br><span>CSV / Excel</span></div>
+              <div class="step-label"><span data-i18n="upload.step3">Exportieren</span><br><span data-i18n="upload.step3sub">CSV / Excel</span></div>
             </div>
           </div>
 
-          <div id="drop-zone" class="drop-zone" role="button" tabindex="0" aria-label="Datei hier ablegen oder klicken zum Durchsuchen">
+          <div id="drop-zone" class="drop-zone" role="button" tabindex="0" data-i18n-aria="upload.dropzone.aria" aria-label="Datei hier ablegen oder klicken zum Durchsuchen">
             <div class="drop-zone-icon" aria-hidden="true">
               <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
             </div>
-            <h2>CSV- oder Excel-Datei hierher ziehen</h2>
-            <p>oder klicken zum Durchsuchen</p>
-            <p class="drop-zone-hint">Erforderlich: ID, EGRID &middot; Weitere Spalten werden durchgereicht</p>
+            <h2 data-i18n="upload.dropzone">CSV- oder Excel-Datei hierher ziehen</h2>
+            <p data-i18n="upload.browse">oder klicken zum Durchsuchen</p>
+            <p class="drop-zone-hint" data-i18n="upload.hint">Erforderlich: ID, EGRID &middot; Weitere Spalten werden durchgereicht</p>
           </div>
           <input type="file" id="file-input" accept=".csv,.xlsx,.xls,.tsv,.txt" hidden aria-label="Datei auswählen">
-          <p class="demo-link"><a href="data/example.csv" download="vorlage-parzellen.csv">Vorlage herunterladen (CSV)</a></p>
-          <p class="demo-link"><span>Oder testen Sie mit </span><a href="#" id="load-demo">Beispieldaten</a></p>
+          <p class="demo-link"><a href="data/example.csv" download="vorlage-parzellen.csv" data-i18n="upload.template">Vorlage herunterladen (CSV)</a></p>
+          <p class="demo-link"><span data-i18n="upload.demo.prefix">Oder testen Sie mit </span><a href="#" id="load-demo" data-i18n="upload.demo.link">Beispieldaten</a></p>
 
           <div id="upload-error" class="upload-error" role="alert" hidden></div>
 
           <div class="privacy-note">
             <svg class="privacy-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-            <span>Ihre Daten bleiben im Browser. Nur EGRID (öffentliche Parzellen-ID)
+            <span data-i18n="upload.privacy">Ihre Daten bleiben im Browser. Nur EGRID (öffentliche Parzellen-ID)
             wird an die swisstopo-API und geodienste.ch gesendet.</span>
           </div>
         </div>
@@ -118,23 +131,23 @@
     </section>
 
     <!-- STATE 2: Processing -->
-    <section id="state-processing" class="app-state" aria-label="Verarbeitung" hidden>
+    <section id="state-processing" class="app-state" data-i18n-aria="processing.section" aria-label="Verarbeitung" hidden>
       <div class="processing-container">
         <div class="processing-card">
-          <h2>Parzellen werden analysiert...</h2>
+          <h2 data-i18n="processing.title">Parzellen werden analysiert...</h2>
           <div class="progress-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" aria-label="Fortschritt">
             <div id="progress-bar-fill" class="progress-bar-fill"></div>
           </div>
-          <div id="progress-text" aria-live="polite">Datei wird verarbeitet...</div>
+          <div id="progress-text" aria-live="polite" data-i18n="processing.progress">Datei wird verarbeitet...</div>
           <div id="progress-eta"></div>
           <div id="progress-stats"></div>
-          <button id="btn-cancel" class="btn btn-secondary">Abbrechen</button>
+          <button id="btn-cancel" class="btn btn-secondary" data-i18n="btn.cancel">Abbrechen</button>
         </div>
       </div>
     </section>
 
     <!-- STATE 3: Results -->
-    <section id="state-results" class="app-state" aria-label="Ergebnisse" hidden>
+    <section id="state-results" class="app-state" data-i18n-aria="results.section" aria-label="Ergebnisse" hidden>
       <div class="results-container">
 
         <!-- Main: map + table -->
@@ -148,22 +161,22 @@
                 <div class="accordion-item" id="draw-accordion">
                   <button class="accordion-header" aria-expanded="false">
                     <span class="accordion-arrow" aria-hidden="true"><span class="material-symbols-outlined">chevron_right</span></span>
-                    <span>Zeichnen &amp; Messen auf der Karte</span>
+                    <span data-i18n="accordion.draw">Zeichnen &amp; Messen auf der Karte</span>
                   </button>
                   <div class="accordion-content">
-                    <p class="accordion-desc">Zeichnen Sie Punkte, Linien und Polygone direkt auf der Karte. Distanzen und Flächen werden automatisch berechnet.</p>
+                    <p class="accordion-desc" data-i18n="accordion.draw.desc">Zeichnen Sie Punkte, Linien und Polygone direkt auf der Karte. Distanzen und Flächen werden automatisch berechnet.</p>
                     <div class="draw-tools">
-                      <button class="draw-tool-btn" data-tool="point" title="Punkt — kommt bald" disabled><span class="material-symbols-outlined">location_on</span></button>
-                      <button class="draw-tool-btn" data-tool="line" title="Linie — kommt bald" disabled><span class="material-symbols-outlined">timeline</span></button>
-                      <button class="draw-tool-btn" data-tool="polygon" title="Polygon — kommt bald" disabled><span class="material-symbols-outlined">pentagon</span></button>
-                      <button class="draw-tool-btn" data-tool="delete" title="Löschen — kommt bald" disabled><span class="material-symbols-outlined">delete</span></button>
+                      <button class="draw-tool-btn" data-tool="point" data-i18n-title="accordion.draw.point" title="Punkt — kommt bald" disabled><span class="material-symbols-outlined">location_on</span></button>
+                      <button class="draw-tool-btn" data-tool="line" data-i18n-title="accordion.draw.line" title="Linie — kommt bald" disabled><span class="material-symbols-outlined">timeline</span></button>
+                      <button class="draw-tool-btn" data-tool="polygon" data-i18n-title="accordion.draw.polygon" title="Polygon — kommt bald" disabled><span class="material-symbols-outlined">pentagon</span></button>
+                      <button class="draw-tool-btn" data-tool="delete" data-i18n-title="accordion.draw.delete" title="Löschen — kommt bald" disabled><span class="material-symbols-outlined">delete</span></button>
                     </div>
                   </div>
                 </div>
                 <div class="accordion-item" id="geokatalog-accordion">
                   <button class="accordion-header" aria-expanded="false">
                     <span class="accordion-arrow" aria-hidden="true"><span class="material-symbols-outlined">chevron_right</span></span>
-                    <span>Geokatalog</span>
+                    <span data-i18n="accordion.geokatalog">Geokatalog</span>
                   </button>
                   <div class="accordion-content">
                     <div id="geokatalog-tree"></div>
@@ -172,37 +185,37 @@
                 <div class="accordion-item" id="active-layers-accordion">
                   <button class="accordion-header active" aria-expanded="true">
                     <span class="accordion-arrow" aria-hidden="true"><span class="material-symbols-outlined">chevron_right</span></span>
-                    <span>Dargestellte Karten</span>
+                    <span data-i18n="accordion.activeLayers">Dargestellte Karten</span>
                   </button>
                   <div class="accordion-content show">
                     <div class="layer-group">
-                      <div class="layer-group-label">Analyseergebnisse</div>
+                      <div class="layer-group-label" data-i18n="layers.results">Analyseergebnisse</div>
                       <label class="active-layer-item" data-internal-layer="parcels">
                         <input type="checkbox" class="active-layer-checkbox" checked id="layer-toggle-parcels">
-                        <span class="active-layer-title">Parzellen</span>
-                        <button class="active-layer-info" data-info="internal" data-layer-key="parcels" aria-label="Info Parzellen"><span class="material-symbols-outlined">info</span></button>
+                        <span class="active-layer-title" data-i18n="layers.parcels">Parzellen</span>
+                        <button class="active-layer-info" data-info="internal" data-layer-key="parcels" data-i18n-aria="layers.parcels" aria-label="Info Parzellen"><span class="material-symbols-outlined">info</span></button>
                       </label>
                       <label class="active-layer-item" data-internal-layer="landcover">
                         <input type="checkbox" class="active-layer-checkbox" checked id="layer-toggle-landcover">
-                        <span class="active-layer-title">Bodenbedeckung</span>
-                        <button class="active-layer-info" data-info="internal" data-layer-key="landcover" aria-label="Info Bodenbedeckung"><span class="material-symbols-outlined">info</span></button>
+                        <span class="active-layer-title" data-i18n="layers.landcover">Bodenbedeckung</span>
+                        <button class="active-layer-info" data-info="internal" data-layer-key="landcover" data-i18n-aria="layers.landcover" aria-label="Info Bodenbedeckung"><span class="material-symbols-outlined">info</span></button>
                       </label>
                       <label class="active-layer-item">
                         <input type="checkbox" class="active-layer-checkbox" checked id="layer-toggle-labels">
-                        <span class="active-layer-title">Beschriftungen</span>
+                        <span class="active-layer-title" data-i18n="layers.labels">Beschriftungen</span>
                       </label>
                     </div>
                     <div class="layer-group">
-                      <div class="layer-group-label">Externe Karten</div>
+                      <div class="layer-group-label" data-i18n="layers.external">Externe Karten</div>
                       <label class="active-layer-item">
                         <input type="checkbox" class="active-layer-checkbox" id="layer-toggle-av" data-swisstopo="ch.kantone.cadastralwebmap-farbe">
-                        <span class="active-layer-title">Amtliche Vermessung</span>
-                        <button class="active-layer-info" data-info="swisstopo" data-layer-id="ch.kantone.cadastralwebmap-farbe" aria-label="Info Amtliche Vermessung"><span class="material-symbols-outlined">info</span></button>
+                        <span class="active-layer-title" data-i18n="layers.av">Amtliche Vermessung</span>
+                        <button class="active-layer-info" data-info="swisstopo" data-layer-id="ch.kantone.cadastralwebmap-farbe" data-i18n-aria="layers.av" aria-label="Info Amtliche Vermessung"><span class="material-symbols-outlined">info</span></button>
                       </label>
                       <label class="active-layer-item">
                         <input type="checkbox" class="active-layer-checkbox" id="layer-toggle-habitat" data-swisstopo="ch.bafu.lebensraumkarte-schweiz">
-                        <span class="active-layer-title">Lebensraumkarte</span>
-                        <button class="active-layer-info" data-info="swisstopo" data-layer-id="ch.bafu.lebensraumkarte-schweiz" aria-label="Info Lebensraumkarte"><span class="material-symbols-outlined">info</span></button>
+                        <span class="active-layer-title" data-i18n="layers.habitat">Lebensraumkarte</span>
+                        <button class="active-layer-info" data-info="swisstopo" data-layer-id="ch.bafu.lebensraumkarte-schweiz" data-i18n-aria="layers.habitat" aria-label="Info Lebensraumkarte"><span class="material-symbols-outlined">info</span></button>
                       </label>
                       <div id="external-layers-list"></div>
                     </div>
@@ -211,7 +224,7 @@
               </aside>
               <button id="menu-toggle" type="button">
                 <span class="material-symbols-outlined">expand_less</span>
-                <span id="menu-toggle-text">Menü schliessen</span>
+                <span id="menu-toggle-text" data-i18n="menu.close">Menü schliessen</span>
               </button>
             </div>
 
@@ -223,44 +236,44 @@
               </div>
               <div class="context-menu-item" id="ctx-share" role="menuitem">
                 <span class="material-symbols-outlined" aria-hidden="true">share</span>
-                <span>Teilen</span>
+                <span data-i18n="ctx.share">Teilen</span>
               </div>
               <div class="context-menu-item" id="ctx-report" role="menuitem">
                 <span class="material-symbols-outlined" aria-hidden="true">bug_report</span>
-                <span>Problem melden</span>
+                <span data-i18n="ctx.report">Problem melden</span>
               </div>
             </div>
 
             <!-- Basemap selector (bottom-right of map) -->
             <div class="style-switcher" id="style-switcher">
               <div class="style-switcher-panel" id="style-panel">
-                <button class="style-option active" data-style="positron" title="Hell">
+                <button class="style-option active" data-style="positron" data-i18n-title="basemap.positron" title="Hell">
                   <img id="thumb-positron" src="https://basemaps.cartocdn.com/light_all/8/134/91.png" alt="Hell" loading="lazy">
-                  <span>Hell</span>
+                  <span data-i18n="basemap.positron">Hell</span>
                 </button>
-                <button class="style-option" data-style="voyager" title="Standard">
+                <button class="style-option" data-style="voyager" data-i18n-title="basemap.voyager" title="Standard">
                   <img id="thumb-voyager" src="https://basemaps.cartocdn.com/rastertiles/voyager/8/134/91.png" alt="Standard" loading="lazy">
-                  <span>Standard</span>
+                  <span data-i18n="basemap.voyager">Standard</span>
                 </button>
-                <button class="style-option" data-style="swissimage" title="Luftbild">
+                <button class="style-option" data-style="swissimage" data-i18n-title="basemap.swissimage" title="Luftbild">
                   <img id="thumb-swissimage" src="https://wmts.geo.admin.ch/1.0.0/ch.swisstopo.swissimage/default/current/3857/8/134/91.jpeg" alt="Luftbild" loading="lazy">
-                  <span>Luftbild</span>
+                  <span data-i18n="basemap.swissimage">Luftbild</span>
                 </button>
-                <button class="style-option" data-style="dark-matter" title="Dunkel">
+                <button class="style-option" data-style="dark-matter" data-i18n-title="basemap.dark" title="Dunkel">
                   <img id="thumb-dark-matter" src="https://basemaps.cartocdn.com/dark_all/8/134/91.png" alt="Dunkel" loading="lazy">
-                  <span>Dunkel</span>
+                  <span data-i18n="basemap.dark">Dunkel</span>
                 </button>
               </div>
-              <button class="style-switcher-btn" id="style-switcher-btn" title="Hintergrund wechseln">
+              <button class="style-switcher-btn" id="style-switcher-btn" data-i18n-title="basemap.label" title="Hintergrund wechseln">
                 <img id="current-style-thumb" src="https://basemaps.cartocdn.com/light_all/8/134/91.png" alt="Aktueller Kartenstil" loading="lazy">
-                <span>Hintergrund</span>
+                <span data-i18n="basemap.label">Hintergrund</span>
               </button>
             </div>
 
             <!-- Table toggle button -->
-            <button id="tbl-toggle" class="tbl-toggle" title="Tabelle ein-/ausblenden" aria-label="Tabelle ein-/ausblenden">
+            <button id="tbl-toggle" class="tbl-toggle" data-i18n-title="table.toggle.aria" data-i18n-aria="table.toggle.aria" title="Tabelle ein-/ausblenden" aria-label="Tabelle ein-/ausblenden">
               <span class="material-symbols-outlined" aria-hidden="true">expand_more</span>
-              <span class="tbl-toggle-label">Tabelle</span>
+              <span class="tbl-toggle-label" data-i18n="table.toggle">Tabelle</span>
             </button>
           </div>
           <div class="table-panel" id="results-table-container"></div>
@@ -269,8 +282,8 @@
         <!-- Right summary panel -->
         <aside id="summary-panel" class="summary-panel" aria-label="Zusammenfassung">
           <div class="sp-header">
-            <h3>Zusammenfassung</h3>
-            <button id="sp-close" class="close-btn" aria-label="Zusammenfassung schliessen">&times;</button>
+            <h3 data-i18n="summary.title">Zusammenfassung</h3>
+            <button id="sp-close" class="close-btn" data-i18n-aria="summary.close" aria-label="Zusammenfassung schliessen">&times;</button>
           </div>
           <div class="sp-body" id="sp-body"></div>
         </aside>
@@ -282,11 +295,11 @@
   <!-- Layer info modal -->
   <div id="layer-info-modal" class="layer-info-modal" role="dialog" aria-modal="true" aria-labelledby="layer-info-title">
     <div class="layer-info-modal-content">
-      <button class="layer-info-modal-close" aria-label="Schliessen">
+      <button class="layer-info-modal-close" data-i18n-aria="layerinfo.close" aria-label="Schliessen">
         <span class="material-symbols-outlined" aria-hidden="true">close</span>
       </button>
       <div id="layer-info-content" class="layer-info-body">
-        <div class="layer-info-loading">Lade Informationen...</div>
+        <div class="layer-info-loading" data-i18n="layerinfo.loading">Lade Informationen...</div>
       </div>
     </div>
   </div>
@@ -295,25 +308,25 @@
   <div id="download-overlay" class="dl-overlay" role="dialog" aria-modal="true" aria-label="Ergebnisse herunterladen" hidden>
     <div class="dl-modal">
       <div class="dl-header">
-        <h3>Ergebnisse herunterladen</h3>
-        <button id="dl-close" class="close-btn close-btn--lg" aria-label="Dialog schliessen">&times;</button>
+        <h3 data-i18n="download.title">Ergebnisse herunterladen</h3>
+        <button id="dl-close" class="close-btn close-btn--lg" data-i18n-aria="download.close" aria-label="Dialog schliessen">&times;</button>
       </div>
       <div class="dl-body">
         <button class="dl-option" id="dl-parcels-csv">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-          <div class="dl-option-text"><strong>Parzellen CSV</strong><span>Aggregierte Flächen pro Parzelle (SIA 416, DIN 277)</span></div>
+          <div class="dl-option-text"><strong data-i18n="download.parcels.csv">Parzellen CSV</strong><span data-i18n="download.parcels.csv.desc">Aggregierte Flächen pro Parzelle (SIA 416, DIN 277)</span></div>
         </button>
         <button class="dl-option" id="dl-lc-csv">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-          <div class="dl-option-text"><strong>Bodenbedeckung CSV</strong><span>Detail-Zeilen pro geclipptem Polygon</span></div>
+          <div class="dl-option-text"><strong data-i18n="download.lc.csv">Bodenbedeckung CSV</strong><span data-i18n="download.lc.csv.desc">Detail-Zeilen pro geclipptem Polygon</span></div>
         </button>
         <button class="dl-option" id="dl-xlsx">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-          <div class="dl-option-text"><strong>Excel (.xlsx)</strong><span>Parzellen + Bodenbedeckung in einem Workbook</span></div>
+          <div class="dl-option-text"><strong data-i18n="download.xlsx">Excel (.xlsx)</strong><span data-i18n="download.xlsx.desc">Parzellen + Bodenbedeckung in einem Workbook</span></div>
         </button>
         <button class="dl-option" id="dl-geojson">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-          <div class="dl-option-text"><strong>GeoJSON</strong><span>Parzellen-Polygone mit Attributen</span></div>
+          <div class="dl-option-text"><strong data-i18n="download.geojson">GeoJSON</strong><span data-i18n="download.geojson.desc">Parzellen-Polygone mit Attributen</span></div>
         </button>
       </div>
     </div>
@@ -323,9 +336,9 @@
   <footer id="footer">
     <div class="footer-info"><span id="footer-coords">&mdash;</span></div>
     <div class="footer-links">
-      <a href="https://github.com/bbl-dres/landcover-survey" target="_blank" rel="noopener">Quellcode</a>
-      <a href="https://www.admin.ch/gov/de/start/rechtliches.html" target="_blank" rel="noopener">Rechtliches</a>
-      <a href="https://www.bbl.admin.ch/de/kontakt" target="_blank" rel="noopener">Kontakt</a>
+      <a href="https://github.com/bbl-dres/landcover-survey" target="_blank" rel="noopener" data-i18n="footer.source">Quellcode</a>
+      <a href="https://www.admin.ch/gov/de/start/rechtliches.html" target="_blank" rel="noopener" data-i18n="footer.legal">Rechtliches</a>
+      <a href="https://www.bbl.admin.ch/de/kontakt" target="_blank" rel="noopener" data-i18n="footer.contact">Kontakt</a>
     </div>
   </footer>
 </div>

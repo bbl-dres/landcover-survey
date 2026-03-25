@@ -5,6 +5,7 @@ import { API, esc } from "./config.js";
 import { highlightParcel, flyToLocation } from "./map.js";
 import { highlightRow } from "./table.js";
 import { addSwisstopoLayer } from "./swisstopo.js";
+import { t, getLang } from "./i18n.js";
 
 let parcelsData = []; // set by main.js after processing
 let debounceTimer = null;
@@ -79,14 +80,14 @@ async function performSearch(query) {
   // Local search
   const localResults = searchLocal(query);
   if (localResults.length) {
-    html.push('<div class="search-section-header">Parzellen</div>');
+    html.push(`<div class="search-section-header">${esc(t("search.section.parcels"))}</div>`);
     for (const r of localResults) {
       html.push(`
         <div class="search-item" data-action="local" data-index="${r.index}">
           <span class="material-symbols-outlined search-item-icon">location_on</span>
           <div>
             <div class="search-item-title">${esc(r.id)}</div>
-            <div class="search-item-sub">${esc(r.egrid)} ${r.nummer ? '· Nr. ' + esc(r.nummer) : ''}</div>
+            <div class="search-item-sub">${esc(r.egrid)} ${r.nummer ? '· ' + esc(t("col.nummer")) + ' ' + esc(r.nummer) : ''}</div>
           </div>
         </div>
       `);
@@ -103,7 +104,7 @@ async function performSearch(query) {
   const layerResults = layerRes.status === "fulfilled" ? layerRes.value : [];
 
   if (locationResults.length) {
-    html.push('<div class="search-section-header">Orte</div>');
+    html.push(`<div class="search-section-header">${esc(t("search.section.locations"))}</div>`);
     for (const r of locationResults) {
       const bboxAttr = r.bbox ? `data-bbox='${JSON.stringify(r.bbox)}'` : "";
       html.push(`
@@ -119,7 +120,7 @@ async function performSearch(query) {
   }
 
   if (layerResults.length) {
-    html.push('<div class="search-section-header">Karten</div>');
+    html.push(`<div class="search-section-header">${esc(t("search.section.layers"))}</div>`);
     for (const r of layerResults) {
       html.push(`
         <div class="search-item" data-action="layer" data-layer-id="${esc(r.id)}" data-title="${esc(r.title)}">
@@ -133,7 +134,7 @@ async function performSearch(query) {
   }
 
   if (html.length === 0) {
-    html.push('<div class="search-empty">Keine Ergebnisse</div>');
+    html.push(`<div class="search-empty">${esc(t("search.empty"))}</div>`);
   }
 
   results.innerHTML = html.join("");
@@ -180,7 +181,7 @@ async function searchSwisstopoLayers(query) {
   const params = new URLSearchParams({
     searchText: query,
     type: "layers",
-    lang: "de",
+    lang: getLang(),
     limit: "5",
   });
 

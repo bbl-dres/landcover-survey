@@ -4,6 +4,7 @@
  */
 import { esc } from "./config.js";
 import { resizeMap } from "./map.js";
+import { t, getLang } from "./i18n.js";
 
 /** Active swisstopo layers: [{ id, title, sourceId, mapLayerId, tileUrl, maxZoom, visible }] */
 export const activeSwisstopoLayers = [];
@@ -29,7 +30,7 @@ export function addSwisstopoLayer(layerId, title, silent) {
   if (pendingLayerIds.has(layerId)) return;
   pendingLayerIds.add(layerId);
 
-  fetch(`https://api3.geo.admin.ch/rest/services/api/MapServer/${layerId}?lang=de`)
+  fetch(`https://api3.geo.admin.ch/rest/services/api/MapServer/${layerId}?lang=${getLang()}`)
     .then((r) => { if (!r.ok) throw new Error("Metadata unavailable"); return r.json(); })
     .then((meta) => {
       const sourceId = `swisstopo-${layerId}`;
@@ -141,9 +142,9 @@ export function loadGeokatalog() {
   const tree = document.getElementById("geokatalog-tree");
   if (!tree) return;
 
-  tree.innerHTML = '<div class="geokatalog-loading">Katalog wird geladen...</div>';
+  tree.innerHTML = `<div class="geokatalog-loading">${esc(t("geokatalog.loading"))}</div>`;
 
-  fetch("https://api3.geo.admin.ch/rest/services/ech/CatalogServer?lang=de")
+  fetch(`https://api3.geo.admin.ch/rest/services/ech/CatalogServer?lang=${getLang()}`)
     .then((r) => { if (!r.ok) throw new Error("API error"); return r.json(); })
     .then((data) => {
       geokatalogLoaded = true;
@@ -151,12 +152,12 @@ export function loadGeokatalog() {
       if (data.results?.root?.children) {
         renderCatalogTree(data.results.root.children, tree);
       } else {
-        tree.innerHTML = '<div class="geokatalog-empty">Keine Daten verfügbar</div>';
+        tree.innerHTML = `<div class="geokatalog-empty">${esc(t("geokatalog.empty"))}</div>`;
       }
     })
     .catch((e) => {
       console.error("Geokatalog error:", e);
-      tree.innerHTML = '<div class="geokatalog-empty">Fehler beim Laden</div>';
+      tree.innerHTML = `<div class="geokatalog-empty">${esc(t("geokatalog.error"))}</div>`;
     });
 }
 
@@ -185,7 +186,7 @@ function renderCatalogTree(items, container) {
 
     const label = document.createElement("span");
     label.className = "node-label";
-    label.textContent = item.label || item.category || "Unbekannt";
+    label.textContent = item.label || item.category || t("geokatalog.unknown");
     node.appendChild(label);
 
     el.appendChild(node);
@@ -253,10 +254,10 @@ export function renderActiveLayersList() {
   container.innerHTML = dynamicLayers.map((layer) => {
     const isVisible = layer.visible !== false;
     return `<label class="active-layer-item">
-      <button class="active-layer-remove" data-layer-id="${esc(layer.id)}" title="Entfernen">
+      <button class="active-layer-remove" data-layer-id="${esc(layer.id)}" title="${esc(t("layer.remove"))}">
         <span class="material-symbols-outlined">close</span>
       </button>
-      <input type="checkbox" class="active-layer-checkbox" ${isVisible ? "checked" : ""} data-layer-id="${esc(layer.id)}" title="${isVisible ? "Ausblenden" : "Einblenden"}">
+      <input type="checkbox" class="active-layer-checkbox" ${isVisible ? "checked" : ""} data-layer-id="${esc(layer.id)}" title="${isVisible ? esc(t("layer.hide")) : esc(t("layer.show"))}">
       <span class="active-layer-title">${esc(layer.title)}</span>
       <button class="active-layer-info" data-info="swisstopo" data-layer-id="${esc(layer.id)}"><span class="material-symbols-outlined">info</span></button>
     </label>`;
@@ -276,30 +277,32 @@ export function renderActiveLayersList() {
 
 /* ── Layer Info Modal ── */
 
-const internalLayerMeta = {
-  parcels: {
-    title: "Parzellen (Landcover Survey)",
-    description: "Parzellen-Polygone aus der swisstopo Cadastralwebmap, abgefragt per EGRID über die geo.admin.ch API.",
-    source: "swisstopo / geo.admin.ch",
-    format: "GeoJSON (Polygon)",
-  },
-  landcover: {
-    title: "Bodenbedeckung (Landcover Survey)",
-    description: "Bodenbedeckungsflächen aus der amtlichen Vermessung (geodienste.ch WFS), geclippt auf Parzellengrenzen mit Turf.js. Klassifiziert nach SIA 416, DIN 277 und Versiegelungsgrad.",
-    source: "geodienste.ch / Amtliche Vermessung",
-    format: "GeoJSON (Polygon)",
-  },
-};
+function getInternalLayerMeta(key) {
+  return {
+    parcels: {
+      title: t("layermeta.parcels.title"),
+      description: t("layermeta.parcels.desc"),
+      source: t("layermeta.parcels.source"),
+      format: t("layermeta.parcels.format"),
+    },
+    landcover: {
+      title: t("layermeta.landcover.title"),
+      description: t("layermeta.landcover.desc"),
+      source: t("layermeta.landcover.source"),
+      format: t("layermeta.landcover.format"),
+    },
+  }[key];
+}
 
 export function showLayerInfo(layerId) {
   const modal = document.getElementById("layer-info-modal");
   const content = document.getElementById("layer-info-content");
   if (!modal || !content || !layerId) return;
 
-  content.innerHTML = '<div class="layer-info-loading">Lade Informationen...</div>';
+  content.innerHTML = `<div class="layer-info-loading">${esc(t("layerinfo.loading"))}</div>`;
   modal.classList.add("show");
 
-  fetch(`https://api3.geo.admin.ch/rest/services/api/MapServer/${layerId}/legend?lang=de`)
+  fetch(`https://api3.geo.admin.ch/rest/services/api/MapServer/${layerId}/legend?lang=${getLang()}`)
     .then((r) => { if (!r.ok) throw new Error("Unavailable"); return r.text(); })
     .then((html) => {
       // Sanitize: strip scripts and event handlers
@@ -316,7 +319,7 @@ export function showLayerInfo(layerId) {
     })
     .catch((e) => {
       console.error("Layer info error:", e);
-      content.innerHTML = '<div class="layer-info-loading">Informationen nicht verfügbar.</div>';
+      content.innerHTML = `<div class="layer-info-loading">${esc(t("layerinfo.unavailable"))}</div>`;
     });
 }
 
@@ -325,20 +328,21 @@ export function showInternalLayerInfo(layerKey) {
   const content = document.getElementById("layer-info-content");
   if (!modal || !content) return;
 
-  const meta = internalLayerMeta[layerKey];
+  const meta = getInternalLayerMeta(layerKey);
   if (!meta) return;
 
-  const today = new Date().toLocaleDateString("de-CH", { day: "2-digit", month: "2-digit", year: "numeric" });
+  const locale = { de: "de-CH", fr: "fr-CH", it: "it-CH", en: "en-CH" }[getLang()] || "de-CH";
+  const today = new Date().toLocaleDateString(locale, { day: "2-digit", month: "2-digit", year: "numeric" });
 
   content.innerHTML = `
     <div class="legend-container">
       <div class="bod-title" id="layer-info-title">${esc(meta.title)}</div>
       <div class="legend-abstract">${esc(meta.description)}</div>
-      <div class="legend-footer"><span>Informationen</span></div>
+      <div class="legend-footer"><span>${esc(t("layerinfo.info"))}</span></div>
       <table>
-        <tr><td>Quelle</td><td>${esc(meta.source)}</td></tr>
-        <tr><td>Format</td><td>${esc(meta.format)}</td></tr>
-        <tr><td>Datenstand</td><td>${today}</td></tr>
+        <tr><td>${esc(t("layerinfo.source"))}</td><td>${esc(meta.source)}</td></tr>
+        <tr><td>${esc(t("layerinfo.format"))}</td><td>${esc(meta.format)}</td></tr>
+        <tr><td>${esc(t("layerinfo.date"))}</td><td>${today}</td></tr>
       </table>
     </div>
   `;

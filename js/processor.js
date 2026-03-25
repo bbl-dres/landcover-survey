@@ -8,6 +8,7 @@
  * - No artificial sleep — only natural network latency paces the requests
  */
 import { API, SLIVER_THRESHOLD, STATUS, classify } from "./config.js";
+import { t } from "./i18n.js";
 
 const CONCURRENCY = 5; // max parallel API requests
 
@@ -97,7 +98,7 @@ export async function processRows(rows, onProgress) {
     } catch (err) {
       console.error(`Error processing ${egrid}:`, err);
       return {
-        parcel: makeErrorParcel(id, egrid, row, `Fehler: ${err.message}`),
+        parcel: makeErrorParcel(id, egrid, row, t("status.error", { message: err.message })),
         landcover: [],
       };
     }

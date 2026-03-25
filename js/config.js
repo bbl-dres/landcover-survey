@@ -1,6 +1,7 @@
 /**
  * BBArt classification mappings — ported from python/config.py
  */
+import { t, localeFmtNum, getLocale, getLang } from "./i18n.js";
 
 /** Land cover type → SIA 416 classification */
 export const SIA416 = {
@@ -102,19 +103,26 @@ export function classify(art) {
   };
 }
 
-/** Status constants (used across modules) */
+/** Status constants — dynamic getters for i18n */
 export const STATUS = {
-  FOUND: "EGRID gefunden",
-  NOT_FOUND: "EGRID nicht gefunden",
-  INVALID: "Ungültiges EGRID",
+  get FOUND() { return t("status.found"); },
+  get NOT_FOUND() { return t("status.notFound"); },
+  get INVALID() { return t("status.invalid"); },
 };
 
-/** Green space German labels */
-export const GREEN_SPACE_DE = {
-  "Green space (soil-covered)": "Humusiert",
-  "Green space (wooded)": "Bestockt",
-  "Not green space": "Keine Grünfläche",
-};
+/** Green space translated labels */
+export function getGreenSpaceLabel(key) {
+  const map = {
+    "Green space (soil-covered)": "gs.soil",
+    "Green space (wooded)": "gs.wooded",
+    "Not green space": "gs.none",
+  };
+  return t(map[key] || "gs.none");
+}
+// Keep GREEN_SPACE_DE as a getter-based object for backward compat
+export const GREEN_SPACE_DE = new Proxy({}, {
+  get(_, prop) { return getGreenSpaceLabel(prop); },
+});
 
 /** Shared HTML escape utility */
 const _escDiv = document.createElement("div");
@@ -123,10 +131,9 @@ export function esc(s) {
   return _escDiv.innerHTML;
 }
 
-/** Shared number formatter (de-CH locale) */
+/** Shared number formatter (locale-aware) */
 export function fmtNum(n, decimals = 1) {
-  const v = parseFloat(n);
-  return isNaN(v) ? "\u2013" : v.toLocaleString("de-CH", { maximumFractionDigits: decimals });
+  return localeFmtNum(n, decimals);
 }
 
 /** Shared dynamic script loader */
@@ -141,10 +148,11 @@ export function loadScript(src) {
 }
 
 /** API endpoints */
+const WFS_LANG = { de: "deu", fr: "fra", it: "ita", en: "eng" };
 export const API = {
   PARCEL_FIND: "https://api3.geo.admin.ch/rest/services/all/MapServer/find",
   SEARCH: "https://api3.geo.admin.ch/rest/services/ech/SearchServer",
-  WFS_AV: "https://geodienste.ch/db/av_0/deu",
+  get WFS_AV() { return `https://geodienste.ch/db/av_0/${WFS_LANG[getLang()] || "deu"}`; },
 };
 
 /** Basemap styles with thumbnails */

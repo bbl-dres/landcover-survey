@@ -4,6 +4,7 @@
  */
 import { ART_LABELS, STATUS, esc, fmtNum } from "./config.js";
 import { resizeMap } from "./map.js";
+import { t } from "./i18n.js";
 
 /* ── State ── */
 
@@ -30,31 +31,35 @@ let lcPageSize = 50;
 
 /* ── Column definitions ── */
 
-const PARCEL_COLS = [
-  { key: "id", label: "ID", cls: "col-p-id" },
-  { key: "egrid", label: "EGRID", cls: "col-p-egrid" },
-  { key: "nummer", label: "Nr.", cls: "col-p-nummer" },
-  { key: "bfsnr", label: "BFSNr", cls: "col-p-bfsnr" },
-  { key: "check_egrid", label: "Status", cls: "col-p-status" },
-  { key: "parcel_area_m2", label: "Parzelle m²", cls: "col-p-area", numeric: true },
-  { key: "GGF_m2", label: "GGF m²", cls: "col-p-ggf", numeric: true },
-  { key: "BUF_m2", label: "BUF m²", cls: "col-p-buf", numeric: true },
-  { key: "UUF_m2", label: "UUF m²", cls: "col-p-uuf", numeric: true },
-  { key: "Sealed_m2", label: "Versiegelt m²", cls: "col-p-sealed", numeric: true },
-  { key: "GreenSpace_m2", label: "Grünfläche m²", cls: "col-p-green", numeric: true },
-];
+function getParcelCols() {
+  return [
+    { key: "id", label: t("col.id"), cls: "col-p-id" },
+    { key: "egrid", label: t("col.egrid"), cls: "col-p-egrid" },
+    { key: "nummer", label: t("col.nummer"), cls: "col-p-nummer" },
+    { key: "bfsnr", label: t("col.bfsnr"), cls: "col-p-bfsnr" },
+    { key: "check_egrid", label: t("col.status"), cls: "col-p-status" },
+    { key: "parcel_area_m2", label: t("col.parcel_area"), cls: "col-p-area", numeric: true },
+    { key: "GGF_m2", label: t("col.ggf"), cls: "col-p-ggf", numeric: true },
+    { key: "BUF_m2", label: t("col.buf"), cls: "col-p-buf", numeric: true },
+    { key: "UUF_m2", label: t("col.uuf"), cls: "col-p-uuf", numeric: true },
+    { key: "Sealed_m2", label: t("col.sealed"), cls: "col-p-sealed", numeric: true },
+    { key: "GreenSpace_m2", label: t("col.green"), cls: "col-p-green", numeric: true },
+  ];
+}
 
-const LC_COLS = [
-  { key: "id", label: "Parzelle ID", cls: "col-lc-id" },
-  { key: "egrid", label: "EGRID", cls: "col-lc-egrid" },
-  { key: "fid", label: "FID", cls: "col-lc-fid" },
-  { key: "art", label: "Art", cls: "col-lc-art" },
-  { key: "art_label", label: "Typ", cls: "col-lc-type" },
-  { key: "bfsnr", label: "BFSNr", cls: "col-lc-bfsnr" },
-  { key: "gwr_egid", label: "GWR EGID", cls: "col-lc-gwregid" },
-  { key: "check_greenspace", label: "Grünfläche", cls: "col-lc-green" },
-  { key: "area_m2", label: "Fläche m²", cls: "col-lc-area", numeric: true },
-];
+function getLcCols() {
+  return [
+    { key: "id", label: t("col.parcel_id"), cls: "col-lc-id" },
+    { key: "egrid", label: t("col.egrid"), cls: "col-lc-egrid" },
+    { key: "fid", label: t("col.fid"), cls: "col-lc-fid" },
+    { key: "art", label: t("col.art"), cls: "col-lc-art" },
+    { key: "art_label", label: t("col.type"), cls: "col-lc-type" },
+    { key: "bfsnr", label: t("col.bfsnr"), cls: "col-lc-bfsnr" },
+    { key: "gwr_egid", label: t("col.gwr_egid"), cls: "col-lc-gwregid" },
+    { key: "check_greenspace", label: t("col.greenspace"), cls: "col-lc-green" },
+    { key: "area_m2", label: t("col.area"), cls: "col-lc-area", numeric: true },
+  ];
+}
 
 /* ── Init ── */
 
@@ -127,16 +132,16 @@ function switchToTab(tabName) {
 
 function renderShell() {
   container.innerHTML = `
-    <div class="tbl-resize-handle" id="tbl-resize-handle" title="Grösse ändern"></div>
+    <div class="tbl-resize-handle" id="tbl-resize-handle" title="${esc(t("table.resize"))}"></div>
     <div class="list-table-container">
       <div class="toolbar">
         <div class="table-tabs" role="tablist">
-          <button class="table-tab active" data-tab="parcels" role="tab" aria-selected="true">Parzellen</button>
-          <button class="table-tab" data-tab="landcover" role="tab" aria-selected="false">Bodenbedeckung</button>
+          <button class="table-tab active" data-tab="parcels" role="tab" aria-selected="true">${esc(t("table.tab.parcels"))}</button>
+          <button class="table-tab" data-tab="landcover" role="tab" aria-selected="false">${esc(t("table.tab.landcover"))}</button>
         </div>
         <div class="toolbar-search">
           <span class="material-symbols-outlined">search</span>
-          <input type="text" id="tbl-search-input" placeholder="Tabelle durchsuchen..." autocomplete="off">
+          <input type="text" id="tbl-search-input" placeholder="${esc(t("table.search"))}" autocomplete="off">
           <button class="toolbar-search-clear" id="tbl-search-clear" type="button" hidden>
             <span class="material-symbols-outlined">close</span>
           </button>
@@ -144,14 +149,14 @@ function renderShell() {
         <div class="toolbar-actions">
           <div class="dropdown-container">
             <button class="dropdown-btn" id="columns-dropdown-btn">
-              <span class="material-symbols-outlined">view_column</span> Spalten
+              <span class="material-symbols-outlined">view_column</span> ${esc(t("table.columns"))}
               <span class="material-symbols-outlined">expand_more</span>
             </button>
             <div class="dropdown-menu columns-dropdown" id="columns-dropdown-menu">
-              <div class="dropdown-menu-header">Spalten anzeigen</div>
+              <div class="dropdown-menu-header">${esc(t("table.columns.show"))}</div>
               <div class="dropdown-menu-toggle-row">
-                <button class="dropdown-toggle-btn" id="col-toggle-all">Alle</button>
-                <button class="dropdown-toggle-btn" id="col-toggle-none">Keine</button>
+                <button class="dropdown-toggle-btn" id="col-toggle-all">${esc(t("table.columns.all"))}</button>
+                <button class="dropdown-toggle-btn" id="col-toggle-none">${esc(t("table.columns.none"))}</button>
               </div>
               <div class="columns-list" id="columns-list"></div>
             </div>
@@ -237,8 +242,8 @@ function renderShell() {
   container.querySelector("#col-toggle-none").addEventListener("click", () => toggleAllCols(false));
 
   // Build headers
-  renderHeaders("parcels-header-row", PARCEL_COLS, "p");
-  renderHeaders("lc-header-row", LC_COLS, "lc");
+  renderHeaders("parcels-header-row", getParcelCols(), "p");
+  renderHeaders("lc-header-row", getLcCols(), "lc");
   updateColumnsDropdown();
 }
 
@@ -286,7 +291,7 @@ function updateSortIndicators(rowId, activeKey, asc) {
 
 function updateColumnsDropdown() {
   const list = container.querySelector("#columns-list");
-  const cols = activeTab === "parcels" ? PARCEL_COLS : LC_COLS;
+  const cols = activeTab === "parcels" ? getParcelCols() : getLcCols();
   list.innerHTML = cols.map((c) =>
     `<label class="dropdown-menu-item">
       <input type="checkbox" checked data-column="${c.cls}"> ${esc(c.label)}
@@ -332,7 +337,7 @@ function renderParcels() {
     });
   }
 
-  const col = PARCEL_COLS.find((c) => c.key === pSortField);
+  const col = getParcelCols().find((c) => c.key === pSortField);
   data.sort((a, b) => {
     let va = a[pSortField] ?? "";
     let vb = b[pSortField] ?? "";
@@ -350,15 +355,15 @@ function renderParcels() {
 
   const body = container.querySelector("#parcels-body");
   if (total === 0) {
-    body.innerHTML = `<tr><td colspan="${PARCEL_COLS.length}" class="empty-cell">
-      <span class="material-symbols-outlined">search_off</span> Keine Ergebnisse
+    body.innerHTML = `<tr><td colspan="${getParcelCols().length}" class="empty-cell">
+      <span class="material-symbols-outlined">search_off</span> ${esc(t("table.empty"))}
     </td></tr>`;
   } else {
     body.innerHTML = page.map((row) => {
       const idx = row._idx;
       const errCls = row.check_egrid === STATUS.FOUND ? "" : "row-error";
       return `<tr data-index="${idx}" class="${errCls}" tabindex="0">
-        ${PARCEL_COLS.map((c) => `<td class="${c.cls} ${c.numeric ? 'num' : ''}">${fmtCell(row[c.key], c.numeric)}</td>`).join("")}
+        ${getParcelCols().map((c) => `<td class="${c.cls} ${c.numeric ? 'num' : ''}">${fmtCell(row[c.key], c.numeric)}</td>`).join("")}
       </tr>`;
     }).join("");
   }
@@ -375,7 +380,7 @@ function renderParcels() {
     });
   });
 
-  renderPagination("parcels-pagination", pPage, totalPages, total, pPageSize, "Parzellen",
+  renderPagination("parcels-pagination", pPage, totalPages, total, pPageSize, t("table.label.parcels"),
     (p) => { pPage = p; renderParcels(); },
     (s) => { pPageSize = s; pPage = 1; renderParcels(); }
   );
@@ -397,7 +402,7 @@ function renderLandcover() {
     });
   }
 
-  const col = LC_COLS.find((c) => c.key === lcSortField);
+  const col = getLcCols().find((c) => c.key === lcSortField);
   data.sort((a, b) => {
     let va = a[lcSortField] ?? "";
     let vb = b[lcSortField] ?? "";
@@ -415,14 +420,14 @@ function renderLandcover() {
 
   const body = container.querySelector("#lc-body");
   if (total === 0) {
-    body.innerHTML = `<tr><td colspan="${LC_COLS.length}" class="empty-cell">
-      <span class="material-symbols-outlined">search_off</span> Keine Ergebnisse
+    body.innerHTML = `<tr><td colspan="${getLcCols().length}" class="empty-cell">
+      <span class="material-symbols-outlined">search_off</span> ${esc(t("table.empty"))}
     </td></tr>`;
   } else {
     body.innerHTML = page.map((row) => {
       const lcIdx = row._idx;
       return `<tr data-lc-index="${lcIdx}" tabindex="0">
-        ${LC_COLS.map((c) => `<td class="${c.cls} ${c.numeric ? 'num' : ''}">${fmtCell(row[c.key], c.numeric)}</td>`).join("")}
+        ${getLcCols().map((c) => `<td class="${c.cls} ${c.numeric ? 'num' : ''}">${fmtCell(row[c.key], c.numeric)}</td>`).join("")}
       </tr>`;
     }).join("");
   }
@@ -440,7 +445,7 @@ function renderLandcover() {
     });
   });
 
-  renderPagination("lc-pagination", lcPage, totalPages, total, lcPageSize, "Bodenbedeckungen",
+  renderPagination("lc-pagination", lcPage, totalPages, total, lcPageSize, t("table.label.landcover"),
     (p) => { lcPage = p; renderLandcover(); },
     (s) => { lcPageSize = s; lcPage = 1; renderLandcover(); }
   );
@@ -458,18 +463,18 @@ function renderPagination(elId, currentPage, totalPages, totalItems, pageSize, l
   const end = Math.min(currentPage * pageSize, totalItems);
 
   el.innerHTML = `
-    <div class="pagination-info">${start}–${end} von ${totalItems} ${label}</div>
+    <div class="pagination-info">${t("table.pagination.info", { start, end, total: totalItems, label })}</div>
     <div class="pagination-nav">
       <button class="pagination-btn pg-prev" ${currentPage <= 1 ? "disabled" : ""}>
         <span class="material-symbols-outlined">chevron_left</span>
       </button>
-      <span class="pagination-page-info">Seite ${currentPage} von ${totalPages}</span>
+      <span class="pagination-page-info">${t("table.pagination.page", { current: currentPage, total: totalPages })}</span>
       <button class="pagination-btn pg-next" ${currentPage >= totalPages ? "disabled" : ""}>
         <span class="material-symbols-outlined">chevron_right</span>
       </button>
     </div>
     <div class="pagination-rows">
-      Zeilen:
+      ${esc(t("table.pagination.rows"))}
       <select class="pg-size">
         ${[25, 50, 100].map((s) => `<option value="${s}" ${s === pageSize ? "selected" : ""}>${s}</option>`).join("")}
       </select>
