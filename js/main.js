@@ -7,7 +7,7 @@ import { initMap, plotResults, highlightParcel, highlightLandcover, resizeMap, o
 import { initTable, populateTable, highlightRow, highlightLcRow } from "./table.js";
 import { downloadParcelCSV, downloadLandcoverCSV, downloadXLSX, downloadGeoJSON } from "./export.js";
 import { initSearch, setSearchData } from "./search.js";
-import { ART_LABELS, ART_COLORS, CATEGORY_COLORS, SIA416, DIN277, GREEN_SPACE, SEALED } from "./config.js";
+import { ART_LABELS, ART_COLORS, CATEGORY_COLORS, SIA416, DIN277, GREEN_SPACE, SEALED, STATUS, esc, fmtNum } from "./config.js";
 
 let processedResults = null;
 let currentFilename = "";
@@ -239,7 +239,7 @@ function updateSummaryPanel() {
   const parcels = processedResults.parcels;
   const landcover = processedResults.landcover;
   const total = parcels.length;
-  const found = parcels.filter((r) => r.check_egrid === "EGRID gefunden").length;
+  const found = parcels.filter((r) => r.check_egrid === STATUS.FOUND).length;
   const notFound = total - found;
 
   let totalSealed = 0, totalGreen = 0;
@@ -249,11 +249,11 @@ function updateSummaryPanel() {
   }
 
   const now = new Date();
-  const fmt = (n) => n.toLocaleString("de-CH", { maximumFractionDigits: 1 });
+  const fmt = (n) => fmtNum(n, 1);
 
   // Build dropdown options
   const modeOptions = Object.entries(AGGREGATION_MODES).map(([k, v]) =>
-    `<option value="${k}" ${k === currentAggMode ? "selected" : ""}>${escHtml(v.label)}</option>`
+    `<option value="${k}" ${k === currentAggMode ? "selected" : ""}>${esc(v.label)}</option>`
   ).join("");
 
   document.getElementById("sp-body").innerHTML = `
@@ -265,7 +265,7 @@ function updateSummaryPanel() {
       </div>
       <div class="sp-collapse-content">
         <div class="sp-meta-row">
-          <span class="sp-meta-filename">${escHtml(currentFilename)}</span>
+          <span class="sp-meta-filename">${esc(currentFilename)}</span>
           <span class="sp-meta-sep">&middot;</span>
           <span>${now.toLocaleDateString("de-CH", { dateStyle: "medium" })}, ${now.toLocaleTimeString("de-CH", { timeStyle: "short" })}</span>
         </div>
@@ -328,7 +328,7 @@ function renderDonutAndLegend() {
   const entries = mode.getEntries(landcover);
   const totalArea = entries.reduce((s, e) => s + e.area, 0);
 
-  const fmt = (n) => n.toLocaleString("de-CH", { maximumFractionDigits: 1 });
+  const fmt = (n) => fmtNum(n, 1);
   const pctOf = (part) => totalArea > 0 ? ((part / totalArea) * 100).toFixed(1) : "0";
 
   // Donut SVG
@@ -342,7 +342,7 @@ function renderDonutAndLegend() {
     if (arc > 0.01) {
       arcs += `<circle cx="64" cy="64" r="${R}" fill="none" stroke="${e.color}" stroke-width="${SW}" stroke-dasharray="${arc} ${C - arc}" stroke-dashoffset="${offset}" />`;
       // Invisible wider hit area for hover
-      hitArcs += `<circle class="donut-hit" cx="64" cy="64" r="${R}" fill="none" stroke="transparent" stroke-width="${HIT_SW}" stroke-dasharray="${arc} ${C - arc}" stroke-dashoffset="${offset}" data-label="${escHtml(e.label)}" data-value="${fmt(e.area)} m²" data-pct="${pctOf(e.area)}%" data-color="${e.color}"><title>${escHtml(e.label)}: ${fmt(e.area)} m² (${pctOf(e.area)}%)</title></circle>`;
+      hitArcs += `<circle class="donut-hit" cx="64" cy="64" r="${R}" fill="none" stroke="transparent" stroke-width="${HIT_SW}" stroke-dasharray="${arc} ${C - arc}" stroke-dashoffset="${offset}" data-label="${esc(e.label)}" data-value="${fmt(e.area)} m²" data-pct="${pctOf(e.area)}%" data-color="${e.color}"><title>${esc(e.label)}: ${fmt(e.area)} m² (${pctOf(e.area)}%)</title></circle>`;
     }
     offset -= arc;
   }
@@ -387,7 +387,7 @@ function renderDonutAndLegend() {
     .map((e) => `
       <div class="sp-legend-row">
         <span class="sp-dist-dot" style="background:${e.color}"></span>
-        <span class="sp-legend-label">${escHtml(e.label)}</span>
+        <span class="sp-legend-label">${esc(e.label)}</span>
         <span class="sp-legend-val">${fmt(e.area)} m²</span>
         <span class="sp-legend-pct">${pctOf(e.area)}%</span>
       </div>
@@ -430,8 +430,3 @@ function showResults() {
   });
 }
 
-function escHtml(s) {
-  const d = document.createElement("div");
-  d.textContent = s || "";
-  return d.innerHTML;
-}

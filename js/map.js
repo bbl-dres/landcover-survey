@@ -2,7 +2,7 @@
  * MapLibre GL JS map with parcel polygons, land cover overlay,
  * Home/3D controls, and thumbnail basemap selector
  */
-import { ART_COLORS, CATEGORY_COLORS, ART_LABELS, MAP_STYLES, MAP_DEFAULT } from "./config.js";
+import { ART_COLORS, CATEGORY_COLORS, ART_LABELS, MAP_STYLES, MAP_DEFAULT, GREEN_SPACE_DE, esc, fmtNum } from "./config.js";
 import { setMap, readdSwisstopoLayers, loadGeokatalog, addSwisstopoLayer, removeSwisstopoLayer } from "./swisstopo.js";
 
 let map = null;
@@ -443,6 +443,7 @@ function initBasemapSelector() {
 /* ── Data Layers ── */
 
 function addDataLayers() {
+  if (map.getSource("landcover")) return; // guard against duplicate calls
   map.addSource("landcover", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
   map.addLayer({ id: "landcover-fill", type: "fill", source: "landcover", paint: { "fill-color": ["get", "color"], "fill-opacity": 0.5 } });
   map.addLayer({ id: "landcover-line", type: "line", source: "landcover", paint: { "line-color": ["get", "color"], "line-width": 1, "line-opacity": 0.8 } });
@@ -569,7 +570,7 @@ export function plotResults(results) {
   // Build cluster centroids from parcel polygons
   const clusterPoints = parcelFeatures.map((f) => {
     const center = turf.centroid(f);
-    center.properties = { ...f.properties };
+    center.properties = { index: f.properties.index, id: f.properties.id, egrid: f.properties.egrid, nummer: f.properties.nummer, label: f.properties.label, area: f.properties.area };
     return center;
   });
   currentClusterData = { type: "FeatureCollection", features: clusterPoints };
@@ -625,28 +626,20 @@ export function fitAllParcels() {
   map.fitBounds([[bounds[0], bounds[1]], [bounds[2], bounds[3]]], { padding: 60, maxZoom: 18, duration: 800 });
 }
 
-const GREEN_SPACE_DE = {
-  "Green space (soil-covered)": "Humusiert",
-  "Green space (wooded)": "Bestockt",
-  "Not green space": "Keine Grünfläche",
-};
-
 function showParcelPopup(lngLat, props) {
-  const fmt = (n) => parseFloat(n) ? parseFloat(n).toLocaleString("de-CH", { maximumFractionDigits: 2 }) : "\u2013";
   popup.setLngLat(lngLat).setHTML(`
     <div class="map-popup">
       <div class="popup-layer">Parzelle</div>
       <div class="popup-title">${esc(props.id)} &middot; ${esc(props.egrid)}</div>
       <div class="popup-sub">Nr. ${esc(props.nummer)}</div>
       <table class="popup-table">
-        <tr><td>Fläche</td><td>${fmt(props.area)} m²</td></tr>
+        <tr><td>Fläche</td><td>${fmtNum(props.area, 2)} m²</td></tr>
       </table>
     </div>
   `).addTo(map);
 }
 
 function showLandcoverPopup(lngLat, props) {
-  const fmt = (n) => parseFloat(n) ? parseFloat(n).toLocaleString("de-CH", { maximumFractionDigits: 2 }) : "\u2013";
   const gs = GREEN_SPACE_DE[props.greenspace] || props.greenspace || "\u2013";
   popup.setLngLat(lngLat).setHTML(`
     <div class="map-popup">
@@ -654,7 +647,7 @@ function showLandcoverPopup(lngLat, props) {
       <div class="popup-title">${esc(props.art_label)}</div>
       <div class="popup-sub">Parzelle: ${esc(props.parcel_id)}</div>
       <table class="popup-table">
-        <tr><td>Fläche</td><td>${fmt(props.area_m2)} m²</td></tr>
+        <tr><td>Fläche</td><td>${fmtNum(props.area_m2, 2)} m²</td></tr>
         <tr><td>Grünfläche</td><td>${gs}</td></tr>
         <tr><td>SIA 416</td><td>${esc(props.sia416)}</td></tr>
       </table>
@@ -676,4 +669,3 @@ export function updateLandcoverColors(colorMap) {
   map.getSource("landcover").setData(currentLandcoverData);
 }
 
-function esc(s) { const d = document.createElement("div"); d.textContent = s || ""; return d.innerHTML; }

@@ -1,7 +1,7 @@
 /**
  * Search bar: local parcel search + swisstopo location search
  */
-import { API } from "./config.js";
+import { API, esc } from "./config.js";
 import { highlightParcel, flyToLocation } from "./map.js";
 import { highlightRow } from "./table.js";
 import { addSwisstopoLayer } from "./swisstopo.js";
@@ -93,46 +93,43 @@ async function performSearch(query) {
     }
   }
 
-  // Swisstopo location search
-  try {
-    const locationResults = await searchSwisstopo(query);
-    if (locationResults.length) {
-      html.push('<div class="search-section-header">Orte</div>');
-      for (const r of locationResults) {
-        const bboxAttr = r.bbox ? `data-bbox='${JSON.stringify(r.bbox)}'` : "";
-        html.push(`
-          <div class="search-item" data-action="location" data-lat="${r.lat}" data-lng="${r.lng}" ${bboxAttr}>
-            <span class="material-symbols-outlined search-item-icon">map</span>
-            <div>
-              <div class="search-item-title">${r.label}</div>
-              <div class="search-item-sub">${esc(r.origin)}</div>
-            </div>
+  // Swisstopo searches (locations + layers) in parallel
+  const [locationRes, layerRes] = await Promise.allSettled([
+    searchSwisstopo(query),
+    searchSwisstopoLayers(query),
+  ]);
+
+  const locationResults = locationRes.status === "fulfilled" ? locationRes.value : [];
+  const layerResults = layerRes.status === "fulfilled" ? layerRes.value : [];
+
+  if (locationResults.length) {
+    html.push('<div class="search-section-header">Orte</div>');
+    for (const r of locationResults) {
+      const bboxAttr = r.bbox ? `data-bbox='${JSON.stringify(r.bbox)}'` : "";
+      html.push(`
+        <div class="search-item" data-action="location" data-lat="${r.lat}" data-lng="${r.lng}" ${bboxAttr}>
+          <span class="material-symbols-outlined search-item-icon">map</span>
+          <div>
+            <div class="search-item-title">${r.label}</div>
+            <div class="search-item-sub">${esc(r.origin)}</div>
           </div>
-        `);
-      }
+        </div>
+      `);
     }
-  } catch (err) {
-    console.warn("Swisstopo search failed:", err);
   }
 
-  // Swisstopo layer search
-  try {
-    const layerResults = await searchSwisstopoLayers(query);
-    if (layerResults.length) {
-      html.push('<div class="search-section-header">Karten</div>');
-      for (const r of layerResults) {
-        html.push(`
-          <div class="search-item" data-action="layer" data-layer-id="${esc(r.id)}" data-title="${esc(r.title)}">
-            <span class="material-symbols-outlined search-item-icon">layers</span>
-            <div>
-              <div class="search-item-title">${esc(r.title)}</div>
-            </div>
+  if (layerResults.length) {
+    html.push('<div class="search-section-header">Karten</div>');
+    for (const r of layerResults) {
+      html.push(`
+        <div class="search-item" data-action="layer" data-layer-id="${esc(r.id)}" data-title="${esc(r.title)}">
+          <span class="material-symbols-outlined search-item-icon">layers</span>
+          <div>
+            <div class="search-item-title">${esc(r.title)}</div>
           </div>
-        `);
-      }
+        </div>
+      `);
     }
-  } catch (err) {
-    console.warn("Layer search failed:", err);
   }
 
   if (html.length === 0) {
@@ -204,8 +201,3 @@ function parseBBox(box2d) {
   return [parseFloat(match[1]), parseFloat(match[2]), parseFloat(match[3]), parseFloat(match[4])];
 }
 
-function esc(s) {
-  const d = document.createElement("div");
-  d.textContent = s || "";
-  return d.innerHTML;
-}

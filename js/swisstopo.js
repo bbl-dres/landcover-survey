@@ -2,6 +2,7 @@
  * Swisstopo external layer management — add/remove/toggle WMTS/WMS layers,
  * Geokatalog tree, restore after basemap change
  */
+import { esc } from "./config.js";
 import { resizeMap } from "./map.js";
 
 /** Active swisstopo layers: [{ id, title, sourceId, mapLayerId, tileUrl, maxZoom, visible }] */
@@ -344,8 +345,3 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 });
 
-function esc(s) {
-  const d = document.createElement("div");
-  d.textContent = s || "";
-  return d.innerHTML;
-}

@@ -15,7 +15,9 @@
   /* Surfaces */
   --color-white: #fff;
   --overlay-bg: rgba(0, 0, 0, 0.4);
+  --overlay-bg-dark: rgba(0, 0, 0, 0.5);
   --accent-panel: #6C757D;
+  --hover-overlay: rgba(0, 0, 0, 0.08);
 
   /* Status */
   --color-good: #22c55e;
@@ -94,6 +96,12 @@
   --icon-lg: 20px;
   --icon-xl: 24px;
 
+  /* Borders */
+  --border-width: 1px;
+  --border-width-thick: 2px;
+  --border-color: var(--gray-200);
+  --border-color-strong: var(--gray-300);
+
   /* Layout */
   --header-height: 60px;
   --footer-height: 36px;
@@ -125,6 +133,7 @@
   --z-sticky: 10;
   --z-dropdown: 100;
   --z-accordion: 500;
+  --z-context-menu: 600;
   --z-overlay: 1000;
   --z-modal: 2000;
 

@@ -1,6 +1,7 @@
 /**
  * File parsing and validation — CSV with ID + EGRID columns
  */
+import { loadScript } from "./config.js";
 
 const REQUIRED_COLUMNS = ["id", "egrid"];
 
@@ -199,12 +200,3 @@ async function parseExcel(file) {
   });
 }
 
-function loadScript(src) {
-  return new Promise((resolve, reject) => {
-    const s = document.createElement("script");
-    s.src = src;
-    s.onload = resolve;
-    s.onerror = reject;
-    document.head.appendChild(s);
-  });
-}

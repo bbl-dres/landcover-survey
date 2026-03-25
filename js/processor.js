@@ -7,7 +7,7 @@
  * - Turf.js clipping runs synchronously per parcel (CPU-bound, fast)
  * - No artificial sleep — only natural network latency paces the requests
  */
-import { API, SLIVER_THRESHOLD, classify } from "./config.js";
+import { API, SLIVER_THRESHOLD, STATUS, classify } from "./config.js";
 
 const CONCURRENCY = 5; // max parallel API requests
 
@@ -45,7 +45,7 @@ export async function processRows(rows, onProgress) {
     // Validation
     if (!egrid || !egrid.startsWith("CH")) {
       return {
-        parcel: makeErrorParcel(id, egrid, row, "Ungültiges EGRID"),
+        parcel: makeErrorParcel(id, egrid, row, STATUS.INVALID),
         landcover: [],
       };
     }
@@ -56,7 +56,7 @@ export async function processRows(rows, onProgress) {
 
       if (!parcelResult) {
         return {
-          parcel: makeErrorParcel(id, egrid, row, "EGRID nicht gefunden"),
+          parcel: makeErrorParcel(id, egrid, row, STATUS.NOT_FOUND),
           landcover: [],
         };
       }
@@ -80,7 +80,7 @@ export async function processRows(rows, onProgress) {
         egrid,
         nummer: parcelResult.properties.number || "",
         bfsnr: parcelResult.properties.bfsnr || "",
-        check_egrid: "EGRID gefunden",
+        check_egrid: STATUS.FOUND,
         flaeche: parcelResult.properties.area || "",
         parcel_area_m2: round2(parcelArea),
         ...agg,
@@ -113,7 +113,7 @@ export async function processRows(rows, onProgress) {
       const result = await processOne(row, index);
       results[index] = result;
       completed++;
-      if (result && result.parcel.check_egrid === "EGRID gefunden") succeeded++;
+      if (result && result.parcel.check_egrid === STATUS.FOUND) succeeded++;
       reportProgress();
     }
   };

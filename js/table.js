@@ -2,8 +2,8 @@
  * Table widget with tabs (Parcels / Land Covers), toolbar with search,
  * sortable headers, pagination, column visibility dropdown, resize handle
  */
-import { ART_LABELS } from "./config.js";
-import { highlightParcel, resizeMap } from "./map.js";
+import { ART_LABELS, STATUS, esc, fmtNum } from "./config.js";
+import { resizeMap } from "./map.js";
 
 /* ── State ── */
 
@@ -65,11 +65,12 @@ export function initTable(el, { onParcelSelect, onLandcoverSelect } = {}) {
 }
 
 export function populateTable(parcels, landcover) {
-  parcelsData = parcels || [];
-  landcoverData = (landcover || []).map((lc) => ({
-    ...lc,
-    art_label: ART_LABELS[lc.art] || lc.art,
-  }));
+  parcelsData = (parcels || []).map((p, i) => { p._idx = i; return p; });
+  landcoverData = (landcover || []).map((lc, i) => {
+    lc._idx = i;
+    lc.art_label = ART_LABELS[lc.art] || lc.art;
+    return lc;
+  });
   pPage = 1;
   lcPage = 1;
   pSearch = "";
@@ -354,8 +355,8 @@ function renderParcels() {
     </td></tr>`;
   } else {
     body.innerHTML = page.map((row) => {
-      const idx = parcelsData.indexOf(row);
-      const errCls = row.check_egrid === "EGRID gefunden" ? "" : "row-error";
+      const idx = row._idx;
+      const errCls = row.check_egrid === STATUS.FOUND ? "" : "row-error";
       return `<tr data-index="${idx}" class="${errCls}" tabindex="0">
         ${PARCEL_COLS.map((c) => `<td class="${c.cls} ${c.numeric ? 'num' : ''}">${fmtCell(row[c.key], c.numeric)}</td>`).join("")}
       </tr>`;
@@ -419,7 +420,7 @@ function renderLandcover() {
     </td></tr>`;
   } else {
     body.innerHTML = page.map((row) => {
-      const lcIdx = landcoverData.indexOf(row);
+      const lcIdx = row._idx;
       return `<tr data-lc-index="${lcIdx}" tabindex="0">
         ${LC_COLS.map((c) => `<td class="${c.cls} ${c.numeric ? 'num' : ''}">${fmtCell(row[c.key], c.numeric)}</td>`).join("")}
       </tr>`;
@@ -523,15 +524,6 @@ function initResizeHandle() {
 
 function fmtCell(val, numeric) {
   if (val === null || val === undefined || val === "") return "\u2013";
-  if (numeric) {
-    const n = parseFloat(val);
-    return isNaN(n) ? esc(String(val)) : n.toLocaleString("de-CH", { maximumFractionDigits: 2 });
-  }
+  if (numeric) return fmtNum(val, 2);
   return esc(String(val));
-}
-
-function esc(s) {
-  const d = document.createElement("div");
-  d.textContent = s;
-  return d.innerHTML;
 }

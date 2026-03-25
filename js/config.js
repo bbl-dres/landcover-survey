@@ -102,6 +102,44 @@ export function classify(art) {
   };
 }
 
+/** Status constants (used across modules) */
+export const STATUS = {
+  FOUND: "EGRID gefunden",
+  NOT_FOUND: "EGRID nicht gefunden",
+  INVALID: "Ungültiges EGRID",
+};
+
+/** Green space German labels */
+export const GREEN_SPACE_DE = {
+  "Green space (soil-covered)": "Humusiert",
+  "Green space (wooded)": "Bestockt",
+  "Not green space": "Keine Grünfläche",
+};
+
+/** Shared HTML escape utility */
+const _escDiv = document.createElement("div");
+export function esc(s) {
+  _escDiv.textContent = s || "";
+  return _escDiv.innerHTML;
+}
+
+/** Shared number formatter (de-CH locale) */
+export function fmtNum(n, decimals = 1) {
+  const v = parseFloat(n);
+  return isNaN(v) ? "\u2013" : v.toLocaleString("de-CH", { maximumFractionDigits: decimals });
+}
+
+/** Shared dynamic script loader */
+export function loadScript(src) {
+  return new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = src;
+    s.onload = resolve;
+    s.onerror = reject;
+    document.head.appendChild(s);
+  });
+}
+
 /** API endpoints */
 export const API = {
   PARCEL_FIND: "https://api3.geo.admin.ch/rest/services/all/MapServer/find",
