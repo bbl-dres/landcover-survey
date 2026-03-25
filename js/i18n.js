@@ -140,6 +140,7 @@ const translations = {
     "download.geojson.desc": "Parzellen-Polygone mit Attributen",
 
     // Footer
+    "footer.manual": "Anleitung",
     "footer.source": "Quellcode",
     "footer.legal": "Rechtliches",
     "footer.contact": "Kontakt",
@@ -350,6 +351,7 @@ const translations = {
     "download.xlsx.desc": "Parcelles + couverture du sol dans un classeur",
     "download.geojson": "GeoJSON",
     "download.geojson.desc": "Polygones de parcelles avec attributs",
+    "footer.manual": "Guide",
     "footer.source": "Code source",
     "footer.legal": "Informations juridiques",
     "footer.contact": "Contact",
@@ -536,6 +538,7 @@ const translations = {
     "download.xlsx.desc": "Parcelle + copertura del suolo in una cartella di lavoro",
     "download.geojson": "GeoJSON",
     "download.geojson.desc": "Poligoni di parcelle con attributi",
+    "footer.manual": "Guida",
     "footer.source": "Codice sorgente",
     "footer.legal": "Basi legali",
     "footer.contact": "Contatto",
@@ -722,6 +725,7 @@ const translations = {
     "download.xlsx.desc": "Parcels + land cover in one spreadsheet",
     "download.geojson": "GeoJSON",
     "download.geojson.desc": "Parcel polygons with attributes",
+    "footer.manual": "Guide",
     "footer.source": "Source code",
     "footer.legal": "Legal",
     "footer.contact": "Contact",
