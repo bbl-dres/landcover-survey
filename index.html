@@ -129,48 +129,121 @@
     <section id="state-results" class="app-state" aria-label="Ergebnisse" hidden>
       <div class="results-container">
 
-        <!-- Left accordion panel -->
-        <aside id="left-panel" class="left-panel">
-          <div class="left-panel-header">
-            <h3>Ergebnisse</h3>
-          </div>
-          <div class="left-panel-body" id="panel-content"></div>
-        </aside>
-        <button id="panel-toggle" class="panel-toggle" title="Panel ein-/ausblenden">
-          <span class="material-symbols-outlined">chevron_right</span>
-        </button>
-
         <!-- Main: map + table -->
         <div class="results-main">
           <div id="map-panel" class="map-panel">
             <div id="results-map"></div>
 
+            <!-- Accordion tools menu (top-left overlay on map) -->
+            <div id="accordion-wrapper">
+              <aside id="accordion-panel">
+                <div class="accordion-item" id="draw-accordion">
+                  <button class="accordion-header" aria-expanded="false">
+                    <span class="accordion-arrow"><span class="material-symbols-outlined">chevron_right</span></span>
+                    <span>Zeichnen &amp; Messen auf der Karte</span>
+                  </button>
+                  <div class="accordion-content">
+                    <p class="accordion-desc">Zeichnen Sie Punkte, Linien und Polygone direkt auf der Karte. Distanzen und Flächen werden automatisch berechnet.</p>
+                    <div class="draw-tools">
+                      <button class="draw-tool-btn" data-tool="point" title="Punkt"><span class="material-symbols-outlined">location_on</span></button>
+                      <button class="draw-tool-btn" data-tool="line" title="Linie"><span class="material-symbols-outlined">timeline</span></button>
+                      <button class="draw-tool-btn" data-tool="polygon" title="Polygon"><span class="material-symbols-outlined">pentagon</span></button>
+                      <button class="draw-tool-btn" data-tool="delete" title="Löschen"><span class="material-symbols-outlined">delete</span></button>
+                    </div>
+                  </div>
+                </div>
+                <div class="accordion-item" id="geokatalog-accordion">
+                  <button class="accordion-header" aria-expanded="false">
+                    <span class="accordion-arrow"><span class="material-symbols-outlined">chevron_right</span></span>
+                    <span>Geokatalog</span>
+                  </button>
+                  <div class="accordion-content">
+                    <div class="geokatalog-search">
+                      <span class="material-symbols-outlined">search</span>
+                      <input type="text" id="geokatalog-search-input" placeholder="Karte suchen..." autocomplete="off">
+                    </div>
+                    <div id="geokatalog-results">
+                      <p class="geokatalog-empty">Suchen Sie nach swisstopo Karten um sie als Overlay hinzuzufügen.</p>
+                    </div>
+                  </div>
+                </div>
+                <div class="accordion-item" id="active-layers-accordion">
+                  <button class="accordion-header active" aria-expanded="true">
+                    <span class="accordion-arrow"><span class="material-symbols-outlined">chevron_right</span></span>
+                    <span>Dargestellte Karten</span>
+                  </button>
+                  <div class="accordion-content show">
+                    <div class="layer-group">
+                      <div class="layer-group-label">Interne Karten</div>
+                      <div class="active-layer-item">
+                        <input type="checkbox" class="active-layer-checkbox" checked id="layer-toggle-parcels">
+                        <span class="active-layer-title">Parzellen</span>
+                      </div>
+                      <div class="active-layer-item">
+                        <input type="checkbox" class="active-layer-checkbox" checked id="layer-toggle-landcover">
+                        <span class="active-layer-title">Bodenbedeckung</span>
+                      </div>
+                      <div class="active-layer-item">
+                        <input type="checkbox" class="active-layer-checkbox" checked id="layer-toggle-labels">
+                        <span class="active-layer-title">Beschriftungen</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </aside>
+              <div id="menu-toggle">
+                <span class="material-symbols-outlined">expand_less</span>
+                <span id="menu-toggle-text">Menü schliessen</span>
+              </div>
+            </div>
+
+            <!-- Right-click context menu -->
+            <div id="map-context-menu" class="map-context-menu">
+              <div class="context-menu-item context-menu-coords" id="ctx-copy-coords" title="Klicken zum Kopieren">
+                <span class="material-symbols-outlined">content_copy</span>
+                <span id="ctx-coords-text">47.37623, 8.53048</span>
+              </div>
+              <div class="context-menu-item" id="ctx-share">
+                <span class="material-symbols-outlined">share</span>
+                <span>Teilen</span>
+              </div>
+              <div class="context-menu-item" id="ctx-report">
+                <span class="material-symbols-outlined">bug_report</span>
+                <span>Problem melden</span>
+              </div>
+            </div>
+
             <!-- Basemap selector (bottom-right of map) -->
             <div class="style-switcher" id="style-switcher">
               <div class="style-switcher-panel" id="style-panel">
                 <button class="style-option active" data-style="positron" title="Hell">
-                  <img id="thumb-positron" src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" alt="Hell">
+                  <img id="thumb-positron" src="https://basemaps.cartocdn.com/light_all/8/134/91.png" alt="Hell">
                   <span>Hell</span>
                 </button>
                 <button class="style-option" data-style="voyager" title="Standard">
-                  <img id="thumb-voyager" src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" alt="Standard">
+                  <img id="thumb-voyager" src="https://basemaps.cartocdn.com/rastertiles/voyager/8/134/91.png" alt="Standard">
                   <span>Standard</span>
                 </button>
                 <button class="style-option" data-style="swissimage" title="Luftbild">
-                  <img id="thumb-swissimage" src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" alt="Luftbild">
+                  <img id="thumb-swissimage" src="https://wmts.geo.admin.ch/1.0.0/ch.swisstopo.swissimage/default/current/3857/8/134/91.jpeg" alt="Luftbild">
                   <span>Luftbild</span>
                 </button>
                 <button class="style-option" data-style="dark-matter" title="Dunkel">
-                  <img id="thumb-dark-matter" src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" alt="Dunkel">
+                  <img id="thumb-dark-matter" src="https://basemaps.cartocdn.com/dark_all/8/134/91.png" alt="Dunkel">
                   <span>Dunkel</span>
                 </button>
               </div>
               <button class="style-switcher-btn" id="style-switcher-btn" title="Hintergrund wechseln">
-                <img id="current-style-thumb" src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" alt="">
+                <img id="current-style-thumb" src="https://basemaps.cartocdn.com/light_all/8/134/91.png" alt="">
                 <span>Hintergrund</span>
               </button>
             </div>
 
+            <!-- Table toggle button -->
+            <button id="tbl-toggle" class="tbl-toggle" title="Tabelle ein-/ausblenden">
+              <span class="material-symbols-outlined">expand_more</span>
+              <span class="tbl-toggle-label">Tabelle</span>
+            </button>
           </div>
           <div class="table-panel" id="results-table-container"></div>
         </div>
@@ -181,7 +254,6 @@
             <h3>Zusammenfassung</h3>
             <button id="sp-close" class="close-btn" aria-label="Zusammenfassung schliessen">&times;</button>
           </div>
-          <div class="sp-meta" id="sp-meta"></div>
           <div class="sp-body" id="sp-body"></div>
         </aside>
       </div>

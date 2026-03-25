@@ -3,12 +3,11 @@
  */
 import { initUpload } from "./upload.js";
 import { processRows, cancelProcessing } from "./processor.js";
-import { initMap, plotResults, highlightParcel, resizeMap, onSummaryToggle, setSummaryToggleVisible } from "./map.js";
-import { initTable, populateTable, highlightRow } from "./table.js";
+import { initMap, plotResults, highlightParcel, highlightLandcover, resizeMap, onSummaryToggle, setSummaryToggleVisible, updateLandcoverColors } from "./map.js";
+import { initTable, populateTable, highlightRow, highlightLcRow } from "./table.js";
 import { downloadParcelCSV, downloadLandcoverCSV, downloadXLSX, downloadGeoJSON } from "./export.js";
 import { initSearch, setSearchData } from "./search.js";
-import { initPanel, populatePanel } from "./panel.js";
-import { ART_LABELS, CATEGORY_COLORS } from "./config.js";
+import { ART_LABELS, ART_COLORS, CATEGORY_COLORS, SIA416, DIN277, GREEN_SPACE, SEALED } from "./config.js";
 
 let processedResults = null;
 let currentFilename = "";
@@ -16,10 +15,19 @@ let currentFilename = "";
 document.addEventListener("DOMContentLoaded", () => {
   initUpload(onStartProcessing);
   initSearch();
-  initPanel();
 
   // Cancel
   document.getElementById("btn-cancel").addEventListener("click", () => cancelProcessing());
+
+  // Table toggle
+  document.getElementById("tbl-toggle").addEventListener("click", () => {
+    const panel = document.getElementById("results-table-container");
+    const btn = document.getElementById("tbl-toggle");
+    const collapsed = !panel.classList.contains("collapsed");
+    panel.classList.toggle("collapsed", collapsed);
+    btn.classList.toggle("collapsed", collapsed);
+    setTimeout(() => resizeMap(), 280);
+  });
 
   // Reset
   function resetToUpload() {
@@ -141,76 +149,231 @@ function updateProgress(progress, startTime) {
   document.getElementById("progress-stats").textContent = `Gefunden: ${succeeded} · Fehler: ${failed}`;
 }
 
+/* ── Aggregation modes for Flächenanalyse ── */
+
+const AGGREGATION_MODES = {
+  landcover: {
+    label: "Bodenbedeckung",
+    getEntries(lc) {
+      const map = {};
+      for (const f of lc) {
+        const key = f.art;
+        map[key] = (map[key] || 0) + f.area_m2;
+      }
+      return Object.entries(map)
+        .map(([k, v]) => ({ label: ART_LABELS[k] || k, area: v, color: ART_COLORS[k] || "#888", key: k }))
+        .sort((a, b) => b.area - a.area);
+    },
+    colorFn(props) { return ART_COLORS[props.art] || "#888"; },
+  },
+  sia416: {
+    label: "SIA 416",
+    getEntries(lc) {
+      const map = { GGF: 0, BUF: 0, UUF: 0 };
+      for (const f of lc) { const cls = SIA416[f.art] || "UUF"; map[cls] += f.area_m2; }
+      return [
+        { label: "GGF (Gebäude)", area: map.GGF, color: CATEGORY_COLORS.GGF, key: "GGF" },
+        { label: "BUF (Bearbeitet)", area: map.BUF, color: CATEGORY_COLORS.BUF, key: "BUF" },
+        { label: "UUF (Unbearbeitet)", area: map.UUF, color: CATEGORY_COLORS.UUF, key: "UUF" },
+      ];
+    },
+    colorFn(props) {
+      const cls = SIA416[props.art] || "UUF";
+      return CATEGORY_COLORS[cls] || "#888";
+    },
+  },
+  din277: {
+    label: "DIN 277",
+    getEntries(lc) {
+      const map = { BF: 0, UF: 0 };
+      for (const f of lc) { const cls = DIN277[f.art] || "UF"; map[cls] += f.area_m2; }
+      return [
+        { label: "BF (Bebaute Fläche)", area: map.BF, color: "#c0392b", key: "BF" },
+        { label: "UF (Unbebaute Fläche)", area: map.UF, color: "#2980b9", key: "UF" },
+      ];
+    },
+    colorFn(props) { return (DIN277[props.art] || "UF") === "BF" ? "#c0392b" : "#2980b9"; },
+  },
+  greenspace: {
+    label: "Grünfläche",
+    getEntries(lc) {
+      const map = { "soil": 0, "wooded": 0, "none": 0 };
+      for (const f of lc) {
+        const gs = GREEN_SPACE[f.art];
+        if (gs === "Green space (soil-covered)") map.soil += f.area_m2;
+        else if (gs === "Green space (wooded)") map.wooded += f.area_m2;
+        else map.none += f.area_m2;
+      }
+      return [
+        { label: "Grünfläche (humusiert)", area: map.soil, color: "#27ae60", key: "soil" },
+        { label: "Grünfläche (bestockt)", area: map.wooded, color: "#1e8449", key: "wooded" },
+        { label: "Keine Grünfläche", area: map.none, color: "#95a5a6", key: "none" },
+      ];
+    },
+    colorFn(props) {
+      const gs = GREEN_SPACE[props.art];
+      if (gs === "Green space (soil-covered)") return "#27ae60";
+      if (gs === "Green space (wooded)") return "#1e8449";
+      return "#95a5a6";
+    },
+  },
+  sealed: {
+    label: "Versiegelung",
+    getEntries(lc) {
+      let sealed = 0, unsealed = 0;
+      for (const f of lc) { if (SEALED.has(f.art)) sealed += f.area_m2; else unsealed += f.area_m2; }
+      return [
+        { label: "Versiegelt", area: sealed, color: "#c0392b", key: "sealed" },
+        { label: "Unversiegelt", area: unsealed, color: "#27ae60", key: "unsealed" },
+      ];
+    },
+    colorFn(props) { return SEALED.has(props.art) ? "#c0392b" : "#27ae60"; },
+  },
+};
+
+let currentAggMode = "landcover";
+
 function updateSummaryPanel() {
   if (!processedResults) return;
   const parcels = processedResults.parcels;
+  const landcover = processedResults.landcover;
   const total = parcels.length;
   const found = parcels.filter((r) => r.check_egrid === "EGRID gefunden").length;
   const notFound = total - found;
 
-  let totalArea = 0, totalGGF = 0, totalBUF = 0, totalUUF = 0, totalSealed = 0, totalGreen = 0;
+  let totalSealed = 0, totalGreen = 0;
   for (const p of parcels) {
-    totalArea += parseFloat(p.parcel_area_m2) || 0;
-    totalGGF += parseFloat(p.GGF_m2) || 0;
-    totalBUF += parseFloat(p.BUF_m2) || 0;
-    totalUUF += parseFloat(p.UUF_m2) || 0;
     totalSealed += parseFloat(p.Sealed_m2) || 0;
     totalGreen += parseFloat(p.GreenSpace_m2) || 0;
   }
 
-  const fmt = (n) => n.toLocaleString("de-CH", { maximumFractionDigits: 1 });
-  const pctOf = (part) => totalArea > 0 ? ((part / totalArea) * 100).toFixed(1) : "0";
-
-  const donutRadius = 54, donutStroke = 10;
-  const donutCirc = 2 * Math.PI * donutRadius;
-  const ggfArc = (totalArea > 0 ? totalGGF / totalArea : 0) * donutCirc;
-  const bufArc = (totalArea > 0 ? totalBUF / totalArea : 0) * donutCirc;
-  const uufArc = (totalArea > 0 ? totalUUF / totalArea : 0) * donutCirc;
-  const ggfOffset = donutCirc * 0.25;
-  const bufOffset = ggfOffset - ggfArc;
-  const uufOffset = bufOffset - bufArc;
-
-  // File meta in summary panel
   const now = new Date();
-  document.getElementById("sp-meta").innerHTML = `
-    <div class="sp-meta-row">
-      <span class="sp-meta-filename">${escHtml(currentFilename)}</span>
-      <span class="sp-meta-sep">&middot;</span>
-      <span>${now.toLocaleDateString("de-CH", { dateStyle: "medium" })}, ${now.toLocaleTimeString("de-CH", { timeStyle: "short" })}</span>
+  const fmt = (n) => n.toLocaleString("de-CH", { maximumFractionDigits: 1 });
+
+  // Build dropdown options
+  const modeOptions = Object.entries(AGGREGATION_MODES).map(([k, v]) =>
+    `<option value="${k}" ${k === currentAggMode ? "selected" : ""}>${escHtml(v.label)}</option>`
+  ).join("");
+
+  document.getElementById("sp-body").innerHTML = `
+    <!-- Section 1: Übersicht -->
+    <div class="sp-collapse-section open" data-sp-section="overview">
+      <div class="sp-collapse-header">
+        <span class="material-symbols-outlined sp-collapse-arrow">expand_more</span>
+        <span>Übersicht</span>
+      </div>
+      <div class="sp-collapse-content">
+        <div class="sp-meta-row">
+          <span class="sp-meta-filename">${escHtml(currentFilename)}</span>
+          <span class="sp-meta-sep">&middot;</span>
+          <span>${now.toLocaleDateString("de-CH", { dateStyle: "medium" })}, ${now.toLocaleTimeString("de-CH", { timeStyle: "short" })}</span>
+        </div>
+        <div class="sp-kpi-grid" style="margin-top:var(--space-3)">
+          <div class="sp-kpi"><div class="sp-kpi-value sp-color-good">${found}</div><div class="sp-kpi-label">Gefunden</div></div>
+          <div class="sp-kpi"><div class="sp-kpi-value sp-color-poor">${notFound}</div><div class="sp-kpi-label">Nicht gefunden</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 2: Flächenanalyse -->
+    <div class="sp-collapse-section open" data-sp-section="area">
+      <div class="sp-collapse-header">
+        <span class="material-symbols-outlined sp-collapse-arrow">expand_more</span>
+        <span>Flächenanalyse</span>
+        <select id="sp-agg-mode" class="sp-agg-select">${modeOptions}</select>
+      </div>
+      <div class="sp-collapse-content">
+        <div id="sp-donut-container"></div>
+        <div id="sp-legend-container"></div>
+      </div>
+    </div>
+
+    <!-- Section 3: Weitere Kennzahlen -->
+    <div class="sp-collapse-section open" data-sp-section="extra">
+      <div class="sp-collapse-header">
+        <span class="material-symbols-outlined sp-collapse-arrow">expand_more</span>
+        <span>Weitere Kennzahlen</span>
+      </div>
+      <div class="sp-collapse-content">
+        <div class="sp-kpi-grid">
+          <div class="sp-kpi"><div class="sp-kpi-value">${fmt(totalSealed)}</div><div class="sp-kpi-label">Versiegelt m²</div></div>
+          <div class="sp-kpi"><div class="sp-kpi-value">${fmt(totalGreen)}</div><div class="sp-kpi-label">Grünfläche m²</div></div>
+        </div>
+      </div>
     </div>
   `;
 
-  document.getElementById("sp-body").innerHTML = `
+  // Section collapse toggles
+  document.querySelectorAll(".sp-collapse-header").forEach((header) => {
+    header.addEventListener("click", (e) => {
+      if (e.target.closest(".sp-agg-select")) return; // don't toggle when clicking dropdown
+      header.parentElement.classList.toggle("open");
+    });
+  });
+
+  // Aggregation dropdown
+  document.getElementById("sp-agg-mode")?.addEventListener("change", (e) => {
+    currentAggMode = e.target.value;
+    renderDonutAndLegend();
+    applyAggColorsToMap();
+  });
+
+  renderDonutAndLegend();
+}
+
+function renderDonutAndLegend() {
+  const landcover = processedResults.landcover;
+  const mode = AGGREGATION_MODES[currentAggMode];
+  const entries = mode.getEntries(landcover);
+  const totalArea = entries.reduce((s, e) => s + e.area, 0);
+
+  const fmt = (n) => n.toLocaleString("de-CH", { maximumFractionDigits: 1 });
+  const pctOf = (part) => totalArea > 0 ? ((part / totalArea) * 100).toFixed(1) : "0";
+
+  // Donut SVG
+  const R = 54, SW = 10;
+  const C = 2 * Math.PI * R;
+  let offset = C * 0.25;
+  let arcs = "";
+  for (const e of entries) {
+    const arc = totalArea > 0 ? (e.area / totalArea) * C : 0;
+    if (arc > 0.01) {
+      arcs += `<circle cx="64" cy="64" r="${R}" fill="none" stroke="${e.color}" stroke-width="${SW}" stroke-dasharray="${arc} ${C - arc}" stroke-dashoffset="${offset}" />`;
+    }
+    offset -= arc;
+  }
+
+  document.getElementById("sp-donut-container").innerHTML = `
     <div class="sp-donut-wrap">
       <svg class="sp-donut" viewBox="0 0 128 128">
-        <circle cx="64" cy="64" r="${donutRadius}" fill="none" stroke="var(--gray-200)" stroke-width="${donutStroke}" />
-        <circle cx="64" cy="64" r="${donutRadius}" fill="none" stroke="${CATEGORY_COLORS.GGF}" stroke-width="${donutStroke}" stroke-dasharray="${ggfArc} ${donutCirc - ggfArc}" stroke-dashoffset="${ggfOffset}" />
-        <circle cx="64" cy="64" r="${donutRadius}" fill="none" stroke="${CATEGORY_COLORS.BUF}" stroke-width="${donutStroke}" stroke-dasharray="${bufArc} ${donutCirc - bufArc}" stroke-dashoffset="${bufOffset}" />
-        <circle cx="64" cy="64" r="${donutRadius}" fill="none" stroke="${CATEGORY_COLORS.UUF}" stroke-width="${donutStroke}" stroke-dasharray="${uufArc} ${donutCirc - uufArc}" stroke-dashoffset="${uufOffset}" />
+        <circle cx="64" cy="64" r="${R}" fill="none" stroke="var(--gray-200)" stroke-width="${SW}" />
+        ${arcs}
       </svg>
       <div class="sp-donut-text">
         <div class="sp-donut-value">${fmt(totalArea)}</div>
         <div class="sp-donut-label">m² Total</div>
       </div>
     </div>
-    <div class="sp-divider"></div>
-    <div class="sp-section">
-      <div class="sp-section-header"><span class="sp-section-title">SIA 416 Aufteilung</span><span class="sp-section-count">${total} Parzellen</span></div>
-      <div class="sp-dist-row"><span class="sp-dist-dot" style="background:${CATEGORY_COLORS.GGF}"></span><span class="sp-dist-label">GGF (Gebäude)</span><span class="sp-dist-val">${fmt(totalGGF)} m² (${pctOf(totalGGF)}%)</span></div>
-      <div class="sp-dist-row"><span class="sp-dist-dot" style="background:${CATEGORY_COLORS.BUF}"></span><span class="sp-dist-label">BUF (Bearbeitet)</span><span class="sp-dist-val">${fmt(totalBUF)} m² (${pctOf(totalBUF)}%)</span></div>
-      <div class="sp-dist-row"><span class="sp-dist-dot" style="background:${CATEGORY_COLORS.UUF}"></span><span class="sp-dist-label">UUF (Unbearbeitet)</span><span class="sp-dist-val">${fmt(totalUUF)} m² (${pctOf(totalUUF)}%)</span></div>
-    </div>
-    <div class="sp-divider"></div>
-    <div class="sp-section">
-      <div class="sp-section-title">Weitere Kennzahlen</div>
-      <div class="sp-kpi-grid">
-        <div class="sp-kpi"><div class="sp-kpi-value">${fmt(totalSealed)}</div><div class="sp-kpi-label">Versiegelt m²</div></div>
-        <div class="sp-kpi"><div class="sp-kpi-value">${fmt(totalGreen)}</div><div class="sp-kpi-label">Grünfläche m²</div></div>
-        <div class="sp-kpi"><div class="sp-kpi-value sp-color-good">${found}</div><div class="sp-kpi-label">Gefunden</div></div>
-        <div class="sp-kpi"><div class="sp-kpi-value sp-color-poor">${notFound}</div><div class="sp-kpi-label">Nicht gefunden</div></div>
-      </div>
-    </div>
   `;
+
+  // Legend
+  const legendHtml = entries
+    .filter((e) => e.area > 0)
+    .map((e) => `
+      <div class="sp-legend-row">
+        <span class="sp-dist-dot" style="background:${e.color}"></span>
+        <span class="sp-legend-label">${escHtml(e.label)}</span>
+        <span class="sp-legend-val">${fmt(e.area)} m²</span>
+        <span class="sp-legend-pct">${pctOf(e.area)}%</span>
+      </div>
+    `).join("");
+
+  document.getElementById("sp-legend-container").innerHTML = legendHtml;
+}
+
+function applyAggColorsToMap() {
+  const mode = AGGREGATION_MODES[currentAggMode];
+  updateLandcoverColors(mode.colorFn);
 }
 
 function showResults() {
@@ -220,7 +383,10 @@ function showResults() {
   document.getElementById("summary-panel").classList.remove("collapsed");
   setSummaryToggleVisible(false);
 
-  initTable(document.getElementById("results-table-container"), (index) => highlightParcel(index));
+  initTable(document.getElementById("results-table-container"), {
+    onParcelSelect: (index) => highlightParcel(index),
+    onLandcoverSelect: (lcIndex) => highlightLandcover(lcIndex),
+  });
   populateTable(processedResults.parcels, processedResults.landcover);
 
   // Show search bar + header buttons
@@ -229,12 +395,13 @@ function showResults() {
   document.getElementById("btn-new").hidden = false;
   setSearchData(processedResults.parcels);
 
-  // Populate left panel
-  populatePanel(processedResults);
-
   requestAnimationFrame(async () => {
-    await initMap("results-map", (index) => highlightRow(index));
+    await initMap("results-map", {
+      onParcelSelect: (index) => highlightRow(index),
+      onLandcoverSelect: (lcIndex) => highlightLcRow(lcIndex),
+    });
     plotResults(processedResults);
+    applyAggColorsToMap();
   });
 }
 

@@ -10,7 +10,8 @@ import { highlightParcel, resizeMap } from "./map.js";
 let parcelsData = [];
 let landcoverData = [];
 let activeTab = "parcels";
-let onRowClick = null;
+let onParcelRowClick = null;
+let onLcRowClick = null;
 let container = null;
 
 // Parcel tab state
@@ -57,9 +58,10 @@ const LC_COLS = [
 
 /* ── Init ── */
 
-export function initTable(el, clickCallback) {
+export function initTable(el, { onParcelSelect, onLandcoverSelect } = {}) {
   container = el;
-  onRowClick = clickCallback;
+  onParcelRowClick = onParcelSelect || null;
+  onLcRowClick = onLandcoverSelect || null;
 }
 
 export function populateTable(parcels, landcover) {
@@ -78,14 +80,46 @@ export function populateTable(parcels, landcover) {
   initResizeHandle();
 }
 
+/** Highlight a parcel row (called from map click). Switches to parcels tab if needed. */
 export function highlightRow(index) {
   if (!container) return;
-  container.querySelectorAll("tr.row-active").forEach((r) => r.classList.remove("row-active"));
+  switchToTab("parcels");
+  clearAllActiveRows();
   const row = container.querySelector(`tr[data-index="${index}"]`);
   if (row) {
     row.classList.add("row-active");
     row.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }
+}
+
+/** Highlight a landcover row (called from map click). Switches to landcover tab if needed. */
+export function highlightLcRow(lcIndex) {
+  if (!container) return;
+  switchToTab("landcover");
+  clearAllActiveRows();
+  const row = container.querySelector(`tr[data-lc-index="${lcIndex}"]`);
+  if (row) {
+    row.classList.add("row-active");
+    row.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }
+}
+
+function clearAllActiveRows() {
+  if (!container) return;
+  container.querySelectorAll("tr.row-active").forEach((r) => r.classList.remove("row-active"));
+}
+
+function switchToTab(tabName) {
+  if (!container || activeTab === tabName) return;
+  activeTab = tabName;
+  container.querySelectorAll(".table-tab").forEach((t) => {
+    t.classList.toggle("active", t.dataset.tab === activeTab);
+    t.setAttribute("aria-selected", t.dataset.tab === activeTab);
+  });
+  container.querySelector("#tab-parcels")?.classList.toggle("active", activeTab === "parcels");
+  container.querySelector("#tab-landcover")?.classList.toggle("active", activeTab === "landcover");
+  updateColumnsDropdown();
+  renderActiveTab();
 }
 
 /* ── Shell (toolbar + tab content containers) ── */
@@ -331,9 +365,9 @@ function renderParcels() {
   body.querySelectorAll("tr[data-index]").forEach((tr) => {
     tr.addEventListener("click", () => {
       const idx = parseInt(tr.dataset.index, 10);
-      body.querySelectorAll("tr.row-active").forEach((r) => r.classList.remove("row-active"));
+      clearAllActiveRows();
       tr.classList.add("row-active");
-      if (onRowClick) onRowClick(idx);
+      if (onParcelRowClick) onParcelRowClick(idx);
     });
     tr.addEventListener("keydown", (e) => {
       if (e.key === "Enter" || e.key === " ") { e.preventDefault(); tr.click(); }
@@ -384,10 +418,26 @@ function renderLandcover() {
       <span class="material-symbols-outlined">search_off</span> Keine Ergebnisse
     </td></tr>`;
   } else {
-    body.innerHTML = page.map((row) =>
-      `<tr>${LC_COLS.map((c) => `<td class="${c.cls} ${c.numeric ? 'num' : ''}">${fmtCell(row[c.key], c.numeric)}</td>`).join("")}</tr>`
-    ).join("");
+    body.innerHTML = page.map((row) => {
+      const lcIdx = landcoverData.indexOf(row);
+      return `<tr data-lc-index="${lcIdx}" tabindex="0">
+        ${LC_COLS.map((c) => `<td class="${c.cls} ${c.numeric ? 'num' : ''}">${fmtCell(row[c.key], c.numeric)}</td>`).join("")}
+      </tr>`;
+    }).join("");
   }
+
+  // LC row click handlers
+  body.querySelectorAll("tr[data-lc-index]").forEach((tr) => {
+    tr.addEventListener("click", () => {
+      const idx = parseInt(tr.dataset.lcIndex, 10);
+      clearAllActiveRows();
+      tr.classList.add("row-active");
+      if (onLcRowClick) onLcRowClick(idx);
+    });
+    tr.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); tr.click(); }
+    });
+  });
 
   renderPagination("lc-pagination", lcPage, totalPages, total, lcPageSize, "Bodenbedeckungen",
     (p) => { lcPage = p; renderLandcover(); },

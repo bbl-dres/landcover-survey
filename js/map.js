@@ -6,7 +6,8 @@ import { ART_COLORS, CATEGORY_COLORS, ART_LABELS, MAP_STYLES, MAP_DEFAULT } from
 
 let map = null;
 let popup = null;
-let onFeatureClick = null;
+let onParcelClick = null;
+let onLandcoverClick = null;
 let summaryToggleCallback = null;
 let summaryToggleControl = null;
 let currentStyle = "positron";
@@ -60,12 +61,74 @@ function toggle3D() {
   is3D = !is3D;
   if (is3D) {
     map.flyTo({ pitch: 60, bearing: -20, duration: 800, center: map.getCenter(), zoom: map.getZoom() });
+    show3DBuildings();
   } else {
     map.flyTo({ pitch: 0, bearing: 0, duration: 800, center: map.getCenter(), zoom: map.getZoom() });
+    hide3DBuildings();
   }
   if (toggle3DBtn) {
     toggle3DBtn.textContent = is3D ? "2D" : "3D";
     toggle3DBtn.classList.toggle("active", is3D);
+  }
+}
+
+function show3DBuildings() {
+  if (!map) return;
+
+  // Already added — just show
+  if (map.getLayer("3d-buildings")) {
+    map.setLayoutProperty("3d-buildings", "visibility", "visible");
+    return;
+  }
+
+  // Find vector tile source from basemap
+  const sources = map.getStyle().sources;
+  let vectorSourceId = null;
+  for (const key in sources) {
+    if (sources[key].type === "vector") { vectorSourceId = key; break; }
+  }
+  if (!vectorSourceId) return;
+
+  // Hide basemap's own building layers to prevent double-rendering
+  for (const layer of map.getStyle().layers) {
+    if (layer["source-layer"] === "building" && layer.id !== "3d-buildings") {
+      map.setLayoutProperty(layer.id, "visibility", "none");
+    }
+  }
+
+  // Insert below our data layers
+  let beforeLayer = null;
+  if (map.getLayer("landcover-fill")) beforeLayer = "landcover-fill";
+  else if (map.getLayer("parcels-fill")) beforeLayer = "parcels-fill";
+
+  map.addLayer({
+    id: "3d-buildings",
+    source: vectorSourceId,
+    "source-layer": "building",
+    type: "fill-extrusion",
+    minzoom: 15,
+    filter: ["!=", ["get", "hide_3d"], true],
+    paint: {
+      "fill-extrusion-color": "#d0d0d0",
+      "fill-extrusion-height": ["coalesce", ["get", "render_height"], 5],
+      "fill-extrusion-base": 0,
+      "fill-extrusion-opacity": 1,
+    },
+  }, beforeLayer);
+}
+
+function hide3DBuildings() {
+  if (!map) return;
+
+  if (map.getLayer("3d-buildings")) {
+    map.setLayoutProperty("3d-buildings", "visibility", "none");
+  }
+
+  // Restore basemap's building layers
+  for (const layer of map.getStyle().layers) {
+    if (layer["source-layer"] === "building" && layer.id !== "3d-buildings") {
+      map.setLayoutProperty(layer.id, "visibility", "visible");
+    }
   }
 }
 
@@ -90,8 +153,9 @@ class SummaryToggleControl {
 export function onSummaryToggle(callback) { summaryToggleCallback = callback; }
 export function setSummaryToggleVisible(visible) { if (summaryToggleControl) summaryToggleControl.setHidden(!visible); }
 
-export async function initMap(containerId, clickCallback) {
-  onFeatureClick = clickCallback;
+export async function initMap(containerId, { onParcelSelect, onLandcoverSelect } = {}) {
+  onParcelClick = onParcelSelect || null;
+  onLandcoverClick = onLandcoverSelect || null;
 
   if (map) { map.remove(); map = null; }
 
@@ -117,7 +181,8 @@ export async function initMap(containerId, clickCallback) {
   map.addControl(summaryToggleControl, "top-right");
   summaryToggleControl.setHidden(true);
 
-  // Attribution bottom-right
+  // Bottom controls
+  map.addControl(new maplibregl.ScaleControl({ maxWidth: 200 }), "bottom-left");
   map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
 
   // Initialize basemap selector (DOM element, not MapLibre control)
@@ -132,12 +197,14 @@ export async function initMap(containerId, clickCallback) {
     if (!e.features.length) return;
     const props = e.features[0].properties;
     showParcelPopup(e.lngLat, props);
-    if (onFeatureClick) onFeatureClick(props.index);
+    if (onParcelClick) onParcelClick(props.index);
   });
 
   map.on("click", "landcover-fill", (e) => {
     if (!e.features.length) return;
-    showLandcoverPopup(e.lngLat, e.features[0].properties);
+    const props = e.features[0].properties;
+    showLandcoverPopup(e.lngLat, props);
+    if (onLandcoverClick && props.lc_index !== undefined) onLandcoverClick(props.lc_index);
   });
 
   for (const layer of ["parcels-fill", "landcover-fill"]) {
@@ -156,6 +223,138 @@ export async function initMap(containerId, clickCallback) {
       coordsEl.textContent = "\u2014";
     });
   }
+
+  // Context menu
+  initContextMenu();
+
+  // Accordion layer toggles
+  initAccordionMenu();
+}
+
+/* ── Accordion Layer Menu ── */
+
+function initAccordionMenu() {
+  // Accordion header toggle (mutually exclusive)
+  document.querySelectorAll(".accordion-header").forEach((header) => {
+    header.addEventListener("click", () => {
+      const content = header.nextElementSibling;
+      const isActive = header.classList.contains("active");
+
+      // Close all
+      document.querySelectorAll(".accordion-header").forEach((h) => {
+        h.classList.remove("active");
+        h.setAttribute("aria-expanded", "false");
+      });
+      document.querySelectorAll(".accordion-content").forEach((c) => c.classList.remove("show"));
+
+      // Open clicked if not already active
+      if (!isActive) {
+        header.classList.add("active");
+        header.setAttribute("aria-expanded", "true");
+        content.classList.add("show");
+      }
+    });
+  });
+
+  // Menu toggle (collapse/expand panel)
+  const menuToggle = document.getElementById("menu-toggle");
+  const accordionPanel = document.getElementById("accordion-panel");
+  const toggleText = document.getElementById("menu-toggle-text");
+  let menuOpen = true;
+
+  menuToggle?.addEventListener("click", () => {
+    menuOpen = !menuOpen;
+    accordionPanel.classList.toggle("collapsed", !menuOpen);
+    toggleText.textContent = menuOpen ? "Menü schliessen" : "Menü öffnen";
+    menuToggle.querySelector(".material-symbols-outlined").textContent = menuOpen ? "expand_less" : "expand_more";
+  });
+
+  // Layer visibility toggles
+  initLayerToggle("layer-toggle-parcels", ["parcels-fill", "parcels-line", "parcels-label"]);
+  initLayerToggle("layer-toggle-landcover", ["landcover-fill", "landcover-line"]);
+  initLayerToggle("layer-toggle-labels", ["parcels-label"]);
+}
+
+function initLayerToggle(checkboxId, layerIds) {
+  const cb = document.getElementById(checkboxId);
+  if (!cb) return;
+  cb.addEventListener("change", () => {
+    const vis = cb.checked ? "visible" : "none";
+    for (const id of layerIds) {
+      if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", vis);
+    }
+  });
+}
+
+/* ── Context Menu ── */
+
+let contextLngLat = null;
+
+function initContextMenu() {
+  const menu = document.getElementById("map-context-menu");
+  if (!menu) return;
+
+  map.on("contextmenu", (e) => {
+    e.preventDefault();
+    contextLngLat = e.lngLat;
+
+    const lat = contextLngLat.lat.toFixed(5);
+    const lon = contextLngLat.lng.toFixed(5);
+    document.getElementById("ctx-coords-text").textContent = `${lat}, ${lon}`;
+    menu.querySelector(".context-menu-coords")?.classList.remove("copied");
+
+    const mapEl = map.getContainer();
+    const rect = mapEl.getBoundingClientRect();
+    const menuW = 200, menuH = 140;
+    const flipH = (e.point.x + menuW) > rect.width;
+    const flipV = (e.point.y + menuH) > rect.height;
+
+    menu.style.left = e.point.x + "px";
+    menu.style.top = e.point.y + "px";
+    menu.classList.toggle("flip-horizontal", flipH);
+    menu.classList.toggle("flip-vertical", flipV);
+    menu.classList.add("show");
+  });
+
+  // Hide on click elsewhere
+  map.on("click", () => menu.classList.remove("show"));
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") menu.classList.remove("show");
+  });
+
+  // Copy coordinates
+  document.getElementById("ctx-copy-coords")?.addEventListener("click", () => {
+    const text = document.getElementById("ctx-coords-text").textContent;
+    navigator.clipboard.writeText(text).then(() => {
+      menu.querySelector(".context-menu-coords")?.classList.add("copied");
+      setTimeout(() => menu.classList.remove("show"), 300);
+    });
+  });
+
+  // Share
+  document.getElementById("ctx-share")?.addEventListener("click", () => {
+    if (!contextLngLat) return;
+    const url = `${location.origin}${location.pathname}?center=${contextLngLat.lng.toFixed(5)},${contextLngLat.lat.toFixed(5)}&zoom=${Math.round(map.getZoom())}`;
+    menu.classList.remove("show");
+    if (navigator.share) {
+      navigator.share({ title: "Landcover Survey", url }).catch(() => {
+        navigator.clipboard.writeText(url);
+      });
+    } else {
+      navigator.clipboard.writeText(url);
+    }
+  });
+
+  // Report
+  document.getElementById("ctx-report")?.addEventListener("click", () => {
+    menu.classList.remove("show");
+    if (!contextLngLat) return;
+    const lat = contextLngLat.lat.toFixed(5);
+    const lon = contextLngLat.lng.toFixed(5);
+    const subject = encodeURIComponent("Problem melden - Landcover Survey");
+    const body = encodeURIComponent(`Problembeschreibung:\n\n\n---\nKoordinaten: ${lat}, ${lon}\nURL: ${location.href}`);
+    window.location.href = `mailto:?subject=${subject}&body=${body}`;
+  });
 }
 
 /* ── Basemap Selector ── */
@@ -232,6 +431,7 @@ function reAddDataLayers() {
   addDataLayers();
   if (currentParcelData) map.getSource("parcels").setData(currentParcelData);
   if (currentLandcoverData) map.getSource("landcover").setData(currentLandcoverData);
+  if (is3D) show3DBuildings();
 }
 
 export function plotResults(results) {
@@ -240,6 +440,7 @@ export function plotResults(results) {
 
   const parcelFeatures = [];
   const lcFeatures = [];
+  let lcIndex = 0;
 
   results.parcels.forEach((p, i) => {
     if (!p._geometry) return;
@@ -251,8 +452,9 @@ export function plotResults(results) {
       if (!lc._geometry) continue;
       lcFeatures.push({
         type: "Feature", geometry: lc._geometry,
-        properties: { art: lc.art, art_label: ART_LABELS[lc.art] || lc.art, area_m2: lc.area_m2, color: ART_COLORS[lc.art] || "#888", greenspace: lc.check_greenspace },
+        properties: { lc_index: lcIndex, art: lc.art, art_label: ART_LABELS[lc.art] || lc.art, area_m2: lc.area_m2, color: ART_COLORS[lc.art] || "#888", greenspace: lc.check_greenspace, parcel_id: p.id },
       });
+      lcIndex++;
     }
   });
 
@@ -276,6 +478,18 @@ export function highlightParcel(index) {
   const center = turf.centroid(feature);
   const [lng, lat] = center.geometry.coordinates;
   showParcelPopup({ lng, lat }, feature.properties);
+}
+
+/** Highlight and zoom to a specific landcover feature */
+export function highlightLandcover(lcIndex) {
+  if (!map || !currentLandcoverData) return;
+  const feature = currentLandcoverData.features.find((f) => f.properties.lc_index === lcIndex);
+  if (!feature) return;
+  const bounds = turf.bbox(feature);
+  map.fitBounds([[bounds[0], bounds[1]], [bounds[2], bounds[3]]], { padding: 80, maxZoom: 19, duration: 600 });
+  const center = turf.centroid(feature);
+  const [lng, lat] = center.geometry.coordinates;
+  showLandcoverPopup({ lng, lat }, feature.properties);
 }
 
 /** Fly to a location and place a temporary marker */
@@ -312,5 +526,17 @@ function showLandcoverPopup(lngLat, props) {
 }
 
 export function resizeMap() { if (map) map.resize(); }
+
+/** Update landcover polygon colors based on a color mapping function.
+ *  colorFn receives a feature's properties and returns a hex color string. */
+export function updateLandcoverColors(colorMap) {
+  if (!map || !map.getLayer("landcover-fill") || !currentLandcoverData) return;
+
+  // Update the GeoJSON features with new colors
+  for (const f of currentLandcoverData.features) {
+    f.properties.color = colorMap(f.properties) || "#888";
+  }
+  map.getSource("landcover").setData(currentLandcoverData);
+}
 
 function esc(s) { const d = document.createElement("div"); d.textContent = s || ""; return d.innerHTML; }
