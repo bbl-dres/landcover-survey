@@ -2,8 +2,8 @@
  * MapLibre GL JS map with parcel polygons, land cover overlay,
  * Home/3D controls, and thumbnail basemap selector
  */
-import { ART_COLORS, CATEGORY_COLORS, ART_LABELS, MAP_STYLES, MAP_DEFAULT, greenSpaceLabel, esc, fmtNum } from "./config.js";
-import { setMap, readdSwisstopoLayers, loadGeokatalog, addSwisstopoLayer, removeSwisstopoLayer } from "./swisstopo.js";
+import { API, ART_COLORS, CATEGORY_COLORS, ART_LABELS, MAP_STYLES, MAP_DEFAULT, greenSpaceLabel, esc, fmtNum } from "./config.js";
+import { setMap, readdSwisstopoLayers, loadGeokatalog, addSwisstopoLayer, removeSwisstopoLayer, activeSwisstopoLayers } from "./swisstopo.js";
 import { t, getLang } from "./i18n.js";
 
 let map = null;
@@ -193,6 +193,7 @@ export async function initMap(containerId, { onParcelSelect, onLandcoverSelect }
   initBasemapSelector();
 
   popup = new maplibregl.Popup({ closeButton: true, closeOnClick: false, maxWidth: "360px" });
+  popup.on("close", () => clearIdentifyHighlight());
 
   await new Promise((resolve) => map.on("load", resolve));
 
@@ -215,6 +216,9 @@ export async function initMap(containerId, { onParcelSelect, onLandcoverSelect }
     map.on("mouseenter", layer, () => (map.getCanvas().style.cursor = "pointer"));
     map.on("mouseleave", layer, () => (map.getCanvas().style.cursor = ""));
   }
+
+  // Click-to-identify on swisstopo reference layers
+  initIdentifyClick();
 
   // Footer coordinates on mouse move
   const coordsEl = document.getElementById("footer-coords");
@@ -293,6 +297,7 @@ function initAccordionMenu() {
   // Swisstopo overlay toggles (ÖREB, AV) — add/remove as swisstopo layers
   initSwisstopoToggle("layer-toggle-av");
   initSwisstopoToggle("layer-toggle-habitat");
+  initSwisstopoToggle("layer-toggle-bauzonen");
 }
 
 function initSwisstopoToggle(checkboxId) {
@@ -658,6 +663,119 @@ function showLandcoverPopup(lngLat, props) {
 }
 
 export function resizeMap() { if (map) map.resize(); }
+
+/* ── Click-to-Identify for swisstopo reference layers ── */
+
+const IDENTIFY_TIMEOUT = 8000;
+
+function initIdentifyClick() {
+  if (!map) return;
+
+  map.on("click", async (e) => {
+    // Skip if click was handled by our own data layers
+    const ownFeatures = map.queryRenderedFeatures(e.point, { layers: ["parcels-fill", "landcover-fill"].filter((id) => map.getLayer(id)) });
+    if (ownFeatures.length > 0) return;
+
+    // Find active swisstopo layers that are visible
+    const visibleLayers = activeSwisstopoLayers.filter((l) => l.visible !== false);
+    if (visibleLayers.length === 0) return;
+
+    // Build layer list for identify API
+    const layerIds = visibleLayers.map((l) => `all:${l.id}`).join(",");
+    const bounds = map.getBounds();
+    const canvas = map.getCanvas();
+
+    const params = new URLSearchParams({
+      geometryType: "esriGeometryPoint",
+      geometry: `${e.lngLat.lng},${e.lngLat.lat}`,
+      sr: "4326",
+      layers: layerIds,
+      tolerance: "5",
+      mapExtent: `${bounds.getWest()},${bounds.getSouth()},${bounds.getEast()},${bounds.getNorth()}`,
+      imageDisplay: `${canvas.width},${canvas.height},96`,
+      returnGeometry: "true",
+      geometryFormat: "geojson",
+      lang: getLang(),
+    });
+
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), IDENTIFY_TIMEOUT);
+      const resp = await fetch(`${API.IDENTIFY}?${params}`, { signal: controller.signal });
+      clearTimeout(timeout);
+
+      if (!resp.ok) return;
+      const data = await resp.json();
+      if (!data.results || data.results.length === 0) {
+        clearIdentifyHighlight();
+        return;
+      }
+
+      const feature = data.results[0];
+      showIdentifyPopup(e.lngLat, feature);
+      highlightIdentifyFeature(feature);
+    } catch (err) {
+      if (err.name !== "AbortError") console.warn("Identify failed:", err.message);
+    }
+  });
+}
+
+function showIdentifyPopup(lngLat, feature) {
+  const props = feature.properties || {};
+  const layerName = feature.layerName || feature.layerBodId || "";
+
+  // Build property rows — show the most useful attributes
+  const skipKeys = new Set(["label", "id", "featureId", "layerBodId", "layerName"]);
+  const rows = [];
+  for (const [k, v] of Object.entries(props)) {
+    if (skipKeys.has(k) || v === null || v === "" || v === undefined) continue;
+    // Skip internal-looking keys
+    if (k.startsWith("_")) continue;
+    const displayVal = typeof v === "number" ? fmtNum(v, 1) : esc(String(v));
+    rows.push(`<tr><td>${esc(k)}</td><td>${displayVal}</td></tr>`);
+    if (rows.length >= 8) break; // Cap at 8 rows to keep popup compact
+  }
+
+  popup.setLngLat(lngLat).setHTML(`
+    <div class="map-popup">
+      <div class="popup-layer">${esc(layerName)}</div>
+      <div class="popup-title">${esc(props.label || props.name || props.ch_bez_d || feature.layerBodId)}</div>
+      ${rows.length ? `<table class="popup-table">${rows.join("")}</table>` : ""}
+    </div>
+  `).addTo(map);
+}
+
+function highlightIdentifyFeature(feature) {
+  clearIdentifyHighlight();
+
+  if (!feature.geometry) return;
+
+  map.addSource("identify-highlight", {
+    type: "geojson",
+    data: { type: "Feature", geometry: feature.geometry, properties: {} },
+  });
+
+  map.addLayer({
+    id: "identify-highlight-fill",
+    type: "fill",
+    source: "identify-highlight",
+    paint: { "fill-color": "#d8232a", "fill-opacity": 0.2 },
+  });
+
+  map.addLayer({
+    id: "identify-highlight-line",
+    type: "line",
+    source: "identify-highlight",
+    paint: { "line-color": "#d8232a", "line-width": 2.5 },
+  });
+}
+
+function clearIdentifyHighlight() {
+  if (!map) return;
+  if (map.getLayer("identify-highlight-fill")) map.removeLayer("identify-highlight-fill");
+  if (map.getLayer("identify-highlight-line")) map.removeLayer("identify-highlight-line");
+  if (map.getSource("identify-highlight")) map.removeSource("identify-highlight");
+}
 
 /** Update landcover polygon colors based on a color mapping function.
  *  colorFn receives a feature's properties and returns a hex color string. */

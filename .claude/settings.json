@@ -144,7 +144,15 @@
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"http://127.0.0.1:8082/css/tokens.css\")",
       "Bash(curl -s \"https://api3.geo.admin.ch/rest/services/ech/SearchServer?type=layers&limit=10&lang=de&searchText=Lebensr%C3%A4ume\")",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"http://127.0.0.1:8082/js/main.js\")",
-      "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"http://127.0.0.1:8082/js/swisstopo.js\")"
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"http://127.0.0.1:8082/js/swisstopo.js\")",
+      "Bash(curl -s \"https://geodienste.ch/info/services/av\")",
+      "Bash(curl -s \"https://geodienste.ch/db/av_0\")",
+      "Bash(curl -s \"https://www.cadastre.ch/de/services/service/registry/opendata.html\")",
+      "Bash(curl -s \"https://geodienste.ch/db/av_0/deu?SERVICE=WFS&REQUEST=GetFeature&VERSION=2.0.0&TYPENAMES=ms:LCSF&COUNT=1&OUTPUTFORMAT=application/json;%20subtype=geojson&BBOX=46.95,7.44,46.96,7.45,urn:ogc:def:crs:EPSG::4326\")",
+      "Bash(curl -s \"https://www.geodienste.ch/info/services.csv?base_topics=av&language=de\")",
+      "Read(//c/Users/DavidRasner/Documents/GitHub/landcover-survey/**)",
+      "Bash(curl -s \"https://api3.geo.admin.ch/rest/services/all/MapServer/identify?geometryType=esriGeometryPoint&geometry=8.2275,46.8182&sr=4326&layers=all:ch.are.bauzonen&tolerance=5&mapExtent=0,0,100,100&imageDisplay=100,100,96&returnGeometry=true&geometryFormat=geojson\")",
+      "Bash(curl -s \"https://api3.geo.admin.ch/rest/services/all/MapServer/identify?geometryType=esriGeometryPoint&geometry=8.2275,46.8182&sr=4326&layers=all:ch.kantone.cadastralwebmap-farbe&tolerance=5&mapExtent=0,0,100,100&imageDisplay=100,100,96&returnGeometry=true&geometryFormat=geojson\")"
     ]
   }
 }

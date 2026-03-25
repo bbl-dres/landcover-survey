@@ -162,6 +162,7 @@ export function loadScript(src) {
 const WFS_LANG = { de: "deu", fr: "fra", it: "ita", en: "eng" };
 export const API = {
   PARCEL_FIND: "https://api3.geo.admin.ch/rest/services/all/MapServer/find",
+  IDENTIFY: "https://api3.geo.admin.ch/rest/services/all/MapServer/identify",
   SEARCH: "https://api3.geo.admin.ch/rest/services/ech/SearchServer",
   get WFS_AV() { return `https://geodienste.ch/db/av_0/${WFS_LANG[getLang()] || "deu"}`; },
 };

@@ -47,6 +47,23 @@ Ja. Die CSV-Datei kann beliebig viele Zeilen enthalten. Die Verarbeitung erfolgt
 **Welches Koordinatensystem wird verwendet?**
 Die Anzeige erfolgt in WGS 84 (EPSG:4326). Flächenberechnungen basieren auf geodätischen Methoden.
 
+### Datenabdeckung und Einschränkungen
+
+Die Bodenbedeckungsdaten stammen vom WFS-Dienst der amtlichen Vermessung auf [geodienste.ch](https://www.geodienste.ch/services/av). **Nicht alle Kantone stellen ihre Daten frei über diesen Dienst zur Verfügung.**
+
+**Kein Zugang (Freigabe/Vertrag erforderlich):**
+JU, LU, NE, NW, OW, VD
+
+**Unvollständige Abdeckung:**
+NE (teilweise + gesperrt), TI (nur Siedlungsgebiete), VS (teilweise, jährliche Aktualisierung)
+
+**Vollständige Abdeckung (20 Kantone):**
+AG, AI, AR, BE, BL, BS, FR, GE, GL, GR, SG, SH, SO, SZ, TG, UR, ZG, ZH und teilweise TI, VS
+
+Parzellen in Kantonen ohne WFS-Zugang werden zwar per EGRID gefunden, zeigen aber 0 m² Bodenbedeckung. Prüfen Sie die Spalte `check_wfs` im Export.
+
+Quelle: [geodienste.ch/services/av](https://www.geodienste.ch/services/av) — Stand März 2025.
+
 ---
 
 ## FR — Français
@@ -93,6 +110,23 @@ L'EGRID n'a pas pu être trouvé dans la base swisstopo. Vérifiez qu'il est cor
 **Puis-je analyser plusieurs parcelles en même temps ?**
 Oui. Le fichier CSV peut contenir autant de lignes que nécessaire. Le traitement s'effectue en parallèle (max. 5 simultanément).
 
+### Couverture des données et limitations
+
+Les données de couverture du sol proviennent du service WFS de la mensuration officielle sur [geodienste.ch](https://www.geodienste.ch/services/av). **Tous les cantons ne mettent pas leurs données librement à disposition via ce service.**
+
+**Pas d'accès (approbation/contrat nécessaire) :**
+JU, LU, NE, NW, OW, VD
+
+**Couverture incomplète :**
+NE (partiel + bloqué), TI (zones urbaines uniquement), VS (partiel, mise à jour annuelle)
+
+**Couverture complète (20 cantons) :**
+AG, AI, AR, BE, BL, BS, FR, GE, GL, GR, SG, SH, SO, SZ, TG, UR, ZG, ZH et partiellement TI, VS
+
+Les parcelles dans les cantons sans accès WFS sont trouvées par EGRID mais affichent 0 m² de couverture du sol. Vérifiez la colonne `check_wfs` dans l'export.
+
+Source : [geodienste.ch/services/av](https://www.geodienste.ch/services/av) — état mars 2025.
+
 ---
 
 ## IT — Italiano
@@ -135,6 +169,23 @@ Possibili cause: (1) Il cantone non ha ancora pubblicato i dati di copertura del
 
 **Cosa significa lo stato «Non trovato»?**
 L'EGRID non è stato trovato nella banca dati swisstopo. Verificare che sia corretto e aggiornato.
+
+### Copertura dei dati e limitazioni
+
+I dati di copertura del suolo provengono dal servizio WFS della misurazione ufficiale su [geodienste.ch](https://www.geodienste.ch/services/av). **Non tutti i cantoni mettono i propri dati liberamente a disposizione tramite questo servizio.**
+
+**Nessun accesso (approvazione/contratto necessario):**
+JU, LU, NE, NW, OW, VD
+
+**Copertura incompleta:**
+NE (parziale + bloccato), TI (solo aree urbane), VS (parziale, aggiornamento annuale)
+
+**Copertura completa (20 cantoni):**
+AG, AI, AR, BE, BL, BS, FR, GE, GL, GR, SG, SH, SO, SZ, TG, UR, ZG, ZH e parzialmente TI, VS
+
+Le particelle nei cantoni senza accesso WFS vengono trovate tramite EGRID ma mostrano 0 m² di copertura del suolo. Verificare la colonna `check_wfs` nell'export.
+
+Fonte: [geodienste.ch/services/av](https://www.geodienste.ch/services/av) — stato marzo 2025.
 
 ---
 
@@ -184,6 +235,23 @@ Yes. The CSV file can contain any number of rows. Processing runs in parallel (m
 
 **What coordinate system is used?**
 Display uses WGS 84 (EPSG:4326). Area calculations use geodesic methods.
+
+### Data coverage and limitations
+
+Land cover data comes from the official surveying WFS service on [geodienste.ch](https://www.geodienste.ch/services/av). **Not all cantons make their data freely available via this service.**
+
+**No access (approval/contract required):**
+JU, LU, NE, NW, OW, VD
+
+**Incomplete coverage:**
+NE (partial + blocked), TI (urban areas only), VS (partial, annual updates)
+
+**Full coverage (20 cantons):**
+AG, AI, AR, BE, BL, BS, FR, GE, GL, GR, SG, SH, SO, SZ, TG, UR, ZG, ZH and partially TI, VS
+
+Parcels in cantons without WFS access are found by EGRID but show 0 m² land cover. Check the `check_wfs` column in the export.
+
+Source: [geodienste.ch/services/av](https://www.geodienste.ch/services/av) — as of March 2025.
 
 ---
 

@@ -28,6 +28,7 @@ export function setMap(map) { mapRef = map; }
 const STATIC_LAYER_IDS = new Set([
   "ch.kantone.cadastralwebmap-farbe",
   "ch.bafu.lebensraumkarte-schweiz",
+  "ch.are.bauzonen",
 ]);
 
 const pendingLayerIds = new Set();

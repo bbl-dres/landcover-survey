@@ -144,7 +144,7 @@ main { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: 
 @keyframes state-fade-in { from { opacity: 0; } to { opacity: 1; } }
 
 /* -- Upload -- */
-.upload-container, .processing-container { flex: 1; display: flex; align-items: center; justify-content: center; padding: var(--space-8); overflow-y: auto; }
+.upload-container, .processing-container { flex: 1; display: flex; align-items: safe center; justify-content: center; padding: var(--space-8); overflow-y: auto; }
 .upload-card { width: 100%; max-width: 700px; background: var(--color-white); border: var(--space-px) solid var(--gray-200); border-radius: var(--radius-lg); padding: var(--space-8) var(--space-6); box-shadow: var(--shadow-sm); }
 .intro { text-align: center; margin-bottom: var(--space-6); }
 .intro-title { font-size: var(--text-xl); font-weight: var(--font-semibold); color: var(--gray-800); line-height: var(--leading-tight); margin-bottom: var(--space-3); }
@@ -1006,6 +1006,7 @@ main { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: 
    ══════════════════════════════════════════════ */
 @media (max-height: 800px) {
   .table-panel { height: 30vh; }
+  .upload-container, .processing-container { align-items: flex-start; }
 }
 @media (max-height: 700px) {
   .table-panel { height: 25vh; }
@@ -1054,8 +1055,8 @@ main { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: 
   #footer { font-size: var(--text-2xs); padding: 0 var(--space-3); }
   #footer-coords { display: none; }
 
-  /* Upload */
-  .upload-container { padding: var(--space-4); }
+  /* Upload — align top so content doesn't clip under header */
+  .upload-container { padding: var(--space-4); align-items: flex-start; }
   .upload-card { padding: var(--space-5) var(--space-4); }
   .intro-title { font-size: var(--text-lg); }
   .intro-desc { font-size: var(--text-xs); }
