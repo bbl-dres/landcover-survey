@@ -17,15 +17,18 @@ Die Anwendung berechnet, wie viel Fläche (m²) jeder **Bodenbedeckungsart** inn
 
 ### Was ist EGRID?
 
-Der **Eidgenössische Grundstücksidentifikator** (z.B. `CH955832730536`) ist die schweizweit eindeutige Parzellen-ID. Sie finden den EGRID im Grundbuch, auf [geo.admin.ch](https://map.geo.admin.ch) oder bei Ihrem Grundbuchamt.
+Der **Eidgenössische Grundstücksidentifikator** (z.B. `CH955832730536`) ist die schweizweit eindeutige Parzellen-ID. Sie finden den EGRID:
+- im Grundbuch
+- auf der [Karte geo.admin.ch](https://map.geo.admin.ch/#/map?lang=de&center=2660000,1190000&z=1&topic=ech&layers=ch.swisstopo-vd.stand-oerebkataster&bgLayer=ch.swisstopo.pixelkarte-farbe) (Ebene ÖREB-Kataster)
+- bei Ihrem kantonalen Grundbuchamt
 
 ### Klassifikationen
 
 | Kürzel | Bedeutung | Beschreibung |
 |--------|-----------|--------------|
-| **GGF** | Gebäudegrundfläche | Fläche unter Gebäuden (SIA 416) |
-| **BUF** | Umgebungsfläche | Bearbeitete Flächen: Strassen, Wege, Gärten, Landwirtschaft (SIA 416) |
-| **UUF** | Naturbelassene Fläche | Wald, Gewässer, Fels, unbearbeitete Flächen (SIA 416) |
+| **GGF** | Gebäudegrundfläche | Fläche des Grundstücks, die von Gebäuden durchdrungen wird (SIA 416, Ziff. 1.1) |
+| **BUF** | Bearbeitete Umgebungsfläche | Hart- und Grünflächen: Strassen, Wege, Gärten, Landwirtschaft (SIA 416, Ziff. 1.2.1) |
+| **UUF** | Unbearbeitete Umgebungsfläche | Wald, Gewässer, Fels, unbearbeitete Flächen (SIA 416, Ziff. 1.2.2) |
 | **BF** | Bebaute Fläche | Grundfläche der Gebäude (DIN 277) |
 | **UF** | Unbebaute Fläche | Alles ausser Gebäude (DIN 277) |
 
@@ -63,15 +66,18 @@ L'application calcule la surface (m²) de chaque **type de couverture du sol** �
 
 ### Qu'est-ce que l'EGRID ?
 
-L'**identifiant fédéral de bien-fonds** (p. ex. `CH955832730536`) est l'identifiant unique de chaque parcelle en Suisse. Vous le trouverez au registre foncier, sur [geo.admin.ch](https://map.geo.admin.ch) ou auprès de votre office du registre foncier.
+L'**identifiant fédéral de bien-fonds** (p. ex. `CH955832730536`) est l'identifiant unique de chaque parcelle en Suisse. Vous le trouverez :
+- au registre foncier
+- sur la [carte geo.admin.ch](https://map.geo.admin.ch/#/map?lang=fr&center=2660000,1190000&z=1&topic=ech&layers=ch.swisstopo-vd.stand-oerebkataster&bgLayer=ch.swisstopo.pixelkarte-farbe) (couche cadastre RDPPF)
+- auprès de votre office cantonal du registre foncier
 
 ### Classifications
 
 | Abrév. | Signification | Description |
 |--------|---------------|-------------|
-| **GGF** | Surface de bâtiment | Emprise au sol des bâtiments (SIA 416) |
-| **BUF** | Surface aménagée | Routes, chemins, jardins, agriculture (SIA 416) |
-| **UUF** | Surface naturelle | Forêt, cours d'eau, rochers (SIA 416) |
+| **SB** | Surface bâtie | Surface de terrain occupée par des bâtiments (SIA 416, ch. 1.1) |
+| **SAA** | Surface des abords aménagés | Surface revêtue ou plantée : routes, chemins, jardins, agriculture (SIA 416, ch. 1.2.1) |
+| **SAN** | Surface des abords non aménagés | Forêt, cours d'eau, rochers (SIA 416, ch. 1.2.2) |
 | **BF** | Surface bâtie | Emprise des bâtiments (DIN 277) |
 | **UF** | Surface non bâtie | Tout sauf les bâtiments (DIN 277) |
 
@@ -106,15 +112,18 @@ L'applicazione calcola la superficie (m²) di ciascun **tipo di copertura del su
 
 ### Cos'è l'EGRID?
 
-L'**identificatore federale dei fondi** (ad es. `CH955832730536`) è l'identificativo unico di ogni particella in Svizzera. Si trova nel registro fondiario, su [geo.admin.ch](https://map.geo.admin.ch) o presso l'ufficio del registro fondiario.
+L'**identificatore federale dei fondi** (ad es. `CH955832730536`) è l'identificativo unico di ogni particella in Svizzera. Si trova:
+- nel registro fondiario
+- sulla [carta geo.admin.ch](https://map.geo.admin.ch/#/map?lang=it&center=2660000,1190000&z=1&topic=ech&layers=ch.swisstopo-vd.stand-oerebkataster&bgLayer=ch.swisstopo.pixelkarte-farbe) (livello catasto RDPP)
+- presso l'ufficio cantonale del registro fondiario
 
 ### Classificazioni
 
 | Sigla | Significato | Descrizione |
 |-------|-------------|-------------|
-| **GGF** | Superficie edificata | Superficie coperta dagli edifici (SIA 416) |
-| **BUF** | Superficie sistemata | Strade, sentieri, giardini, agricoltura (SIA 416) |
-| **UUF** | Superficie naturale | Bosco, corsi d'acqua, roccia (SIA 416) |
+| **SE** | Superficie edificata | Superficie del fondo occupata da edifici (SIA 416, par. 1.1) |
+| **SLES** | Superficie libera esterna sistemata | Superficie rivestita o sistemata a verde: strade, sentieri, giardini, agricoltura (SIA 416, par. 1.2.1) |
+| **SLEN** | Superficie libera esterna non sistemata | Bosco, corsi d'acqua, roccia (SIA 416, par. 1.2.2) |
 | **BF** | Superficie costruita | Impronta degli edifici (DIN 277) |
 | **UF** | Superficie non costruita | Tutto tranne gli edifici (DIN 277) |
 
@@ -146,15 +155,18 @@ The application calculates the area (m²) of each **land cover type** within eac
 
 ### What is EGRID?
 
-The **Federal Property Identifier** (e.g. `CH955832730536`) is the unique ID for every parcel in Switzerland. You can find it in the land register, on [geo.admin.ch](https://map.geo.admin.ch), or from your local land registry office.
+The **Federal Property Identifier** (e.g. `CH955832730536`) is the unique ID for every parcel in Switzerland. You can find it:
+- in the land register
+- on the [geo.admin.ch map](https://map.geo.admin.ch/#/map?lang=en&center=2660000,1190000&z=1&topic=ech&layers=ch.swisstopo-vd.stand-oerebkataster&bgLayer=ch.swisstopo.pixelkarte-farbe) (ÖREB/PLR cadastre layer)
+- from your cantonal land registry office
 
 ### Classifications
 
 | Code | Meaning | Description |
 |------|---------|-------------|
-| **GGF** | Building footprint | Area covered by buildings (SIA 416) |
-| **BUF** | Surroundings | Roads, paths, gardens, agriculture (SIA 416) |
-| **UUF** | Natural areas | Forest, water bodies, rock (SIA 416) |
+| **GGF** | Building footprint (*Gebäudegrundfläche*) | Area of the plot covered by buildings (SIA 416, sec. 1.1) |
+| **BUF** | Developed surroundings (*Bearbeitete Umgebungsfläche*) | Paved surfaces and planted areas: roads, paths, gardens, agriculture (SIA 416, sec. 1.2.1) |
+| **UUF** | Undeveloped surroundings (*Unbearbeitete Umgebungsfläche*) | Forest, water bodies, rock, undeveloped areas (SIA 416, sec. 1.2.2) |
 | **BF** | Built-up area | Building footprint (DIN 277) |
 | **UF** | Unbuilt area | Everything except buildings (DIN 277) |
 
