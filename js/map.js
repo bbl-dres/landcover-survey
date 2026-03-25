@@ -77,9 +77,10 @@ function toggle3D() {
 function show3DBuildings() {
   if (!map) return;
 
-  // Already added — just show
+  // Already added — just show and adjust data layer opacity
   if (map.getLayer("3d-buildings")) {
     map.setLayoutProperty("3d-buildings", "visibility", "visible");
+    dimDataLayersFor3D(true);
     return;
   }
 
@@ -91,18 +92,15 @@ function show3DBuildings() {
   }
   if (!vectorSourceId) return;
 
-  // Hide basemap's own building layers to prevent double-rendering
+  // Hide basemap's own 2D building layers to prevent double-rendering
   for (const layer of map.getStyle().layers) {
     if (layer["source-layer"] === "building" && layer.id !== "3d-buildings") {
       map.setLayoutProperty(layer.id, "visibility", "none");
     }
   }
 
-  // Insert below our data layers
-  let beforeLayer = null;
-  if (map.getLayer("landcover-fill")) beforeLayer = "landcover-fill";
-  else if (map.getLayer("parcels-fill")) beforeLayer = "parcels-fill";
-
+  // Add 3D buildings on TOP of everything (no beforeLayer) so extrusions
+  // aren't hidden by the flat 2D data fills that don't participate in depth testing
   map.addLayer({
     id: "3d-buildings",
     source: vectorSourceId,
@@ -111,12 +109,14 @@ function show3DBuildings() {
     minzoom: 15,
     filter: ["!=", ["get", "hide_3d"], true],
     paint: {
-      "fill-extrusion-color": "#d0d0d0",
+      "fill-extrusion-color": "#c8c8c8",
       "fill-extrusion-height": ["coalesce", ["get", "render_height"], 5],
       "fill-extrusion-base": 0,
-      "fill-extrusion-opacity": 1,
+      "fill-extrusion-opacity": 0.85,
     },
-  }, beforeLayer);
+  });
+
+  dimDataLayersFor3D(true);
 }
 
 function hide3DBuildings() {
@@ -126,11 +126,25 @@ function hide3DBuildings() {
     map.setLayoutProperty("3d-buildings", "visibility", "none");
   }
 
-  // Restore basemap's building layers
+  // Restore basemap's 2D building layers
   for (const layer of map.getStyle().layers) {
     if (layer["source-layer"] === "building" && layer.id !== "3d-buildings") {
       map.setLayoutProperty(layer.id, "visibility", "visible");
     }
+  }
+
+  dimDataLayersFor3D(false);
+}
+
+/** In 3D mode, reduce data layer opacity so buildings aren't washed out.
+ *  In 2D mode, restore full opacity. */
+function dimDataLayersFor3D(dim) {
+  if (!map) return;
+  if (map.getLayer("landcover-fill")) {
+    map.setPaintProperty("landcover-fill", "fill-opacity", dim ? 0.3 : 0.5);
+  }
+  if (map.getLayer("parcels-fill")) {
+    map.setPaintProperty("parcels-fill", "fill-opacity", dim ? 0.04 : 0.08);
   }
 }
 
