@@ -886,21 +886,46 @@ main { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: 
 .context-menu-coords.copied .material-symbols-outlined { color: var(--color-good-text); }
 
 /* ══════════════════════════════════════════════
+   Responsive — Small Laptop (max-width: 1400px)
+   Accordion closed by default, narrower summary
+   ══════════════════════════════════════════════ */
+@media (max-width: 1400px) {
+  :root { --summary-width: 300px; }
+
+  /* Accordion closed by default on small laptops (JS reads this) */
+  #accordion-panel.auto-collapse { display: none; }
+
+  .search-wrapper { max-width: 420px; }
+  .table-panel { height: 35vh; }
+
+  /* Compact summary */
+  .sp-donut { width: 110px; height: 110px; }
+  .sp-collapse-header { padding: var(--space-2) var(--space-4); }
+  .sp-kpi { padding: var(--space-2); }
+}
+
+/* ══════════════════════════════════════════════
    Responsive — Tablet (max-width: 1024px)
    ══════════════════════════════════════════════ */
 @media (max-width: 1024px) {
   :root {
     --header-height: 52px;
-    --summary-width: 280px;
+    --summary-width: 260px;
   }
 
   .header-agency { display: none; }
   .search-wrapper { max-width: 360px; }
 
+  /* Narrower accordion */
   #accordion-panel { width: 260px; }
   #menu-toggle { font-size: var(--text-xs); }
 
-  .sp-donut { width: 110px; height: 110px; }
+  /* Compact header buttons */
+  #btn-new { font-size: var(--text-2xs); padding: 0 var(--space-2); }
+  #btn-download span:last-child { display: none; }
+
+  .table-panel { height: 30vh; }
+  .sp-donut { width: 100px; height: 100px; }
 }
 
 /* ══════════════════════════════════════════════
@@ -909,8 +934,19 @@ main { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: 
 @media (max-height: 800px) {
   .table-panel { height: 30vh; }
 }
-@media (max-height: 600px) {
+@media (max-height: 700px) {
   .table-panel { height: 25vh; }
+}
+@media (max-height: 600px) {
+  .table-panel { height: 20vh; }
+}
+
+/* ══════════════════════════════════════════════
+   Combined: small laptop height
+   ══════════════════════════════════════════════ */
+@media (max-width: 1400px) and (max-height: 800px) {
+  .table-panel { height: 28vh; }
+  .summary-panel { --summary-width: 280px; width: 280px; }
 }
 
 /* ══════════════════════════════════════════════
@@ -934,7 +970,6 @@ main { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: 
   .search-results { max-height: 60vh; }
 
   /* Header buttons: icon-only */
-  #btn-download span:not(.material-symbols-outlined),
   #btn-new { font-size: var(--text-2xs); }
   #btn-download span:last-child { display: none; }
 
@@ -968,7 +1003,7 @@ main { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: 
 
   /* Accordion menu */
   #accordion-panel { width: 240px; }
-  #menu-toggle { width: auto; font-size: var(--text-xs); }
+  #menu-toggle { font-size: var(--text-xs); }
   .accordion-header { font-size: var(--text-xs); padding: var(--space-2) var(--space-3); }
   .accordion-content { padding: var(--space-2) var(--space-3); font-size: var(--text-xs); }
 

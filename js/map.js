@@ -268,7 +268,14 @@ function initAccordionMenu() {
   const menuToggle = document.getElementById("menu-toggle");
   const accordionPanel = document.getElementById("accordion-panel");
   const toggleText = document.getElementById("menu-toggle-text");
-  let menuOpen = true;
+
+  // Auto-collapse on small screens (<= 1400px)
+  let menuOpen = window.innerWidth > 1400;
+  if (!menuOpen) {
+    accordionPanel.classList.add("collapsed");
+    toggleText.textContent = "Menü öffnen";
+    menuToggle.querySelector(".material-symbols-outlined").textContent = "expand_more";
+  }
 
   menuToggle?.addEventListener("click", () => {
     menuOpen = !menuOpen;
@@ -448,12 +455,84 @@ function addDataLayers() {
     layout: { "text-field": ["get", "label"], "text-size": 12, "text-font": ["Open Sans Regular", "Arial Unicode MS Regular"], "text-anchor": "center" },
     paint: { "text-color": "#1a365d", "text-halo-color": "#fff", "text-halo-width": 1.5 },
   });
+
+  // Clustered parcel centroids (visible when zoomed out)
+  map.addSource("parcels-clusters", {
+    type: "geojson",
+    data: { type: "FeatureCollection", features: [] },
+    cluster: true,
+    clusterMaxZoom: 13,
+    clusterRadius: 50,
+  });
+
+  // Cluster circles
+  map.addLayer({
+    id: "parcel-clusters", type: "circle", source: "parcels-clusters",
+    filter: ["has", "point_count"],
+    paint: {
+      "circle-color": ["step", ["get", "point_count"], "#1a365d", 10, "#2d4a7a", 50, "#d8232a"],
+      "circle-radius": ["step", ["get", "point_count"], 18, 10, 24, 50, 32],
+      "circle-stroke-width": 2,
+      "circle-stroke-color": "#fff",
+    },
+  });
+
+  // Cluster count labels
+  map.addLayer({
+    id: "parcel-cluster-count", type: "symbol", source: "parcels-clusters",
+    filter: ["has", "point_count"],
+    layout: {
+      "text-field": ["get", "point_count_abbreviated"],
+      "text-size": 12,
+      "text-font": ["Open Sans Regular", "Arial Unicode MS Regular"],
+    },
+    paint: { "text-color": "#fff" },
+  });
+
+  // Unclustered single points (small dot when zoomed out)
+  map.addLayer({
+    id: "parcel-unclustered", type: "circle", source: "parcels-clusters",
+    filter: ["!", ["has", "point_count"]],
+    paint: {
+      "circle-color": "#1a365d",
+      "circle-radius": 6,
+      "circle-stroke-width": 1.5,
+      "circle-stroke-color": "#fff",
+    },
+  });
+
+  // Click on cluster → zoom in
+  map.on("click", "parcel-clusters", (e) => {
+    const features = map.queryRenderedFeatures(e.point, { layers: ["parcel-clusters"] });
+    if (!features.length) return;
+    const clusterId = features[0].properties.cluster_id;
+    map.getSource("parcels-clusters").getClusterExpansionZoom(clusterId, (err, zoom) => {
+      if (err) return;
+      map.easeTo({ center: features[0].geometry.coordinates, zoom: zoom + 1 });
+    });
+  });
+
+  // Click on unclustered point → select parcel
+  map.on("click", "parcel-unclustered", (e) => {
+    if (!e.features.length) return;
+    const props = e.features[0].properties;
+    showParcelPopup(e.lngLat, props);
+    if (onParcelClick) onParcelClick(props.index);
+  });
+
+  map.on("mouseenter", "parcel-clusters", () => (map.getCanvas().style.cursor = "pointer"));
+  map.on("mouseleave", "parcel-clusters", () => (map.getCanvas().style.cursor = ""));
+  map.on("mouseenter", "parcel-unclustered", () => (map.getCanvas().style.cursor = "pointer"));
+  map.on("mouseleave", "parcel-unclustered", () => (map.getCanvas().style.cursor = ""));
 }
+
+let currentClusterData = null;
 
 function reAddDataLayers() {
   addDataLayers();
   if (currentParcelData) map.getSource("parcels").setData(currentParcelData);
   if (currentLandcoverData) map.getSource("landcover").setData(currentLandcoverData);
+  if (currentClusterData) map.getSource("parcels-clusters").setData(currentClusterData);
   if (is3D) show3DBuildings();
   readdSwisstopoLayers();
 }
@@ -486,6 +565,15 @@ export function plotResults(results) {
   currentLandcoverData = { type: "FeatureCollection", features: lcFeatures };
   map.getSource("parcels").setData(currentParcelData);
   map.getSource("landcover").setData(currentLandcoverData);
+
+  // Build cluster centroids from parcel polygons
+  const clusterPoints = parcelFeatures.map((f) => {
+    const center = turf.centroid(f);
+    center.properties = { ...f.properties };
+    return center;
+  });
+  currentClusterData = { type: "FeatureCollection", features: clusterPoints };
+  map.getSource("parcels-clusters").setData(currentClusterData);
 
   if (parcelFeatures.length > 0) {
     const bounds = turf.bbox({ type: "FeatureCollection", features: parcelFeatures });

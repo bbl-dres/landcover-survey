@@ -24,6 +24,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const panel = document.getElementById("results-table-container");
     const btn = document.getElementById("tbl-toggle");
     const collapsed = !panel.classList.contains("collapsed");
+    panel.style.height = ""; // Clear inline height from resize drag
     panel.classList.toggle("collapsed", collapsed);
     btn.classList.toggle("collapsed", collapsed);
     setTimeout(() => resizeMap(), 280);
