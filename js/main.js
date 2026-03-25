@@ -332,14 +332,17 @@ function renderDonutAndLegend() {
   const pctOf = (part) => totalArea > 0 ? ((part / totalArea) * 100).toFixed(1) : "0";
 
   // Donut SVG
-  const R = 54, SW = 10;
+  const R = 54, SW = 10, HIT_SW = 20;
   const C = 2 * Math.PI * R;
   let offset = C * 0.25;
   let arcs = "";
+  let hitArcs = "";
   for (const e of entries) {
     const arc = totalArea > 0 ? (e.area / totalArea) * C : 0;
     if (arc > 0.01) {
       arcs += `<circle cx="64" cy="64" r="${R}" fill="none" stroke="${e.color}" stroke-width="${SW}" stroke-dasharray="${arc} ${C - arc}" stroke-dashoffset="${offset}" />`;
+      // Invisible wider hit area for hover
+      hitArcs += `<circle class="donut-hit" cx="64" cy="64" r="${R}" fill="none" stroke="transparent" stroke-width="${HIT_SW}" stroke-dasharray="${arc} ${C - arc}" stroke-dashoffset="${offset}" data-label="${escHtml(e.label)}" data-value="${fmt(e.area)} m²" data-pct="${pctOf(e.area)}%" data-color="${e.color}"><title>${escHtml(e.label)}: ${fmt(e.area)} m² (${pctOf(e.area)}%)</title></circle>`;
     }
     offset -= arc;
   }
@@ -349,13 +352,34 @@ function renderDonutAndLegend() {
       <svg class="sp-donut" viewBox="0 0 128 128">
         <circle cx="64" cy="64" r="${R}" fill="none" stroke="var(--gray-200)" stroke-width="${SW}" />
         ${arcs}
+        ${hitArcs}
       </svg>
-      <div class="sp-donut-text">
-        <div class="sp-donut-value">${fmt(totalArea)}</div>
-        <div class="sp-donut-label">m² Total</div>
+      <div class="sp-donut-text" id="sp-donut-center">
+        <div class="sp-donut-value" id="sp-donut-val">${fmt(totalArea)}</div>
+        <div class="sp-donut-label" id="sp-donut-lbl">m² Total</div>
       </div>
+      <div class="sp-donut-tooltip" id="sp-donut-tooltip" hidden></div>
     </div>
   `;
+
+  // Hover: update center text with segment info
+  const centerVal = document.getElementById("sp-donut-val");
+  const centerLbl = document.getElementById("sp-donut-lbl");
+  const defaultVal = fmt(totalArea);
+  const defaultLbl = "m² Total";
+
+  document.querySelectorAll(".donut-hit").forEach((hit) => {
+    hit.addEventListener("mouseenter", () => {
+      centerVal.textContent = hit.dataset.value;
+      centerLbl.textContent = hit.dataset.label;
+      centerVal.style.color = hit.dataset.color;
+    });
+    hit.addEventListener("mouseleave", () => {
+      centerVal.textContent = defaultVal;
+      centerLbl.textContent = defaultLbl;
+      centerVal.style.color = "";
+    });
+  });
 
   // Legend
   const legendHtml = entries

@@ -720,7 +720,12 @@ main { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: 
 .sp-donut { width: 128px; height: 128px; }
 .sp-donut-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; }
 .sp-donut-value { font-size: var(--text-sm); font-weight: var(--font-bold); color: var(--gray-800); }
-.sp-donut-label { font-size: var(--text-2xs); color: var(--gray-500); }
+.sp-donut-label { font-size: var(--text-2xs); color: var(--gray-500); transition: color var(--transition-fast); max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sp-donut-value { transition: color var(--transition-fast); }
+
+/* Donut hover hit areas */
+.donut-hit { cursor: pointer; pointer-events: stroke; }
+.donut-hit:hover { stroke: rgba(0,0,0,0.08) !important; }
 
 /* Legend */
 .sp-legend-row { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-1); font-size: var(--text-xs); }
@@ -887,21 +892,43 @@ main { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: 
 
 /* ══════════════════════════════════════════════
    Responsive — Small Laptop (max-width: 1400px)
-   Accordion closed by default, narrower summary
+   Tighter typography, accordion closed, narrower panels
    ══════════════════════════════════════════════ */
 @media (max-width: 1400px) {
-  :root { --summary-width: 300px; }
-
-  /* Accordion closed by default on small laptops (JS reads this) */
-  #accordion-panel.auto-collapse { display: none; }
+  :root {
+    --summary-width: 300px;
+    /* Scale down typography for dense laptop UI */
+    --text-base: 1rem;
+    --text-sm: 0.875rem;
+    --text-xs: 0.8125rem;
+    --text-2xs: 0.6875rem;
+  }
 
   .search-wrapper { max-width: 420px; }
   .table-panel { height: 35vh; }
 
+  /* Tighter header */
+  #header { padding: 0 var(--space-4); }
+  .header-agency { font-size: var(--text-2xs); }
+  .btn { height: var(--control-sm); font-size: var(--text-2xs); }
+
   /* Compact summary */
   .sp-donut { width: 110px; height: 110px; }
-  .sp-collapse-header { padding: var(--space-2) var(--space-4); }
+  .sp-collapse-header { padding: var(--space-2) var(--space-4); font-size: var(--text-xs); }
   .sp-kpi { padding: var(--space-2); }
+  .sp-kpi-value { font-size: var(--text-xs); }
+  .sp-legend-row { font-size: var(--text-2xs); }
+
+  /* Tighter table */
+  .list-table th { padding: var(--space-1) var(--space-3); }
+  .list-table td { padding: var(--space-1) var(--space-3); }
+  .toolbar { padding: var(--space-1) var(--space-3); min-height: 38px; }
+
+  /* Tighter accordion */
+  .accordion-header { font-size: var(--text-xs); }
+  .accordion-content { font-size: var(--text-xs); }
+  .active-layer-item { padding: var(--space-2); font-size: var(--text-xs); }
+  .layer-group-label { font-size: var(--text-2xs); }
 }
 
 /* ══════════════════════════════════════════════
@@ -911,6 +938,9 @@ main { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: 
   :root {
     --header-height: 52px;
     --summary-width: 260px;
+    --text-sm: 0.875rem;
+    --text-xs: 0.75rem;
+    --text-2xs: 0.6875rem;
   }
 
   .header-agency { display: none; }
@@ -924,8 +954,13 @@ main { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: 
   #btn-new { font-size: var(--text-2xs); padding: 0 var(--space-2); }
   #btn-download span:last-child { display: none; }
 
+  /* Compact popup */
+  .map-popup { min-width: 170px; }
+  .popup-title { font-size: var(--text-xs); }
+
   .table-panel { height: 30vh; }
   .sp-donut { width: 100px; height: 100px; }
+  .sp-donut-value { font-size: var(--text-xs); }
 }
 
 /* ══════════════════════════════════════════════
@@ -957,6 +992,10 @@ main { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: 
     --header-height: 48px;
     --footer-height: 30px;
     --summary-width: 100%;
+    --text-base: 0.9375rem;
+    --text-sm: 0.8125rem;
+    --text-xs: 0.75rem;
+    --text-2xs: 0.6875rem;
   }
 
   /* Header compact */
@@ -1001,27 +1040,48 @@ main { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: 
   /* Map panel */
   .map-panel { min-height: 200px; }
 
-  /* Accordion menu */
+  /* Accordion menu — compact */
   #accordion-panel { width: 240px; }
   #menu-toggle { font-size: var(--text-xs); }
-  .accordion-header { font-size: var(--text-xs); padding: var(--space-2) var(--space-3); }
-  .accordion-content { padding: var(--space-2) var(--space-3); font-size: var(--text-xs); }
+  .accordion-header { padding: var(--space-2) var(--space-3); }
+  .accordion-content { padding: var(--space-2) var(--space-3); }
+  .active-layer-item { padding: var(--space-2); min-height: var(--touch-target-min); }
 
-  /* Style switcher */
+  /* Style switcher — vertical, above basemap btn */
   .style-switcher { bottom: 40px; right: var(--space-3); }
   .style-switcher-panel { flex-direction: column; right: 0; bottom: 100%; margin-right: 0; margin-bottom: var(--space-3); }
 
-  /* Table */
+  /* Summary — tighter on mobile */
+  .sp-header { padding: var(--space-2) var(--space-3); }
+  .sp-collapse-header { padding: var(--space-2) var(--space-3); }
+  .sp-collapse-content { padding: var(--space-2) var(--space-3); }
+  .sp-kpi-grid { gap: var(--space-2); }
+  .sp-kpi { padding: var(--space-2); }
+  .sp-agg-select { font-size: var(--text-2xs); }
+  .sp-donut { width: 100px; height: 100px; }
+
+  /* Table — compact touch-friendly */
   .table-panel { height: 35vh; }
   .toolbar { flex-wrap: wrap; gap: var(--space-2); padding: var(--space-2) var(--space-3); min-height: auto; }
-  .toolbar-search { min-width: 0; flex: 1; }
+  .toolbar-search { min-width: 0; flex: 1; order: 10; width: 100%; }
+  .toolbar-actions { order: 5; }
   .table-tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  .table-tab { font-size: var(--text-2xs); padding: var(--space-1) var(--space-3); }
-  .list-table td, .list-table th { padding: var(--space-1) var(--space-2); font-size: var(--text-2xs); }
+  .table-tab { padding: var(--space-1) var(--space-3); min-height: var(--touch-target-min); }
+  .list-table td, .list-table th { padding: var(--space-1) var(--space-2); }
   .pagination-footer { flex-wrap: wrap; gap: var(--space-2); padding: var(--space-1) var(--space-3); }
+  .pagination-btn { min-width: var(--touch-target-min); min-height: var(--touch-target-min); }
+
+  /* Popups compact */
+  .map-popup { padding: var(--space-3); min-width: 160px; }
+  .popup-layer { margin-bottom: var(--space-1); }
+  .popup-sub { margin-bottom: var(--space-2); }
+
+  /* Context menu — touch friendly */
+  .map-context-menu .context-menu-item { min-height: var(--touch-target-min); }
 
   /* Download modal */
   .dl-modal { width: 95%; max-width: none; }
+  .dl-option { min-height: var(--touch-target-min); }
   .layer-info-modal { padding: var(--space-3); }
   .layer-info-modal-content { max-height: 90vh; }
   .layer-info-body { padding: var(--space-3); }

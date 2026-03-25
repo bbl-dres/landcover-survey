@@ -142,7 +142,8 @@
       "Bash(curl -s \"https://api3.geo.admin.ch/rest/services/ech/SearchServer?type=layers&limit=5&lang=de&searchText=OEREB\")",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"http://127.0.0.1:8082/css/styles.css\")",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"http://127.0.0.1:8082/css/tokens.css\")",
-      "Bash(curl -s \"https://api3.geo.admin.ch/rest/services/ech/SearchServer?type=layers&limit=10&lang=de&searchText=Lebensr%C3%A4ume\")"
+      "Bash(curl -s \"https://api3.geo.admin.ch/rest/services/ech/SearchServer?type=layers&limit=10&lang=de&searchText=Lebensr%C3%A4ume\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"http://127.0.0.1:8082/js/main.js\")"
     ]
   }
 }
