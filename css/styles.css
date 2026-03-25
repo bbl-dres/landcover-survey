@@ -365,6 +365,11 @@ main { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: 
   color: var(--color-white);
 }
 
+.draw-tool-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .draw-tool-btn .material-symbols-outlined {
   font-size: var(--icon-md);
 }

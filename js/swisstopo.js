@@ -303,7 +303,7 @@ export function showInternalLayerInfo(layerKey) {
 
   content.innerHTML = `
     <div class="legend-container">
-      <div class="bod-title">${esc(meta.title)}</div>
+      <div class="bod-title" id="layer-info-title">${esc(meta.title)}</div>
       <div class="legend-abstract">${esc(meta.description)}</div>
       <div class="legend-footer"><span>Informationen</span></div>
       <table>

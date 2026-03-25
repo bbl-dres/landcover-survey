@@ -12,17 +12,24 @@
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet">
 
   <!-- MapLibre GL JS -->
-  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
-  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" crossorigin="anonymous" />
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js" crossorigin="anonymous"></script>
 
   <!-- Turf.js -->
-  <script src="https://unpkg.com/@turf/turf@7/turf.min.js"></script>
+  <script src="https://unpkg.com/@turf/turf@7/turf.min.js" crossorigin="anonymous"></script>
 
   <!-- App CSS -->
   <link rel="stylesheet" href="css/tokens.css">
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
+
+<noscript>
+  <div style="padding:2rem;text-align:center;font-family:system-ui,sans-serif">
+    <h1>JavaScript erforderlich</h1>
+    <p>Diese Anwendung benötigt JavaScript. Bitte aktivieren Sie JavaScript in Ihren Browser-Einstellungen.</p>
+  </div>
+</noscript>
 
 <div class="app">
   <!-- Header -->
@@ -38,11 +45,11 @@
     <!-- Search bar (center) -->
     <div id="search-wrapper" class="search-wrapper" hidden>
       <div class="search-container">
-        <span class="material-symbols-outlined search-icon">search</span>
-        <input type="search" id="search-input" placeholder="Suche nach Parzellen oder Orten" autocomplete="off">
-        <button id="search-clear-btn" class="search-clear" hidden>&times;</button>
+        <span class="material-symbols-outlined search-icon" aria-hidden="true">search</span>
+        <input type="text" id="search-input" placeholder="Suche nach Parzellen oder Orten" autocomplete="off" aria-label="Suche nach Parzellen oder Orten">
+        <button id="search-clear-btn" class="search-clear" hidden aria-label="Suche löschen">&times;</button>
       </div>
-      <div id="search-results" class="search-results" role="listbox" hidden></div>
+      <div id="search-results" class="search-results" role="listbox" aria-label="Suchergebnisse" hidden></div>
     </div>
 
     <div class="header-right">
@@ -89,7 +96,7 @@
 
           <div id="drop-zone" class="drop-zone" role="button" tabindex="0" aria-label="Datei hier ablegen oder klicken zum Durchsuchen">
             <div class="drop-zone-icon" aria-hidden="true">
-              <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
             </div>
             <h2>CSV- oder Excel-Datei hierher ziehen</h2>
             <p>oder klicken zum Durchsuchen</p>
@@ -115,10 +122,10 @@
       <div class="processing-container">
         <div class="processing-card">
           <h2>Parzellen werden analysiert...</h2>
-          <div class="progress-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+          <div class="progress-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" aria-label="Fortschritt">
             <div id="progress-bar-fill" class="progress-bar-fill"></div>
           </div>
-          <div id="progress-text">Datei wird verarbeitet...</div>
+          <div id="progress-text" aria-live="polite">Datei wird verarbeitet...</div>
           <div id="progress-eta"></div>
           <div id="progress-stats"></div>
           <button id="btn-cancel" class="btn btn-secondary">Abbrechen</button>
@@ -137,25 +144,25 @@
 
             <!-- Accordion tools menu (top-left overlay on map) -->
             <div id="accordion-wrapper">
-              <aside id="accordion-panel">
+              <aside id="accordion-panel" aria-label="Kartenwerkzeuge">
                 <div class="accordion-item" id="draw-accordion">
                   <button class="accordion-header" aria-expanded="false">
-                    <span class="accordion-arrow"><span class="material-symbols-outlined">chevron_right</span></span>
+                    <span class="accordion-arrow" aria-hidden="true"><span class="material-symbols-outlined">chevron_right</span></span>
                     <span>Zeichnen &amp; Messen auf der Karte</span>
                   </button>
                   <div class="accordion-content">
                     <p class="accordion-desc">Zeichnen Sie Punkte, Linien und Polygone direkt auf der Karte. Distanzen und Flächen werden automatisch berechnet.</p>
                     <div class="draw-tools">
-                      <button class="draw-tool-btn" data-tool="point" title="Punkt"><span class="material-symbols-outlined">location_on</span></button>
-                      <button class="draw-tool-btn" data-tool="line" title="Linie"><span class="material-symbols-outlined">timeline</span></button>
-                      <button class="draw-tool-btn" data-tool="polygon" title="Polygon"><span class="material-symbols-outlined">pentagon</span></button>
-                      <button class="draw-tool-btn" data-tool="delete" title="Löschen"><span class="material-symbols-outlined">delete</span></button>
+                      <button class="draw-tool-btn" data-tool="point" title="Punkt — kommt bald" disabled><span class="material-symbols-outlined">location_on</span></button>
+                      <button class="draw-tool-btn" data-tool="line" title="Linie — kommt bald" disabled><span class="material-symbols-outlined">timeline</span></button>
+                      <button class="draw-tool-btn" data-tool="polygon" title="Polygon — kommt bald" disabled><span class="material-symbols-outlined">pentagon</span></button>
+                      <button class="draw-tool-btn" data-tool="delete" title="Löschen — kommt bald" disabled><span class="material-symbols-outlined">delete</span></button>
                     </div>
                   </div>
                 </div>
                 <div class="accordion-item" id="geokatalog-accordion">
                   <button class="accordion-header" aria-expanded="false">
-                    <span class="accordion-arrow"><span class="material-symbols-outlined">chevron_right</span></span>
+                    <span class="accordion-arrow" aria-hidden="true"><span class="material-symbols-outlined">chevron_right</span></span>
                     <span>Geokatalog</span>
                   </button>
                   <div class="accordion-content">
@@ -164,62 +171,62 @@
                 </div>
                 <div class="accordion-item" id="active-layers-accordion">
                   <button class="accordion-header active" aria-expanded="true">
-                    <span class="accordion-arrow"><span class="material-symbols-outlined">chevron_right</span></span>
+                    <span class="accordion-arrow" aria-hidden="true"><span class="material-symbols-outlined">chevron_right</span></span>
                     <span>Dargestellte Karten</span>
                   </button>
                   <div class="accordion-content show">
                     <div class="layer-group">
                       <div class="layer-group-label">Analyseergebnisse</div>
-                      <div class="active-layer-item" data-internal-layer="parcels">
+                      <label class="active-layer-item" data-internal-layer="parcels">
                         <input type="checkbox" class="active-layer-checkbox" checked id="layer-toggle-parcels">
                         <span class="active-layer-title">Parzellen</span>
-                        <button class="active-layer-info" data-info="internal" data-layer-key="parcels"><span class="material-symbols-outlined">info</span></button>
-                      </div>
-                      <div class="active-layer-item" data-internal-layer="landcover">
+                        <button class="active-layer-info" data-info="internal" data-layer-key="parcels" aria-label="Info Parzellen"><span class="material-symbols-outlined">info</span></button>
+                      </label>
+                      <label class="active-layer-item" data-internal-layer="landcover">
                         <input type="checkbox" class="active-layer-checkbox" checked id="layer-toggle-landcover">
                         <span class="active-layer-title">Bodenbedeckung</span>
-                        <button class="active-layer-info" data-info="internal" data-layer-key="landcover"><span class="material-symbols-outlined">info</span></button>
-                      </div>
-                      <div class="active-layer-item">
+                        <button class="active-layer-info" data-info="internal" data-layer-key="landcover" aria-label="Info Bodenbedeckung"><span class="material-symbols-outlined">info</span></button>
+                      </label>
+                      <label class="active-layer-item">
                         <input type="checkbox" class="active-layer-checkbox" checked id="layer-toggle-labels">
                         <span class="active-layer-title">Beschriftungen</span>
-                      </div>
+                      </label>
                     </div>
                     <div class="layer-group">
                       <div class="layer-group-label">Externe Karten</div>
-                      <div class="active-layer-item">
+                      <label class="active-layer-item">
                         <input type="checkbox" class="active-layer-checkbox" id="layer-toggle-av" data-swisstopo="ch.kantone.cadastralwebmap-farbe">
                         <span class="active-layer-title">Amtliche Vermessung</span>
-                        <button class="active-layer-info" data-info="swisstopo" data-layer-id="ch.kantone.cadastralwebmap-farbe"><span class="material-symbols-outlined">info</span></button>
-                      </div>
-                      <div class="active-layer-item">
+                        <button class="active-layer-info" data-info="swisstopo" data-layer-id="ch.kantone.cadastralwebmap-farbe" aria-label="Info Amtliche Vermessung"><span class="material-symbols-outlined">info</span></button>
+                      </label>
+                      <label class="active-layer-item">
                         <input type="checkbox" class="active-layer-checkbox" id="layer-toggle-habitat" data-swisstopo="ch.bafu.lebensraumkarte-schweiz">
                         <span class="active-layer-title">Lebensraumkarte</span>
-                        <button class="active-layer-info" data-info="swisstopo" data-layer-id="ch.bafu.lebensraumkarte-schweiz"><span class="material-symbols-outlined">info</span></button>
-                      </div>
+                        <button class="active-layer-info" data-info="swisstopo" data-layer-id="ch.bafu.lebensraumkarte-schweiz" aria-label="Info Lebensraumkarte"><span class="material-symbols-outlined">info</span></button>
+                      </label>
                       <div id="external-layers-list"></div>
                     </div>
                   </div>
                 </div>
               </aside>
-              <div id="menu-toggle">
+              <button id="menu-toggle" type="button">
                 <span class="material-symbols-outlined">expand_less</span>
                 <span id="menu-toggle-text">Menü schliessen</span>
-              </div>
+              </button>
             </div>
 
             <!-- Right-click context menu -->
-            <div id="map-context-menu" class="map-context-menu">
-              <div class="context-menu-item context-menu-coords" id="ctx-copy-coords" title="Klicken zum Kopieren">
-                <span class="material-symbols-outlined">content_copy</span>
+            <div id="map-context-menu" class="map-context-menu" role="menu" aria-label="Kartenmenü">
+              <div class="context-menu-item context-menu-coords" id="ctx-copy-coords" role="menuitem" title="Klicken zum Kopieren">
+                <span class="material-symbols-outlined" aria-hidden="true">content_copy</span>
                 <span id="ctx-coords-text">47.37623, 8.53048</span>
               </div>
-              <div class="context-menu-item" id="ctx-share">
-                <span class="material-symbols-outlined">share</span>
+              <div class="context-menu-item" id="ctx-share" role="menuitem">
+                <span class="material-symbols-outlined" aria-hidden="true">share</span>
                 <span>Teilen</span>
               </div>
-              <div class="context-menu-item" id="ctx-report">
-                <span class="material-symbols-outlined">bug_report</span>
+              <div class="context-menu-item" id="ctx-report" role="menuitem">
+                <span class="material-symbols-outlined" aria-hidden="true">bug_report</span>
                 <span>Problem melden</span>
               </div>
             </div>
@@ -228,31 +235,31 @@
             <div class="style-switcher" id="style-switcher">
               <div class="style-switcher-panel" id="style-panel">
                 <button class="style-option active" data-style="positron" title="Hell">
-                  <img id="thumb-positron" src="https://basemaps.cartocdn.com/light_all/8/134/91.png" alt="Hell">
+                  <img id="thumb-positron" src="https://basemaps.cartocdn.com/light_all/8/134/91.png" alt="Hell" loading="lazy">
                   <span>Hell</span>
                 </button>
                 <button class="style-option" data-style="voyager" title="Standard">
-                  <img id="thumb-voyager" src="https://basemaps.cartocdn.com/rastertiles/voyager/8/134/91.png" alt="Standard">
+                  <img id="thumb-voyager" src="https://basemaps.cartocdn.com/rastertiles/voyager/8/134/91.png" alt="Standard" loading="lazy">
                   <span>Standard</span>
                 </button>
                 <button class="style-option" data-style="swissimage" title="Luftbild">
-                  <img id="thumb-swissimage" src="https://wmts.geo.admin.ch/1.0.0/ch.swisstopo.swissimage/default/current/3857/8/134/91.jpeg" alt="Luftbild">
+                  <img id="thumb-swissimage" src="https://wmts.geo.admin.ch/1.0.0/ch.swisstopo.swissimage/default/current/3857/8/134/91.jpeg" alt="Luftbild" loading="lazy">
                   <span>Luftbild</span>
                 </button>
                 <button class="style-option" data-style="dark-matter" title="Dunkel">
-                  <img id="thumb-dark-matter" src="https://basemaps.cartocdn.com/dark_all/8/134/91.png" alt="Dunkel">
+                  <img id="thumb-dark-matter" src="https://basemaps.cartocdn.com/dark_all/8/134/91.png" alt="Dunkel" loading="lazy">
                   <span>Dunkel</span>
                 </button>
               </div>
               <button class="style-switcher-btn" id="style-switcher-btn" title="Hintergrund wechseln">
-                <img id="current-style-thumb" src="https://basemaps.cartocdn.com/light_all/8/134/91.png" alt="">
+                <img id="current-style-thumb" src="https://basemaps.cartocdn.com/light_all/8/134/91.png" alt="Aktueller Kartenstil" loading="lazy">
                 <span>Hintergrund</span>
               </button>
             </div>
 
             <!-- Table toggle button -->
-            <button id="tbl-toggle" class="tbl-toggle" title="Tabelle ein-/ausblenden">
-              <span class="material-symbols-outlined">expand_more</span>
+            <button id="tbl-toggle" class="tbl-toggle" title="Tabelle ein-/ausblenden" aria-label="Tabelle ein-/ausblenden">
+              <span class="material-symbols-outlined" aria-hidden="true">expand_more</span>
               <span class="tbl-toggle-label">Tabelle</span>
             </button>
           </div>
@@ -273,10 +280,10 @@
   </main>
 
   <!-- Layer info modal -->
-  <div id="layer-info-modal" class="layer-info-modal" role="dialog" aria-modal="true">
+  <div id="layer-info-modal" class="layer-info-modal" role="dialog" aria-modal="true" aria-labelledby="layer-info-title">
     <div class="layer-info-modal-content">
       <button class="layer-info-modal-close" aria-label="Schliessen">
-        <span class="material-symbols-outlined">close</span>
+        <span class="material-symbols-outlined" aria-hidden="true">close</span>
       </button>
       <div id="layer-info-content" class="layer-info-body">
         <div class="layer-info-loading">Lade Informationen...</div>
