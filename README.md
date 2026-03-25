@@ -60,7 +60,7 @@ The browser-based version runs entirely client-side — no backend, no installat
 | **Area calculation** | Spherical (Turf.js), ~0.1–0.5% error | Exact planar (LV95/EPSG:2056) |
 | **Data source** | Live API queries per parcel | Local GeoPackage (all cantons at once) |
 | **Throughput** | ~5 parcels in parallel, rate-limited | Bulk vectorised processing |
-| **Bauzonen analysis** | Not yet | `--bauzonen` flag |
+| **Bauzonen analysis** | Layer overlay only | `--bauzonen` flag |
 | **Habitat analysis** | Layer overlay only | `--habitat` flag with area intersection |
 | **Offline** | Requires internet | Fully offline with local GeoPackage |
 
