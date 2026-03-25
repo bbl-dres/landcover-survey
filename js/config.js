@@ -1,7 +1,7 @@
 /**
  * BBArt classification mappings — ported from python/config.py
  */
-import { t, localeFmtNum, getLocale, getLang } from "./i18n.js";
+import { t, localeFmtNum, getLang } from "./i18n.js";
 
 /** Land cover type → SIA 416 classification */
 export const SIA416 = {
@@ -103,26 +103,37 @@ export function classify(art) {
   };
 }
 
-/** Status constants — dynamic getters for i18n */
+/** Status constants — language-independent codes (translate at display time) */
 export const STATUS = {
-  get FOUND() { return t("status.found"); },
-  get NOT_FOUND() { return t("status.notFound"); },
-  get INVALID() { return t("status.invalid"); },
+  FOUND: "found",
+  NOT_FOUND: "not_found",
+  INVALID: "invalid",
 };
 
-/** Green space translated labels */
-export function getGreenSpaceLabel(key) {
+/** Translate a status code for display */
+export function statusLabel(code) {
   const map = {
-    "Green space (soil-covered)": "gs.soil",
-    "Green space (wooded)": "gs.wooded",
-    "Not green space": "gs.none",
+    found: "status.found",
+    not_found: "status.notFound",
+    invalid: "status.invalid",
   };
-  return t(map[key] || "gs.none");
+  if (map[code]) return t(map[code]);
+  // Error messages stored as "error:actual message"
+  if (code && code.startsWith("error:")) return t("status.error", { message: code.slice(6) });
+  return code || "\u2013";
 }
-// Keep GREEN_SPACE_DE as a getter-based object for backward compat
-export const GREEN_SPACE_DE = new Proxy({}, {
-  get(_, prop) { return getGreenSpaceLabel(prop); },
-});
+
+/** Green space display labels — translates stable English codes at display time */
+const GREEN_SPACE_I18N = {
+  "Green space (soil-covered)": "gs.soil",
+  "Green space (wooded)": "gs.wooded",
+  "Not green space": "gs.none",
+};
+
+export function greenSpaceLabel(code) {
+  const key = GREEN_SPACE_I18N[code];
+  return key ? t(key) : code || "\u2013";
+}
 
 /** Shared HTML escape utility */
 const _escDiv = document.createElement("div");

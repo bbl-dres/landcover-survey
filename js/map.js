@@ -2,7 +2,7 @@
  * MapLibre GL JS map with parcel polygons, land cover overlay,
  * Home/3D controls, and thumbnail basemap selector
  */
-import { ART_COLORS, CATEGORY_COLORS, ART_LABELS, MAP_STYLES, MAP_DEFAULT, GREEN_SPACE_DE, esc, fmtNum } from "./config.js";
+import { ART_COLORS, CATEGORY_COLORS, ART_LABELS, MAP_STYLES, MAP_DEFAULT, greenSpaceLabel, esc, fmtNum } from "./config.js";
 import { setMap, readdSwisstopoLayers, loadGeokatalog, addSwisstopoLayer, removeSwisstopoLayer } from "./swisstopo.js";
 import { t, getLang } from "./i18n.js";
 
@@ -642,7 +642,7 @@ function showParcelPopup(lngLat, props) {
 }
 
 function showLandcoverPopup(lngLat, props) {
-  const gs = GREEN_SPACE_DE[props.greenspace] || props.greenspace || "\u2013";
+  const gs = greenSpaceLabel(props.greenspace);
   popup.setLngLat(lngLat).setHTML(`
     <div class="map-popup">
       <div class="popup-layer">${esc(t("popup.landcover"))}</div>

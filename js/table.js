@@ -2,7 +2,7 @@
  * Table widget with tabs (Parcels / Land Covers), toolbar with search,
  * sortable headers, pagination, column visibility dropdown, resize handle
  */
-import { ART_LABELS, STATUS, esc, fmtNum } from "./config.js";
+import { ART_LABELS, STATUS, statusLabel, greenSpaceLabel, esc, fmtNum } from "./config.js";
 import { resizeMap } from "./map.js";
 import { t } from "./i18n.js";
 
@@ -37,7 +37,7 @@ function getParcelCols() {
     { key: "egrid", label: t("col.egrid"), cls: "col-p-egrid" },
     { key: "nummer", label: t("col.nummer"), cls: "col-p-nummer" },
     { key: "bfsnr", label: t("col.bfsnr"), cls: "col-p-bfsnr" },
-    { key: "check_egrid", label: t("col.status"), cls: "col-p-status" },
+    { key: "check_egrid", label: t("col.status"), cls: "col-p-status", fmt: statusLabel },
     { key: "parcel_area_m2", label: t("col.parcel_area"), cls: "col-p-area", numeric: true },
     { key: "GGF_m2", label: t("col.ggf"), cls: "col-p-ggf", numeric: true },
     { key: "BUF_m2", label: t("col.buf"), cls: "col-p-buf", numeric: true },
@@ -56,7 +56,7 @@ function getLcCols() {
     { key: "art_label", label: t("col.type"), cls: "col-lc-type" },
     { key: "bfsnr", label: t("col.bfsnr"), cls: "col-lc-bfsnr" },
     { key: "gwr_egid", label: t("col.gwr_egid"), cls: "col-lc-gwregid" },
-    { key: "check_greenspace", label: t("col.greenspace"), cls: "col-lc-green" },
+    { key: "check_greenspace", label: t("col.greenspace"), cls: "col-lc-green", fmt: greenSpaceLabel },
     { key: "area_m2", label: t("col.area"), cls: "col-lc-area", numeric: true },
   ];
 }
@@ -363,7 +363,7 @@ function renderParcels() {
       const idx = row._idx;
       const errCls = row.check_egrid === STATUS.FOUND ? "" : "row-error";
       return `<tr data-index="${idx}" class="${errCls}" tabindex="0">
-        ${getParcelCols().map((c) => `<td class="${c.cls} ${c.numeric ? 'num' : ''}">${fmtCell(row[c.key], c.numeric)}</td>`).join("")}
+        ${getParcelCols().map((c) => `<td class="${c.cls} ${c.numeric ? 'num' : ''}">${fmtCell(row[c.key], c.numeric, c.fmt)}</td>`).join("")}
       </tr>`;
     }).join("");
   }
@@ -427,7 +427,7 @@ function renderLandcover() {
     body.innerHTML = page.map((row) => {
       const lcIdx = row._idx;
       return `<tr data-lc-index="${lcIdx}" tabindex="0">
-        ${getLcCols().map((c) => `<td class="${c.cls} ${c.numeric ? 'num' : ''}">${fmtCell(row[c.key], c.numeric)}</td>`).join("")}
+        ${getLcCols().map((c) => `<td class="${c.cls} ${c.numeric ? 'num' : ''}">${fmtCell(row[c.key], c.numeric, c.fmt)}</td>`).join("")}
       </tr>`;
     }).join("");
   }
@@ -527,8 +527,9 @@ function initResizeHandle() {
 
 /* ── Helpers ── */
 
-function fmtCell(val, numeric) {
+function fmtCell(val, numeric, fmt) {
   if (val === null || val === undefined || val === "") return "\u2013";
   if (numeric) return fmtNum(val, 2);
+  if (fmt) return esc(fmt(val));
   return esc(String(val));
 }
