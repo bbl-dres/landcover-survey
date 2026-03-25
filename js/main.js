@@ -104,8 +104,14 @@ document.addEventListener("DOMContentLoaded", () => {
     if (processedResults) downloadLandcoverCSV(processedResults.landcover);
     closeDownloadModal();
   });
-  document.getElementById("dl-xlsx").addEventListener("click", () => {
-    if (processedResults) downloadXLSX(processedResults.parcels, processedResults.landcover);
+  document.getElementById("dl-xlsx").addEventListener("click", async () => {
+    if (processedResults) {
+      try {
+        await downloadXLSX(processedResults.parcels, processedResults.landcover);
+      } catch (err) {
+        console.error("XLSX export failed:", err);
+      }
+    }
     closeDownloadModal();
   });
   document.getElementById("dl-geojson").addEventListener("click", () => {

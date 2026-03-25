@@ -84,7 +84,7 @@ export async function processRows(rows, onProgress) {
         egrid,
         nummer: parcelResult.properties.number || "",
         bfsnr: parcelResult.properties.bfsnr || "",
-        check_egrid: lcResult.error ? STATUS.FOUND : STATUS.FOUND,
+        check_egrid: STATUS.FOUND,
         check_wfs: lcResult.error ? "wfs_error" : "ok",
         flaeche: parcelResult.properties.area || "",
         parcel_area_m2: round2(parcelArea),
