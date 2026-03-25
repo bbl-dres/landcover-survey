@@ -14,13 +14,12 @@ The solution is available in two variants that produce the same results:
 
 - **[Python](python/)** — open-source, requires Python >= 3.10 and free dependencies.
 - **[FME](fme/)** — requires a licensed copy of [FME Form](https://fme.safe.com/fme-form/).
+- **[Web JS Version](index.html)** — web JS only version without downloads, but with limitations.
 
 <p align="center">
+  <img src="assets/images/preview5.jpg" width="45%" style="vertical-align: top;"/>
   <img src="assets/images/preview6.jpg" width="45%" style="vertical-align: top;"/>
-  <img src="assets/images/preview7.jpg" width="45%" style="vertical-align: top;"/>
 </p>
-
-- **[Web JS Version](index.html)** — web JS only version without downloads, but with limitations.
 
 See [docs/SPECIFICATION.md](docs/SPECIFICATION.md) for a detailed description.
 
