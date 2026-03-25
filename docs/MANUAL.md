@@ -1,7 +1,5 @@
 # Benutzeranleitung / Guide de l'utilisateur / Guida per l'utente / User Guide
 
----
-
 ## DE — Deutsch
 
 ### Was macht diese Anwendung?
