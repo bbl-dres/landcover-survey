@@ -51,6 +51,56 @@ export const GREEN_SPACE = {
   uebrige_bestockte: "Green space (wooded)",
 };
 
+/** Land cover type → VBS Kategorie (a–d) */
+export const VBS_KATEGORIE = {
+  // A. Siedlungsfläche
+  Gebaeude: "kat_a",
+  Strasse_Weg: "kat_a",
+  Trottoir: "kat_a",
+  Verkehrsinsel: "kat_a",
+  Bahn: "kat_a",
+  Flugplatz: "kat_a",
+  Wasserbecken: "kat_a",
+  uebrige_befestigte: "kat_a",
+  Abbau_Deponie: "kat_a",
+  // B. Landwirtschaftsfläche
+  Acker_Wiese_Weide: "kat_b",
+  Reben: "kat_b",
+  uebrige_Intensivkultur: "kat_b",
+  Gartenanlage: "kat_b",
+  uebrige_humusierte: "kat_b",
+  Wytweide_dicht: "kat_b",
+  Wytweide_offen: "kat_b",
+  // C. Bestockte Fläche
+  geschlossener_Wald: "kat_c",
+  uebrige_bestockte: "kat_c",
+  // D. Unproduktive Fläche
+  Hoch_Flachmoor: "kat_d",
+  Gewaesser_stehendes: "kat_d",
+  Gewaesser_fliessendes: "kat_d",
+  Schilfguertel: "kat_d",
+  Fels: "kat_d",
+  Gletscher_Firn: "kat_d",
+  Geroell_Sand: "kat_d",
+  uebrige_vegetationslose: "kat_d",
+};
+
+/** VBS biological productivity — derived from VBS_KATEGORIE */
+const _UNPRODUKTIV_FROM_D = new Set(["Fels", "Gletscher_Firn", "Geroell_Sand"]);
+export const VBS_PRODUKTIV = Object.fromEntries(
+  Object.entries(VBS_KATEGORIE).map(([art, kat]) => [
+    art,
+    kat === "kat_a" || _UNPRODUKTIV_FROM_D.has(art) ? "unproduktiv" : "produktiv",
+  ])
+);
+
+/** VBS Typ — within biologically productive only */
+export const VBS_TYP = Object.fromEntries(
+  Object.entries(VBS_PRODUKTIV)
+    .filter(([, prod]) => prod === "produktiv")
+    .map(([art]) => [art, art === "Gartenanlage" ? "typ1" : "typ2"])
+);
+
 /** Land cover types classified as sealed (versiegelt) */
 export const SEALED = new Set([
   "Gebaeude",
@@ -100,6 +150,9 @@ export function classify(art) {
     din277: DIN277[art] || "UF",
     greenSpace: GREEN_SPACE[art] || "Not green space",
     sealed: SEALED.has(art),
+    vbsKategorie: VBS_KATEGORIE[art] || "kat_d",
+    vbsProduktiv: VBS_PRODUKTIV[art] || "unproduktiv",
+    vbsTyp: VBS_TYP[art] || null,
   };
 }
 

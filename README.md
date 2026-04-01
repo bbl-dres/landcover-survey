@@ -31,7 +31,7 @@ The browser-based version runs entirely client-side — no backend, no installat
 1. Look up parcel geometries from [swisstopo](https://api3.geo.admin.ch) (`ch.kantone.cadastralwebmap-farbe`)
 2. Fetch land cover polygons from [geodienste.ch](https://geodienste.ch) WFS (`ms:LCSF`)
 3. Clip land cover to parcel boundaries using [Turf.js](https://turfjs.org)
-4. Classify by SIA 416, DIN 277, green space, and imperviousness
+4. Classify by SIA 416, DIN 277, green space, imperviousness, and VBS Kategorie
 5. Display results on an interactive map with table and summary panel
 
 **Multilingual** — Available in German (DE), French (FR), Italian (IT), and English (EN) via `?lang=` URL parameter.
@@ -42,7 +42,7 @@ The browser-based version runs entirely client-side — no backend, no installat
 - **Accordion Menu** — Layer toggles, Geokatalog (all swisstopo layers), draw tools (placeholder)
 - **Search Bar** — Search parcels by ID/EGRID, Swiss locations, and swisstopo map layers
 - **Table Widget** — Tabs for Parcels and Land Covers, sortable columns, search filter, pagination (25/50/100), column visibility dropdown, resizable panel
-- **Summary Panel** — Collapsible sections for parcel status, area analysis with donut chart, and key metrics. Aggregation dropdown switches between land cover, SIA 416, DIN 277, green space, and imperviousness — updates chart, legend, and map polygon colors
+- **Summary Panel** — Collapsible sections for parcel status, area analysis with donut chart, and key metrics. Aggregation dropdown switches between land cover, SIA 416, DIN 277, green space, imperviousness, VBS Kategorie, VBS Produktivität, and VBS Typ — updates chart, legend, and map polygon colors
 - **Context Menu** — Right-click to copy coordinates, share, or report issues
 - **External Layers** — Toggle official survey and habitat map overlays, or add any swisstopo layer via Geokatalog/search
 - **Layer Info** — Click (i) to view swisstopo legend and metadata
@@ -93,7 +93,7 @@ js/
   table.js                   Table widget with tabs, sorting, pagination, column toggle
   search.js                  Header search (parcels + locations + layers)
   swisstopo.js               External layer management, Geokatalog, layer info modal
-  config.js                  BBArt mappings (SIA 416, DIN 277, green space, sealed)
+  config.js                  BBArt mappings (SIA 416, DIN 277, green space, sealed, VBS)
   export.js                  CSV/XLSX/GeoJSON export
   i18n.js                    Translations (DE, FR, IT, EN)
 data/
@@ -192,36 +192,38 @@ python main.py --mode 1 --input ../data/example.csv --bauzonen --habitat --limit
 
 The 26 land cover types (`Art` / BBArt) are defined in the official survey data model [DM.01-AV-CH](https://www.cadastre-manual.admin.ch/de/datenmodell-der-amtlichen-vermessung-dm01-av-ch). The legal basis for the categories is [TVAV Art. 14–19](https://www.fedlex.admin.ch/eli/cc/2023/530/de) (Technical Ordinance on the Official Cadastral Survey).
 
-| `Art` Code | EN | DE | SIA 416 | DIN 277 | Sealed | Green Space |
-|------------|-----|-----|---------|---------|--------|-------------|
-| `Gebaeude` | Building | Gebäude | GGF | BF | Yes | — |
-| `Strasse_Weg` | Road, path | Strasse, Weg | BUF | UF | Yes | — |
-| `Trottoir` | Sidewalk | Trottoir | BUF | UF | Yes | — |
-| `Verkehrsinsel` | Traffic island | Verkehrsinsel | BUF | UF | Yes | — |
-| `Bahn` | Railway | Bahn | BUF | UF | Yes | — |
-| `Flugplatz` | Airfield | Flugplatz | BUF | UF | Yes | — |
-| `Wasserbecken` | Water basin | Wasserbecken | BUF | UF | Yes | — |
-| `uebrige_befestigte` | Other sealed | Übrige befestigte | BUF | UF | Yes | — |
-| `Acker_Wiese_Weide` | Arable, meadow, pasture | Acker, Wiese, Weide | BUF | UF | No | Soil-covered |
-| `Reben` | Vineyards | Reben | BUF | UF | No | Soil-covered |
-| `uebrige_Intensivkultur` | Other intensive cultivation | Übrige Intensivkultur | BUF | UF | No | — |
-| `Gartenanlage` | Garden | Gartenanlage | BUF | UF | No | Soil-covered |
-| `Hoch_Flachmoor` | Raised/flat bog | Hoch-/Flachmoor | BUF | UF | No | Soil-covered |
-| `uebrige_humusierte` | Other soil-covered | Übrige humusierte | BUF | UF | No | Soil-covered |
-| `Gewaesser_stehendes` | Standing water | Stehendes Gewässer | UUF | UF | No | — |
-| `Gewaesser_fliessendes` | Flowing water | Fliessendes Gewässer | UUF | UF | No | — |
-| `Schilfguertel` | Reed belt | Schilfgürtel | UUF | UF | No | — |
-| `geschlossener_Wald` | Dense forest | Geschlossener Wald | UUF | UF | No | Wooded |
-| `Wytweide_dicht` | Dense wooded pasture | Wytweide dicht | BUF | UF | No | Soil-covered |
-| `Wytweide_offen` | Open wooded pasture | Wytweide offen | BUF | UF | No | Soil-covered |
-| `uebrige_bestockte` | Other wooded | Übrige bestockte | UUF | UF | No | Wooded |
-| `Fels` | Rock | Fels | UUF | UF | No | — |
-| `Gletscher_Firn` | Glacier, firn | Gletscher, Firn | UUF | UF | No | — |
-| `Geroell_Sand` | Scree, sand | Geröll, Sand | UUF | UF | No | — |
-| `Abbau_Deponie` | Quarry, landfill | Abbau, Deponie | UUF | UF | No | — |
-| `uebrige_vegetationslose` | Other unvegetated | Übrige vegetationslose | UUF | UF | No | — |
+| `Art` Code | EN | DE | SIA 416 | DIN 277 | Sealed | Green Space | VBS Kat. | VBS Prod. | VBS Typ |
+|------------|-----|-----|---------|---------|--------|-------------|---------|-----------|---------|
+| `Gebaeude` | Building | Gebäude | GGF | BF | Yes | — | A | 2 | — |
+| `Strasse_Weg` | Road, path | Strasse, Weg | BUF | UF | Yes | — | A | 2 | — |
+| `Trottoir` | Sidewalk | Trottoir | BUF | UF | Yes | — | A | 2 | — |
+| `Verkehrsinsel` | Traffic island | Verkehrsinsel | BUF | UF | Yes | — | A | 2 | — |
+| `Bahn` | Railway | Bahn | BUF | UF | Yes | — | A | 2 | — |
+| `Flugplatz` | Airfield | Flugplatz | BUF | UF | Yes | — | A | 2 | — |
+| `Wasserbecken` | Water basin | Wasserbecken | BUF | UF | Yes | — | A | 2 | — |
+| `uebrige_befestigte` | Other sealed | Übrige befestigte | BUF | UF | Yes | — | A | 2 | — |
+| `Acker_Wiese_Weide` | Arable, meadow, pasture | Acker, Wiese, Weide | BUF | UF | No | Soil-covered | B | 1 | Typ 2 |
+| `Reben` | Vineyards | Reben | BUF | UF | No | Soil-covered | B | 1 | Typ 2 |
+| `uebrige_Intensivkultur` | Other intensive cultivation | Übrige Intensivkultur | BUF | UF | No | — | B | 1 | Typ 2 |
+| `Gartenanlage` | Garden | Gartenanlage | BUF | UF | No | Soil-covered | B | 1 | Typ 1 |
+| `Hoch_Flachmoor` | Raised/flat bog | Hoch-/Flachmoor | BUF | UF | No | Soil-covered | D | 1 | Typ 2 |
+| `uebrige_humusierte` | Other soil-covered | Übrige humusierte | BUF | UF | No | Soil-covered | B | 1 | Typ 2 |
+| `Gewaesser_stehendes` | Standing water | Stehendes Gewässer | UUF | UF | No | — | D | 1 | Typ 2 |
+| `Gewaesser_fliessendes` | Flowing water | Fliessendes Gewässer | UUF | UF | No | — | D | 1 | Typ 2 |
+| `Schilfguertel` | Reed belt | Schilfgürtel | UUF | UF | No | — | D | 1 | Typ 2 |
+| `geschlossener_Wald` | Dense forest | Geschlossener Wald | UUF | UF | No | Wooded | C | 1 | Typ 2 |
+| `Wytweide_dicht` | Dense wooded pasture | Wytweide dicht | BUF | UF | No | Soil-covered | B | 1 | Typ 2 |
+| `Wytweide_offen` | Open wooded pasture | Wytweide offen | BUF | UF | No | Soil-covered | B | 1 | Typ 2 |
+| `uebrige_bestockte` | Other wooded | Übrige bestockte | UUF | UF | No | Wooded | C | 1 | Typ 2 |
+| `Fels` | Rock | Fels | UUF | UF | No | — | D | 2 | — |
+| `Gletscher_Firn` | Glacier, firn | Gletscher, Firn | UUF | UF | No | — | D | 2 | — |
+| `Geroell_Sand` | Scree, sand | Geröll, Sand | UUF | UF | No | — | D | 2 | — |
+| `Abbau_Deponie` | Quarry, landfill | Abbau, Deponie | UUF | UF | No | — | A | 2 | — |
+| `uebrige_vegetationslose` | Other unvegetated | Übrige vegetationslose | UUF | UF | No | — | D | 1 | Typ 2 |
 
 > **SIA 416:2003** — GSF = GGF + UF, where UF = BUF + UUF. **DIN 277:2021** — GF = BF + UF.
+>
+> **VBS Classification** — Based on "Auswertung naturnahe VBS Flächen" (arImmo). **VBS Kat.** A–D = Siedlung / Landwirtschaft / Bestockt / Unproduktiv. **VBS Prod.** 1 = Biologisch produktiv, 2 = Biologisch unproduktiv (A + Fels/Gletscher/Geröll). **VBS Typ** = Typ 1 (Gartenanlage only) / Typ 2 (other productive) — only within biologically productive.
 
 ## Data Source
 

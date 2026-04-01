@@ -152,7 +152,9 @@
       "Bash(curl -s \"https://www.geodienste.ch/info/services.csv?base_topics=av&language=de\")",
       "Read(//c/Users/DavidRasner/Documents/GitHub/landcover-survey/**)",
       "Bash(curl -s \"https://api3.geo.admin.ch/rest/services/all/MapServer/identify?geometryType=esriGeometryPoint&geometry=8.2275,46.8182&sr=4326&layers=all:ch.are.bauzonen&tolerance=5&mapExtent=0,0,100,100&imageDisplay=100,100,96&returnGeometry=true&geometryFormat=geojson\")",
-      "Bash(curl -s \"https://api3.geo.admin.ch/rest/services/all/MapServer/identify?geometryType=esriGeometryPoint&geometry=8.2275,46.8182&sr=4326&layers=all:ch.kantone.cadastralwebmap-farbe&tolerance=5&mapExtent=0,0,100,100&imageDisplay=100,100,96&returnGeometry=true&geometryFormat=geojson\")"
+      "Bash(curl -s \"https://api3.geo.admin.ch/rest/services/all/MapServer/identify?geometryType=esriGeometryPoint&geometry=8.2275,46.8182&sr=4326&layers=all:ch.kantone.cadastralwebmap-farbe&tolerance=5&mapExtent=0,0,100,100&imageDisplay=100,100,96&returnGeometry=true&geometryFormat=geojson\")",
+      "Bash(where pdftotext:*)",
+      "Bash(pdftotext \"Auswertung_naturnaheVBSFlaeche_Anleitung.pdf\" -)"
     ]
   }
 }

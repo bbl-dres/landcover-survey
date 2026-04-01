@@ -123,6 +123,70 @@ DIN277: dict[str, str] = {
 }
 
 # ---------------------------------------------------------------------------
+# VBS Kategorie classification  (Art → base category a–d)
+#
+# Based on: "Auswertung naturnahe VBS Flächen" (arImmo internal)
+# Groups the 26 BBArt types into four base categories used by VBS/arImmo.
+# ---------------------------------------------------------------------------
+VBS_KATEGORIE: dict[str, str] = {
+    # A. Siedlungsfläche
+    "Gebaeude": "kat_a",
+    "Strasse_Weg": "kat_a",
+    "Trottoir": "kat_a",
+    "Verkehrsinsel": "kat_a",
+    "Bahn": "kat_a",
+    "Flugplatz": "kat_a",
+    "Wasserbecken": "kat_a",
+    "uebrige_befestigte": "kat_a",
+    "Abbau_Deponie": "kat_a",
+    # B. Landwirtschaftsfläche
+    "Acker_Wiese_Weide": "kat_b",
+    "Reben": "kat_b",
+    "uebrige_Intensivkultur": "kat_b",
+    "Gartenanlage": "kat_b",
+    "uebrige_humusierte": "kat_b",
+    "Wytweide_dicht": "kat_b",
+    "Wytweide_offen": "kat_b",
+    # C. Bestockte Fläche
+    "geschlossener_Wald": "kat_c",
+    "uebrige_bestockte": "kat_c",
+    # D. Unproduktive Fläche
+    "Hoch_Flachmoor": "kat_d",
+    "Gewaesser_stehendes": "kat_d",
+    "Gewaesser_fliessendes": "kat_d",
+    "Schilfguertel": "kat_d",
+    "Fels": "kat_d",
+    "Gletscher_Firn": "kat_d",
+    "Geroell_Sand": "kat_d",
+    "uebrige_vegetationslose": "kat_d",
+}
+
+# ---------------------------------------------------------------------------
+# VBS biological productivity  (Art → produktiv / unproduktiv)
+#
+# 1 Biologisch produktiv  = B + C + D  minus  Fels, Gletscher_Firn, Geroell_Sand
+# 2 Biologisch unproduktiv = A  plus  Fels, Gletscher_Firn, Geroell_Sand
+# ---------------------------------------------------------------------------
+_UNPRODUKTIV_FROM_D = {"Fels", "Gletscher_Firn", "Geroell_Sand"}
+
+VBS_PRODUKTIV: dict[str, str] = {
+    art: "unproduktiv" if (kat == "kat_a" or art in _UNPRODUKTIV_FROM_D) else "produktiv"
+    for art, kat in VBS_KATEGORIE.items()
+}
+
+# ---------------------------------------------------------------------------
+# VBS Typ  (within biologically productive only)
+#
+# Typ 1 — Grünflächen in Gebäudeumgebung  = Gartenanlage only
+# Typ 2 — Übrige Grünflächen              = all other biologically productive
+# ---------------------------------------------------------------------------
+VBS_TYP: dict[str, str] = {
+    art: ("typ1" if art == "Gartenanlage" else "typ2")
+    for art, prod in VBS_PRODUKTIV.items()
+    if prod == "produktiv"
+}
+
+# ---------------------------------------------------------------------------
 # Check_EGRID messages
 # ---------------------------------------------------------------------------
 MSG_EGRID_FOUND = "EGRID found in AV"

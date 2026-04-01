@@ -7,7 +7,7 @@ import { initMap, plotResults, highlightParcel, highlightLandcover, resizeMap, o
 import { initTable, populateTable, highlightRow, highlightLcRow } from "./table.js";
 import { downloadParcelCSV, downloadLandcoverCSV, downloadXLSX, downloadGeoJSON } from "./export.js";
 import { initSearch, setSearchData } from "./search.js";
-import { ART_LABELS, ART_COLORS, CATEGORY_COLORS, SIA416, DIN277, GREEN_SPACE, SEALED, STATUS, esc, fmtNum } from "./config.js";
+import { ART_LABELS, ART_COLORS, CATEGORY_COLORS, SIA416, DIN277, GREEN_SPACE, SEALED, VBS_KATEGORIE, VBS_PRODUKTIV, VBS_TYP, STATUS, esc, fmtNum } from "./config.js";
 import { t, applyI18nDOM, setLang, getLang, getLocale } from "./i18n.js";
 
 let processedResults = null;
@@ -296,6 +296,60 @@ const AGGREGATION_MODES = {
       ];
     },
     colorFn(props) { return SEALED.has(props.art) ? "#c0392b" : "#27ae60"; },
+  },
+  vbsKategorie: {
+    get label() { return t("agg.vbs.kategorie"); },
+    getEntries(lc) {
+      const map = { kat_a: 0, kat_b: 0, kat_c: 0, kat_d: 0 };
+      for (const f of lc) { const k = VBS_KATEGORIE[f.art] || "kat_d"; map[k] += f.area_m2; }
+      return [
+        { label: t("agg.vbs.kat_a"), area: map.kat_a, color: "#e74c3c", key: "kat_a" },
+        { label: t("agg.vbs.kat_b"), area: map.kat_b, color: "#27ae60", key: "kat_b" },
+        { label: t("agg.vbs.kat_c"), area: map.kat_c, color: "#1e8449", key: "kat_c" },
+        { label: t("agg.vbs.kat_d"), area: map.kat_d, color: "#95a5a6", key: "kat_d" },
+      ];
+    },
+    colorFn(props) {
+      const k = VBS_KATEGORIE[props.art] || "kat_d";
+      return { kat_a: "#e74c3c", kat_b: "#27ae60", kat_c: "#1e8449", kat_d: "#95a5a6" }[k];
+    },
+  },
+  vbsProduktiv: {
+    get label() { return t("agg.vbs.produktiv"); },
+    getEntries(lc) {
+      const map = { produktiv: 0, unproduktiv: 0 };
+      for (const f of lc) { const p = VBS_PRODUKTIV[f.art] || "unproduktiv"; map[p] += f.area_m2; }
+      return [
+        { label: t("agg.vbs.produktiv.yes"), area: map.produktiv, color: "#27ae60", key: "produktiv" },
+        { label: t("agg.vbs.produktiv.no"), area: map.unproduktiv, color: "#95a5a6", key: "unproduktiv" },
+      ];
+    },
+    colorFn(props) {
+      return (VBS_PRODUKTIV[props.art] || "unproduktiv") === "produktiv" ? "#27ae60" : "#95a5a6";
+    },
+  },
+  vbsTyp: {
+    get label() { return t("agg.vbs.typ"); },
+    getEntries(lc) {
+      const map = { typ1: 0, typ2: 0, none: 0 };
+      for (const f of lc) {
+        const typ = VBS_TYP[f.art];
+        if (typ === "typ1") map.typ1 += f.area_m2;
+        else if (typ === "typ2") map.typ2 += f.area_m2;
+        else map.none += f.area_m2;
+      }
+      return [
+        { label: t("agg.vbs.typ1"), area: map.typ1, color: "#27ae60", key: "typ1" },
+        { label: t("agg.vbs.typ2"), area: map.typ2, color: "#1e8449", key: "typ2" },
+        { label: t("agg.vbs.produktiv.no"), area: map.none, color: "#95a5a6", key: "none" },
+      ];
+    },
+    colorFn(props) {
+      const typ = VBS_TYP[props.art];
+      if (typ === "typ1") return "#27ae60";
+      if (typ === "typ2") return "#1e8449";
+      return "#95a5a6";
+    },
   },
 };
 

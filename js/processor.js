@@ -333,6 +333,9 @@ function clipLandCover(parcelGeom, lcFeatures, id, egrid) {
         _sia416: cls.sia416,
         _din277: cls.din277,
         _sealed: cls.sealed,
+        _vbsKategorie: cls.vbsKategorie,
+        _vbsProduktiv: cls.vbsProduktiv,
+        _vbsTyp: cls.vbsTyp,
       });
     } catch (err) {
       console.warn("Clip error for feature:", lc.id, err.message);
@@ -352,6 +355,8 @@ function aggregateLandCover(clippedFeatures) {
     DIN277_UF_m2: 0,
     Sealed_m2: 0,
     GreenSpace_m2: 0,
+    VBS_Produktiv_m2: 0,
+    VBS_Unproduktiv_m2: 0,
   };
 
   const artAreas = {};
@@ -368,6 +373,9 @@ function aggregateLandCover(clippedFeatures) {
 
     if (f._sealed) agg.Sealed_m2 += area;
     if (f.check_greenspace !== "Not green space") agg.GreenSpace_m2 += area;
+
+    if (f._vbsProduktiv === "produktiv") agg.VBS_Produktiv_m2 += area;
+    else agg.VBS_Unproduktiv_m2 += area;
 
     const artKey = `${f.art}_m2`;
     artAreas[artKey] = (artAreas[artKey] || 0) + area;

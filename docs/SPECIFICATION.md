@@ -100,34 +100,34 @@ The 26 land cover types are defined in the Swiss data model **DM.01-AV-CH** as t
 
 ### Complete Land Cover Type Hierarchy
 
-| AVS Code | Main Category | Sub-category | `Art` Value | EN | DE | SIA 416 | Sealed | Green Space |
-|----------|---------------|--------------|-------------|-----|-----|---------|--------|-------------|
-| 0 | Buildings (Gebäude) | — | `Gebaeude` | Buildings | Gebäude | GGF | Yes | — |
-| 1 | Sealed (Befestigt) | — | `Strasse_Weg` | Road, path | Strasse, Weg | BUF | Yes | — |
-| 2 | Sealed (Befestigt) | — | `Trottoir` | Sidewalk | Trottoir | BUF | Yes | — |
-| 3 | Sealed (Befestigt) | — | `Verkehrsinsel` | Traffic island | Verkehrsinsel | BUF | Yes | — |
-| 4 | Sealed (Befestigt) | — | `Bahn` | Railway | Bahn | BUF | Yes | — |
-| 5 | Sealed (Befestigt) | — | `Flugplatz` | Airfield | Flugplatz | BUF | Yes | — |
-| 6 | Sealed (Befestigt) | — | `Wasserbecken` | Water basin | Wasserbecken | BUF | Yes | — |
-| 7 | Sealed (Befestigt) | — | `uebrige_befestigte` | Other sealed surfaces | Übrige befestigte | BUF | Yes | — |
-| 8 | Soil-covered (Humusiert) | — | `Acker_Wiese_Weide` | Arable land, meadow, pasture | Acker, Wiese, Weide | BUF | No | Soil-covered |
-| 9 | Soil-covered (Humusiert) | Intensive (Intensivkultur) | `Reben` | Vineyards | Reben | BUF | No | Soil-covered |
-| 10 | Soil-covered (Humusiert) | Intensive (Intensivkultur) | `uebrige_Intensivkultur` | Other intensive cultivation | Übrige Intensivkultur | BUF | No | — * |
-| 11 | Soil-covered (Humusiert) | — | `Gartenanlage` | Garden area | Gartenanlage | BUF | No | Soil-covered |
-| 12 | Soil-covered (Humusiert) | — | `Hoch_Flachmoor` | Raised/flat bog | Hoch-/Flachmoor | BUF | No | Soil-covered |
-| 13 | Soil-covered (Humusiert) | — | `uebrige_humusierte` | Other soil-covered | Übrige humusierte | BUF | No | Soil-covered |
-| 14 | Water (Gewässer) | — | `stehendes` | Standing water | Stehendes Gewässer | UUF | No | — |
-| 15 | Water (Gewässer) | — | `fliessendes` | Flowing water | Fliessendes Gewässer | UUF | No | — |
-| 16 | Water (Gewässer) | — | `Schilfguertel` | Reed belt | Schilfgürtel | UUF | No | — |
-| 17 | Wooded (Bestockt) | — | `geschlossener_Wald` | Closed forest | Geschlossener Wald | UUF | No | Wooded |
-| 18 | Wooded (Bestockt) | Wooded pasture (Wytweide) | `Wytweide_dicht` | Dense wooded pasture | Wytweide dicht | BUF | No | Soil-covered ** |
-| 19 | Wooded (Bestockt) | Wooded pasture (Wytweide) | `Wytweide_offen` | Open wooded pasture | Wytweide offen | BUF | No | Soil-covered ** |
-| 20 | Wooded (Bestockt) | — | `uebrige_bestockte` | Other wooded | Übrige bestockte | UUF | No | Wooded |
-| 21 | Unvegetated (Vegetationslos) | — | `Fels` | Rock | Fels | UUF | No | — |
-| 22 | Unvegetated (Vegetationslos) | — | `Gletscher_Firn` | Glacier, firn | Gletscher, Firn | UUF | No | — |
-| 23 | Unvegetated (Vegetationslos) | — | `Geroell_Sand` | Scree, sand | Geröll, Sand | UUF | No | — |
-| 24 | Unvegetated (Vegetationslos) | — | `Abbau_Deponie` | Extraction, landfill | Abbau, Deponie | UUF | No | — |
-| 25 | Unvegetated (Vegetationslos) | — | `uebrige_vegetationslose` | Other unvegetated | Übrige vegetationslose | UUF | No | — |
+| AVS Code | Main Category | Sub-category | `Art` Value | EN | DE | SIA 416 | Sealed | Green Space | VBS Kat. | VBS Prod. | VBS Typ |
+|----------|---------------|--------------|-------------|-----|-----|---------|--------|-------------|---------|-----------|---------|
+| 0 | Buildings (Gebäude) | — | `Gebaeude` | Buildings | Gebäude | GGF | Yes | — | A | 2 | — |
+| 1 | Sealed (Befestigt) | — | `Strasse_Weg` | Road, path | Strasse, Weg | BUF | Yes | — | A | 2 | — |
+| 2 | Sealed (Befestigt) | — | `Trottoir` | Sidewalk | Trottoir | BUF | Yes | — | A | 2 | — |
+| 3 | Sealed (Befestigt) | — | `Verkehrsinsel` | Traffic island | Verkehrsinsel | BUF | Yes | — | A | 2 | — |
+| 4 | Sealed (Befestigt) | — | `Bahn` | Railway | Bahn | BUF | Yes | — | A | 2 | — |
+| 5 | Sealed (Befestigt) | — | `Flugplatz` | Airfield | Flugplatz | BUF | Yes | — | A | 2 | — |
+| 6 | Sealed (Befestigt) | — | `Wasserbecken` | Water basin | Wasserbecken | BUF | Yes | — | A | 2 | — |
+| 7 | Sealed (Befestigt) | — | `uebrige_befestigte` | Other sealed surfaces | Übrige befestigte | BUF | Yes | — | A | 2 | — |
+| 8 | Soil-covered (Humusiert) | — | `Acker_Wiese_Weide` | Arable land, meadow, pasture | Acker, Wiese, Weide | BUF | No | Soil-covered | B | 1 | Typ 2 |
+| 9 | Soil-covered (Humusiert) | Intensive (Intensivkultur) | `Reben` | Vineyards | Reben | BUF | No | Soil-covered | B | 1 | Typ 2 |
+| 10 | Soil-covered (Humusiert) | Intensive (Intensivkultur) | `uebrige_Intensivkultur` | Other intensive cultivation | Übrige Intensivkultur | BUF | No | — * | B | 1 | Typ 2 |
+| 11 | Soil-covered (Humusiert) | — | `Gartenanlage` | Garden area | Gartenanlage | BUF | No | Soil-covered | B | 1 | Typ 1 |
+| 12 | Soil-covered (Humusiert) | — | `Hoch_Flachmoor` | Raised/flat bog | Hoch-/Flachmoor | BUF | No | Soil-covered | D | 1 | Typ 2 |
+| 13 | Soil-covered (Humusiert) | — | `uebrige_humusierte` | Other soil-covered | Übrige humusierte | BUF | No | Soil-covered | B | 1 | Typ 2 |
+| 14 | Water (Gewässer) | — | `stehendes` | Standing water | Stehendes Gewässer | UUF | No | — | D | 1 | Typ 2 |
+| 15 | Water (Gewässer) | — | `fliessendes` | Flowing water | Fliessendes Gewässer | UUF | No | — | D | 1 | Typ 2 |
+| 16 | Water (Gewässer) | — | `Schilfguertel` | Reed belt | Schilfgürtel | UUF | No | — | D | 1 | Typ 2 |
+| 17 | Wooded (Bestockt) | — | `geschlossener_Wald` | Closed forest | Geschlossener Wald | UUF | No | Wooded | C | 1 | Typ 2 |
+| 18 | Wooded (Bestockt) | Wooded pasture (Wytweide) | `Wytweide_dicht` | Dense wooded pasture | Wytweide dicht | BUF | No | Soil-covered ** | B | 1 | Typ 2 |
+| 19 | Wooded (Bestockt) | Wooded pasture (Wytweide) | `Wytweide_offen` | Open wooded pasture | Wytweide offen | BUF | No | Soil-covered ** | B | 1 | Typ 2 |
+| 20 | Wooded (Bestockt) | — | `uebrige_bestockte` | Other wooded | Übrige bestockte | UUF | No | Wooded | C | 1 | Typ 2 |
+| 21 | Unvegetated (Vegetationslos) | — | `Fels` | Rock | Fels | UUF | No | — | D | 2 *** | — |
+| 22 | Unvegetated (Vegetationslos) | — | `Gletscher_Firn` | Glacier, firn | Gletscher, Firn | UUF | No | — | D | 2 *** | — |
+| 23 | Unvegetated (Vegetationslos) | — | `Geroell_Sand` | Scree, sand | Geröll, Sand | UUF | No | — | D | 2 *** | — |
+| 24 | Unvegetated (Vegetationslos) | — | `Abbau_Deponie` | Extraction, landfill | Abbau, Deponie | UUF | No | — | A | 2 | — |
+| 25 | Unvegetated (Vegetationslos) | — | `uebrige_vegetationslose` | Other unvegetated | Übrige vegetationslose | UUF | No | — | D | 1 | Typ 2 |
 
 > **SIA 416 Legend:** **GSF** = Grundstücksfläche / total parcel area = GGF + UF. **GGF** = Gebäudegrundfläche / building footprint. **UF** = Umgebungsfläche / surrounding area = BUF + UUF. **BUF** = Bearbeitete Umgebungsfläche / developed surrounding (sealed + soil-covered). **UUF** = Unbearbeitete Umgebungsfläche / undeveloped surrounding (water + wooded + unvegetated).
 > **Sealed area** = GGF + all sealed types (all types with Sealed = Yes).
@@ -135,6 +135,9 @@ The 26 land cover types are defined in the Swiss data model **DM.01-AV-CH** as t
 > **Green Space Legend:** **Soil-covered** = green space (humusiert), **Wooded** = green space (bestockt), **—** = not green space.
 > \* `uebrige_Intensivkultur` is officially "soil-covered" (humusiert) but classified as not green space — typically managed/sealed horticultural surfaces (orchards, nurseries).
 > \*\* `Wytweide_dicht` and `Wytweide_offen` are officially "bestockt" but treated as Humusiert — primarily open pasture with partial tree cover.
+>
+> **VBS Legend:** **VBS Kat.** = VBS Kategorie (A–D). **VBS Prod.** = 1 Biologisch produktiv / 2 Biologisch unproduktiv. **VBS Typ** = Typ 1 (Grünflächen in Gebäudeumgebung) / Typ 2 (Übrige Grünflächen) — only for biologically productive types.
+> \*\*\* `Fels`, `Gletscher_Firn`, `Geroell_Sand` belong to "D. Unproduktive Fläche" but are reclassified as "2 Biologisch unproduktiv" — mineral, non-vegetated surfaces.
 
 ### INTERLIS Hierarchy (DM.01-AV-CH)
 
@@ -172,6 +175,37 @@ Each land cover type is also classified as green space or not. Two special cases
 | Green space (wooded) | Grünfläche (Bestockt) | `geschlossener_Wald`, `uebrige_bestockte` |
 | Not green space | Keine Grünfläche | All others |
 
+### VBS Classification (Project-Specific)
+
+Based on the arImmo internal document "Auswertung naturnahe VBS Flächen", each land cover type is classified into three additional layers used by VBS/arImmo for near-natural area reporting.
+
+#### Layer 1 — VBS Kategorie (Base Category a–d)
+
+| VBS Kategorie | DE | `Art` Values |
+|---------------|-----|-------------|
+| A. Siedlungsfläche | A. Siedlungsfläche | `Gebaeude`, `Strasse_Weg`, `Trottoir`, `Verkehrsinsel`, `Bahn`, `Flugplatz`, `Wasserbecken`, `uebrige_befestigte`, `Abbau_Deponie` |
+| B. Landwirtschaftsfläche | B. Landwirtschaftsfläche | `Acker_Wiese_Weide`, `Reben`, `uebrige_Intensivkultur`, `Gartenanlage`, `uebrige_humusierte`, `Wytweide_dicht`, `Wytweide_offen` |
+| C. Bestockte Fläche | C. Bestockte Fläche | `geschlossener_Wald`, `uebrige_bestockte` |
+| D. Unproduktive Fläche | D. Unproduktive Fläche | `Hoch_Flachmoor`, `Gewaesser_stehendes`, `Gewaesser_fliessendes`, `Schilfguertel`, `Fels`, `Gletscher_Firn`, `Geroell_Sand`, `uebrige_vegetationslose` |
+
+#### Layer 2 — Biological Productivity
+
+| Category | DE | Rule |
+|----------|-----|------|
+| 1 Biologisch produktiv | 1 Biologisch produktiv | B + C + D **minus** `Fels`, `Gletscher_Firn`, `Geroell_Sand` |
+| 2 Biologisch unproduktiv | 2 Biologisch unproduktiv | A **plus** `Fels`, `Gletscher_Firn`, `Geroell_Sand` |
+
+> Three types from "D. Unproduktive Fläche" (`Fels`, `Gletscher_Firn`, `Geroell_Sand`) are reclassified as biologically unproductive — they are mineral, non-vegetated surfaces.
+
+#### Layer 3 — VBS Typ (within biologically productive only)
+
+| VBS Typ | DE | `Art` Values |
+|---------|-----|-------------|
+| Typ 1 — Grünflächen in Gebäudeumgebung | Typ 1 — Grünflächen in Gebäudeumgebung | `Gartenanlage` |
+| Typ 2 — Übrige Grünflächen | Typ 2 — Übrige Grünflächen | All other biologically productive types |
+
+> Biologically unproductive types have no VBS Typ assignment.
+
 ---
 
 ## Output Tables (Alphanumeric — No Geometry)
@@ -196,6 +230,8 @@ One row per parcel. In Mode 1, includes user-provided columns and an error messa
 | `DIN277_UF_m2` | `float` | Optional | Non-Built-Up Area (m²) | Unbebaute Fläche (m²) | Everything except buildings (DIN 277 UF) | Alles ausser Gebäuden (DIN 277 UF) |
 | `Sealed_m2` | `float` | Optional | Sealed Area (m²) | Versiegelte Fläche (m²) | GGF + sealed surfaces (buildings + all befestigt) | GGF + befestigte Flächen (Gebäude + alle befestigt) |
 | `GreenSpace_m2` | `float` | Optional | Green Space (m²) | Grünfläche (m²) | Total green space area (soil-covered + wooded types from green space classification) | Gesamte Grünfläche (humusiert + bestockt gemäss Grünfläche-Klassifizierung) |
+| `VBS_Produktiv_m2` | `float` | Optional | Biologically Productive (m²) | Biologisch produktiv (m²) | Biologically productive area (VBS classification) | Biologisch produktive Fläche (VBS-Klassifizierung) |
+| `VBS_Unproduktiv_m2` | `float` | Optional | Biologically Unproductive (m²) | Biologisch unproduktiv (m²) | Biologically unproductive area (VBS classification) | Biologisch unproduktive Fläche (VBS-Klassifizierung) |
 | `{Art}_m2` | `float` | Optional | Per-Type Area (m²) | Fläche pro Typ (m²) | One column per land cover type present (e.g. `Gebaeude_m2`, `Strasse_Weg_m2`) | Eine Spalte pro vorhandener Bodenabdeckungsart |
 | `bauzonen` | `varchar` | Optional | Building Zones | Bauzonen | Semicolon-separated building zone names intersecting the parcel (`--bauzonen`) | Semikolon-getrennte Bauzonennamen, die die Parzelle schneiden |
 | `bauzonen_m2` | `varchar` | Optional | Building Zone Areas (m²) | Bauzonen-Flächen (m²) | Semicolon-separated intersection areas per building zone (`--bauzonen`) | Semikolon-getrennte Schnittflächen pro Bauzone |
