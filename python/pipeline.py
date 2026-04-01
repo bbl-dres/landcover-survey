@@ -28,6 +28,9 @@ from config import (
     SIA416,
     SLIVER_THRESHOLD,
     SQL_BATCH_SIZE,
+    VBS_KATEGORIE,
+    VBS_PRODUKTIV,
+    VBS_TYP,
     VERSIEGELT_ARTS,
 )
 from geometry import clean_geometries, filter_clip_results
@@ -597,11 +600,12 @@ def _aggregate_landcover(
     - ``GGF_m2``, ``BUF_m2``, ``UUF_m2`` — SIA 416 area breakdown
     - ``Sealed_m2`` — sealed area (GGF + befestigt)
     - ``GreenSpace_m2`` — green space area (humusiert + bestockt)
+    - ``VBS_Produktiv_m2``, ``VBS_Unproduktiv_m2`` — VBS biological productivity
     - One column per ``Art`` value present (e.g. ``Gebaeude_m2``)
     """
     sia_cols = [f"{c}_m2" for c in _SIA416_CATEGORIES]
     din_cols = [f"DIN277_{c}_m2" for c in _DIN277_CATEGORIES]
-    fixed_cols = sia_cols + din_cols + ["Sealed_m2", "GreenSpace_m2"]
+    fixed_cols = sia_cols + din_cols + ["Sealed_m2", "GreenSpace_m2", "VBS_Produktiv_m2", "VBS_Unproduktiv_m2"]
 
     if lc_df.empty:
         for col in fixed_cols:
@@ -664,6 +668,23 @@ def _aggregate_landcover(
         .rename(columns={"area_m2": "GreenSpace_m2"})
     )
 
+    # --- VBS biological productivity ---
+    lc["VBS_PRODUKTIV"] = lc["Art"].map(VBS_PRODUKTIV).fillna("unproduktiv")
+    vbs_produktiv = (
+        lc[lc["VBS_PRODUKTIV"] == "produktiv"]
+        .groupby("EGRID")["area_m2"]
+        .sum()
+        .reset_index()
+        .rename(columns={"area_m2": "VBS_Produktiv_m2"})
+    )
+    vbs_unproduktiv = (
+        lc[lc["VBS_PRODUKTIV"] == "unproduktiv"]
+        .groupby("EGRID")["area_m2"]
+        .sum()
+        .reset_index()
+        .rename(columns={"area_m2": "VBS_Unproduktiv_m2"})
+    )
+
     # --- Per-Art pivot ---
     art_pivot = (
         lc.groupby(["EGRID", "Art"])["area_m2"]
@@ -679,6 +700,8 @@ def _aggregate_landcover(
     result = result.merge(din_pivot, on="EGRID", how="left")
     result = result.merge(versiegelt, on="EGRID", how="left")
     result = result.merge(green, on="EGRID", how="left")
+    result = result.merge(vbs_produktiv, on="EGRID", how="left")
+    result = result.merge(vbs_unproduktiv, on="EGRID", how="left")
     result = result.merge(art_pivot, on="EGRID", how="left")
 
     # Fill NaN for parcels with no LC data
