@@ -527,7 +527,7 @@ main { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: 
 }
 
 /* -- Map panel -- */
-.map-panel { flex: 1; position: relative; min-height: 250px; }
+.map-panel { flex: 1; position: relative; min-height: 300px; }
 #results-map { width: 100%; height: 100%; }
 
 /* Map controls styling */
@@ -536,10 +536,10 @@ main { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: 
 
 /* -- Table panel -- */
 .table-panel {
-  height: 40vh; flex-shrink: 0; overflow: hidden;
+  height: 40vh; max-height: 320px; flex-shrink: 0; overflow: hidden;
   display: flex; flex-direction: column;
   border-top: var(--space-px) solid var(--gray-200);
-  transition: height var(--duration-normal) ease;
+  transition: height var(--duration-normal) ease, max-height var(--duration-normal) ease;
   position: relative;
 }
 .table-panel.collapsed { height: 0; border-top: none; }
@@ -550,7 +550,14 @@ main { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: 
   background: var(--gray-200); position: relative; z-index: var(--z-sticky);
   transition: background var(--duration-normal);
 }
+.tbl-resize-handle::after {
+  content: ""; position: absolute; left: 50%; top: 50%;
+  transform: translate(-50%, -50%); width: 32px; height: 2px;
+  background: var(--gray-400); border-radius: var(--radius-full);
+  transition: background var(--duration-normal), width var(--duration-normal);
+}
 .tbl-resize-handle:hover, .tbl-resize-handle.dragging { background: var(--federal-blue); }
+.tbl-resize-handle:hover::after, .tbl-resize-handle.dragging::after { background: var(--color-white); width: 40px; }
 
 /* Table container */
 .list-table-container { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
@@ -935,18 +942,20 @@ main { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: 
 @media (max-width: 1400px) {
   :root {
     --summary-width: 300px;
+    --header-height: 52px;
+    --footer-height: 32px;
     /* Scale down typography for dense laptop UI */
-    --text-base: 1rem;
-    --text-sm: 0.875rem;
-    --text-xs: 0.8125rem;
+    --text-base: 0.9375rem;
+    --text-sm: 0.8125rem;
+    --text-xs: 0.75rem;
     --text-2xs: 0.6875rem;
   }
 
   .search-wrapper { max-width: 420px; }
-  .table-panel { height: 35vh; }
+  .table-panel { height: 35vh; max-height: 240px; }
 
   /* Tighter header */
-  #header { padding: 0 var(--space-4); }
+  #header { padding: 0 var(--space-4); gap: var(--space-3); }
   .header-agency { font-size: var(--text-2xs); }
   .btn { height: var(--control-sm); font-size: var(--text-2xs); }
 
@@ -961,12 +970,64 @@ main { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: 
   .list-table th { padding: var(--space-1) var(--space-3); }
   .list-table td { padding: var(--space-1) var(--space-3); }
   .toolbar { padding: var(--space-1) var(--space-3); min-height: 38px; }
+  .pagination-footer { padding: var(--space-1) var(--space-3); }
 
   /* Tighter accordion */
   .accordion-header { font-size: var(--text-xs); }
   .accordion-content { font-size: var(--text-xs); }
   .active-layer-item { padding: var(--space-2); font-size: var(--text-xs); }
   .layer-group-label { font-size: var(--text-2xs); }
+
+  /* Tighter upload */
+  .upload-container { padding: var(--space-6); }
+  .upload-card { padding: var(--space-6) var(--space-5); }
+  .intro { margin-bottom: var(--space-4); }
+  .steps { margin-bottom: var(--space-6); gap: var(--space-3); }
+  .step { padding: var(--space-2) var(--space-4); gap: var(--space-2); }
+  .step-number { width: 28px; height: 28px; font-size: var(--text-xs); }
+  .drop-zone { padding: var(--space-8) var(--space-6); }
+  .privacy-note { margin-top: var(--space-4); }
+
+  /* Smaller basemap thumbnails */
+  .style-switcher-btn img { width: 70px; height: 52px; }
+  .style-option img { width: 60px; height: 44px; }
+}
+
+/* ══════════════════════════════════════════════
+   Responsive — Compact Laptop (max-width: 1280px)
+   Auto-collapse summary, tighter fonts, bridge gap
+   ══════════════════════════════════════════════ */
+@media (max-width: 1280px) {
+  :root {
+    --summary-width: 280px;
+    --header-height: 48px;
+    --footer-height: 30px;
+    --text-base: 0.875rem;
+    --text-sm: 0.8125rem;
+    --text-xs: 0.75rem;
+    --text-2xs: 0.625rem;
+  }
+
+  .header-agency { display: none; }
+  .header-app { font-size: var(--text-xs); }
+  .search-wrapper { max-width: 380px; }
+  #accordion-panel { width: 260px; }
+  .table-panel { max-height: 220px; }
+
+  /* Toolbar search narrower */
+  .toolbar-search { min-width: 180px; }
+
+  /* Compact header buttons */
+  #btn-new { font-size: var(--text-2xs); padding: 0 var(--space-2); }
+  #btn-download span:last-child { display: none; }
+
+  /* Tighter upload */
+  .upload-card { max-width: 620px; }
+  .intro-title { font-size: var(--text-lg); }
+  .intro-desc { font-size: var(--text-xs); }
+  .drop-zone { padding: var(--space-6) var(--space-5); }
+  .drop-zone h2 { font-size: var(--text-lg); }
+  .drop-zone-icon svg { width: 44px; height: 44px; }
 }
 
 /* ══════════════════════════════════════════════
@@ -974,19 +1035,22 @@ main { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: 
    ══════════════════════════════════════════════ */
 @media (max-width: 1024px) {
   :root {
-    --header-height: 52px;
+    --header-height: 48px;
+    --footer-height: 28px;
     --summary-width: 260px;
-    --text-sm: 0.875rem;
-    --text-xs: 0.75rem;
-    --text-2xs: 0.6875rem;
+    --text-base: 0.875rem;
+    --text-sm: 0.8125rem;
+    --text-xs: 0.6875rem;
+    --text-2xs: 0.625rem;
   }
 
   .header-agency { display: none; }
-  .search-wrapper { max-width: 360px; }
+  .search-wrapper { max-width: 320px; }
 
   /* Narrower accordion */
-  #accordion-panel { width: 260px; }
+  #accordion-panel { width: 230px; }
   #menu-toggle { font-size: var(--text-xs); }
+  #menu-toggle-text { display: none; }
 
   /* Compact header buttons */
   #btn-new { font-size: var(--text-2xs); padding: 0 var(--space-2); }
@@ -996,31 +1060,83 @@ main { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: 
   .map-popup { min-width: 170px; }
   .popup-title { font-size: var(--text-xs); }
 
-  .table-panel { height: 30vh; }
+  .table-panel { height: 30vh; max-height: 200px; }
+  .toolbar-search { min-width: 160px; }
   .sp-donut { width: 100px; height: 100px; }
   .sp-donut-value { font-size: var(--text-xs); }
+
+  /* Upload compact */
+  .upload-card { max-width: 560px; }
+  .step-label br { display: none; }
+  .step-label span { display: none; }
+
+  /* Smaller basemap thumbnails */
+  .style-switcher-btn img { width: 60px; height: 45px; }
+  .style-option img { width: 50px; height: 36px; }
 }
 
 /* ══════════════════════════════════════════════
    Responsive — Small height
    ══════════════════════════════════════════════ */
 @media (max-height: 800px) {
-  .table-panel { height: 30vh; }
+  .table-panel { height: 30vh; max-height: 220px; }
   .upload-container, .processing-container { align-items: flex-start; }
+
+  /* Compact upload on short screens */
+  .upload-container { padding: var(--space-4); }
+  .upload-card { padding: var(--space-5) var(--space-5); }
+  .intro { margin-bottom: var(--space-3); }
+  .intro-title { font-size: var(--text-lg); }
+  .intro-desc { font-size: var(--text-xs); }
+  .steps { margin-bottom: var(--space-4); gap: var(--space-2); }
+  .step { padding: var(--space-2) var(--space-4); }
+  .drop-zone { padding: var(--space-5) var(--space-5); }
+  .drop-zone-icon svg { width: 40px; height: 40px; }
+  .drop-zone-icon { margin-bottom: var(--space-2); }
+  .drop-zone h2 { font-size: var(--text-lg); margin-bottom: var(--space-1); }
+  .privacy-note { margin-top: var(--space-3); padding: var(--space-2) var(--space-3); }
+  .demo-link { margin-top: var(--space-2); }
+
+  /* Limit accordion height so map stays usable */
+  #accordion-wrapper { max-height: calc(100% - 70px); }
 }
 @media (max-height: 700px) {
-  .table-panel { height: 25vh; }
+  :root {
+    --header-height: 44px;
+    --footer-height: 28px;
+  }
+  .table-panel { height: 25vh; max-height: 180px; }
+  .drop-zone { padding: var(--space-4) var(--space-4); }
+  .drop-zone-icon { margin-bottom: var(--space-1); }
+  .drop-zone-icon svg { width: 32px; height: 32px; }
+  .steps { display: none; }
+  .privacy-note { margin-top: var(--space-2); }
 }
 @media (max-height: 600px) {
-  .table-panel { height: 20vh; }
+  .table-panel { height: 20vh; max-height: 160px; }
 }
 
 /* ══════════════════════════════════════════════
-   Combined: small laptop height
+   Combined: small laptop width + height
    ══════════════════════════════════════════════ */
 @media (max-width: 1400px) and (max-height: 800px) {
-  .table-panel { height: 28vh; }
+  .table-panel { height: 28vh; max-height: 200px; }
   .summary-panel { --summary-width: 280px; width: 280px; }
+
+  /* Ensure accordion doesn't swallow the map */
+  #accordion-wrapper { max-height: calc(100% - 80px); }
+}
+
+/* Combined: compact laptop (1280px) + short height */
+@media (max-width: 1280px) and (max-height: 800px) {
+  .table-panel { height: 25vh; max-height: 180px; }
+  #accordion-wrapper { max-height: calc(100% - 90px); }
+
+  /* Further compact upload */
+  .steps { gap: var(--space-2); margin-bottom: var(--space-4); }
+  .step { padding: var(--space-1) var(--space-3); }
+  .step-number { width: 24px; height: 24px; font-size: var(--text-2xs); }
+  .drop-zone { padding: var(--space-5) var(--space-4); }
 }
 
 /* ══════════════════════════════════════════════
@@ -1029,12 +1145,12 @@ main { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: 
 @media (max-width: 767px) {
   :root {
     --header-height: 48px;
-    --footer-height: 30px;
+    --footer-height: 28px;
     --summary-width: 100%;
-    --text-base: 0.9375rem;
+    --text-base: 0.875rem;
     --text-sm: 0.8125rem;
     --text-xs: 0.75rem;
-    --text-2xs: 0.6875rem;
+    --text-2xs: 0.625rem;
   }
 
   /* Header compact */
@@ -1088,7 +1204,7 @@ main { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: 
   .summary-panel.collapsed { max-height: 0; height: 0; opacity: 0; overflow: hidden; border-top: none; box-shadow: none; }
 
   /* Map panel — full available height */
-  .map-panel { min-height: 250px; flex: 1; }
+  .map-panel { min-height: 200px; flex: 1; }
 
   /* Accordion menu — compact */
   #accordion-panel { width: 240px; }
@@ -1112,7 +1228,7 @@ main { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: 
   .sp-donut { width: 100px; height: 100px; }
 
   /* Table — hidden by default on mobile (toggled via JS), slide-up when shown */
-  .table-panel { height: 45vh; }
+  .table-panel { height: 45vh; max-height: none; }
   .toolbar { flex-wrap: wrap; gap: var(--space-2); padding: var(--space-2) var(--space-3); min-height: auto; }
   .toolbar-search { min-width: 0; flex: 1; order: 10; width: 100%; }
   .toolbar-actions { order: 5; }

@@ -528,9 +528,11 @@ function showResults() {
   updateSummaryPanel();
 
   const isMobile = window.innerWidth <= 767;
+  const isCompact = window.innerWidth <= 1280;
+  const isShortScreen = window.innerHeight <= 800;
 
-  // On mobile: collapse summary & table to give map full space
-  if (isMobile) {
+  // On compact/mobile: collapse summary to give map more space
+  if (isMobile || isCompact) {
     document.getElementById("summary-panel").classList.add("collapsed");
     setSummaryToggleVisible(true);
   } else {
@@ -544,8 +546,8 @@ function showResults() {
   });
   populateTable(processedResults.parcels, processedResults.landcover);
 
-  // On mobile: start with table collapsed so map gets full space
-  if (isMobile) {
+  // On mobile or short screens: start with table collapsed so map gets full space
+  if (isMobile || isShortScreen) {
     const tablePanel = document.getElementById("results-table-container");
     const tblBtn = document.getElementById("tbl-toggle");
     tablePanel.classList.add("collapsed");

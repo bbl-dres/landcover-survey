@@ -294,8 +294,8 @@ function initAccordionMenu() {
   const accordionPanel = document.getElementById("accordion-panel");
   const toggleText = document.getElementById("menu-toggle-text");
 
-  // Auto-collapse on small screens (<= 1400px)
-  let menuOpen = window.innerWidth > 1400;
+  // Auto-collapse on small or short screens
+  let menuOpen = window.innerWidth > 1400 && window.innerHeight > 900;
   if (!menuOpen) {
     accordionPanel.classList.add("collapsed");
     toggleText.textContent = t("menu.open");
