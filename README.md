@@ -19,6 +19,8 @@ The solution is available in three variants:
 - **[Python CLI](python/)** — Open-source, requires Python >= 3.10 and free dependencies. Processes locally with exact LV95 areas.
 - **[FME](fme/)** — Requires a licensed copy of [FME Form](https://fme.safe.com/fme-form/).
 
+> **Data coverage note:** The Web App uses the geodienste.ch WFS, which requires cantonal approval in 6 cantons (JU, LU, NE, NW, OW, VD). Parcels in these cantons are found by EGRID but return 0 m² land cover. Coverage is also incomplete in TI, VS, and NE. See the [User Guide](docs/MANUAL.md) for details.
+
 <p align="center">
   <img src="assets/images/preview5.jpg" width="45%" style="vertical-align: top;"/>
   <img src="assets/images/preview6.jpg" width="45%" style="vertical-align: top;"/>
