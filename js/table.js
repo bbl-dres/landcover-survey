@@ -493,13 +493,14 @@ function initResizeHandle() {
   if (!handle) return;
 
   const MIN_H = 120;
-  const MAX_FRAC = 0.75;
+  const MAX_FRAC = 0.70;
 
   handle.addEventListener("pointerdown", (e) => {
     e.preventDefault();
     handle.setPointerCapture(e.pointerId);
     handle.classList.add("dragging");
     container.style.transition = "none";
+    container.style.maxHeight = "none";
     const startY = e.clientY;
     const startH = container.getBoundingClientRect().height;
 
