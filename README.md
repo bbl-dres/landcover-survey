@@ -70,7 +70,7 @@ The browser-based version runs entirely client-side — no backend, no installat
 
 ### Complete Land Cover Type Hierarchy
 
-- See: docs/SPECIFICATION.md
+- See: https://github.com/bbl-dres/landcover-survey/blob/main/docs/SPECIFICATION.md
 
 | AVS Code | Main Category | Sub-category | `Art` Value | EN | DE | SIA 416 | Sealed | Green Space | VBS Kat. | VBS Prod. | VBS Typ |
 |----------|---------------|--------------|-------------|-----|-----|---------|--------|-------------|---------|-----------|---------|
