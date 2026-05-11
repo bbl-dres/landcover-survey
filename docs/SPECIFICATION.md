@@ -100,7 +100,7 @@ The 26 land cover types are defined in the Swiss data model **DM.01-AV-CH** as t
 
 ### Complete Land Cover Type Hierarchy
 
-| AVS Code | Main Category | Sub-category | `Art` Value | EN | DE | SIA 416 | Sealed | Green Space | VBS Kat. | VBS Prod. | VBS Typ |
+| # | AVMain Category | AVSub-category | AV `Art` Value | EN | DE | SIA 416 | Sealed | Green Space | VBS Kat. | VBS Prod. | VBS Typ |
 |----------|---------------|--------------|-------------|-----|-----|---------|--------|-------------|---------|-----------|---------|
 | 0 | Buildings (Gebäude) | — | `Gebaeude` | Buildings | Gebäude | GGF | Yes | — | A | 2 | — |
 | 1 | Sealed (Befestigt) | — | `Strasse_Weg` | Road, path | Strasse, Weg | BUF | Yes | — | A | 2 | — |
