@@ -72,7 +72,7 @@ The browser-based version runs entirely client-side — no backend, no installat
 
 - See: https://github.com/bbl-dres/landcover-survey/blob/main/docs/SPECIFICATION.md
 
-| AVS Code | Main Category | Sub-category | `Art` Value | EN | DE | SIA 416 | Sealed | Green Space | VBS Kat. | VBS Prod. | VBS Typ |
+| # | AV Main Category | AV Sub-category | AV `Art` Value | EN | DE | SIA 416 | Sealed | Green Space | VBS Kat. | VBS Prod. | VBS Typ |
 |----------|---------------|--------------|-------------|-----|-----|---------|--------|-------------|---------|-----------|---------|
 | 0 | Buildings (Gebäude) | — | `Gebaeude` | Buildings | Gebäude | GGF | Yes | — | A | 2 | — |
 | 1 | Sealed (Befestigt) | — | `Strasse_Weg` | Road, path | Strasse, Weg | BUF | Yes | — | A | 2 | — |
