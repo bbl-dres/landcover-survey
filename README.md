@@ -15,7 +15,7 @@ For each parcel, the tool clips every intersecting land cover polygon to the par
 
 The solution is available in three variants:
 
-- **[Web App](index.html)** — Zero-install browser app. Upload a CSV, get results on a map with export to CSV/Excel/GeoJSON.
+- **[Web App](https://bbl-dres.github.io/landcover-survey/)** — Zero-install browser app. Upload a CSV, get results on a map with export to CSV/Excel/GeoJSON.
 - **[Python CLI](python/)** — Open-source, requires Python >= 3.10 and free dependencies. Processes locally with exact LV95 areas.
 - **[FME](fme/)** — Requires a licensed copy of [FME Form](https://fme.safe.com/fme-form/).
 
