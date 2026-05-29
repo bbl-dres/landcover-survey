@@ -186,6 +186,7 @@ const translations = {
     "map.home": "Schweiz-\u00dcbersicht",
     "map.3d": "2D / 3D",
     "map.summary": "Zusammenfassung",
+    "map.loading": "Karte wird geladen …",
 
     // Map popups
     "popup.parcel": "Parzelle",
@@ -405,6 +406,7 @@ const translations = {
     "map.home": "Vue d\u2019ensemble Suisse",
     "map.3d": "2D / 3D",
     "map.summary": "R\u00e9sum\u00e9",
+    "map.loading": "Chargement de la carte \u2026",
     "popup.parcel": "Parcelle",
     "popup.landcover": "Couverture du sol",
     "popup.area": "Surface",
@@ -604,6 +606,7 @@ const translations = {
     "map.home": "Vista d\u2019insieme Svizzera",
     "map.3d": "Commutare 2D/3D",
     "map.summary": "Riepilogo",
+    "map.loading": "Caricamento della mappa …",
     "popup.parcel": "Parcella",
     "popup.landcover": "Copertura del suolo",
     "popup.area": "Superficie",
@@ -803,6 +806,7 @@ const translations = {
     "map.home": "Switzerland overview",
     "map.3d": "2D / 3D",
     "map.summary": "Summary",
+    "map.loading": "Loading map …",
     "popup.parcel": "Parcel",
     "popup.landcover": "Land cover",
     "popup.area": "Area",

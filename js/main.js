@@ -3,7 +3,7 @@
  */
 import { initUpload } from "./upload.js";
 import { processRows, cancelProcessing } from "./processor.js";
-import { initMap, plotResults, highlightParcel, highlightLandcover, resizeMap, onSummaryToggle, setSummaryToggleVisible, updateLandcoverColors } from "./map.js";
+import { initMap, plotResults, highlightParcel, highlightLandcover, resizeMap, onSummaryToggle, setSummaryToggleVisible, updateLandcoverColors, showMapSpinner, hideMapSpinner } from "./map.js";
 import { initTable, populateTable, highlightRow, highlightLcRow } from "./table.js";
 import { downloadParcelCSV, downloadLandcoverCSV, downloadXLSX, downloadGeoJSON } from "./export.js";
 import { initSearch, setSearchData } from "./search.js";
@@ -154,7 +154,8 @@ function showState(state) {
   document.querySelectorAll(".app-state").forEach((el) => {
     el.hidden = el.id !== `state-${state}`;
   });
-  if (state === "results") setTimeout(() => resizeMap(), 100);
+  // Note: the map self-corrects its size via a ResizeObserver in initMap(),
+  // so no timer-based resize is needed when entering the results view.
 }
 
 async function onStartProcessing(parsedData) {
@@ -562,7 +563,9 @@ function showResults() {
   setSearchData(processedResults.parcels);
 
   requestAnimationFrame(async () => {
+    showMapSpinner();
     try {
+      // Load the empty basemap first, then layer the results on top.
       await initMap("results-map", {
         onParcelSelect: (index) => highlightRow(index),
         onLandcoverSelect: (lcIndex) => highlightLcRow(lcIndex),
@@ -571,6 +574,8 @@ function showResults() {
       applyAggColorsToMap();
     } catch (err) {
       console.error("Map initialization failed:", err);
+    } finally {
+      hideMapSpinner();
     }
   });
 }

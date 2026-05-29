@@ -7,6 +7,7 @@ import { setMap, readdSwisstopoLayers, loadGeokatalog, addSwisstopoLayer, remove
 import { t, getLang } from "./i18n.js";
 
 let map = null;
+let resizeObserver = null;
 let popup = null;
 let onParcelClick = null;
 let onLandcoverClick = null;
@@ -175,13 +176,19 @@ class SummaryToggleControl {
 export function onSummaryToggle(callback) { summaryToggleCallback = callback; }
 export function setSummaryToggleVisible(visible) { if (summaryToggleControl) summaryToggleControl.setHidden(!visible); }
 
+/* ── Map loading overlay ── */
+export function showMapSpinner() { const el = document.getElementById("map-spinner"); if (el) el.hidden = false; }
+export function hideMapSpinner() { const el = document.getElementById("map-spinner"); if (el) el.hidden = true; }
+
 export async function initMap(containerId, { onParcelSelect, onLandcoverSelect } = {}) {
   onParcelClick = onParcelSelect || null;
   onLandcoverClick = onLandcoverSelect || null;
 
+  if (resizeObserver) { resizeObserver.disconnect(); resizeObserver = null; }
   if (map) { map.remove(); map = null; }
 
   const styleObj = MAP_STYLES[currentStyle];
+  const container = document.getElementById(containerId);
   map = new maplibregl.Map({
     container: containerId,
     style: styleObj.url,
@@ -191,6 +198,15 @@ export async function initMap(containerId, { onParcelSelect, onLandcoverSelect }
   });
 
   setMap(map);
+
+  // MapLibre measures its container only at creation and on resize(). The map is
+  // created right as the results view becomes visible, so it can capture a wrong
+  // (often zero) canvas size and render grey until something else triggers a resize.
+  // A ResizeObserver makes the map self-correct the moment the container is laid out.
+  if (container && typeof ResizeObserver !== "undefined") {
+    resizeObserver = new ResizeObserver(() => map && map.resize());
+    resizeObserver.observe(container);
+  }
 
   // Top-right: Nav → Home → 3D
   map.addControl(new maplibregl.NavigationControl(), "top-right");
@@ -216,6 +232,9 @@ export async function initMap(containerId, { onParcelSelect, onLandcoverSelect }
   popup.on("close", () => clearIdentifyHighlight());
 
   await new Promise((resolve) => map.on("load", resolve));
+
+  // Ensure the canvas matches its container now that the style has loaded.
+  map.resize();
 
   // Click handlers
   map.on("click", "parcels-fill", (e) => {
