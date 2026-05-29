@@ -1,7 +1,11 @@
 # Land Cover Survey
 
-![Land Cover Survey](assets/Social1.jpg)
+Aggregate land cover area (m²) per Swiss cadastral parcel from official survey data (Amtliche Vermessung).
 
+<!-- The hero image is clickable and opens the live app -->
+[![Land Cover Survey — click to open the live app](assets/Social1.jpg)](https://bbl-dres.github.io/landcover-survey/)
+
+[![Demo on GitHub Pages](https://img.shields.io/badge/demo-GitHub%20Pages-2ea44f?logo=github&logoColor=white)](https://bbl-dres.github.io/landcover-survey/)
 ![Python](https://img.shields.io/badge/python-%3E%3D3.10-blue)
 ![GeoPandas](https://img.shields.io/badge/geopandas-%3E%3D0.14-green)
 ![JavaScript](https://img.shields.io/badge/javascript-ES6+-yellow)
@@ -9,15 +13,22 @@
 ![License](https://img.shields.io/badge/license-MIT-lightgrey)
 ![Status](https://img.shields.io/badge/status-alpha-orange)
 
-Aggregate land cover area (m²) per Swiss cadastral parcel from official survey data (Amtliche Vermessung).
+> [!TIP]
+> **▶ Try it now — open the live web app:** https://bbl-dres.github.io/landcover-survey/
+>
+> No installation needed; it runs entirely in your browser.
 
 For each parcel, the tool clips every intersecting land cover polygon to the parcel boundary and calculates the area of each clipped piece. This produces a breakdown of how much area of each land cover type exists within each parcel.
 
 The solution is available in three variants:
 
-- **[Web App](https://bbl-dres.github.io/landcover-survey/)** — Zero-install browser app. Upload a CSV, get results on a map with export to CSV/Excel/GeoJSON.
-- **[Python CLI](python/)** — Open-source, requires Python >= 3.10 and free dependencies. Processes locally with exact LV95 areas.
-- **[FME](fme/)** — Requires a licensed copy of [FME Form](https://fme.safe.com/fme-form/).
+- **Web App** — Zero-install browser app. Upload a CSV, get results on an interactive map with export to CSV/Excel/GeoJSON.
+  - Live app: https://bbl-dres.github.io/landcover-survey/
+  - Source code: [`web/`](web/)
+- **Python CLI** — Open-source, requires Python >= 3.10 and free dependencies. Processes locally with exact LV95 areas.
+  - Source code: [`python/`](python/)
+- **FME** — Requires a licensed copy of [FME Form](https://fme.safe.com/fme-form/).
+  - Source code: [`fme/`](fme/)
 
 > **Data coverage note:** The Web App uses the geodienste.ch WFS, which requires cantonal approval in 6 cantons (JU, LU, NE, NW, OW, VD). Parcels in these cantons are found by EGRID but return 0 m² land cover. Coverage is also incomplete in TI, VS, and NE. See the [User Guide](docs/MANUAL.md) for details.
 
@@ -27,6 +38,8 @@ The solution is available in three variants:
 </p>
 
 ## Web App
+
+**Live app:** https://bbl-dres.github.io/landcover-survey/ &nbsp;·&nbsp; **Source:** [`web/`](web/)
 
 The browser-based version runs entirely client-side — no backend, no installation. Upload a CSV with `ID` and `EGRID` columns and the app will:
 
@@ -104,41 +117,45 @@ The browser-based version runs entirely client-side — no backend, no installat
 
 ### Quick Start
 
-Open `index.html` in a browser (requires a local server for ES modules):
+The web app is plain static files (ES modules, no build step) in [`web/`](web/). Serve the repo root with any static server — the root `index.html` redirects to the app:
 
 ```bash
 cd landcover-survey
 python -m http.server 8080
-# Open http://localhost:8080
+# Open http://localhost:8080  (redirects to /web/)
 ```
 
-Or deploy to any static hosting (GitHub Pages, Cloudflare Pages, etc.).
+Or deploy the repo to any static hosting (GitHub Pages, Cloudflare Pages, etc.); the root redirect keeps the published URL clean.
 
 ### File Structure
 
 ```
-index.html                   Entry point (GitHub Pages compatible)
-css/
-  tokens.css                 Design tokens (colors, spacing, typography, shadows)
-  styles.css                 Component styles + responsive breakpoints
-js/
-  main.js                    State machine (upload → processing → results)
-  upload.js                  CSV/XLSX parsing with auto-delimiter detection
-  processor.js               EGRID lookup + WFS query + Turf.js clipping (5x parallel)
-  map.js                     MapLibre map, controls, popups, layer management
-  table.js                   Table widget with tabs, sorting, pagination, column toggle
-  search.js                  Header search (parcels + locations + layers)
-  swisstopo.js               External layer management, Geokatalog, layer info modal
-  config.js                  BBArt mappings (SIA 416, DIN 277, green space, sealed, VBS)
-  export.js                  CSV/XLSX/GeoJSON export
-  i18n.js                    Translations (DE, FR, IT, EN)
+index.html                   Root redirect → web/ (keeps the GitHub Pages URL clean)
+web/                         Web app — static, no build step
+  index.html                 App entry point
+  css/
+    tokens.css               Design tokens (colors, spacing, typography, shadows)
+    styles.css               Component styles + responsive breakpoints
+  js/
+    main.js                  State machine (upload → processing → results)
+    upload.js                CSV/XLSX parsing with auto-delimiter detection
+    processor.js             EGRID lookup + WFS query + Turf.js clipping (5x parallel)
+    map.js                   MapLibre map, controls, popups, layer management
+    table.js                 Table widget with tabs, sorting, pagination, column toggle
+    search.js                Header search (parcels + locations + layers)
+    swisstopo.js             External layer management, Geokatalog, layer info modal
+    config.js                BBArt mappings (SIA 416, DIN 277, green space, sealed, VBS)
+    export.js                CSV/XLSX/GeoJSON export
+    i18n.js                  Translations (DE, FR, IT, EN)
+python/                      Python CLI (see the Python CLI section below)
+fme/                         FME workspace (.fmw)
 data/
   example.csv                Demo data (20 parcels with error test cases)
   example-full.csv           Full test set (1000 parcels)
 docs/
   MANUAL.md                  Multilingual user guide (DE/FR/IT/EN)
   SPECIFICATION.md           Full technical specification
-assets/
+assets/                      Images for the README + app logo
   swiss-logo-flag.svg        Swiss coat of arms
 ```
 

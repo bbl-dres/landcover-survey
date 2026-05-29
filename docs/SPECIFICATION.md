@@ -455,7 +455,12 @@ The generic API client (`swisstopo.py`) makes it straightforward to add new laye
 
 ```
 landcover-survey/
-├── assets/                       # Images for README
+├── index.html                    # Root redirect → web/
+├── web/                          # Web app (static ES modules, no build step)
+│   ├── index.html                # App entry point
+│   ├── css/                      # Design tokens + component styles
+│   └── js/                       # State machine, map, table, processing, i18n
+├── assets/                       # Images for README + app logo
 ├── data/                         # Input CSVs and output results
 │   └── test_data.csv              # Sample input (Mode 1)
 ├── docs/
@@ -470,8 +475,8 @@ landcover-survey/
 │   ├── pipeline.py               # Main processing orchestration
 │   ├── swisstopo.py              # Generic Swisstopo REST API client (fetch, cache, intersect)
 │   ├── bauzonen.py               # Bauzonen layer configuration (ch.are.bauzonen)
-│   └── habitat.py                # Lebensraumkarte layer configuration (ch.bafu.lebensraumkarte-schweiz)
-├── pyproject.toml                # Project metadata, dependencies
+│   ├── habitat.py                # Lebensraumkarte layer configuration (ch.bafu.lebensraumkarte-schweiz)
+│   └── pyproject.toml            # Project metadata, dependencies
 └── LICENSE
 ```
 
