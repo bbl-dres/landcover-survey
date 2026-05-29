@@ -3,7 +3,6 @@
  * sortable headers, pagination, column visibility dropdown, resize handle
  */
 import { ART_LABELS, STATUS, statusLabel, greenSpaceLabel, esc, fmtNum } from "./config.js";
-import { resizeMap } from "./map.js";
 import { t } from "./i18n.js";
 
 /* ── State ── */
@@ -508,7 +507,7 @@ function initResizeHandle() {
       const delta = startY - ev.clientY;
       const maxH = window.innerHeight * MAX_FRAC;
       container.style.height = Math.min(maxH, Math.max(MIN_H, startH + delta)) + "px";
-      resizeMap();
+      // Map auto-resizes via its ResizeObserver (see initMap) as the panel height changes.
     }
 
     function onUp() {
@@ -517,7 +516,6 @@ function initResizeHandle() {
       handle.removeEventListener("pointermove", onMove);
       handle.removeEventListener("pointerup", onUp);
       handle.removeEventListener("lostpointercapture", onUp);
-      resizeMap();
     }
 
     handle.addEventListener("pointermove", onMove);

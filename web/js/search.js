@@ -74,7 +74,7 @@ export function initSearch() {
       try { bbox = item.dataset.bbox ? JSON.parse(item.dataset.bbox) : null; } catch { /* malformed bbox */ }
       flyToLocation(lng, lat, bbox);
     } else if (action === "layer") {
-      addSwisstopoLayer(item.dataset.layerId, item.dataset.title, false);
+      addSwisstopoLayer(item.dataset.layerId, item.dataset.title);
     }
 
     results.hidden = true;

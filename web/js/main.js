@@ -3,7 +3,8 @@
  */
 import { initUpload } from "./upload.js";
 import { processRows, cancelProcessing } from "./processor.js";
-import { initMap, plotResults, highlightParcel, highlightLandcover, resizeMap, onSummaryToggle, setSummaryToggleVisible, updateLandcoverColors, showMapSpinner, hideMapSpinner } from "./map.js";
+import { initMap, plotResults, highlightParcel, highlightLandcover, onSummaryToggle, setSummaryToggleVisible, updateLandcoverColors, showMapSpinner, hideMapSpinner, teardownMap } from "./map.js";
+import { showToast } from "./toast.js";
 import { initTable, populateTable, highlightRow, highlightLcRow } from "./table.js";
 import { downloadParcelCSV, downloadLandcoverCSV, downloadXLSX, downloadGeoJSON } from "./export.js";
 import { initSearch, setSearchData } from "./search.js";
@@ -33,12 +34,13 @@ document.addEventListener("DOMContentLoaded", () => {
     panel.style.maxHeight = ""; // Restore CSS max-height
     panel.classList.toggle("collapsed", collapsed);
     btn.classList.toggle("collapsed", collapsed);
-    setTimeout(() => resizeMap(), 280);
+    // The map resizes itself via a ResizeObserver (see initMap) when the panel changes size.
   });
 
   // Reset
   function resetToUpload() {
     cancelProcessing();
+    teardownMap();
     processedResults = null;
     currentFilename = "";
     showState("upload");
@@ -57,12 +59,10 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("sp-close").addEventListener("click", () => {
     document.getElementById("summary-panel").classList.add("collapsed");
     setSummaryToggleVisible(true);
-    setTimeout(() => resizeMap(), 280);
   });
   onSummaryToggle(() => {
     document.getElementById("summary-panel").classList.remove("collapsed");
     setSummaryToggleVisible(false);
-    setTimeout(() => resizeMap(), 280);
   });
 
   // Download modal
@@ -574,6 +574,7 @@ function showResults() {
       applyAggColorsToMap();
     } catch (err) {
       console.error("Map initialization failed:", err);
+      showToast(t("toast.map.failed"));
     } finally {
       hideMapSpinner();
     }

@@ -3,8 +3,9 @@
  * Geokatalog tree, restore after basemap change
  */
 import { esc } from "./config.js";
-import { resizeMap, is3DActive } from "./map.js";
+import { is3DActive } from "./map.js";
 import { t, getLang } from "./i18n.js";
+import { showToast } from "./toast.js";
 
 /** Active swisstopo layers: [{ id, title, sourceId, mapLayerId, tileUrl, maxZoom, visible }] */
 export const activeSwisstopoLayers = [];
@@ -64,7 +65,7 @@ function getLayersConfig() {
   return layersConfigPromise;
 }
 
-export function addSwisstopoLayer(layerId, title, silent) {
+export function addSwisstopoLayer(layerId, title) {
   if (!layerId || !mapRef) return;
   if (!/^[a-zA-Z0-9._-]+$/.test(layerId)) return;
   if (activeSwisstopoLayers.some((l) => l.id === layerId)) return;
@@ -86,7 +87,11 @@ export function addSwisstopoLayer(layerId, title, silent) {
         tileUrl = `https://wmts.geo.admin.ch/1.0.0/${layerId}/default/${ts}/3857/{z}/{x}/{y}.${fmt}`;
         maxZoom = 18;
       } else {
-        // wms / aggregate — render as WMS GetMap tiles
+        // wms / aggregate — render as WMS GetMap tiles. Best-effort: `aggregate`
+        // layers without an explicit `wmsLayers` fall back to the layer id, which
+        // is not always a valid WMS layer name (tiles may then come back blank).
+        // `singleTile` layers are also served tiled here, which is fine for most
+        // raster overlays.
         const wmsLayers = cfg.wmsLayers || layerId;
         tileUrl = `https://wms.geo.admin.ch/?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=${encodeURIComponent(wmsLayers)}&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&WIDTH=256&HEIGHT=256&FORMAT=image/${fmt}&TRANSPARENT=true`;
         maxZoom = 19;
@@ -123,8 +128,10 @@ export function addSwisstopoLayer(layerId, title, silent) {
       if (e.name === "AbortError") return;
       console.warn("Layer load failed:", layerId, e.message);
       // The layer never became active — reset any checkbox that was ticked for it
+      // and let the user know why nothing appeared.
       syncStaticCheckboxes();
       updateGeokatalogCheckboxes();
+      showToast(t("toast.layer.failed", { name: title || layerId }));
     });
 }
 
@@ -176,7 +183,7 @@ export function readdSwisstopoLayers() {
       mapRef.addLayer({
         id: layer.mapLayerId, type: "raster", source: layer.sourceId,
         layout: { visibility: layer.visible !== false ? "visible" : "none" },
-        paint: { "raster-opacity": 0.7 },
+        paint: { "raster-opacity": is3DActive() ? 0.35 : 0.7 },
       }, beforeLayer);
     } catch (e) { console.error("Error restoring layer:", layer.id, e); }
   }
@@ -262,7 +269,7 @@ function renderCatalogTree(items, container) {
           removeSwisstopoLayer(lid);
           if (cb) cb.checked = false;
         } else {
-          addSwisstopoLayer(lid, lTitle, false);
+          addSwisstopoLayer(lid, lTitle);
           if (cb) cb.checked = true;
         }
       });

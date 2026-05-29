@@ -231,7 +231,17 @@ export async function initMap(containerId, { onParcelSelect, onLandcoverSelect }
   popup = new maplibregl.Popup({ closeButton: true, closeOnClick: false, maxWidth: "360px" });
   popup.on("close", () => clearIdentifyHighlight());
 
-  await new Promise((resolve) => map.on("load", resolve));
+  // Resolve on `load`; reject if an error fires *before* load (offline, CDN down,
+  // blocked style) — otherwise the await would hang forever and the loading
+  // spinner would spin indefinitely. Errors after load (e.g. a single missing
+  // tile) are non-fatal and must not reject, so we drop the error listener once
+  // the map has loaded.
+  await new Promise((resolve, reject) => {
+    const onLoad = () => { map.off("error", onError); resolve(); };
+    const onError = (e) => { map.off("load", onLoad); reject((e && e.error) || new Error("Map failed to load")); };
+    map.once("load", onLoad);
+    map.once("error", onError);
+  });
 
   // Ensure the canvas matches its container now that the style has loaded.
   map.resize();
@@ -345,7 +355,7 @@ function initSwisstopoToggle(checkboxId) {
   const layerId = cb.dataset.swisstopo;
   if (!layerId) return;
   cb.addEventListener("change", () => {
-    if (cb.checked) addSwisstopoLayer(layerId, cb.nextElementSibling?.textContent || layerId, true);
+    if (cb.checked) addSwisstopoLayer(layerId, cb.nextElementSibling?.textContent || layerId);
     else removeSwisstopoLayer(layerId);
   });
 }
@@ -701,7 +711,11 @@ function showLandcoverPopup(lngLat, props) {
   `).addTo(map);
 }
 
-export function resizeMap() { if (map) map.resize(); }
+/** Tear down the map and its ResizeObserver (e.g. when returning to the upload view). */
+export function teardownMap() {
+  if (resizeObserver) { resizeObserver.disconnect(); resizeObserver = null; }
+  if (map) { map.remove(); map = null; }
+}
 export function is3DActive() { return is3D; }
 
 /* ── Click-to-Identify for swisstopo reference layers ── */
