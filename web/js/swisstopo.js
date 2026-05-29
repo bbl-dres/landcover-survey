@@ -44,6 +44,26 @@ const STATIC_LAYER_IDS = new Set([
 
 const pendingLayerIds = new Set();
 
+/**
+ * Cached fetch of the geo.admin layersConfig — the canonical source describing
+ * how to render any layer (wmts vs wms, image format, timestamps).
+ *
+ * We deliberately do NOT use the api/MapServer/{id} metadata endpoint here: it
+ * only works for layers that have a vector/feature table and returns HTTP 400
+ * for raster-only overlays (e.g. ch.meteoschweiz.hagelgefaehrdung-…), which is
+ * exactly the kind of layer this function adds. The fields we read are
+ * language-independent, so a single cached copy is fine.
+ */
+let layersConfigPromise = null;
+function getLayersConfig() {
+  if (!layersConfigPromise) {
+    layersConfigPromise = fetchTimeout(`https://api3.geo.admin.ch/rest/services/all/MapServer/layersConfig?lang=${getLang()}`)
+      .then((r) => { if (!r.ok) throw new Error("layersConfig unavailable"); return r.json(); })
+      .catch((e) => { layersConfigPromise = null; throw e; }); // reset so a later attempt can retry
+  }
+  return layersConfigPromise;
+}
+
 export function addSwisstopoLayer(layerId, title, silent) {
   if (!layerId || !mapRef) return;
   if (!/^[a-zA-Z0-9._-]+$/.test(layerId)) return;
@@ -51,19 +71,24 @@ export function addSwisstopoLayer(layerId, title, silent) {
   if (pendingLayerIds.has(layerId)) return;
   pendingLayerIds.add(layerId);
 
-  fetchTimeout(`https://api3.geo.admin.ch/rest/services/api/MapServer/${layerId}?lang=${getLang()}`)
-    .then((r) => { if (!r.ok) throw new Error("Metadata unavailable"); return r.json(); })
-    .then((meta) => {
+  getLayersConfig()
+    .then((config) => {
+      const cfg = config[layerId];
+      if (!cfg) throw new Error("not available as a map overlay");
+
       const sourceId = `swisstopo-${layerId}`;
       const mapLayerId = `swisstopo-layer-${layerId}`;
-      let tileUrl, maxZoom = 18;
+      const fmt = (cfg.format || "png").replace("image/", "");
+      let tileUrl, maxZoom;
 
-      if (meta.format) {
-        const fmt = meta.format.replace("image/", "");
-        const ts = (meta.timestamps && meta.timestamps.length) ? meta.timestamps[0] : "current";
+      if (cfg.type === "wmts") {
+        const ts = (cfg.timestamps && cfg.timestamps.length) ? cfg.timestamps[0] : "current";
         tileUrl = `https://wmts.geo.admin.ch/1.0.0/${layerId}/default/${ts}/3857/{z}/{x}/{y}.${fmt}`;
+        maxZoom = 18;
       } else {
-        tileUrl = `https://wms.geo.admin.ch/?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=${layerId}&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&WIDTH=256&HEIGHT=256&FORMAT=image/png&TRANSPARENT=true`;
+        // wms / aggregate — render as WMS GetMap tiles
+        const wmsLayers = cfg.wmsLayers || layerId;
+        tileUrl = `https://wms.geo.admin.ch/?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=${encodeURIComponent(wmsLayers)}&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&WIDTH=256&HEIGHT=256&FORMAT=image/${fmt}&TRANSPARENT=true`;
         maxZoom = 19;
       }
 
@@ -82,18 +107,24 @@ export function addSwisstopoLayer(layerId, title, silent) {
           paint: { "raster-opacity": is3DActive() ? 0.35 : 0.7 },
         }, beforeLayer);
       } catch (e) {
-        console.error("Error adding swisstopo layer:", e);
-        return;
+        // Roll back a partial add so a later retry can succeed cleanly
+        if (mapRef.getLayer(mapLayerId)) mapRef.removeLayer(mapLayerId);
+        if (mapRef.getSource(sourceId)) mapRef.removeSource(sourceId);
+        throw e;
       }
 
-      activeSwisstopoLayers.push({ id: layerId, title: title || layerId, sourceId, mapLayerId, tileUrl, maxZoom, visible: true });
+      activeSwisstopoLayers.push({ id: layerId, title: title || cfg.label || layerId, sourceId, mapLayerId, tileUrl, maxZoom, visible: true });
       pendingLayerIds.delete(layerId);
       renderActiveLayersList();
       syncStaticCheckboxes();
     })
     .catch((e) => {
       pendingLayerIds.delete(layerId);
-      if (e.name !== "AbortError") console.error("Layer load failed:", layerId, e);
+      if (e.name === "AbortError") return;
+      console.warn("Layer load failed:", layerId, e.message);
+      // The layer never became active — reset any checkbox that was ticked for it
+      syncStaticCheckboxes();
+      updateGeokatalogCheckboxes();
     });
 }
 

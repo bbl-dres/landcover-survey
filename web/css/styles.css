@@ -371,46 +371,6 @@ main { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: 
   margin-bottom: var(--space-3);
 }
 
-/* Draw tools toolbar */
-.draw-tools {
-  display: flex;
-  gap: var(--space-2);
-}
-
-.draw-tool-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: var(--control-md);
-  height: var(--control-md);
-  border: var(--space-px) solid var(--gray-300);
-  border-radius: var(--radius-sm);
-  background: var(--color-white);
-  color: var(--gray-700);
-  cursor: pointer;
-  transition: background var(--duration-fast), border-color var(--duration-fast), color var(--duration-fast);
-}
-
-.draw-tool-btn:hover {
-  background: var(--gray-100);
-  border-color: var(--gray-500);
-}
-
-.draw-tool-btn.active {
-  background: var(--swiss-red);
-  border-color: var(--swiss-red);
-  color: var(--color-white);
-}
-
-.draw-tool-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.draw-tool-btn .material-symbols-outlined {
-  font-size: var(--icon-md);
-}
-
 /* Geokatalog */
 .geokatalog-header {
   justify-content: flex-start;

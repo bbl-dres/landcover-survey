@@ -54,7 +54,7 @@ The browser-based version runs entirely client-side — no backend, no installat
 ### Features
 
 - **Interactive Map** — MapLibre GL JS with parcel + land cover polygons, 4 basemaps (CARTO + swisstopo aerial), 3D building extrusions, scale bar
-- **Accordion Menu** — Layer toggles, Geokatalog (all swisstopo layers), draw tools (placeholder)
+- **Accordion Menu** — Layer toggles and Geokatalog (all swisstopo layers)
 - **Search Bar** — Search parcels by ID/EGRID, Swiss locations, and swisstopo map layers
 - **Table Widget** — Tabs for Parcels and Land Covers, sortable columns, search filter, pagination (25/50/100), column visibility dropdown, resizable panel
 - **Summary Panel** — Collapsible sections for parcel status, area analysis with donut chart, and key metrics. Aggregation dropdown switches between land cover, SIA 416, DIN 277, green space, imperviousness, VBS Kategorie, VBS Produktivität, and VBS Typ — updates chart, legend, and map polygon colors

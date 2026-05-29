@@ -116,7 +116,7 @@
             <p class="drop-zone-hint" data-i18n="upload.hint">Erforderlich: ID, EGRID &middot; Weitere Spalten werden durchgereicht</p>
           </div>
           <input type="file" id="file-input" accept=".csv,.xlsx,.xls,.tsv,.txt" hidden aria-label="Datei auswählen">
-          <p class="demo-link"><a href="data/example.csv" download="vorlage-parzellen.csv" data-i18n="upload.template">Vorlage herunterladen (CSV)</a></p>
+          <p class="demo-link"><a href="../data/example.csv" download="vorlage-parzellen.csv" data-i18n="upload.template">Vorlage herunterladen (CSV)</a></p>
           <p class="demo-link"><span data-i18n="upload.demo.prefix">Oder testen Sie mit </span><a href="#" id="load-demo" data-i18n="upload.demo.link">Beispieldaten</a></p>
 
           <div id="upload-error" class="upload-error" role="alert" hidden></div>
@@ -166,21 +166,6 @@
             <!-- Accordion tools menu (top-left overlay on map) -->
             <div id="accordion-wrapper">
               <aside id="accordion-panel" aria-label="Kartenwerkzeuge">
-                <div class="accordion-item" id="draw-accordion">
-                  <button class="accordion-header" aria-expanded="false">
-                    <span class="accordion-arrow" aria-hidden="true"><span class="material-symbols-outlined">chevron_right</span></span>
-                    <span data-i18n="accordion.draw">Zeichnen &amp; Messen auf der Karte</span>
-                  </button>
-                  <div class="accordion-content">
-                    <p class="accordion-desc" data-i18n="accordion.draw.desc">Zeichnen Sie Punkte, Linien und Polygone direkt auf der Karte. Distanzen und Flächen werden automatisch berechnet.</p>
-                    <div class="draw-tools">
-                      <button class="draw-tool-btn" data-tool="point" data-i18n-title="accordion.draw.point" title="Punkt — kommt bald" disabled><span class="material-symbols-outlined">location_on</span></button>
-                      <button class="draw-tool-btn" data-tool="line" data-i18n-title="accordion.draw.line" title="Linie — kommt bald" disabled><span class="material-symbols-outlined">timeline</span></button>
-                      <button class="draw-tool-btn" data-tool="polygon" data-i18n-title="accordion.draw.polygon" title="Polygon — kommt bald" disabled><span class="material-symbols-outlined">pentagon</span></button>
-                      <button class="draw-tool-btn" data-tool="delete" data-i18n-title="accordion.draw.delete" title="Löschen — kommt bald" disabled><span class="material-symbols-outlined">delete</span></button>
-                    </div>
-                  </div>
-                </div>
                 <div class="accordion-item" id="geokatalog-accordion">
                   <button class="accordion-header" aria-expanded="false">
                     <span class="accordion-arrow" aria-hidden="true"><span class="material-symbols-outlined">chevron_right</span></span>
