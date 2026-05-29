@@ -42,7 +42,7 @@ Command-line tool for local, offline processing with exact planar (LV95) areas a
 - **Preview:** command-line tool — run locally (no hosted demo)
 - **Source code:** [`python/`](python/)
 
---
+---
 
 ### FME
 
