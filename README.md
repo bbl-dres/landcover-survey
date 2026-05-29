@@ -14,6 +14,8 @@ Aggregate land cover area (m²) per Swiss cadastral parcel from official survey 
 >
 > No installation needed; it runs entirely in your browser.
 
+## What is this?
+
 Aggregate land cover area (m²) per Swiss cadastral parcel from official Amtliche Vermessung (AV) data — supports single-parcel EGRID lookup and full municipal batch processing.
 
 For each parcel, the tool clips every intersecting land cover polygon to the parcel boundary and computes the area of each piece — a per-parcel breakdown of how much area each land cover type covers, classified by SIA 416, DIN 277, green space, imperviousness, and VBS categories.
