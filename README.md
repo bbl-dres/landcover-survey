@@ -6,333 +6,61 @@ Aggregate land cover area (m²) per Swiss cadastral parcel from official survey 
 [![Land Cover Survey — click to open the live app](assets/Social1.jpg)](https://bbl-dres.github.io/landcover-survey/)
 
 [![Demo on GitHub Pages](https://img.shields.io/badge/demo-GitHub%20Pages-2ea44f?logo=github&logoColor=white)](https://bbl-dres.github.io/landcover-survey/)
-![Python](https://img.shields.io/badge/python-%3E%3D3.10-blue)
-![GeoPandas](https://img.shields.io/badge/geopandas-%3E%3D0.14-green)
-![JavaScript](https://img.shields.io/badge/javascript-ES6+-yellow)
-![MapLibre](https://img.shields.io/badge/maplibre-4.7-blue)
 ![License](https://img.shields.io/badge/license-MIT-lightgrey)
 ![Status](https://img.shields.io/badge/status-alpha-orange)
 
 > [!TIP]
-> **▶ Try it now — open the live web app:** https://bbl-dres.github.io/landcover-survey/
+> **Try it now — open the live web app:** https://bbl-dres.github.io/landcover-survey/
 >
 > No installation needed; it runs entirely in your browser.
 
-For each parcel, the tool clips every intersecting land cover polygon to the parcel boundary and calculates the area of each clipped piece. This produces a breakdown of how much area of each land cover type exists within each parcel.
-
-The solution is available in three variants:
-
-- **Web App** — Zero-install browser app. Upload a CSV, get results on an interactive map with export to CSV/Excel/GeoJSON.
-  - Live app: https://bbl-dres.github.io/landcover-survey/
-  - Source code: [`web/`](web/)
-- **Python CLI** — Open-source, requires Python >= 3.10 and free dependencies. Processes locally with exact LV95 areas.
-  - Source code: [`python/`](python/)
-- **FME** — Requires a licensed copy of [FME Form](https://fme.safe.com/fme-form/).
-  - Source code: [`fme/`](fme/)
-
-> **Data coverage note:** The Web App uses the geodienste.ch WFS, which requires cantonal approval in 6 cantons (JU, LU, NE, NW, OW, VD). Parcels in these cantons are found by EGRID but return 0 m² land cover. Coverage is also incomplete in TI, VS, and NE. See the [User Guide](docs/MANUAL.md) for details.
+For each parcel, the tool clips every intersecting land cover polygon to the parcel boundary and computes the area of each piece — a per-parcel breakdown of how much area each land cover type covers, classified by SIA 416, DIN 277, green space, imperviousness, and VBS categories.
 
 <p align="center">
   <img src="assets/images/preview5.jpg" width="45%" style="vertical-align: top;"/>
   <img src="assets/images/preview6.jpg" width="45%" style="vertical-align: top;"/>
 </p>
 
-## Web App
+## Solutions
 
-**Live app:** https://bbl-dres.github.io/landcover-survey/ &nbsp;·&nbsp; **Source:** [`web/`](web/)
-
-The browser-based version runs entirely client-side — no backend, no installation. Upload a CSV with `ID` and `EGRID` columns and the app will:
-
-1. Look up parcel geometries from [swisstopo](https://api3.geo.admin.ch) (`ch.kantone.cadastralwebmap-farbe`)
-2. Fetch land cover polygons from [geodienste.ch](https://geodienste.ch) WFS (`ms:LCSF`)
-3. Clip land cover to parcel boundaries using [Turf.js](https://turfjs.org)
-4. Classify by SIA 416, DIN 277, green space, imperviousness, and VBS Kategorie
-5. Display results on an interactive map with table and summary panel
-
-**Multilingual** — Available in German (DE), French (FR), Italian (IT), and English (EN) via `?lang=` URL parameter.
-
-### Features
-
-- **Interactive Map** — MapLibre GL JS with parcel + land cover polygons, 4 basemaps (CARTO + swisstopo aerial), 3D building extrusions, scale bar
-- **Accordion Menu** — Layer toggles and Geokatalog (all swisstopo layers)
-- **Search Bar** — Search parcels by ID/EGRID, Swiss locations, and swisstopo map layers
-- **Table Widget** — Tabs for Parcels and Land Covers, sortable columns, search filter, pagination (25/50/100), column visibility dropdown, resizable panel
-- **Summary Panel** — Collapsible sections for parcel status, area analysis with donut chart, and key metrics. Aggregation dropdown switches between land cover, SIA 416, DIN 277, green space, imperviousness, VBS Kategorie, VBS Produktivität, and VBS Typ — updates chart, legend, and map polygon colors
-- **Context Menu** — Right-click to copy coordinates, share, or report issues
-- **External Layers** — Toggle official survey and habitat map overlays, or add any swisstopo layer via Geokatalog/search
-- **Layer Info** — Click (i) to view swisstopo legend and metadata
-- **Export** — Parcels CSV, Land Cover CSV, Excel (both sheets), GeoJSON
-- **Privacy** — All data stays in the browser. Only EGRID and bounding box are sent to public APIs
-- **Responsive** — Adapts to tablet and mobile screens with map-first layout
-- **Accessible** — ARIA roles, keyboard navigation, `<label>` elements, `<noscript>` fallback
-- **i18n** — Four languages (DE/FR/IT/EN) with localized SIA 416 terminology
-
-### Limitations vs Python Version
-
-| | Web App | Python CLI |
-|---|---|---|
-| **Data coverage** | 20 of 26 cantons via public WFS (JU, LU, NE, NW, OW, VD blocked) | All cantons via local GeoPackage |
-| **Area calculation** | Spherical (Turf.js), ~0.1–0.5% error | Exact planar (LV95/EPSG:2056) |
-| **Data source** | Live API queries per parcel | Local GeoPackage (all cantons at once) |
-| **Throughput** | ~5 parcels in parallel, rate-limited | Bulk vectorised processing |
-| **Bauzonen analysis** | Layer overlay only | `--bauzonen` flag |
-| **Habitat analysis** | Layer overlay only | `--habitat` flag with area intersection |
-| **Offline** | Requires internet | Fully offline with local GeoPackage |
-
-> **Data coverage note:** The Web App uses the geodienste.ch WFS, which requires cantonal approval in 6 cantons (JU, LU, NE, NW, OW, VD). Parcels in these cantons are found by EGRID but return 0 m² land cover. Coverage is also incomplete in TI, VS, and NE. See the [User Guide](docs/MANUAL.md) for details.
-
-### Complete Land Cover Type Hierarchy
-
-- See: https://github.com/bbl-dres/landcover-survey/blob/main/docs/SPECIFICATION.md
-
-| # | AV Main Category | AV Sub-category | AV `Art` Value | EN | DE | SIA 416 | Sealed | Green Space | VBS Kat. | VBS Prod. | VBS Typ |
-|----------|---------------|--------------|-------------|-----|-----|---------|--------|-------------|---------|-----------|---------|
-| 0 | Buildings (Gebäude) | — | `Gebaeude` | Buildings | Gebäude | GGF | Yes | — | A | 2 | — |
-| 1 | Sealed (Befestigt) | — | `Strasse_Weg` | Road, path | Strasse, Weg | BUF | Yes | — | A | 2 | — |
-| 2 | Sealed (Befestigt) | — | `Trottoir` | Sidewalk | Trottoir | BUF | Yes | — | A | 2 | — |
-| 3 | Sealed (Befestigt) | — | `Verkehrsinsel` | Traffic island | Verkehrsinsel | BUF | Yes | — | A | 2 | — |
-| 4 | Sealed (Befestigt) | — | `Bahn` | Railway | Bahn | BUF | Yes | — | A | 2 | — |
-| 5 | Sealed (Befestigt) | — | `Flugplatz` | Airfield | Flugplatz | BUF | Yes | — | A | 2 | — |
-| 6 | Sealed (Befestigt) | — | `Wasserbecken` | Water basin | Wasserbecken | BUF | Yes | — | A | 2 | — |
-| 7 | Sealed (Befestigt) | — | `uebrige_befestigte` | Other sealed surfaces | Übrige befestigte | BUF | Yes | — | A | 2 | — |
-| 8 | Soil-covered (Humusiert) | — | `Acker_Wiese_Weide` | Arable land, meadow, pasture | Acker, Wiese, Weide | BUF | No | Soil-covered | B | 1 | Typ 2 |
-| 9 | Soil-covered (Humusiert) | Intensive (Intensivkultur) | `Reben` | Vineyards | Reben | BUF | No | Soil-covered | B | 1 | Typ 2 |
-| 10 | Soil-covered (Humusiert) | Intensive (Intensivkultur) | `uebrige_Intensivkultur` | Other intensive cultivation | Übrige Intensivkultur | BUF | No | — * | B | 1 | Typ 2 |
-| 11 | Soil-covered (Humusiert) | — | `Gartenanlage` | Garden area | Gartenanlage | BUF | No | Soil-covered | B | 1 | Typ 1 |
-| 12 | Soil-covered (Humusiert) | — | `Hoch_Flachmoor` | Raised/flat bog | Hoch-/Flachmoor | BUF | No | Soil-covered | D | 1 | Typ 2 |
-| 13 | Soil-covered (Humusiert) | — | `uebrige_humusierte` | Other soil-covered | Übrige humusierte | BUF | No | Soil-covered | B | 1 | Typ 2 |
-| 14 | Water (Gewässer) | — | `stehendes` | Standing water | Stehendes Gewässer | UUF | No | — | D | 1 | Typ 2 |
-| 15 | Water (Gewässer) | — | `fliessendes` | Flowing water | Fliessendes Gewässer | UUF | No | — | D | 1 | Typ 2 |
-| 16 | Water (Gewässer) | — | `Schilfguertel` | Reed belt | Schilfgürtel | UUF | No | — | D | 1 | Typ 2 |
-| 17 | Wooded (Bestockt) | — | `geschlossener_Wald` | Closed forest | Geschlossener Wald | UUF | No | Wooded | C | 1 | Typ 2 |
-| 18 | Wooded (Bestockt) | Wooded pasture (Wytweide) | `Wytweide_dicht` | Dense wooded pasture | Wytweide dicht | BUF | No | Soil-covered ** | B | 1 | Typ 2 |
-| 19 | Wooded (Bestockt) | Wooded pasture (Wytweide) | `Wytweide_offen` | Open wooded pasture | Wytweide offen | BUF | No | Soil-covered ** | B | 1 | Typ 2 |
-| 20 | Wooded (Bestockt) | — | `uebrige_bestockte` | Other wooded | Übrige bestockte | UUF | No | Wooded | C | 1 | Typ 2 |
-| 21 | Unvegetated (Vegetationslos) | — | `Fels` | Rock | Fels | UUF | No | — | D | 2 *** | — |
-| 22 | Unvegetated (Vegetationslos) | — | `Gletscher_Firn` | Glacier, firn | Gletscher, Firn | UUF | No | — | D | 2 *** | — |
-| 23 | Unvegetated (Vegetationslos) | — | `Geroell_Sand` | Scree, sand | Geröll, Sand | UUF | No | — | D | 2 *** | — |
-| 24 | Unvegetated (Vegetationslos) | — | `Abbau_Deponie` | Extraction, landfill | Abbau, Deponie | UUF | No | — | A | 2 | — |
-| 25 | Unvegetated (Vegetationslos) | — | `uebrige_vegetationslose` | Other unvegetated | Übrige vegetationslose | UUF | No | — | D | 1 | Typ 2 |
-
-
-### Quick Start
-
-The web app is plain static files (ES modules, no build step) in [`web/`](web/). Serve the repo root with any static server — the root `index.html` redirects to the app:
-
-```bash
-cd landcover-survey
-python -m http.server 8080
-# Open http://localhost:8080  (redirects to /web/)
-```
-
-Or deploy the repo to any static hosting (GitHub Pages, Cloudflare Pages, etc.); the root redirect keeps the published URL clean.
-
-### File Structure
-
-```
-index.html                   Root redirect → web/ (keeps the GitHub Pages URL clean)
-web/                         Web app — static, no build step
-  index.html                 App entry point
-  css/
-    tokens.css               Design tokens (colors, spacing, typography, shadows)
-    styles.css               Component styles + responsive breakpoints
-  js/
-    main.js                  State machine (upload → processing → results)
-    upload.js                CSV/XLSX parsing with auto-delimiter detection
-    processor.js             EGRID lookup + WFS query + Turf.js clipping (5x parallel)
-    map.js                   MapLibre map, controls, popups, layer management
-    table.js                 Table widget with tabs, sorting, pagination, column toggle
-    search.js                Header search (parcels + locations + layers)
-    swisstopo.js             External layer management, Geokatalog, layer info modal
-    config.js                BBArt mappings (SIA 416, DIN 277, green space, sealed, VBS)
-    export.js                CSV/XLSX/GeoJSON export
-    i18n.js                  Translations (DE, FR, IT, EN)
-python/                      Python CLI (see the Python CLI section below)
-fme/                         FME workspace (.fmw)
-data/
-  example.csv                Demo data (20 parcels with error test cases)
-  example-full.csv           Full test set (1000 parcels)
-docs/
-  MANUAL.md                  Multilingual user guide (DE/FR/IT/EN)
-  SPECIFICATION.md           Full technical specification
-assets/                      Images for the README + app logo
-  swiss-logo-flag.svg        Swiss coat of arms
-```
-
-### APIs Used
-
-| API | Purpose | Auth |
-|-----|---------|------|
-| `api3.geo.admin.ch/MapServer/find` | Parcel geometry by EGRID | None (CORS) |
-| `geodienste.ch/db/av_0/{lang}` WFS | Land cover polygons (ms:LCSF) | None (CORS) |
-| `api3.geo.admin.ch/SearchServer` | Location + layer search | None (CORS) |
-| `api3.geo.admin.ch/CatalogServer` | Geokatalog tree | None (CORS) |
-| `api3.geo.admin.ch/MapServer/{id}/legend` | Layer metadata + legend | None (CORS) |
-| `wmts.geo.admin.ch` | swisstopo WMTS tiles | None |
-| `wms.geo.admin.ch` | swisstopo WMS fallback | None |
-
----
-
-## Python CLI
-
-See [docs/SPECIFICATION.md](docs/SPECIFICATION.md) for the full technical specification.
-
-### Outputs
-
-1. **Parcels** — One row per parcel with identifiers, official and calculated area. In Mode 1, includes user-provided columns and error messages for unresolved EGRIDs. Disable with `--no-parcels`.
-2. **Land Cover** — One row per clipped land cover feature per parcel with type, area, EGRID, and green space classification. Disable with `--no-landcover`.
-3. **Bauzonen** *(optional, `--bauzonen`)* — Adds `bauzonen` and `bauzonen_m2` columns to both Parcels and Land Cover outputs.
-4. **Habitat** *(optional, `--habitat`)* — Adds `habitat` and `habitat_m2` columns to both Parcels and Land Cover outputs.
-
-### Modes of Operation
-
-| Mode | Description | Input |
-|------|-------------|-------|
-| 1 | User-provided parcel list | CSV or Excel with `ID` and `EGRID` columns |
-| 2 | Full survey processing | All parcels from the AV GeoPackage (batched by municipality) |
-
-### Requirements
-
-- Python >= 3.10
-- Dependencies: `geopandas`, `pandas`, `shapely >= 2.0`, `openpyxl`
-- AV GeoPackage (`av_2056.gpkg`) from [geodienste.ch](https://www.geodienste.ch/services/av)
-
-### Installation
-
-```bash
-cd python
-pip install geopandas pandas shapely openpyxl
-```
-
-### Usage
-
-```bash
-cd python
-
-# Mode 1: User-provided parcel list
-python main.py --mode 1 --input ../data/example.csv
-
-# Mode 1: Test with first 10 parcels
-python main.py --mode 1 --input ../data/example.csv --limit 10
-
-# Mode 2: All parcels (batched by BFSNr)
-python main.py --mode 2 --limit 5
-
-# With optional analyses
-python main.py --mode 1 --input ../data/example.csv --bauzonen --habitat --limit 10 -v
-```
-
-### CLI Arguments
-
-| Argument | Default | Description |
-|----------|---------|-------------|
-| `--mode {1,2}` | `1` | Processing mode |
-| `--input PATH` | *(required for Mode 1)* | Path to user CSV or Excel file |
-| `--gpkg PATH` | `D:\AV_lv95\av_2056.gpkg` | Path to the AV GeoPackage |
-| `--output-dir PATH` | *(input file's directory)* | Output directory |
-| `--limit N` | *(all)* | Limit processing for testing |
-| `--chunk-size N` | `10000` | Rows per processing chunk (Mode 1) |
-| `--no-aggregate` | off | Disable area aggregation columns |
-| `--no-parcels` | off | Skip parcels CSV export |
-| `--no-landcover` | off | Skip land cover CSV export |
-| `--bauzonen` | off | Intersect with [Bauzonen Schweiz](https://map.geo.admin.ch/?layers=ch.are.bauzonen) |
-| `--habitat` | off | Intersect with [BAFU Lebensraumkarte](https://map.geo.admin.ch/?layers=ch.bafu.lebensraumkarte-schweiz) |
-| `--verbose`, `-v` | off | Enable DEBUG logging |
-
----
-
-## Land Cover Classification
-
-The 26 land cover types (`Art` / BBArt) are defined in the official survey data model [DM.01-AV-CH](https://www.cadastre-manual.admin.ch/de/datenmodell-der-amtlichen-vermessung-dm01-av-ch). The legal basis for the categories is [TVAV Art. 14–19](https://www.fedlex.admin.ch/eli/cc/2023/530/de) (Technical Ordinance on the Official Cadastral Survey).
-
-| `Art` Code | EN | DE | SIA 416 | DIN 277 | Sealed | Green Space | VBS Kat. | VBS Prod. | VBS Typ |
-|------------|-----|-----|---------|---------|--------|-------------|---------|-----------|---------|
-| `Gebaeude` | Building | Gebäude | GGF | BF | Yes | — | A | 2 | — |
-| `Strasse_Weg` | Road, path | Strasse, Weg | BUF | UF | Yes | — | A | 2 | — |
-| `Trottoir` | Sidewalk | Trottoir | BUF | UF | Yes | — | A | 2 | — |
-| `Verkehrsinsel` | Traffic island | Verkehrsinsel | BUF | UF | Yes | — | A | 2 | — |
-| `Bahn` | Railway | Bahn | BUF | UF | Yes | — | A | 2 | — |
-| `Flugplatz` | Airfield | Flugplatz | BUF | UF | Yes | — | A | 2 | — |
-| `Wasserbecken` | Water basin | Wasserbecken | BUF | UF | Yes | — | A | 2 | — |
-| `uebrige_befestigte` | Other sealed | Übrige befestigte | BUF | UF | Yes | — | A | 2 | — |
-| `Acker_Wiese_Weide` | Arable, meadow, pasture | Acker, Wiese, Weide | BUF | UF | No | Soil-covered | B | 1 | Typ 2 |
-| `Reben` | Vineyards | Reben | BUF | UF | No | Soil-covered | B | 1 | Typ 2 |
-| `uebrige_Intensivkultur` | Other intensive cultivation | Übrige Intensivkultur | BUF | UF | No | — | B | 1 | Typ 2 |
-| `Gartenanlage` | Garden | Gartenanlage | BUF | UF | No | Soil-covered | B | 1 | Typ 1 |
-| `Hoch_Flachmoor` | Raised/flat bog | Hoch-/Flachmoor | BUF | UF | No | Soil-covered | D | 1 | Typ 2 |
-| `uebrige_humusierte` | Other soil-covered | Übrige humusierte | BUF | UF | No | Soil-covered | B | 1 | Typ 2 |
-| `Gewaesser_stehendes` | Standing water | Stehendes Gewässer | UUF | UF | No | — | D | 1 | Typ 2 |
-| `Gewaesser_fliessendes` | Flowing water | Fliessendes Gewässer | UUF | UF | No | — | D | 1 | Typ 2 |
-| `Schilfguertel` | Reed belt | Schilfgürtel | UUF | UF | No | — | D | 1 | Typ 2 |
-| `geschlossener_Wald` | Dense forest | Geschlossener Wald | UUF | UF | No | Wooded | C | 1 | Typ 2 |
-| `Wytweide_dicht` | Dense wooded pasture | Wytweide dicht | BUF | UF | No | Soil-covered | B | 1 | Typ 2 |
-| `Wytweide_offen` | Open wooded pasture | Wytweide offen | BUF | UF | No | Soil-covered | B | 1 | Typ 2 |
-| `uebrige_bestockte` | Other wooded | Übrige bestockte | UUF | UF | No | Wooded | C | 1 | Typ 2 |
-| `Fels` | Rock | Fels | UUF | UF | No | — | D | 2 | — |
-| `Gletscher_Firn` | Glacier, firn | Gletscher, Firn | UUF | UF | No | — | D | 2 | — |
-| `Geroell_Sand` | Scree, sand | Geröll, Sand | UUF | UF | No | — | D | 2 | — |
-| `Abbau_Deponie` | Quarry, landfill | Abbau, Deponie | UUF | UF | No | — | A | 2 | — |
-| `uebrige_vegetationslose` | Other unvegetated | Übrige vegetationslose | UUF | UF | No | — | D | 1 | Typ 2 |
-
-> **SIA 416:2003** — GSF = GGF + UF, where UF = BUF + UUF. **DIN 277:2021** — GF = BF + UF.
->
-> **VBS Classification** — Based on "Auswertung naturnahe VBS Flächen" (arImmo). **VBS Kat.** A–D = Siedlung / Landwirtschaft / Bestockt / Unproduktiv. **VBS Prod.** 1 = Biologisch produktiv, 2 = Biologisch unproduktiv (A + Fels/Gletscher/Geröll). **VBS Typ** = Typ 1 (Gartenanlage only) / Typ 2 (other productive) — only within biologically productive.
-
-## Data Source
-
-Official Swiss cadastral survey data (Amtliche Vermessung / mensuration officielle), data model DM.01-AV-CH:
-
-- Download: https://www.geodienste.ch/services/av
-- Manual: https://www.cadastre-manual.admin.ch/
-- CRS: EPSG:2056 (CH1903+ / LV95)
-
-## Documentation
-
-- [User Guide](docs/MANUAL.md) — Multilingual user manual (DE/FR/IT/EN) with FAQ and data coverage
-- [Technical Specification](docs/SPECIFICATION.md) — Full specification including processing pipeline, data model, and architecture
-
-## Legal Framework & References
-
-### Area Standards
-- **SIA 416:2003** — Flächen und Volumen von Gebäuden / Surfaces et volumes des bâtiments / Superfici e volumi di edifici
-- **DIN 277:2021** — Grundflächen und Rauminhalte im Hochbau
-
-### Data Model & Geoinformation Law
-- [DM.01-AV-CH](https://www.cadastre-manual.admin.ch/de/datenmodell-der-amtlichen-vermessung-dm01-av-ch) — INTERLIS data model for the official cadastral survey
-- [TVAV (SR 211.432.21)](https://www.fedlex.admin.ch/eli/cc/2023/530/de) — Technical Ordinance on the Official Cadastral Survey (Art. 14–19: land cover categories)
-- [GeoIG (SR 510.62)](https://www.fedlex.admin.ch/eli/cc/2008/388/de) — Federal Act on Geoinformation
-- [VAV (SR 211.432.2)](https://www.fedlex.admin.ch/eli/cc/1992/2446_2446_2446/de) — Ordinance on the Official Cadastral Survey
-- [Cadastre Manual](https://www.cadastre-manual.admin.ch/) — Handbuch der Amtlichen Vermessung
-
-## Tech Stack & Credits
+The same analysis is available three ways. Each has its own README with full details.
 
 ### Web App
 
-| Library | Version | Purpose |
-|---------|---------|---------|
-| [MapLibre GL JS](https://maplibre.org) | 4.7.1 | Interactive vector map rendering |
-| [Turf.js](https://turfjs.org) | 7.x | Spatial operations (intersect, area, bbox, centroid) |
-| [SheetJS (xlsx)](https://sheetjs.com) | 0.18.5 | Excel import/export (loaded on demand) |
-| [Material Symbols](https://fonts.google.com/icons) | — | UI icons (Google Fonts) |
-| [Source Sans 3](https://fonts.google.com/specimen/Source+Sans+3) | — | Typography (Google Fonts) |
-| [CARTO Basemaps](https://carto.com/basemaps) | — | Positron, Voyager, Dark Matter tiles |
-| [swisstopo APIs](https://api3.geo.admin.ch) | — | Parcel lookup, search, WMTS/WMS tiles |
-| [geodienste.ch](https://www.geodienste.ch/services/av) | — | Official surveying WFS (land cover) |
+Zero-install browser app: upload a CSV of parcels and explore per-parcel land cover on an interactive map, with export to CSV/Excel/GeoJSON. Multilingual (DE/FR/IT/EN).
+
+- **Preview:** https://bbl-dres.github.io/landcover-survey/
+- **Source code:** [`web/`](web/)
 
 ### Python CLI
 
-| Library | Version | Purpose |
-|---------|---------|---------|
-| [GeoPandas](https://geopandas.org) | >= 0.14 | GeoPackage I/O, spatial operations |
-| [Shapely](https://shapely.readthedocs.io) | >= 2.0 | Geometry operations, `make_valid()` |
-| [pandas](https://pandas.pydata.org) | >= 2.0 | Tabular data processing, CSV/Excel I/O |
-| [openpyxl](https://openpyxl.readthedocs.io) | — | Excel (.xlsx) reading |
+Command-line tool for local, offline processing with exact planar (LV95) areas and full cantonal coverage from a local GeoPackage. Optional Bauzonen and habitat analyses.
 
-### Standards
+- **Preview:** command-line tool — run locally (no hosted demo)
+- **Source code:** [`python/`](python/)
 
-- [SIA 416:2003](https://www.sia.ch/de/dienstleistungen/sia-norm/geodaten/) — Swiss standard for building surfaces and volumes
-- [DIN 277:2021](https://www.beuth.de/de/norm/din-277/343199925) — German standard for floor areas and building volumes
+### FME
+
+The original FME Form workspace (`.fmw`) that the other two solutions reproduce.
+
+- **Preview:** requires [FME Form](https://fme.safe.com/fme-form/) (commercial licence)
+- **Source code:** [`fme/`](fme/)
+
+> **Data coverage note:** The Web App uses the geodienste.ch WFS, which requires cantonal approval in 6 cantons (JU, LU, NE, NW, OW, VD). Parcels in these cantons are found by EGRID but return 0 m² land cover. Coverage is also incomplete in TI, VS, and NE. The Python CLI has full coverage from a local GeoPackage. See the [User Guide](docs/MANUAL.md) for details.
+
+## Data & Documentation
+
+- **Data source** — official Swiss cadastral survey (Amtliche Vermessung), data model [DM.01-AV-CH](https://www.cadastre-manual.admin.ch/), distributed via [geodienste.ch](https://www.geodienste.ch/services/av). CRS: EPSG:2056 (CH1903+ / LV95).
+- **[User Guide](docs/MANUAL.md)** — multilingual manual (DE/FR/IT/EN) with FAQ and data coverage.
+- **[Technical Specification](docs/SPECIFICATION.md)** — processing pipeline, data model, full land cover classification (26 BBArt types), and architecture.
+
+## Standards & References
+
+- [SIA 416:2003](https://www.sia.ch/de/dienstleistungen/sia-norm/geodaten/) — building surfaces and volumes (GGF / BUF / UUF)
+- [DIN 277:2021](https://www.beuth.de/de/norm/din-277/343199925) — floor areas and building volumes (BF / UF)
+- [TVAV (SR 211.432.21)](https://www.fedlex.admin.ch/eli/cc/2023/530/de) — Technical Ordinance on the Official Cadastral Survey (Art. 14–19: land cover categories)
+- [GeoIG (SR 510.62)](https://www.fedlex.admin.ch/eli/cc/2008/388/de) — Federal Act on Geoinformation
 
 ## License
 
-See [LICENSE](LICENSE).
+[MIT](LICENSE) — see [LICENSE](LICENSE).
