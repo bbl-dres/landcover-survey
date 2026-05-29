@@ -26,7 +26,6 @@ Zero-install browser app: upload a CSV of parcels and explore per-parcel land co
 
 - **Preview:** https://bbl-dres.github.io/landcover-survey/
 - **Source code:** [`web/`](web/)
-
 <p align="center">
   <img src="assets/images/preview5.jpg" width="45%" style="vertical-align: top;"/>
   <img src="assets/images/preview6.jpg" width="45%" style="vertical-align: top;"/>
