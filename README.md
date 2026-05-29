@@ -16,11 +16,6 @@ Aggregate land cover area (m²) per Swiss cadastral parcel from official survey 
 
 For each parcel, the tool clips every intersecting land cover polygon to the parcel boundary and computes the area of each piece — a per-parcel breakdown of how much area each land cover type covers, classified by SIA 416, DIN 277, green space, imperviousness, and VBS categories.
 
-<p align="center">
-  <img src="assets/images/preview5.jpg" width="45%" style="vertical-align: top;"/>
-  <img src="assets/images/preview6.jpg" width="45%" style="vertical-align: top;"/>
-</p>
-
 ## Solutions
 
 The same analysis is available three ways. Each has its own README with full details.
@@ -32,12 +27,21 @@ Zero-install browser app: upload a CSV of parcels and explore per-parcel land co
 - **Preview:** https://bbl-dres.github.io/landcover-survey/
 - **Source code:** [`web/`](web/)
 
+<p align="center">
+  <img src="assets/images/preview5.jpg" width="45%" style="vertical-align: top;"/>
+  <img src="assets/images/preview6.jpg" width="45%" style="vertical-align: top;"/>
+</p>
+
+---
+
 ### Python CLI
 
 Command-line tool for local, offline processing with exact planar (LV95) areas and full cantonal coverage from a local GeoPackage. Optional Bauzonen and habitat analyses.
 
 - **Preview:** command-line tool — run locally (no hosted demo)
 - **Source code:** [`python/`](python/)
+
+--
 
 ### FME
 
@@ -47,6 +51,8 @@ The original FME Form workspace (`.fmw`) that the other two solutions reproduce.
 - **Source code:** [`fme/`](fme/)
 
 > **Data coverage note:** The Web App uses the geodienste.ch WFS, which requires cantonal approval in 6 cantons (JU, LU, NE, NW, OW, VD). Parcels in these cantons are found by EGRID but return 0 m² land cover. Coverage is also incomplete in TI, VS, and NE. The Python CLI has full coverage from a local GeoPackage. See the [User Guide](docs/MANUAL.md) for details.
+
+---
 
 ## Data & Documentation
 
