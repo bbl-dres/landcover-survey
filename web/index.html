@@ -46,7 +46,7 @@
     <div id="search-wrapper" class="search-wrapper" hidden>
       <div class="search-container">
         <span class="material-symbols-outlined search-icon" aria-hidden="true">search</span>
-        <input type="text" id="search-input" data-i18n-placeholder="search.placeholder" data-i18n-aria="search.placeholder" placeholder="Suche nach Parzellen oder Orten" autocomplete="off" aria-label="Suche nach Parzellen oder Orten">
+        <input type="text" id="search-input" role="combobox" aria-controls="search-results" aria-autocomplete="list" aria-expanded="false" data-i18n-placeholder="search.placeholder" data-i18n-aria="search.placeholder" placeholder="Suche nach Parzellen oder Orten" autocomplete="off" aria-label="Suche nach Parzellen oder Orten">
         <button id="search-clear-btn" class="search-clear" hidden data-i18n-aria="search.clear" aria-label="Suche löschen">&times;</button>
       </div>
       <div id="search-results" class="search-results" role="listbox" data-i18n-aria="search.results" aria-label="Suchergebnisse" hidden></div>

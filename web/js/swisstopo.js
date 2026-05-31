@@ -2,7 +2,7 @@
  * Swisstopo external layer management — add/remove/toggle WMTS/WMS layers,
  * Geokatalog tree, restore after basemap change
  */
-import { esc } from "./config.js";
+import { esc, fetchWithTimeout } from "./config.js";
 import { is3DActive } from "./map.js";
 import { t, getLang } from "./i18n.js";
 import { showToast } from "./toast.js";
@@ -12,12 +12,7 @@ export const activeSwisstopoLayers = [];
 
 const FETCH_TIMEOUT = 15000;
 
-/** Fetch with AbortController timeout */
-function fetchTimeout(url, ms = FETCH_TIMEOUT) {
-  const controller = new AbortController();
-  const id = setTimeout(() => controller.abort(), ms);
-  return fetch(url, { signal: controller.signal }).finally(() => clearTimeout(id));
-}
+const fetchTimeout = (url) => fetchWithTimeout(url, { timeoutMs: FETCH_TIMEOUT });
 
 let mapRef = null;
 
@@ -310,14 +305,17 @@ export function renderActiveLayersList() {
 
   container.innerHTML = dynamicLayers.map((layer) => {
     const isVisible = layer.visible !== false;
-    return `<label class="active-layer-item">
-      <button class="active-layer-remove" data-layer-id="${esc(layer.id)}" title="${esc(t("layer.remove"))}">
+    const toggleLabel = `${isVisible ? esc(t("layer.hide")) : esc(t("layer.show"))}: ${esc(layer.title)}`;
+    // A row holds several controls, so it is a <div> (not a <label>, which must
+    // wrap a single control). The visibility checkbox carries its own aria-label.
+    return `<div class="active-layer-item">
+      <button class="active-layer-remove" data-layer-id="${esc(layer.id)}" title="${esc(t("layer.remove"))}" aria-label="${esc(t("layer.remove"))}: ${esc(layer.title)}">
         <span class="material-symbols-outlined">close</span>
       </button>
-      <input type="checkbox" class="active-layer-checkbox" ${isVisible ? "checked" : ""} data-layer-id="${esc(layer.id)}" title="${isVisible ? esc(t("layer.hide")) : esc(t("layer.show"))}">
+      <input type="checkbox" class="active-layer-checkbox" ${isVisible ? "checked" : ""} data-layer-id="${esc(layer.id)}" title="${toggleLabel}" aria-label="${toggleLabel}">
       <span class="active-layer-title">${esc(layer.title)}</span>
-      <button class="active-layer-info" data-info="swisstopo" data-layer-id="${esc(layer.id)}"><span class="material-symbols-outlined">info</span></button>
-    </label>`;
+      <button class="active-layer-info" data-info="swisstopo" data-layer-id="${esc(layer.id)}" title="${esc(t("layerinfo.info"))}" aria-label="${esc(t("layerinfo.info"))}: ${esc(layer.title)}"><span class="material-symbols-outlined">info</span></button>
+    </div>`;
   }).join("");
 
   // Wire events
@@ -351,6 +349,62 @@ function getInternalLayerMeta(key) {
   }[key];
 }
 
+/**
+ * Sanitize remote legend HTML with a strict allowlist before injecting it.
+ *
+ * The source is the trusted swisstopo legend endpoint, but legends are remote
+ * HTML rendered via innerHTML, so we keep only the tags/attributes a legend
+ * actually uses (tables, images, inline color swatches) and drop everything
+ * else — unknown tags (script/style/iframe/…), event handlers, and any
+ * non-http(s)/data-image URLs. This is allowlist-based, so new dangerous
+ * constructs are rejected by default rather than needing to be denylisted.
+ */
+const LEGEND_ALLOWED_TAGS = new Set([
+  "div", "span", "p", "br", "hr", "b", "i", "em", "strong", "small", "sub", "sup", "u", "s",
+  "h1", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "li", "dl", "dt", "dd",
+  "table", "caption", "thead", "tbody", "tfoot", "tr", "td", "th", "col", "colgroup",
+  "a", "img", "center", "font",
+]);
+const LEGEND_GLOBAL_ATTRS = new Set([
+  "class", "title", "align", "valign", "width", "height", "style",
+  "color", "bgcolor", "span", "colspan", "rowspan",
+]);
+const LEGEND_TAG_ATTRS = { a: new Set(["href"]), img: new Set(["src", "alt"]) };
+
+function sanitizeLegendHtml(html) {
+  const doc = new DOMParser().parseFromString(html, "text/html");
+
+  const scrub = (node) => {
+    for (const el of Array.from(node.children)) {
+      const tag = el.tagName.toLowerCase();
+      if (!LEGEND_ALLOWED_TAGS.has(tag)) { el.remove(); continue; }
+
+      const allowed = LEGEND_TAG_ATTRS[tag]
+        ? new Set([...LEGEND_GLOBAL_ATTRS, ...LEGEND_TAG_ATTRS[tag]])
+        : LEGEND_GLOBAL_ATTRS;
+
+      for (const attr of Array.from(el.attributes)) {
+        const name = attr.name.toLowerCase();
+        const val = attr.value.trim();
+        if (!allowed.has(name)) { el.removeAttribute(attr.name); continue; }
+        if (name === "style" && /url\s*\(|expression\s*\(|javascript:/i.test(val)) {
+          el.removeAttribute(attr.name);
+        } else if (name === "href" && !/^(https?:|\/|#)/i.test(val)) {
+          el.removeAttribute(attr.name);
+        } else if (name === "src" && !/^(https?:|data:image\/(png|jpe?g|gif|webp);base64,)/i.test(val)) {
+          el.removeAttribute(attr.name);
+        }
+      }
+
+      if (tag === "a") { el.setAttribute("target", "_blank"); el.setAttribute("rel", "noopener noreferrer"); }
+      scrub(el);
+    }
+  };
+
+  scrub(doc.body);
+  return doc.body ? doc.body.innerHTML : "";
+}
+
 export function showLayerInfo(layerId) {
   const modal = document.getElementById("layer-info-modal");
   const content = document.getElementById("layer-info-content");
@@ -362,17 +416,7 @@ export function showLayerInfo(layerId) {
   fetchTimeout(`https://api3.geo.admin.ch/rest/services/api/MapServer/${layerId}/legend?lang=${getLang()}`)
     .then((r) => { if (!r.ok) throw new Error("Unavailable"); return r.text(); })
     .then((html) => {
-      // Sanitize: strip scripts and event handlers
-      const doc = new DOMParser().parseFromString(html, "text/html");
-      doc.querySelectorAll("script, iframe, object, embed, form").forEach((el) => el.remove());
-      doc.querySelectorAll("*").forEach((el) => {
-        for (const attr of Array.from(el.attributes)) {
-          if (attr.name.startsWith("on") || attr.value.trim().toLowerCase().startsWith("javascript:")) {
-            el.removeAttribute(attr.name);
-          }
-        }
-      });
-      content.innerHTML = `<div class="layer-info-api-content">${doc.body?.innerHTML || ""}</div>`;
+      content.innerHTML = `<div class="layer-info-api-content">${sanitizeLegendHtml(html)}</div>`;
     })
     .catch((e) => {
       console.error("Layer info error:", e);

@@ -100,7 +100,7 @@ a { transition: color var(--transition-fast); }
   padding: var(--space-2) var(--space-3); cursor: pointer;
   transition: background var(--duration-fast);
 }
-.search-item:hover { background: var(--federal-blue-hover); }
+.search-item:hover, .search-item.active { background: var(--federal-blue-hover); }
 .search-item-icon { font-size: var(--icon-md); color: var(--gray-400); flex-shrink: 0; }
 .search-item-title { font-size: var(--text-xs); color: var(--gray-800); }
 .search-item-sub { font-size: var(--text-2xs); color: var(--gray-500); }

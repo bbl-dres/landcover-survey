@@ -211,6 +211,16 @@ export function loadScript(src) {
   });
 }
 
+/**
+ * Shared fetch with an AbortController timeout. Rejects with an AbortError when
+ * the request exceeds `timeoutMs`. Any extra fetch options are passed through.
+ */
+export function fetchWithTimeout(url, { timeoutMs = 15000, ...opts } = {}) {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
+  return fetch(url, { ...opts, signal: controller.signal }).finally(() => clearTimeout(id));
+}
+
 /** API endpoints */
 const WFS_LANG = { de: "deu", fr: "fra", it: "ita", en: "eng" };
 export const API = {

@@ -14,19 +14,11 @@ let onParcelRowClick = null;
 let onLcRowClick = null;
 let container = null;
 
-// Parcel tab state
-let pSortField = "id";
-let pSortAsc = true;
-let pSearch = "";
-let pPage = 1;
-let pPageSize = 50;
-
-// Landcover tab state
-let lcSortField = "id";
-let lcSortAsc = true;
-let lcSearch = "";
-let lcPage = 1;
-let lcPageSize = 50;
+// Per-tab view state (sort / search / pagination)
+const tabState = {
+  parcels: { sortField: "id", sortAsc: true, search: "", page: 1, pageSize: 50 },
+  landcover: { sortField: "id", sortAsc: true, search: "", page: 1, pageSize: 50 },
+};
 
 /* ── Column definitions ── */
 
@@ -69,16 +61,11 @@ export function initTable(el, { onParcelSelect, onLandcoverSelect } = {}) {
 }
 
 export function populateTable(parcels, landcover) {
-  parcelsData = (parcels || []).map((p, i) => { p._idx = i; return p; });
-  landcoverData = (landcover || []).map((lc, i) => {
-    lc._idx = i;
-    lc.art_label = ART_LABELS[lc.art] || lc.art;
-    return lc;
-  });
-  pPage = 1;
-  lcPage = 1;
-  pSearch = "";
-  lcSearch = "";
+  // Shallow-copy so we can attach view-only fields (_idx, art_label) without
+  // mutating the shared result objects held by main.js / used for export.
+  parcelsData = (parcels || []).map((p, i) => ({ ...p, _idx: i }));
+  landcoverData = (landcover || []).map((lc, i) => ({ ...lc, _idx: i, art_label: ART_LABELS[lc.art] || lc.art }));
+  for (const st of Object.values(tabState)) { st.page = 1; st.search = ""; }
   activeTab = "parcels";
   renderShell();
   renderActiveTab();
@@ -196,8 +183,8 @@ function renderShell() {
       const input = container.querySelector("#tbl-search-input");
       input.value = "";
       container.querySelector("#tbl-search-clear").hidden = true;
-      pSearch = "";
-      lcSearch = "";
+      tabState.parcels.search = "";
+      tabState.landcover.search = "";
       updateColumnsDropdown();
       renderActiveTab();
     });
@@ -211,16 +198,18 @@ function renderShell() {
     searchClear.hidden = !searchInput.value;
     clearTimeout(debounce);
     debounce = setTimeout(() => {
-      if (activeTab === "parcels") { pSearch = searchInput.value.toLowerCase().trim(); pPage = 1; }
-      else { lcSearch = searchInput.value.toLowerCase().trim(); lcPage = 1; }
+      const st = tabState[activeTab];
+      st.search = searchInput.value.toLowerCase().trim();
+      st.page = 1;
       renderActiveTab();
     }, 200);
   });
   searchClear.addEventListener("click", () => {
     searchInput.value = "";
     searchClear.hidden = true;
-    pSearch = ""; lcSearch = "";
-    pPage = 1; lcPage = 1;
+    const st = tabState[activeTab];
+    st.search = "";
+    st.page = 1;
     renderActiveTab();
     searchInput.focus();
   });
@@ -241,33 +230,33 @@ function renderShell() {
   container.querySelector("#col-toggle-none").addEventListener("click", () => toggleAllCols(false));
 
   // Build headers
-  renderHeaders("parcels-header-row", getParcelCols(), "p");
-  renderHeaders("lc-header-row", getLcCols(), "lc");
+  renderHeaders("parcels-header-row", getParcelCols(), "parcels");
+  renderHeaders("lc-header-row", getLcCols(), "landcover");
   updateColumnsDropdown();
 }
 
 /* ── Headers ── */
 
-function renderHeaders(rowId, cols, prefix) {
+function renderHeaders(rowId, cols, tabName) {
   const row = container.querySelector(`#${rowId}`);
   row.innerHTML = cols.map((c) =>
-    `<th class="${c.cls} sortable" data-key="${c.key}" data-prefix="${prefix}">
+    `<th class="${c.cls} sortable" data-key="${c.key}" role="columnheader" aria-sort="none" tabindex="0">
       ${esc(c.label)} <span class="material-symbols-outlined sort-icon">unfold_more</span>
     </th>`
   ).join("");
 
+  const sortBy = (key) => {
+    const st = tabState[tabName];
+    if (st.sortField === key) st.sortAsc = !st.sortAsc;
+    else { st.sortField = key; st.sortAsc = true; }
+    renderTab(tabName);
+    updateSortIndicators(rowId, key, st.sortAsc);
+  };
+
   row.querySelectorAll("th.sortable").forEach((th) => {
-    th.addEventListener("click", () => {
-      const key = th.dataset.key;
-      if (prefix === "p") {
-        if (pSortField === key) pSortAsc = !pSortAsc;
-        else { pSortField = key; pSortAsc = true; }
-      } else {
-        if (lcSortField === key) lcSortAsc = !lcSortAsc;
-        else { lcSortField = key; lcSortAsc = true; }
-      }
-      renderActiveTab();
-      updateSortIndicators(rowId, key, prefix === "p" ? pSortAsc : lcSortAsc);
+    th.addEventListener("click", () => sortBy(th.dataset.key));
+    th.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); sortBy(th.dataset.key); }
     });
   });
 }
@@ -279,9 +268,11 @@ function updateSortIndicators(rowId, activeKey, asc) {
     if (th.dataset.key === activeKey) {
       icon.textContent = asc ? "expand_less" : "expand_more";
       icon.style.color = "var(--swiss-red)";
+      th.setAttribute("aria-sort", asc ? "ascending" : "descending");
     } else {
       icon.textContent = "unfold_more";
       icon.style.color = "";
+      th.setAttribute("aria-sort", "none");
     }
   });
 }
@@ -319,136 +310,99 @@ function toggleAllCols(showAll) {
 
 /* ── Render active tab ── */
 
+/** Static per-tab configuration shared by the unified renderer below. */
+const TAB_CONFIG = {
+  parcels: {
+    getCols: getParcelCols,
+    getData: () => parcelsData,
+    bodyId: "parcels-body",
+    paginationId: "parcels-pagination",
+    rowAttr: "data-index",
+    label: () => t("table.label.parcels"),
+    searchText: (r) => `${r.id} ${r.egrid} ${r.nummer} ${r.check_egrid}`,
+    rowClass: (r) => (r.check_egrid === STATUS.FOUND ? "" : "row-error"),
+    onRowClick: (idx) => { if (onParcelRowClick) onParcelRowClick(idx); },
+  },
+  landcover: {
+    getCols: getLcCols,
+    getData: () => landcoverData,
+    bodyId: "lc-body",
+    paginationId: "lc-pagination",
+    rowAttr: "data-lc-index",
+    label: () => t("table.label.landcover"),
+    searchText: (r) => `${r.id} ${r.egrid} ${r.art} ${r.art_label} ${r.check_greenspace}`,
+    rowClass: () => "",
+    onRowClick: (idx) => { if (onLcRowClick) onLcRowClick(idx); },
+  },
+};
+
 function renderActiveTab() {
-  if (activeTab === "parcels") renderParcels();
-  else renderLandcover();
+  renderTab(activeTab);
 }
 
-/* ── Parcels tab ── */
-
-function renderParcels() {
-  let data = [...parcelsData];
-
-  if (pSearch) {
-    data = data.filter((p) => {
-      const s = `${p.id} ${p.egrid} ${p.nummer} ${p.check_egrid}`.toLowerCase();
-      return s.includes(pSearch);
-    });
+/** Natural, locale-aware comparison so e.g. TEST-2 sorts before TEST-10. */
+function compareValues(va, vb, numeric, asc) {
+  if (numeric) {
+    const na = parseFloat(va) || 0;
+    const nb = parseFloat(vb) || 0;
+    return asc ? na - nb : nb - na;
   }
+  const cmp = String(va ?? "").localeCompare(String(vb ?? ""), undefined, { numeric: true, sensitivity: "base" });
+  return asc ? cmp : -cmp;
+}
 
-  const col = getParcelCols().find((c) => c.key === pSortField);
-  data.sort((a, b) => {
-    let va = a[pSortField] ?? "";
-    let vb = b[pSortField] ?? "";
-    if (col?.numeric) { va = parseFloat(va) || 0; vb = parseFloat(vb) || 0; }
-    if (va < vb) return pSortAsc ? -1 : 1;
-    if (va > vb) return pSortAsc ? 1 : -1;
-    return 0;
-  });
+/** Unified tab renderer: filter → sort → paginate → render → wire row events. */
+function renderTab(tabName) {
+  const cfg = TAB_CONFIG[tabName];
+  const st = tabState[tabName];
+  const cols = cfg.getCols();
+
+  let data = cfg.getData();
+  data = st.search
+    ? data.filter((r) => cfg.searchText(r).toLowerCase().includes(st.search))
+    : [...data];
+
+  const col = cols.find((c) => c.key === st.sortField);
+  data.sort((a, b) => compareValues(a[st.sortField], b[st.sortField], col?.numeric, st.sortAsc));
 
   const total = data.length;
-  const totalPages = Math.max(1, Math.ceil(total / pPageSize));
-  if (pPage > totalPages) pPage = totalPages;
-  const start = (pPage - 1) * pPageSize;
-  const page = data.slice(start, start + pPageSize);
+  const totalPages = Math.max(1, Math.ceil(total / st.pageSize));
+  if (st.page > totalPages) st.page = totalPages;
+  const start = (st.page - 1) * st.pageSize;
+  const page = data.slice(start, start + st.pageSize);
 
-  const body = container.querySelector("#parcels-body");
+  const body = container.querySelector(`#${cfg.bodyId}`);
   if (total === 0) {
-    body.innerHTML = `<tr><td colspan="${getParcelCols().length}" class="empty-cell">
+    body.innerHTML = `<tr><td colspan="${cols.length}" class="empty-cell">
       <span class="material-symbols-outlined">search_off</span> ${esc(t("table.empty"))}
     </td></tr>`;
   } else {
     body.innerHTML = page.map((row) => {
-      const idx = row._idx;
-      const errCls = row.check_egrid === STATUS.FOUND ? "" : "row-error";
-      return `<tr data-index="${idx}" class="${errCls}" tabindex="0">
-        ${getParcelCols().map((c) => `<td class="${c.cls} ${c.numeric ? 'num' : ''}">${fmtCell(row[c.key], c.numeric, c.fmt)}</td>`).join("")}
+      const cls = cfg.rowClass(row);
+      return `<tr ${cfg.rowAttr}="${row._idx}" class="${cls}" tabindex="0">
+        ${cols.map((c) => `<td class="${c.cls} ${c.numeric ? "num" : ""}">${fmtCell(row[c.key], c.numeric, c.fmt)}</td>`).join("")}
       </tr>`;
     }).join("");
   }
 
-  body.querySelectorAll("tr[data-index]").forEach((tr) => {
+  body.querySelectorAll(`tr[${cfg.rowAttr}]`).forEach((tr) => {
     tr.addEventListener("click", () => {
-      const idx = parseInt(tr.dataset.index, 10);
+      const idx = parseInt(tr.getAttribute(cfg.rowAttr), 10);
       clearAllActiveRows();
       tr.classList.add("row-active");
-      if (onParcelRowClick) onParcelRowClick(idx);
+      cfg.onRowClick(idx);
     });
     tr.addEventListener("keydown", (e) => {
       if (e.key === "Enter" || e.key === " ") { e.preventDefault(); tr.click(); }
     });
   });
 
-  renderPagination("parcels-pagination", pPage, totalPages, total, pPageSize, t("table.label.parcels"),
-    (p) => { pPage = p; renderParcels(); },
-    (s) => { pPageSize = s; pPage = 1; renderParcels(); }
+  renderPagination(cfg.paginationId, st.page, totalPages, total, st.pageSize, cfg.label(),
+    (p) => { st.page = p; renderTab(tabName); },
+    (s) => { st.pageSize = s; st.page = 1; renderTab(tabName); }
   );
 
-  container.querySelectorAll("#columns-list input[type='checkbox']").forEach((cb) => {
-    if (!cb.checked) toggleCol(cb);
-  });
-}
-
-/* ── Landcover tab ── */
-
-function renderLandcover() {
-  let data = [...landcoverData];
-
-  if (lcSearch) {
-    data = data.filter((lc) => {
-      const s = `${lc.id} ${lc.egrid} ${lc.art} ${lc.art_label} ${lc.check_greenspace}`.toLowerCase();
-      return s.includes(lcSearch);
-    });
-  }
-
-  const col = getLcCols().find((c) => c.key === lcSortField);
-  data.sort((a, b) => {
-    let va = a[lcSortField] ?? "";
-    let vb = b[lcSortField] ?? "";
-    if (col?.numeric) { va = parseFloat(va) || 0; vb = parseFloat(vb) || 0; }
-    if (va < vb) return lcSortAsc ? -1 : 1;
-    if (va > vb) return lcSortAsc ? 1 : -1;
-    return 0;
-  });
-
-  const total = data.length;
-  const totalPages = Math.max(1, Math.ceil(total / lcPageSize));
-  if (lcPage > totalPages) lcPage = totalPages;
-  const start = (lcPage - 1) * lcPageSize;
-  const page = data.slice(start, start + lcPageSize);
-
-  const body = container.querySelector("#lc-body");
-  if (total === 0) {
-    body.innerHTML = `<tr><td colspan="${getLcCols().length}" class="empty-cell">
-      <span class="material-symbols-outlined">search_off</span> ${esc(t("table.empty"))}
-    </td></tr>`;
-  } else {
-    body.innerHTML = page.map((row) => {
-      const lcIdx = row._idx;
-      return `<tr data-lc-index="${lcIdx}" tabindex="0">
-        ${getLcCols().map((c) => `<td class="${c.cls} ${c.numeric ? 'num' : ''}">${fmtCell(row[c.key], c.numeric, c.fmt)}</td>`).join("")}
-      </tr>`;
-    }).join("");
-  }
-
-  // LC row click handlers
-  body.querySelectorAll("tr[data-lc-index]").forEach((tr) => {
-    tr.addEventListener("click", () => {
-      const idx = parseInt(tr.dataset.lcIndex, 10);
-      clearAllActiveRows();
-      tr.classList.add("row-active");
-      if (onLcRowClick) onLcRowClick(idx);
-    });
-    tr.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); tr.click(); }
-    });
-  });
-
-  renderPagination("lc-pagination", lcPage, totalPages, total, lcPageSize, t("table.label.landcover"),
-    (p) => { lcPage = p; renderLandcover(); },
-    (s) => { lcPageSize = s; lcPage = 1; renderLandcover(); }
-  );
-
+  // Re-apply hidden columns after re-render
   container.querySelectorAll("#columns-list input[type='checkbox']").forEach((cb) => {
     if (!cb.checked) toggleCol(cb);
   });

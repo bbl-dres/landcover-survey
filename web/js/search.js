@@ -1,7 +1,7 @@
 /**
  * Search bar: local parcel search + swisstopo location search
  */
-import { API, esc } from "./config.js";
+import { API, esc, fetchWithTimeout } from "./config.js";
 import { highlightParcel, flyToLocation } from "./map.js";
 import { highlightRow } from "./table.js";
 import { addSwisstopoLayer } from "./swisstopo.js";
@@ -9,17 +9,21 @@ import { t, getLang } from "./i18n.js";
 
 const SEARCH_TIMEOUT = 8000;
 
-function fetchTimeout(url, ms = SEARCH_TIMEOUT) {
-  const controller = new AbortController();
-  const id = setTimeout(() => controller.abort(), ms);
-  return fetch(url, { signal: controller.signal }).finally(() => clearTimeout(id));
-}
+const fetchTimeout = (url) => fetchWithTimeout(url, { timeoutMs: SEARCH_TIMEOUT });
 
 let parcelsData = []; // set by main.js after processing
 let debounceTimer = null;
+let activeIndex = -1; // keyboard-highlighted suggestion (-1 = none)
 
 export function setSearchData(parcels) {
   parcelsData = parcels;
+}
+
+/** Show/hide the results listbox and keep the combobox's aria-expanded in sync. */
+function setResultsVisible(visible) {
+  const results = document.getElementById("search-results");
+  if (results) results.hidden = !visible;
+  document.getElementById("search-input")?.setAttribute("aria-expanded", visible ? "true" : "false");
 }
 
 export function initSearch() {
@@ -31,30 +35,43 @@ export function initSearch() {
     clearBtn.hidden = !input.value;
     clearTimeout(debounceTimer);
     const q = input.value.trim();
-    if (q.length < 2) { results.hidden = true; return; }
+    if (q.length < 2) { setResultsVisible(false); return; }
     debounceTimer = setTimeout(() => performSearch(q), 300);
   });
 
   input.addEventListener("focus", () => {
     if (input.value.trim().length >= 2) {
-      results.hidden = false;
+      setResultsVisible(true);
     }
   });
 
   input.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") { results.hidden = true; input.blur(); }
+    if (e.key === "Escape") { setResultsVisible(false); input.blur(); return; }
+
+    const items = [...results.querySelectorAll(".search-item")];
+    if (results.hidden || !items.length) return;
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setActiveItem(items, activeIndex < items.length - 1 ? activeIndex + 1 : 0);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setActiveItem(items, activeIndex > 0 ? activeIndex - 1 : items.length - 1);
+    } else if (e.key === "Enter") {
+      if (activeIndex >= 0 && items[activeIndex]) { e.preventDefault(); items[activeIndex].click(); }
+    }
   });
 
   clearBtn.addEventListener("click", () => {
     input.value = "";
     clearBtn.hidden = true;
-    results.hidden = true;
+    setResultsVisible(false);
     input.focus();
   });
 
   // Close on click outside
   document.addEventListener("click", (e) => {
-    if (!e.target.closest("#search-wrapper")) results.hidden = true;
+    if (!e.target.closest("#search-wrapper")) setResultsVisible(false);
   });
 
   // Delegate clicks on results
@@ -77,9 +94,27 @@ export function initSearch() {
       addSwisstopoLayer(item.dataset.layerId, item.dataset.title);
     }
 
-    results.hidden = true;
+    setResultsVisible(false);
     input.value = item.querySelector(".search-item-title").textContent;
   });
+}
+
+/** Move the keyboard highlight to item `idx` (or clear it with -1). */
+function setActiveItem(items, idx) {
+  const input = document.getElementById("search-input");
+  items.forEach((el, i) => {
+    const on = i === idx;
+    el.classList.toggle("active", on);
+    el.setAttribute("aria-selected", on ? "true" : "false");
+  });
+  activeIndex = idx;
+  const active = items[idx];
+  if (active) {
+    active.scrollIntoView({ block: "nearest" });
+    input?.setAttribute("aria-activedescendant", active.id);
+  } else {
+    input?.removeAttribute("aria-activedescendant");
+  }
 }
 
 async function performSearch(query) {
@@ -147,7 +182,17 @@ async function performSearch(query) {
   }
 
   results.innerHTML = html.join("");
-  results.hidden = false;
+
+  // Make items keyboard-navigable (role=option + ids for aria-activedescendant)
+  results.querySelectorAll(".search-item").forEach((el, i) => {
+    el.id = `search-opt-${i}`;
+    el.setAttribute("role", "option");
+    el.setAttribute("aria-selected", "false");
+  });
+  activeIndex = -1;
+  document.getElementById("search-input")?.removeAttribute("aria-activedescendant");
+
+  setResultsVisible(true);
 }
 
 function searchLocal(query) {

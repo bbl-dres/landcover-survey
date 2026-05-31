@@ -4,6 +4,9 @@
 import { loadScript } from "./config.js";
 import { t } from "./i18n.js";
 
+/** Land cover export columns — shared by the CSV and XLSX exporters. */
+const LANDCOVER_HEADERS = ["id", "egrid", "fid", "art", "bfsnr", "gwr_egid", "check_greenspace", "area_m2"];
+
 /** Escape a CSV cell value (semicolon-delimited) */
 function csvCell(val) {
   const v = String(val ?? "").replace(/"/g, '""');
@@ -29,8 +32,7 @@ export function downloadParcelCSV(parcels, filename = "landcover-parcels.csv") {
 /** Download land cover detail as CSV */
 export function downloadLandcoverCSV(landcover, filename = "landcover-detail.csv") {
   if (!landcover.length) return;
-  const headers = ["id", "egrid", "fid", "art", "bfsnr", "gwr_egid", "check_greenspace", "area_m2"];
-  saveBlob(new Blob([buildCSV(landcover, headers)], { type: "text/csv;charset=utf-8" }), filename);
+  saveBlob(new Blob([buildCSV(landcover, LANDCOVER_HEADERS)], { type: "text/csv;charset=utf-8" }), filename);
 }
 
 /** Download as Excel with parcels + landcover sheets */
@@ -54,10 +56,9 @@ export async function downloadXLSX(parcels, landcover, filename = "landcover-res
   XLSX.utils.book_append_sheet(wb, ws1, t("table.tab.parcels"));
 
   if (landcover.length) {
-    const lcH = ["id", "egrid", "fid", "art", "bfsnr", "gwr_egid", "check_greenspace", "area_m2"];
     const ws2 = XLSX.utils.json_to_sheet(landcover.map((row) => {
       const obj = {};
-      for (const h of lcH) obj[h] = row[h] ?? "";
+      for (const h of LANDCOVER_HEADERS) obj[h] = row[h] ?? "";
       return obj;
     }));
     XLSX.utils.book_append_sheet(wb, ws2, t("table.tab.landcover"));

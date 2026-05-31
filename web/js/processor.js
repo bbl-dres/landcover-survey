@@ -9,7 +9,7 @@
  * - EGRID dedup cache avoids redundant API calls
  * - AbortController timeout on all fetch calls
  */
-import { API, SLIVER_THRESHOLD, STATUS, classify } from "./config.js";
+import { API, SLIVER_THRESHOLD, STATUS, classify, fetchWithTimeout } from "./config.js";
 
 // Parcels processed in parallel. Each parcel makes two sequential requests to
 // two different hosts (swisstopo find + geodienste WFS), both HTTP/2, so a
@@ -178,12 +178,8 @@ async function fetchWithRetry(url, opts = {}) {
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     if (cancelled) throw new Error("Cancelled");
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-
     try {
-      const resp = await fetch(url, { ...opts, signal: controller.signal });
-      clearTimeout(timeout);
+      const resp = await fetchWithTimeout(url, { ...opts, timeoutMs: FETCH_TIMEOUT_MS });
 
       if (resp.ok) return resp;
 
@@ -202,8 +198,6 @@ async function fetchWithRetry(url, opts = {}) {
 
       throw new Error(`HTTP ${resp.status}`);
     } catch (err) {
-      clearTimeout(timeout);
-
       if (err.name === "AbortError") {
         lastError = new Error("Request timeout");
       } else {
@@ -227,13 +221,14 @@ function sleep(ms) {
 
 /* ── API calls ── */
 
-/** Fetch parcel geometry by EGRID (with dedup cache) */
+/** Fetch parcel geometry by EGRID (with dedup cache).
+ *  The returned object is treated as read-only downstream (turf operations and
+ *  MapLibre copy their inputs), so we can hand back the cached object directly
+ *  instead of deep-cloning it on every hit. */
 async function fetchParcelGeometry(egrid) {
-  // Check cache first
+  // Check cache first (value may be null = negative cache for "not found")
   if (egridCache.has(egrid)) {
-    const cached = egridCache.get(egrid);
-    // Return a fresh copy so mutations don't affect cache
-    return cached ? JSON.parse(JSON.stringify(cached)) : null;
+    return egridCache.get(egrid);
   }
 
   const params = new URLSearchParams({
@@ -269,7 +264,7 @@ async function fetchParcelGeometry(egrid) {
   };
 
   egridCache.set(egrid, result);
-  return JSON.parse(JSON.stringify(result));
+  return result;
 }
 
 /**

@@ -115,27 +115,20 @@ function parseCSV(file) {
     const reader = new FileReader();
     reader.onload = (e) => {
       const text = e.target.result;
-      const firstLine = text.split("\n")[0];
-      const semicolons = (firstLine.match(/;/g) || []).length;
-      const commas = (firstLine.match(/,/g) || []).length;
-      const tabs = (firstLine.match(/\t/g) || []).length;
-      let delimiter = ",";
-      if (semicolons > commas && semicolons > tabs) delimiter = ";";
-      else if (tabs > commas) delimiter = "\t";
+      const delimiter = detectDelimiter(text);
 
-      const lines = text.split(/\r?\n/).filter((l) => l.trim());
-      if (lines.length < 2) return reject(new Error(t("upload.error.header")));
+      const matrix = tokenizeDelimited(text, delimiter)
+        .map((cells) => cells.map((c) => c.trim()))
+        .filter((cells) => cells.some((c) => c !== "")); // drop blank lines
 
-      const headers = parseLine(lines[0], delimiter);
-      const rows = [];
-      for (let i = 1; i < lines.length; i++) {
-        const values = parseLine(lines[i], delimiter);
-        if (values.some((v) => v.trim())) {
-          const row = {};
-          headers.forEach((h, idx) => (row[h] = values[idx] || ""));
-          rows.push(row);
-        }
-      }
+      if (matrix.length < 2) return reject(new Error(t("upload.error.header")));
+
+      const headers = matrix[0];
+      const rows = matrix.slice(1).map((values) => {
+        const row = {};
+        headers.forEach((h, idx) => (row[h] = values[idx] || ""));
+        return row;
+      });
       resolve({ headers, rows });
     };
     reader.onerror = reject;
@@ -143,34 +136,53 @@ function parseCSV(file) {
   });
 }
 
-function parseLine(line, delimiter) {
-  const result = [];
-  let current = "";
+/**
+ * Detect the delimiter from the first line. Heuristic: counts raw `;`, `,`, tab
+ * — it does not account for a delimiter appearing inside a quoted header cell
+ * (rare for ID/EGRID lists). Defaults to comma.
+ */
+function detectDelimiter(text) {
+  const firstLine = text.split(/\r?\n/, 1)[0] || "";
+  const semicolons = (firstLine.match(/;/g) || []).length;
+  const commas = (firstLine.match(/,/g) || []).length;
+  const tabs = (firstLine.match(/\t/g) || []).length;
+  if (semicolons > commas && semicolons > tabs) return ";";
+  if (tabs > commas) return "\t";
+  return ",";
+}
+
+/**
+ * Single-pass RFC-4180 tokenizer: splits the whole text into rows of fields,
+ * correctly handling quoted fields that contain the delimiter, quotes (`""`),
+ * or newlines. Returns an array of string arrays (one per row).
+ */
+function tokenizeDelimited(text, delimiter) {
+  const rows = [];
+  let row = [];
+  let field = "";
   let inQuotes = false;
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i];
+  let sawAny = false; // did this row have any character (so trailing data flushes)?
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
     if (inQuotes) {
-      if (ch === '"' && line[i + 1] === '"') {
-        current += '"';
-        i++;
-      } else if (ch === '"') {
-        inQuotes = false;
-      } else {
-        current += ch;
-      }
-    } else {
       if (ch === '"') {
-        inQuotes = true;
-      } else if (ch === delimiter) {
-        result.push(current.trim());
-        current = "";
+        if (text[i + 1] === '"') { field += '"'; i++; }
+        else inQuotes = false;
       } else {
-        current += ch;
+        field += ch;
       }
+      continue;
     }
+    if (ch === '"') { inQuotes = true; sawAny = true; }
+    else if (ch === delimiter) { row.push(field); field = ""; sawAny = true; }
+    else if (ch === "\n") { row.push(field); rows.push(row); row = []; field = ""; sawAny = false; }
+    else if (ch === "\r") { /* ignore; LF terminates the row */ }
+    else { field += ch; sawAny = true; }
   }
-  result.push(current.trim());
-  return result;
+  // Flush the final field/row if the text didn't end with a newline.
+  if (sawAny || field !== "" || row.length > 0) { row.push(field); rows.push(row); }
+  return rows;
 }
 
 async function parseExcel(file) {
