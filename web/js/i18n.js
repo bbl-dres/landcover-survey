@@ -199,6 +199,7 @@ const translations = {
 
     // Config / Status
     "status.found": "Gefunden",
+    "status.merged": "Gefunden (zusammengeführt)",
     "status.notFound": "Nicht gefunden",
     "status.invalid": "EGRID ung\u00fcltig",
     "status.error": "Fehler: {message}",
@@ -409,6 +410,7 @@ const translations = {
     "search.section.layers": "G\u00e9odonn\u00e9es",
     "search.empty": "Aucun r\u00e9sultat",
     "status.found": "Trouv\u00e9",
+    "status.merged": "Trouv\u00e9 (fusionn\u00e9)",
     "status.notFound": "Non trouv\u00e9",
     "status.invalid": "EGRID invalide",
     "status.error": "Erreur\u00a0: {message}",
@@ -605,6 +607,7 @@ const translations = {
     "search.section.layers": "Geodati",
     "search.empty": "Nessun risultato",
     "status.found": "Trovato",
+    "status.merged": "Trovato (unito)",
     "status.notFound": "Non trovato",
     "status.invalid": "EGRID non valido",
     "status.error": "Errore: {message}",
@@ -801,6 +804,7 @@ const translations = {
     "search.section.layers": "Geodata",
     "search.empty": "No results",
     "status.found": "Found",
+    "status.merged": "Found (merged)",
     "status.notFound": "Not found",
     "status.invalid": "Invalid EGRID",
     "status.error": "Error: {message}",

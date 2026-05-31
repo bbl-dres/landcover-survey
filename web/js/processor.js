@@ -9,13 +9,15 @@
  * - EGRID dedup cache avoids redundant API calls
  * - AbortController timeout on all fetch calls
  */
-import { API, SLIVER_THRESHOLD, STATUS, classify, fetchWithTimeout } from "./config.js";
+import { API, SLIVER_THRESHOLD, STATUS, classify, isFound, fetchWithTimeout } from "./config.js";
 
 // Parcels processed in parallel. Each parcel makes two sequential requests to
 // two different hosts (swisstopo find + geodienste WFS), both HTTP/2, so a
 // moderate bump over the old value of 5 improves throughput. The 429/5xx
 // exponential backoff below absorbs the occasional rate-limit response.
 const CONCURRENCY = 8;
+/** Max land-cover features requested per parcel bbox (WFS GetFeature COUNT). */
+const WFS_MAX_FEATURES = 1000;
 const FETCH_TIMEOUT_MS = 15000;
 const MAX_RETRIES = 3;
 const BASE_DELAY_MS = 500;
@@ -75,7 +77,7 @@ export async function processRows(rows, onProgress) {
       const lcResult = await fetchLandCover(bbox);
 
       // Step 3: Clip land cover to parcel
-      const clipped = clipLandCover(parcelGeom, lcResult.features, id, egrid);
+      const { results: clipped, skipped } = clipLandCover(parcelGeom, lcResult.features, id, egrid);
 
       // Step 4: Calculate parcel area
       const parcelArea = turf.area(parcelGeom);
@@ -83,13 +85,15 @@ export async function processRows(rows, onProgress) {
       // Step 5: Aggregate
       const agg = aggregateLandCover(clipped);
 
+      const merged = parcelResult.properties.mergedCount > 1;
       const parcel = {
         id,
         egrid,
         nummer: parcelResult.properties.number || "",
         bfsnr: parcelResult.properties.bfsnr || "",
-        check_egrid: STATUS.FOUND,
-        check_wfs: lcResult.error ? "wfs_error" : "ok",
+        check_egrid: merged ? STATUS.MERGED : STATUS.FOUND,
+        check_wfs: lcResult.error ? "wfs_error" : (lcResult.truncated ? "truncated" : "ok"),
+        check_geom: skipped > 0 ? `${skipped}_skipped` : "ok",
         flaeche: parcelResult.properties.area || "",
         parcel_area_m2: round2(parcelArea),
         ...agg,
@@ -122,7 +126,7 @@ export async function processRows(rows, onProgress) {
       const result = await processOne(row, index);
       results[index] = result;
       completed++;
-      if (result && result.parcel.check_egrid === STATUS.FOUND) succeeded++;
+      if (result && isFound(result.parcel.check_egrid)) succeeded++;
       reportProgress();
     }
   };
@@ -155,6 +159,7 @@ function makeErrorParcel(id, egrid, row, message) {
     bfsnr: "",
     check_egrid: message,
     check_wfs: "",
+    check_geom: "",
     flaeche: "",
     parcel_area_m2: "",
     _geometry: null,
@@ -243,14 +248,28 @@ async function fetchParcelGeometry(egrid) {
   const resp = await fetchWithRetry(`${API.PARCEL_FIND}?${params}`);
   const data = await resp.json();
 
-  if (!data.results || data.results.length === 0) {
+  const feats = (data.results || []).filter((r) => r.geometry);
+  if (feats.length === 0) {
     egridCache.set(egrid, null);
     return null;
   }
 
-  const feature = data.results[0];
-  const geom = feature.geometry;
-  const props = feature.properties || feature.attributes || {};
+  // A single EGRID can map to multiple features (ongoing mutations, overlapping
+  // SDR / Baurecht). Union all matching geometries into one polygon so the
+  // parcel area and its land-cover clip aren't under-counted — this mirrors the
+  // Python pipeline's "dissolve by EGRID" step (SPECIFICATION.md §Duplicate EGRIDs).
+  let geom = feats[0].geometry;
+  const mergedCount = feats.length;
+  if (feats.length > 1) {
+    try {
+      const unioned = turf.union(turf.featureCollection(feats.map((r) => turf.feature(r.geometry))));
+      if (unioned?.geometry) geom = unioned.geometry;
+    } catch (err) {
+      console.warn(`Union failed for ${egrid} (${feats.length} parts), using first:`, err.message);
+    }
+  }
+
+  const props = feats[0].properties || feats[0].attributes || {};
 
   const result = {
     type: "Feature",
@@ -260,6 +279,7 @@ async function fetchParcelGeometry(egrid) {
       number: props.number || "",
       bfsnr: props.identnd || "",
       area: "",
+      mergedCount,
     },
   };
 
@@ -283,22 +303,29 @@ async function fetchLandCover(bbox) {
     BBOX: `${minLat},${minLon},${maxLat},${maxLon},urn:ogc:def:crs:EPSG::4326`,
     SRSNAME: "urn:ogc:def:crs:EPSG::4326",
     OUTPUTFORMAT: "geojson",
-    COUNT: "1000",
+    COUNT: String(WFS_MAX_FEATURES),
   });
 
   try {
     const resp = await fetchWithRetry(`${API.WFS_AV}?${params}`);
     const data = await resp.json();
-    return { features: data.features || [], error: false };
+    const features = data.features || [];
+    // If we hit the cap exactly, the bbox likely held more features than were
+    // returned — the result may be truncated, so flag it for the caller.
+    return { features, error: false, truncated: features.length >= WFS_MAX_FEATURES };
   } catch (err) {
     console.warn("WFS fetch failed after retries:", err.message);
-    return { features: [], error: true };
+    return { features: [], error: true, truncated: false };
   }
 }
 
-/** Clip land cover features to parcel polygon using Turf.js */
+/** Clip land cover features to a parcel polygon using Turf.js.
+ *  Returns { results, skipped } — `skipped` counts features whose intersection
+ *  threw (e.g. invalid/self-intersecting geometry; Turf.js has no make_valid()
+ *  equivalent, so those features are dropped rather than repaired). */
 function clipLandCover(parcelGeom, lcFeatures, id, egrid) {
   const results = [];
+  let skipped = 0;
   const parcelFeature = turf.feature(parcelGeom);
 
   for (const lc of lcFeatures) {
@@ -328,6 +355,7 @@ function clipLandCover(parcelGeom, lcFeatures, id, egrid) {
         gwr_egid: gwrEgid,
         check_greenspace: cls.greenSpace,
         area_m2: round2(area),
+        _rawArea: area, // unrounded — summed by aggregateLandCover to avoid rounding drift
         _geometry: intersection.geometry,
         _sia416: cls.sia416,
         _din277: cls.din277,
@@ -337,11 +365,12 @@ function clipLandCover(parcelGeom, lcFeatures, id, egrid) {
         _vbsTyp: cls.vbsTyp,
       });
     } catch (err) {
+      skipped++;
       console.warn("Clip error for feature:", lc.id, err.message);
     }
   }
 
-  return results;
+  return { results, skipped };
 }
 
 /** Aggregate clipped land cover into summary columns */
@@ -361,7 +390,9 @@ function aggregateLandCover(clippedFeatures) {
   const artAreas = {};
 
   for (const f of clippedFeatures) {
-    const area = f.area_m2;
+    // Sum unrounded areas; the result is rounded once at the end. Summing the
+    // per-feature rounded area_m2 would accumulate rounding error.
+    const area = f._rawArea ?? f.area_m2;
 
     if (f._sia416 === "GGF") agg.GGF_m2 += area;
     else if (f._sia416 === "BUF") agg.BUF_m2 += area;

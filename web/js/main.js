@@ -8,7 +8,7 @@ import { showToast } from "./toast.js";
 import { initTable, populateTable, highlightRow, highlightLcRow } from "./table.js";
 import { downloadParcelCSV, downloadLandcoverCSV, downloadXLSX, downloadGeoJSON } from "./export.js";
 import { initSearch, setSearchData } from "./search.js";
-import { ART_LABELS, ART_COLORS, CATEGORY_COLORS, SIA416, DIN277, GREEN_SPACE, SEALED, VBS_KATEGORIE, VBS_PRODUKTIV, VBS_TYP, STATUS, esc, fmtNum } from "./config.js";
+import { ART_LABELS, ART_COLORS, CATEGORY_COLORS, SIA416, DIN277, GREEN_SPACE, SEALED, VBS_KATEGORIE, VBS_PRODUKTIV, VBS_TYP, isFound, esc, fmtNum } from "./config.js";
 import { t, applyI18nDOM, setLang, getLang, getLocale } from "./i18n.js";
 
 let processedResults = null;
@@ -362,7 +362,7 @@ function updateSummaryPanel() {
   const parcels = processedResults.parcels;
   const landcover = processedResults.landcover;
   const total = parcels.length;
-  const found = parcels.filter((r) => r.check_egrid === STATUS.FOUND).length;
+  const found = parcels.filter((r) => isFound(r.check_egrid)).length;
   const notFound = total - found;
 
   let totalSealed = 0, totalGreen = 0;

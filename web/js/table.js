@@ -2,7 +2,7 @@
  * Table widget with tabs (Parcels / Land Covers), toolbar with search,
  * sortable headers, pagination, column visibility dropdown, resize handle
  */
-import { ART_LABELS, STATUS, statusLabel, greenSpaceLabel, esc, fmtNum } from "./config.js";
+import { ART_LABELS, isFound, statusLabel, greenSpaceLabel, esc, fmtNum } from "./config.js";
 import { t } from "./i18n.js";
 
 /* ── State ── */
@@ -320,7 +320,7 @@ const TAB_CONFIG = {
     rowAttr: "data-index",
     label: () => t("table.label.parcels"),
     searchText: (r) => `${r.id} ${r.egrid} ${r.nummer} ${r.check_egrid}`,
-    rowClass: (r) => (r.check_egrid === STATUS.FOUND ? "" : "row-error"),
+    rowClass: (r) => (isFound(r.check_egrid) ? "" : "row-error"),
     onRowClick: (idx) => { if (onParcelRowClick) onParcelRowClick(idx); },
   },
   landcover: {
