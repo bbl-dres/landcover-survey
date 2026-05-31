@@ -5,6 +5,7 @@
 import { API, ART_COLORS, CATEGORY_COLORS, ART_LABELS, MAP_STYLES, MAP_DEFAULT, greenSpaceLabel, esc, fmtNum } from "./config.js";
 import { setMap, readdSwisstopoLayers, loadGeokatalog, addSwisstopoLayer, removeSwisstopoLayer, activeSwisstopoLayers } from "./swisstopo.js";
 import { t, getLang } from "./i18n.js";
+import { poleOfInaccessibility } from "./polylabel.js";
 
 let map = null;
 let resizeObserver = null;
@@ -594,6 +595,28 @@ function reAddDataLayers() {
   readdSwisstopoLayers();
 }
 
+/** Visual-center point ([lng, lat]) for a parcel marker, matching the label anchor.
+ *  For MultiPolygons the largest part is used; falls back to turf.centroid. */
+function parcelMarkerPoint(feature) {
+  const g = feature.geometry;
+  try {
+    if (g.type === "Polygon") {
+      return poleOfInaccessibility(g.coordinates) || turf.centroid(feature).geometry.coordinates;
+    }
+    if (g.type === "MultiPolygon") {
+      let best = null, bestArea = -Infinity;
+      for (const poly of g.coordinates) {
+        const a = turf.area({ type: "Polygon", coordinates: poly });
+        if (a > bestArea) { bestArea = a; best = poly; }
+      }
+      if (best) return poleOfInaccessibility(best) || turf.centroid(feature).geometry.coordinates;
+    }
+  } catch (err) {
+    console.warn("Marker point fallback for parcel", feature.properties?.id, err.message);
+  }
+  return turf.centroid(feature).geometry.coordinates;
+}
+
 export function plotResults(results) {
   if (!map) return;
   if (!map.getSource("parcels")) addDataLayers();
@@ -623,12 +646,15 @@ export function plotResults(results) {
   map.getSource("parcels").setData(currentParcelData);
   map.getSource("landcover").setData(currentLandcoverData);
 
-  // Build cluster centroids from parcel polygons
-  const clusterPoints = parcelFeatures.map((f) => {
-    const center = turf.centroid(f);
-    center.properties = { index: f.properties.index, id: f.properties.id, egrid: f.properties.egrid, nummer: f.properties.nummer, label: f.properties.label, area: f.properties.area };
-    return center;
-  });
+  // Build cluster points from parcel polygons. Use the pole of inaccessibility
+  // (the same visual-center algorithm MapLibre uses to anchor polygon labels) so
+  // the dot sits under the parcel label instead of drifting toward dense parts
+  // of the boundary like a vertex-average centroid would.
+  const clusterPoints = parcelFeatures.map((f) => ({
+    type: "Feature",
+    geometry: { type: "Point", coordinates: parcelMarkerPoint(f) },
+    properties: { index: f.properties.index, id: f.properties.id, egrid: f.properties.egrid, nummer: f.properties.nummer, label: f.properties.label, area: f.properties.area },
+  }));
   currentClusterData = { type: "FeatureCollection", features: clusterPoints };
   map.getSource("parcels-clusters").setData(currentClusterData);
 

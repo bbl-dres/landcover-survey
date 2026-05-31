@@ -11,7 +11,11 @@
  */
 import { API, SLIVER_THRESHOLD, STATUS, classify } from "./config.js";
 
-const CONCURRENCY = 5;
+// Parcels processed in parallel. Each parcel makes two sequential requests to
+// two different hosts (swisstopo find + geodienste WFS), both HTTP/2, so a
+// moderate bump over the old value of 5 improves throughput. The 429/5xx
+// exponential backoff below absorbs the occasional rate-limit response.
+const CONCURRENCY = 8;
 const FETCH_TIMEOUT_MS = 15000;
 const MAX_RETRIES = 3;
 const BASE_DELAY_MS = 500;

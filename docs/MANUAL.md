@@ -42,7 +42,7 @@ Mögliche Ursachen: (1) Die Parzelle liegt in einem Kanton, der noch keine Boden
 Der EGRID konnte in der swisstopo-Datenbank nicht zugeordnet werden. Prüfen Sie, ob der EGRID korrekt und aktuell ist.
 
 **Kann ich mehrere Parzellen gleichzeitig analysieren?**
-Ja. Die CSV-Datei kann beliebig viele Zeilen enthalten. Die Verarbeitung erfolgt parallel (max. 5 gleichzeitig).
+Ja. Die CSV-Datei kann beliebig viele Zeilen enthalten. Die Verarbeitung erfolgt parallel (max. 8 gleichzeitig).
 
 **Welches Koordinatensystem wird verwendet?**
 Die Anzeige erfolgt in WGS 84 (EPSG:4326). Flächenberechnungen basieren auf geodätischen Methoden.
@@ -108,7 +108,7 @@ Causes possibles : (1) Le canton n'a pas encore publié les données de couvertu
 L'EGRID n'a pas pu être trouvé dans la base swisstopo. Vérifiez qu'il est correct et à jour.
 
 **Puis-je analyser plusieurs parcelles en même temps ?**
-Oui. Le fichier CSV peut contenir autant de lignes que nécessaire. Le traitement s'effectue en parallèle (max. 5 simultanément).
+Oui. Le fichier CSV peut contenir autant de lignes que nécessaire. Le traitement s'effectue en parallèle (max. 8 simultanément).
 
 ### Couverture des données et limitations
 
@@ -231,7 +231,7 @@ Possible causes: (1) The canton has not yet published land cover data on geodien
 The EGRID could not be matched in the swisstopo database. Verify that it is correct and up to date.
 
 **Can I analyze multiple parcels at once?**
-Yes. The CSV file can contain any number of rows. Processing runs in parallel (max. 5 at a time).
+Yes. The CSV file can contain any number of rows. Processing runs in parallel (max. 8 at a time).
 
 **What coordinate system is used?**
 Display uses WGS 84 (EPSG:4326). Area calculations use geodesic methods.

@@ -48,7 +48,7 @@ Or deploy the repo to any static hosting (GitHub Pages, Cloudflare Pages, etc.);
 | **Data coverage** | 20 of 26 cantons via public WFS (JU, LU, NE, NW, OW, VD blocked) | All cantons via local GeoPackage |
 | **Area calculation** | Spherical (Turf.js), ~0.1–0.5% error | Exact planar (LV95/EPSG:2056) |
 | **Data source** | Live API queries per parcel | Local GeoPackage (all cantons at once) |
-| **Throughput** | ~5 parcels in parallel, rate-limited | Bulk vectorised processing |
+| **Throughput** | ~8 parcels in parallel, rate-limited | Bulk vectorised processing |
 | **Bauzonen analysis** | Layer overlay only | `--bauzonen` flag |
 | **Habitat analysis** | Layer overlay only | `--habitat` flag with area intersection |
 | **Offline** | Requires internet | Fully offline with local GeoPackage |
