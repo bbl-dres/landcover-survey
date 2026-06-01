@@ -3,8 +3,11 @@ Join SAP parcel export with SAP measurement export (GSF Grundstückfläche).
 =========================================================================
 
 Produces a single CSV containing every attribute from the parcel export, plus a
-canonical ``ObjektKey`` and the plot area ``GSF_m2`` joined from the measurement
-export.
+canonical ``id`` (``BuKr/WE/Grundstk``) and the plot area ``GSF_m2`` joined from
+the measurement export. The parcel ``E-GRID`` column is emitted as ``egrid`` so
+the UTF-8 output uploads straight to the web app — no Excel round-trip (which
+would re-save the file as ANSI/Windows-1252 and corrupt umlauts like
+``Grundstück`` → ``Grundst?ck``).
 
 Both inputs are SAP "Dynamische Listenausgabe" text reports: UTF-8 (with BOM),
 pipe-delimited tables (``|col|col|``) whose column header is on row 11 and
@@ -154,6 +157,11 @@ def parse_area(raw: str) -> float | None:
         return None
 
 
+def _norm_egrid(col: str) -> bool:
+    """True if a parcel column is the E-GRID column (`E-GRID`, `EGRID`, `e_grid`, …)."""
+    return "".join(ch for ch in col.lower() if ch.isalnum()) == "egrid"
+
+
 def format_area(value: float | None) -> str:
     if value is None:
         return ""
@@ -217,7 +225,12 @@ def run(parcels_path: Path, measurements_path: Path, output_path: Path,
 
     areas = load_gsf_areas(measurements_path)
 
-    out_header = ["ObjektKey"] + p_header + ["GSF_m2"]
+    # Emit web-app-ready headers so the UTF-8 output uploads directly (no Excel
+    # round-trip, which would re-save the file as ANSI and corrupt umlauts):
+    # the leading key column is named `id`, and the parcel E-GRID column is
+    # renamed to `egrid`. Both are matched case-/separator-insensitively.
+    parcel_out_header = ["egrid" if _norm_egrid(c) else c for c in p_header]
+    out_header = ["id"] + parcel_out_header + ["GSF_m2"]
     matched = 0
     out_rows: list[tuple[tuple, list[str]]] = []
     for key, r in parcels:

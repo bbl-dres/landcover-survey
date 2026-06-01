@@ -30,10 +30,19 @@ measurement get an empty `GSF_m2`. The run logs coverage (with/without area) and
 warns about any measurement whose parcel is missing from the parcel export.
 
 **Output:** every column from the parcel export, carried through unchanged, with
-`ObjektKey` (`BuKr/WE/Grundstk`) prepended and `GSF_m2` appended. CSV, UTF-8 with
-BOM, `;` delimiter (opens cleanly in German/Swiss Excel on double-click). Use
-`--delimiter ,` to change the separator, or `--sep-line` to prepend an Excel
-`sep=;` hint line if your Excel locale uses a different separator.
+an `id` key (`BuKr/WE/Grundstk`) prepended, the parcel `E-GRID` column renamed to
+`egrid`, and `GSF_m2` appended. The `id` and `egrid` column names match what the
+web app requires, so the output uploads directly — **no Excel round-trip**, which
+would re-save the file as ANSI/Windows-1252 and corrupt umlauts. CSV, UTF-8 with
+BOM, `;` delimiter (opens cleanly in German/Swiss Excel on double-click, and the
+web app auto-detects the `;`). Use `--delimiter ,` to change the separator, or
+`--sep-line` to prepend an Excel `sep=;` hint line if your Excel locale uses a
+different separator.
+
+> **Keep it UTF-8:** upload this file as-is. If you must open it in Excel first,
+> save with **"CSV UTF-8 (Comma delimited)"** — plain "CSV (Comma delimited)"
+> writes ANSI/Windows-1252 and turns `Grundstück` into `Grundst?ck` in the web
+> app, because the web app reads every upload as UTF-8.
 
 ### Usage
 

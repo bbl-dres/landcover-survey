@@ -159,14 +159,21 @@ export function classify(art) {
 /** Status constants — language-independent codes (translate at display time) */
 export const STATUS = {
   FOUND: "found",
+  MERGED: "merged",
   NOT_FOUND: "not_found",
   INVALID: "invalid",
 };
+
+/** True if an EGRID status code represents a successfully resolved parcel. */
+export function isFound(code) {
+  return code === STATUS.FOUND || code === STATUS.MERGED;
+}
 
 /** Translate a status code for display */
 export function statusLabel(code) {
   const map = {
     found: "status.found",
+    merged: "status.merged",
     not_found: "status.notFound",
     invalid: "status.invalid",
   };
