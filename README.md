@@ -3,10 +3,6 @@
 Aggregate land cover area (m²) per Swiss cadastral parcel from official survey data (Amtliche Vermessung).
 
 <!-- The hero image is clickable and opens the live app -->
-<p align="center">
-  <img src="assets/Social1.jpg" width="45%" style="vertical-align: top;"/>
-  <img src="assets/Social2.jpg" width="45%" style="vertical-align: top;"/>
-</p>
 [![Land Cover Survey — click to open the live app](assets/Social2.jpg)](https://bbl-dres.github.io/landcover-survey/)
 
 [![Demo on GitHub Pages](https://img.shields.io/badge/demo-GitHub%20Pages-2ea44f?logo=github&logoColor=white)](https://bbl-dres.github.io/landcover-survey/)
