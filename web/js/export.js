@@ -68,16 +68,17 @@ export async function downloadXLSX(parcels, landcover, filename = "landcover-res
   saveBlob(new Blob([wbOut], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), filename);
 }
 
-/** Download parcels as GeoJSON */
+/** Download parcels as GeoJSON. Parcels without geometry (not found / invalid
+ *  EGRID) are exported as features with a null geometry so the file is a
+ *  complete record of every input parcel. */
 export function downloadGeoJSON(parcels, filename = "landcover-parcels.geojson") {
   const features = [];
   for (const row of parcels) {
-    if (!row._geometry) continue;
     const props = {};
     for (const [k, v] of Object.entries(row)) {
       if (!k.startsWith("_")) props[k] = v;
     }
-    features.push({ type: "Feature", geometry: row._geometry, properties: props });
+    features.push({ type: "Feature", geometry: row._geometry || null, properties: props });
   }
   saveBlob(new Blob([JSON.stringify({ type: "FeatureCollection", features }, null, 2)], { type: "application/geo+json" }), filename);
 }
