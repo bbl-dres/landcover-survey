@@ -696,8 +696,6 @@ main { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: 
   min-width: 220px; z-index: var(--z-overlay); display: none;
 }
 .dropdown-menu.show { display: block; }
-/* Flipped upward when there isn't enough room below (set by JS) */
-.dropdown-menu.drop-up { top: auto; bottom: 100%; margin-top: 0; margin-bottom: var(--space-1); }
 .dropdown-menu-header {
   padding: var(--space-3) var(--space-4); font-size: var(--text-2xs);
   font-weight: var(--font-semibold); color: var(--gray-500); text-transform: uppercase;
@@ -790,7 +788,6 @@ main { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: 
 .sp-legend-pct { color: var(--gray-500); font-family: var(--font-mono); font-size: var(--text-2xs); white-space: nowrap; min-width: 38px; text-align: right; }
 
 .sp-bauzonen-list:not(:empty) { margin-top: var(--space-4); }
-.sp-bauzonen-title { font-size: var(--text-sm); font-weight: 600; color: var(--gray-700); margin-bottom: var(--space-2); }
 
 /* KPI grid */
 .sp-kpi-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); }

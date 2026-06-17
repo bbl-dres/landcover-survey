@@ -3,7 +3,8 @@
  * sortable headers, pagination, column visibility dropdown, resize handle
  */
 import { ART_LABELS, isFound, statusLabel, greenSpaceLabel, vbsKategorieLabel,
-         vbsProduktivLabel, vbsTypLabel, errorsLabel, esc, fmtNum } from "./config.js";
+         vbsProduktivLabel, vbsTypLabel, errorsLabel, esc, fmtNum,
+         isBauzoneAreaKey, bauzoneNameFromKey } from "./config.js";
 import { t } from "./i18n.js";
 
 /* ── State ── */
@@ -14,6 +15,11 @@ let activeTab = "parcels";
 let onParcelRowClick = null;
 let onLcRowClick = null;
 let container = null;
+
+// Memoized Bauzonen column metadata — recomputed once per dataset (populateTable)
+// instead of rescanning every parcel on each render/sort/keystroke.
+let hasBauzonen = false;
+let bauzonenCols = [];
 
 // Per-tab view state (sort / search / pagination)
 const tabState = {
@@ -40,26 +46,26 @@ function getParcelCols() {
     { key: "lc_source", label: t("col.source"), cls: "col-p-source" },
   ];
   // Bauzonen is opt-in; only show the columns when the analysis was run.
-  if (parcelsData.some((p) => "bauzonen" in p)) {
+  // (Joined column + per-zone columns; the latter memoized in computeBauzonenCols.)
+  if (hasBauzonen) {
     cols.push({ key: "bauzonen", label: t("col.bauzonen"), cls: "col-p-bauzonen" });
-    // One column per Bauzone type (m²), default-hidden — toggle in the column picker.
-    const bzKeys = new Set();
-    for (const p of parcelsData) {
-      for (const k in p) {
-        if (k.startsWith("bauzonen_") && k.endsWith("_m2") && k !== "bauzonen_m2") bzKeys.add(k);
-      }
-    }
-    for (const k of [...bzKeys].sort()) {
-      cols.push({
-        key: k,
-        label: `${k.slice(9, -3)} m²`, // strip "bauzonen_" … "_m2"
-        cls: "col-p-" + k.replace(/[^a-zA-Z0-9_-]/g, "-"),
-        numeric: true,
-        hidden: true,
-      });
-    }
+    cols.push(...bauzonenCols);
   }
   return cols;
+}
+
+/** Per-zone Bauzonen column defs (default-hidden, toggleable) — one per
+ *  `bauzonen_<zone>_m2` key found in the data. Computed once per dataset. */
+function computeBauzonenCols(parcels) {
+  const keys = new Set();
+  for (const p of parcels) for (const k in p) if (isBauzoneAreaKey(k)) keys.add(k);
+  return [...keys].sort().map((k) => ({
+    key: k,
+    label: `${bauzoneNameFromKey(k)} m²`,
+    cls: "col-p-" + k.replace(/[^a-zA-Z0-9_-]/g, "-"),
+    numeric: true,
+    hidden: true,
+  }));
 }
 
 function getLcCols() {
@@ -93,6 +99,8 @@ export function populateTable(parcels, landcover) {
   // mutating the shared result objects held by main.js / used for export.
   parcelsData = (parcels || []).map((p, i) => ({ ...p, _idx: i }));
   landcoverData = (landcover || []).map((lc, i) => ({ ...lc, _idx: i, art_label: ART_LABELS[lc.art] || lc.art }));
+  hasBauzonen = parcelsData.some((p) => "bauzonen" in p);
+  bauzonenCols = computeBauzonenCols(parcelsData);
   for (const st of Object.values(tabState)) { st.page = 1; st.search = ""; }
   activeTab = "parcels";
   renderShell();
@@ -519,21 +527,31 @@ function positionColumnsMenu(btn, menu) {
   const spaceBelow = window.innerHeight - rect.bottom - GAP;
   const spaceAbove = rect.top - GAP;
 
-  // Measure natural height with no flip / no clamp first
-  menu.classList.remove("drop-up");
+  // Fixed positioning so the menu escapes the table panel's `overflow: hidden`
+  // and its stacking context — otherwise a flipped/overflowing menu is clipped
+  // and painted behind the map. Coordinates are computed below (viewport-based).
+  menu.style.position = "fixed";
+  menu.style.margin = "0";
   const list = menu.querySelector(".columns-list");
   if (list) list.style.maxHeight = "";
+
+  // Natural height, then pick a direction and clamp the scrollable list to fit.
   const needed = menu.offsetHeight;
-
   const dropUp = needed > spaceBelow && spaceAbove > spaceBelow;
-  menu.classList.toggle("drop-up", dropUp);
-
-  // Clamp the scrollable list so the whole menu fits the chosen side
   const avail = dropUp ? spaceAbove : spaceBelow;
   if (list && needed > avail) {
     const chrome = needed - list.offsetHeight; // header + toggle row + borders
     list.style.maxHeight = Math.max(120, avail - chrome) + "px";
   }
+
+  // Right-align the menu to the button and clamp into the viewport.
+  const width = menu.offsetWidth;
+  const left = Math.max(GAP, Math.min(rect.right - width, window.innerWidth - width - GAP));
+  const top = dropUp ? Math.max(GAP, rect.top - menu.offsetHeight - GAP) : rect.bottom + GAP;
+  menu.style.left = `${left}px`;
+  menu.style.top = `${top}px`;
+  menu.style.right = "auto";
+  menu.style.bottom = "auto";
 }
 
 function fmtCell(val, numeric, fmt) {

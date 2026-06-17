@@ -8,7 +8,7 @@ import { showToast } from "./toast.js";
 import { initTable, populateTable, highlightRow, highlightLcRow } from "./table.js";
 import { downloadParcelCSV, downloadLandcoverCSV, downloadXLSX, downloadGeoJSON } from "./export.js";
 import { initSearch, setSearchData } from "./search.js";
-import { ART_LABELS, ART_COLORS, CATEGORY_COLORS, isFound, esc, fmtNum } from "./config.js";
+import { ART_LABELS, ART_COLORS, CATEGORY_COLORS, isFound, esc, fmtNum, isBauzoneAreaKey, bauzoneNameFromKey } from "./config.js";
 import { t, applyI18nDOM, setLang, getLang, getLocale } from "./i18n.js";
 
 let processedResults = null;
@@ -241,7 +241,7 @@ const AGGREGATION_MODES = {
     getEntries(lc) {
       // SIA 416 is AV-only — BAFU rows can't supply it, so they're excluded.
       const map = { GGF: 0, BUF: 0, UUF: 0 };
-      for (const f of lc) { if (f._bafu) continue; const cls = f._sia416 || "UUF"; map[cls] += f.area_m2; }
+      for (const f of lc) { if (f._sia416 == null) continue; map[f._sia416] += f.area_m2; }
       return [
         { label: t("agg.ggf"), area: map.GGF, color: CATEGORY_COLORS.GGF, key: "GGF" },
         { label: t("agg.buf"), area: map.BUF, color: CATEGORY_COLORS.BUF, key: "BUF" },
@@ -249,24 +249,23 @@ const AGGREGATION_MODES = {
       ];
     },
     colorFn(props) {
-      if (props.bafu) return "#cccccc"; // BAFU rows: SIA 416 not derived
-      const cls = props.sia416 || "UUF";
-      return CATEGORY_COLORS[cls] || "#888";
+      if (!props.sia416) return "#cccccc"; // unclassified (e.g. BAFU): SIA 416 n/a
+      return CATEGORY_COLORS[props.sia416] || "#888";
     },
   },
   din277: {
     get label() { return t("agg.din277"); },
     getEntries(lc) {
       const map = { BF: 0, UF: 0 };
-      for (const f of lc) { if (f._bafu) continue; const cls = f._din277 || "UF"; map[cls] += f.area_m2; }
+      for (const f of lc) { if (f._din277 == null) continue; map[f._din277] += f.area_m2; }
       return [
         { label: t("agg.bf"), area: map.BF, color: "#c0392b", key: "BF" },
         { label: t("agg.uf"), area: map.UF, color: "#2980b9", key: "UF" },
       ];
     },
     colorFn(props) {
-      if (props.bafu) return "#cccccc";
-      return (props.din277 || "UF") === "BF" ? "#c0392b" : "#2980b9";
+      if (!props.din277) return "#cccccc";
+      return props.din277 === "BF" ? "#c0392b" : "#2980b9";
     },
   },
   greenspace: {
@@ -296,15 +295,15 @@ const AGGREGATION_MODES = {
     get label() { return t("agg.sealed"); },
     getEntries(lc) {
       let sealed = 0, unsealed = 0;
-      for (const f of lc) { if (f._bafu) continue; if (f._sealed) sealed += f.area_m2; else unsealed += f.area_m2; }
+      for (const f of lc) { if (f._sealed == null) continue; if (f._sealed) sealed += f.area_m2; else unsealed += f.area_m2; }
       return [
         { label: t("agg.sealed.yes"), area: sealed, color: "#c0392b", key: "sealed" },
         { label: t("agg.sealed.no"), area: unsealed, color: "#27ae60", key: "unsealed" },
       ];
     },
     colorFn(props) {
-      if (props.bafu) return "#cccccc";
-      return props.sealed ? "#c0392b" : "#27ae60";
+      if (!props.sealed) return "#cccccc";
+      return props.sealed === "yes" ? "#c0392b" : "#27ae60";
     },
   },
   vbsKategorie: {
@@ -545,8 +544,8 @@ function renderBauzonenList() {
   const totals = {};
   for (const p of processedResults.parcels) {
     for (const k in p) {
-      if (k.startsWith("bauzonen_") && k.endsWith("_m2") && k !== "bauzonen_m2") {
-        const name = k.slice(9, -3); // strip "bauzonen_" … "_m2"
+      if (isBauzoneAreaKey(k)) {
+        const name = bauzoneNameFromKey(k);
         totals[name] = (totals[name] || 0) + (parseFloat(p[k]) || 0);
       }
     }
@@ -565,7 +564,7 @@ function renderBauzonenList() {
       <span class="sp-legend-pct">${total > 0 ? ((v / total) * 100).toFixed(1) : "0"}%</span>
     </div>`).join("");
 
-  el.innerHTML = `<div class="sp-bauzonen-title">${esc(t("col.bauzonen"))}</div>${rows}`;
+  el.innerHTML = rows;
 }
 
 function showResults() {

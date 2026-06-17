@@ -10,7 +10,8 @@
  * - AbortController timeout on all fetch calls
  */
 import { API, SLIVER_THRESHOLD, STATUS, classify, classifyBafu, isFound, fetchWithTimeout,
-         BAFU_LAYER_ID, VBS_KATEGORIE_LABELS, VBS_PRODUKTIV_LABELS, VBS_TYP_LABELS } from "./config.js";
+         BAFU_LAYER_ID, VBS_KATEGORIE_LABELS, VBS_PRODUKTIV_LABELS, VBS_TYP_LABELS,
+         ERR_MSG, ERR_RUNTIME_PREFIX, bauzoneAreaKey, isBauzoneAreaKey } from "./config.js";
 
 // Parcels processed in parallel. Each parcel makes two sequential requests to
 // two different hosts (swisstopo find + geodienste WFS), both HTTP/2, so a
@@ -103,7 +104,7 @@ export async function processRows(rows, onProgress, options = {}) {
       // Genuine errors (status stays "found"; QA notes like merged/truncated/
       // skipped remain in the check_* columns).
       const lcErrors = [];
-      if (clipped.length === 0 && lcResult.error) lcErrors.push("Land cover unavailable (WFS)");
+      if (clipped.length === 0 && lcResult.error) lcErrors.push(ERR_MSG.wfsUnavailable);
 
       const merged = parcelResult.properties.mergedCount > 1;
       const parcel = {
@@ -140,7 +141,7 @@ export async function processRows(rows, onProgress, options = {}) {
           // One column per zone type (m²) — e.g. bauzonen_Wohnzonen_m2. Made
           // rectangular across all parcels in the flatten pass below.
           for (const [name, area] of Object.entries(agg.zones)) {
-            parcel[`bauzonen_${name}_m2`] = area;
+            parcel[bauzoneAreaKey(name)] = area;
           }
         } catch (err) {
           console.warn(`Bauzonen analysis failed for ${egrid}:`, err.message);
@@ -191,7 +192,7 @@ export async function processRows(rows, onProgress, options = {}) {
     for (const r of results) {
       if (!r) continue;
       for (const k in r.parcel) {
-        if (k.startsWith("bauzonen_") && k.endsWith("_m2") && k !== "bauzonen_m2") zoneKeys.add(k);
+        if (isBauzoneAreaKey(k)) zoneKeys.add(k);
       }
     }
   }
@@ -217,9 +218,9 @@ export async function processRows(rows, onProgress, options = {}) {
 
 /** Map an EGRID-resolution failure code to a stable English error message. */
 function egridErrorMessage(message) {
-  if (message === STATUS.INVALID) return "Invalid EGRID";
-  if (message === STATUS.NOT_FOUND) return "EGRID not found in AV";
-  if (typeof message === "string" && message.startsWith("error:")) return "Error: " + message.slice(6);
+  if (message === STATUS.INVALID) return ERR_MSG.invalidEgrid;
+  if (message === STATUS.NOT_FOUND) return ERR_MSG.egridNotFound;
+  if (typeof message === "string" && message.startsWith("error:")) return ERR_RUNTIME_PREFIX + message.slice(6);
   return message;
 }
 
@@ -395,38 +396,43 @@ async function fetchLandCover(bbox) {
   }
 }
 
-/** Max BAFU habitat features requested per parcel bbox (Identify limit cap). */
-const BAFU_MAX_FEATURES = 200;
+/* ── geo.admin.ch Identify (shared by the BAFU fallback + Bauzonen) ── */
 
-/**
- * Fetch BAFU Lebensraumkarte (habitat) features for a parcel, via the geo.admin.ch
- * Identify endpoint. Used as a fallback where AV land cover is unavailable.
- * Returns the same { features, error, truncated } shape as fetchLandCover().
- */
-async function fetchLandCoverBAFU(parcelGeom) {
+/** Fetch features of `layerId` intersecting a parcel's bbox via the Identify
+ *  endpoint. Returns an array of { geometry, properties, id }. May throw. */
+async function fetchIdentify(layerId, parcelGeom, limit) {
   const [minLon, minLat, maxLon, maxLat] = turf.bbox(parcelGeom);
   const envelope = `${minLon},${minLat},${maxLon},${maxLat}`;
-
   const params = new URLSearchParams({
     geometry: envelope,
     geometryType: "esriGeometryEnvelope",
     geometryFormat: "geojson",
-    layers: `all:${BAFU_LAYER_ID}`,
+    layers: `all:${layerId}`,
     sr: "4326",
     tolerance: "0",
     mapExtent: envelope,
     imageDisplay: "100,100,96",
     returnGeometry: "true",
-    limit: String(BAFU_MAX_FEATURES),
+    limit: String(limit),
     lang: "de",
   });
+  const resp = await fetchWithRetry(`${API.IDENTIFY}?${params}`);
+  const data = await resp.json();
+  return (data.results || [])
+    .filter((r) => r.geometry)
+    .map((r) => ({ geometry: r.geometry, properties: r.properties || r.attributes || {}, id: r.featureId ?? r.id }));
+}
 
+/** Max BAFU habitat features requested per parcel bbox (Identify limit cap). */
+const BAFU_MAX_FEATURES = 200;
+
+/**
+ * Fetch BAFU Lebensraumkarte (habitat) features for a parcel — fallback where AV
+ * land cover is unavailable. Same { features, error, truncated } shape as fetchLandCover().
+ */
+async function fetchLandCoverBAFU(parcelGeom) {
   try {
-    const resp = await fetchWithRetry(`${API.IDENTIFY}?${params}`);
-    const data = await resp.json();
-    const features = (data.results || [])
-      .filter((r) => r.geometry)
-      .map((r) => ({ geometry: r.geometry, properties: r.properties || r.attributes || {}, id: r.featureId ?? r.id }));
+    const features = await fetchIdentify(BAFU_LAYER_ID, parcelGeom, BAFU_MAX_FEATURES);
     return { features, error: false, truncated: features.length >= BAFU_MAX_FEATURES };
   } catch (err) {
     console.warn("BAFU identify failed after retries:", err.message);
@@ -441,52 +447,40 @@ const BAUZONEN_MAX_FEATURES = 50;
 
 /** Fetch building-zone features intersecting a parcel bbox (geo.admin.ch Identify). */
 async function fetchBauzonen(parcelGeom) {
-  const [minLon, minLat, maxLon, maxLat] = turf.bbox(parcelGeom);
-  const envelope = `${minLon},${minLat},${maxLon},${maxLat}`;
-
-  const params = new URLSearchParams({
-    geometry: envelope,
-    geometryType: "esriGeometryEnvelope",
-    geometryFormat: "geojson",
-    layers: `all:${BAUZONEN_LAYER_ID}`,
-    sr: "4326",
-    tolerance: "0",
-    mapExtent: envelope,
-    imageDisplay: "100,100,96",
-    returnGeometry: "true",
-    limit: String(BAUZONEN_MAX_FEATURES),
-    lang: "de",
-  });
-
-  const resp = await fetchWithRetry(`${API.IDENTIFY}?${params}`);
-  const data = await resp.json();
-  const features = (data.results || [])
-    .filter((r) => r.geometry)
-    .map((r) => ({ geometry: r.geometry, properties: r.properties || r.attributes || {} }));
+  const features = await fetchIdentify(BAUZONEN_LAYER_ID, parcelGeom, BAUZONEN_MAX_FEATURES);
   return { features };
 }
 
-/** Clip Bauzonen to the parcel and aggregate area per zone name. Returns
- *  semicolon-joined `bauzonen` (names) + `bauzonen_m2` (areas), largest first —
- *  mirrors the Python `--bauzonen` output. */
-function intersectBauzonen(parcelGeom, features) {
+/** Clip each `features` item to `parcelGeom` and call `onPiece(feature, geometry,
+ *  area)` for every intersection above the sliver threshold. Returns the count of
+ *  features whose intersection threw (dropped — Turf has no make_valid()). */
+function clipFeatures(parcelGeom, features, onPiece) {
+  let skipped = 0;
   const parcelFeature = turf.feature(parcelGeom);
-  const byZone = new Map(); // zone name → area m²
-
-  for (const bz of features) {
+  for (const f of features) {
     try {
-      const inter = turf.intersect(
-        turf.featureCollection([parcelFeature, turf.feature(bz.geometry)])
-      );
-      if (!inter) continue;
-      const area = turf.area(inter);
+      const intersection = turf.intersect(turf.featureCollection([parcelFeature, turf.feature(f.geometry)]));
+      if (!intersection) continue;
+      const area = turf.area(intersection);
       if (area < SLIVER_THRESHOLD) continue;
-      const name = bz.properties?.ch_bez_d || bz.properties?.bz_bezeichnung || "?";
-      byZone.set(name, (byZone.get(name) || 0) + area);
-    } catch {
-      // skip invalid/self-intersecting zone geometry
+      onPiece(f, intersection.geometry, area);
+    } catch (err) {
+      skipped++;
+      console.warn("Clip error for feature:", f.id, err.message);
     }
   }
+  return skipped;
+}
+
+/** Clip Bauzonen to the parcel and aggregate area per zone name. Returns
+ *  semicolon-joined `bauzonen` (names) + `bauzonen_m2` (areas) + a `zones` map,
+ *  largest first — mirrors the Python `--bauzonen` output. */
+function intersectBauzonen(parcelGeom, features) {
+  const byZone = new Map(); // zone name → area m²
+  clipFeatures(parcelGeom, features, (bz, _geometry, area) => {
+    const name = bz.properties?.ch_bez_d || bz.properties?.bz_bezeichnung || "?";
+    byZone.set(name, (byZone.get(name) || 0) + area);
+  });
 
   if (byZone.size === 0) return { bauzonen: "", bauzonen_m2: "", zones: {} };
   const sorted = [...byZone.entries()].sort((a, b) => b[1] - a[1]);
@@ -500,120 +494,78 @@ function intersectBauzonen(parcelGeom, features) {
   };
 }
 
-/** Clip land cover features to a parcel polygon using Turf.js.
- *  Returns { results, skipped } — `skipped` counts features whose intersection
- *  threw (e.g. invalid/self-intersecting geometry; Turf.js has no make_valid()
- *  equivalent, so those features are dropped rather than repaired). */
+/** Clip AV land cover features to a parcel and classify each piece. */
 function clipLandCover(parcelGeom, lcFeatures, id, egrid) {
   const results = [];
-  let skipped = 0;
-  const parcelFeature = turf.feature(parcelGeom);
-
-  for (const lc of lcFeatures) {
-    try {
-      const intersection = turf.intersect(
-        turf.featureCollection([parcelFeature, turf.feature(lc.geometry)])
-      );
-
-      if (!intersection) continue;
-
-      const area = turf.area(intersection);
-      if (area < SLIVER_THRESHOLD) continue;
-
-      const art = lc.properties?.art || lc.properties?.Art || lc.properties?.ART || "";
-      const fid = lc.id || lc.properties?.fid || "";
-      const bfsnr = lc.properties?.bfsnr || lc.properties?.BFSNr || "";
-      const gwrEgid = lc.properties?.gwr_egid || lc.properties?.GWR_EGID || "";
-
-      const cls = classify(art);
-
-      results.push({
-        id,
-        egrid,
-        fid,
-        art,
-        bfsnr,
-        gwr_egid: gwrEgid,
-        check_greenspace: cls.greenSpace,
-        // VBS classification — stable English output values (translated for display).
-        // Typ is only assigned within biologically productive area; blank otherwise.
-        "VBS Kategorie": VBS_KATEGORIE_LABELS[cls.vbsKategorie] || "",
-        "VBS Biologisch produktiv": VBS_PRODUKTIV_LABELS[cls.vbsProduktiv] || "",
-        "VBS Typ": cls.vbsTyp ? (VBS_TYP_LABELS[cls.vbsTyp] || "") : "",
-        lc_source: "AV",
-        prob: "",
-        area_m2: round2(area),
-        _rawArea: area, // unrounded — summed by aggregateLandCover to avoid rounding drift
-        _geometry: intersection.geometry,
-        _sia416: cls.sia416,
-        _din277: cls.din277,
-        _sealed: cls.sealed,
-        _vbsKategorie: cls.vbsKategorie,
-        _vbsProduktiv: cls.vbsProduktiv,
-        _vbsTyp: cls.vbsTyp,
-      });
-    } catch (err) {
-      skipped++;
-      console.warn("Clip error for feature:", lc.id, err.message);
-    }
-  }
-
+  const skipped = clipFeatures(parcelGeom, lcFeatures, (lc, geometry, area) => {
+    const art = lc.properties?.art || lc.properties?.Art || lc.properties?.ART || "";
+    const fid = lc.id || lc.properties?.fid || "";
+    const bfsnr = lc.properties?.bfsnr || lc.properties?.BFSNr || "";
+    const gwrEgid = lc.properties?.gwr_egid || lc.properties?.GWR_EGID || "";
+    const cls = classify(art);
+    results.push({
+      id,
+      egrid,
+      fid,
+      art,
+      bfsnr,
+      gwr_egid: gwrEgid,
+      check_greenspace: cls.greenSpace,
+      // VBS classification — stable English output values (translated for display).
+      // Typ is only assigned within biologically productive area; blank otherwise.
+      "VBS Kategorie": VBS_KATEGORIE_LABELS[cls.vbsKategorie] || "",
+      "VBS Biologisch produktiv": VBS_PRODUKTIV_LABELS[cls.vbsProduktiv] || "",
+      "VBS Typ": cls.vbsTyp ? (VBS_TYP_LABELS[cls.vbsTyp] || "") : "",
+      lc_source: "AV",
+      prob: "",
+      area_m2: round2(area),
+      _rawArea: area, // unrounded — summed by aggregateLandCover to avoid rounding drift
+      _geometry: geometry,
+      _sia416: cls.sia416,
+      _din277: cls.din277,
+      _sealed: cls.sealed,
+      _vbsKategorie: cls.vbsKategorie,
+      _vbsProduktiv: cls.vbsProduktiv,
+      _vbsTyp: cls.vbsTyp,
+    });
+  });
   return { results, skipped };
 }
 
-/** Clip BAFU habitat features to a parcel polygon and classify via TypoCH.
- *  Mirrors clipLandCover() but: `art` holds the TypoCH label, only green space +
- *  VBS are derived (SIA416/DIN277/sealed left undefined), and `_bafu` marks the
- *  rows so aggregation knows to skip the AV-only columns. */
+/** Clip BAFU habitat features to a parcel and classify via TypoCH. `art` holds the
+ *  TypoCH label; SIA 416 / DIN 277 / sealed are `null` (a modeled habitat map can't
+ *  supply them) so aggregation/summary skip them via the null check. */
 function clipLandCoverBAFU(parcelGeom, bafuFeatures, id, egrid) {
   const results = [];
-  let skipped = 0;
-  const parcelFeature = turf.feature(parcelGeom);
-
-  for (const lc of bafuFeatures) {
-    try {
-      const intersection = turf.intersect(
-        turf.featureCollection([parcelFeature, turf.feature(lc.geometry)])
-      );
-
-      if (!intersection) continue;
-
-      const area = turf.area(intersection);
-      if (area < SLIVER_THRESHOLD) continue;
-
-      const typoch = lc.properties?.typoch_de || "";
-      const prob = lc.properties?.prob_de || "";
-      const fid = lc.id || lc.properties?.polyid || "";
-      const cls = classifyBafu(typoch);
-
-      results.push({
-        id,
-        egrid,
-        fid,
-        art: typoch, // TypoCH habitat label, e.g. "6.3.1 Buchenwald"
-        bfsnr: "",
-        gwr_egid: "",
-        check_greenspace: cls.greenSpace,
-        "VBS Kategorie": VBS_KATEGORIE_LABELS[cls.vbsKategorie] || "",
-        "VBS Biologisch produktiv": VBS_PRODUKTIV_LABELS[cls.vbsProduktiv] || "",
-        "VBS Typ": cls.vbsTyp ? (VBS_TYP_LABELS[cls.vbsTyp] || "") : "",
-        lc_source: "BAFU",
-        prob,
-        area_m2: round2(area),
-        _rawArea: area,
-        _geometry: intersection.geometry,
-        // SIA416 / DIN277 / sealed intentionally omitted (blank) for BAFU rows
-        _vbsKategorie: cls.vbsKategorie,
-        _vbsProduktiv: cls.vbsProduktiv,
-        _vbsTyp: cls.vbsTyp,
-        _bafu: true,
-      });
-    } catch (err) {
-      skipped++;
-      console.warn("BAFU clip error for feature:", lc.id, err.message);
-    }
-  }
-
+  const skipped = clipFeatures(parcelGeom, bafuFeatures, (lc, geometry, area) => {
+    const typoch = lc.properties?.typoch_de || "";
+    const prob = lc.properties?.prob_de || "";
+    const fid = lc.id || lc.properties?.polyid || "";
+    const cls = classifyBafu(typoch);
+    results.push({
+      id,
+      egrid,
+      fid,
+      art: typoch, // TypoCH habitat label, e.g. "6.3.1 Buchenwald"
+      bfsnr: "",
+      gwr_egid: "",
+      check_greenspace: cls.greenSpace,
+      "VBS Kategorie": VBS_KATEGORIE_LABELS[cls.vbsKategorie] || "",
+      "VBS Biologisch produktiv": VBS_PRODUKTIV_LABELS[cls.vbsProduktiv] || "",
+      "VBS Typ": cls.vbsTyp ? (VBS_TYP_LABELS[cls.vbsTyp] || "") : "",
+      lc_source: "BAFU",
+      prob,
+      area_m2: round2(area),
+      _rawArea: area,
+      _geometry: geometry,
+      _sia416: null, // not derivable from a modeled habitat map
+      _din277: null,
+      _sealed: null,
+      _vbsKategorie: cls.vbsKategorie,
+      _vbsProduktiv: cls.vbsProduktiv,
+      _vbsTyp: cls.vbsTyp,
+    });
+  });
   return { results, skipped };
 }
 
@@ -639,17 +591,18 @@ function aggregateLandCover(clippedFeatures) {
 
   const artAreas = {};
 
-  // A parcel is wholly AV or wholly BAFU. BAFU rows can't supply SIA 416 / DIN 277
-  // / sealed / per-Art breakdown, so those are left blank for a BAFU parcel.
-  const isBafu = clippedFeatures.length > 0 && clippedFeatures.every((f) => f._bafu);
+  // Rows without an SIA 416 class (modeled/BAFU rows carry null) can't contribute
+  // to SIA / DIN / sealed / per-Art; a parcel made entirely of them leaves those blank.
+  const isUnclassified = (f) => f._sia416 == null;
+  const allUnclassified = clippedFeatures.length > 0 && clippedFeatures.every(isUnclassified);
 
   for (const f of clippedFeatures) {
     // Sum unrounded areas; the result is rounded once at the end. Summing the
     // per-feature rounded area_m2 would accumulate rounding error.
     const area = f._rawArea ?? f.area_m2;
 
-    // SIA 416 / DIN 277 / sealed / per-Art — AV rows only
-    if (!f._bafu) {
+    // SIA 416 / DIN 277 / sealed / per-Art — only rows that carry an SIA class
+    if (!isUnclassified(f)) {
       if (f._sia416 === "GGF") agg.GGF_m2 += area;
       else if (f._sia416 === "BUF") agg.BUF_m2 += area;
       else agg.UUF_m2 += area;
@@ -684,8 +637,8 @@ function aggregateLandCover(clippedFeatures) {
   for (const k of Object.keys(agg)) agg[k] = round2(agg[k]);
   for (const k of Object.keys(artAreas)) artAreas[k] = round2(artAreas[k]);
 
-  // BAFU parcels: SIA 416 / DIN 277 / sealed are not derivable — leave blank.
-  if (isBafu) {
+  // Parcels with no SIA-classified rows (e.g. all-BAFU): leave SIA/DIN/sealed blank.
+  if (allUnclassified) {
     agg.GGF_m2 = agg.BUF_m2 = agg.UUF_m2 = "";
     agg.DIN277_BF_m2 = agg.DIN277_UF_m2 = "";
     agg.Sealed_m2 = "";

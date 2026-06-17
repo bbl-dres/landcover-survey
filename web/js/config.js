@@ -283,16 +283,25 @@ export function vbsTypLabel(code) {
   return key ? t(key) : code || "\u2013";
 }
 
-/** Error / QA message codes (stable English) \u2192 i18n keys, translated at display. */
+/** Stable English error messages \u2014 shared so processor.js (which produces them)
+ *  and errorLabel (which translates them) can't drift out of sync. */
+export const ERR_MSG = {
+  invalidEgrid: "Invalid EGRID",
+  egridNotFound: "EGRID not found in AV",
+  wfsUnavailable: "Land cover unavailable (WFS)",
+};
+/** Prefix for runtime errors carrying a dynamic message ("Error: <msg>"). */
+export const ERR_RUNTIME_PREFIX = "Error: ";
+
 const ERROR_I18N = {
-  "Invalid EGRID": "status.invalid",
-  "EGRID not found in AV": "status.notFound",
-  "Land cover unavailable (WFS)": "err.wfsError",
+  [ERR_MSG.invalidEgrid]: "status.invalid",
+  [ERR_MSG.egridNotFound]: "status.notFound",
+  [ERR_MSG.wfsUnavailable]: "err.wfsError",
 };
 export function errorLabel(msg) {
   if (!msg) return "";
   if (ERROR_I18N[msg]) return t(ERROR_I18N[msg]);
-  if (msg.startsWith("Error: ")) return t("status.error", { message: msg.slice(7) });
+  if (msg.startsWith(ERR_RUNTIME_PREFIX)) return t("status.error", { message: msg.slice(ERR_RUNTIME_PREFIX.length) });
   return msg;
 }
 /** Translate + join an errors array (or single message) for display. */
@@ -300,6 +309,16 @@ export function errorsLabel(arr) {
   if (Array.isArray(arr)) return arr.map(errorLabel).filter(Boolean).join("; ");
   return errorLabel(arr);
 }
+
+/** Bauzonen per-zone area columns: `bauzonen_<zone>_m2`. Encode/decode helpers
+ *  centralized so the producer (processor) and consumers (table, summary) agree. */
+const BAUZONEN_PREFIX = "bauzonen_";
+const BAUZONEN_SUFFIX = "_m2";
+export function bauzoneAreaKey(name) { return `${BAUZONEN_PREFIX}${name}${BAUZONEN_SUFFIX}`; }
+export function isBauzoneAreaKey(k) {
+  return k.startsWith(BAUZONEN_PREFIX) && k.endsWith(BAUZONEN_SUFFIX) && k !== "bauzonen_m2";
+}
+export function bauzoneNameFromKey(k) { return k.slice(BAUZONEN_PREFIX.length, -BAUZONEN_SUFFIX.length); }
 
 /** Shared HTML escape utility */
 const _escDiv = document.createElement("div");
