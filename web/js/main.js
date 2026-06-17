@@ -8,7 +8,7 @@ import { showToast } from "./toast.js";
 import { initTable, populateTable, highlightRow, highlightLcRow } from "./table.js";
 import { downloadParcelCSV, downloadLandcoverCSV, downloadXLSX, downloadGeoJSON } from "./export.js";
 import { initSearch, setSearchData } from "./search.js";
-import { ART_LABELS, ART_COLORS, CATEGORY_COLORS, SIA416, DIN277, GREEN_SPACE, SEALED, VBS_KATEGORIE, VBS_PRODUKTIV, VBS_TYP, isFound, esc, fmtNum } from "./config.js";
+import { ART_LABELS, ART_COLORS, CATEGORY_COLORS, isFound, esc, fmtNum } from "./config.js";
 import { t, applyI18nDOM, setLang, getLang, getLocale } from "./i18n.js";
 
 let processedResults = null;
@@ -166,7 +166,7 @@ async function onStartProcessing(parsedData) {
   try {
     processedResults = await processRows(parsedData.rows, (progress) => {
       updateProgress(progress, startTime);
-    });
+    }, parsedData.options);
 
     if (!processedResults || !processedResults.parcels.length) {
       showState("upload");
@@ -239,8 +239,9 @@ const AGGREGATION_MODES = {
   sia416: {
     get label() { return t("agg.sia416"); },
     getEntries(lc) {
+      // SIA 416 is AV-only — BAFU rows can't supply it, so they're excluded.
       const map = { GGF: 0, BUF: 0, UUF: 0 };
-      for (const f of lc) { const cls = SIA416[f.art] || "UUF"; map[cls] += f.area_m2; }
+      for (const f of lc) { if (f._bafu) continue; const cls = f._sia416 || "UUF"; map[cls] += f.area_m2; }
       return [
         { label: t("agg.ggf"), area: map.GGF, color: CATEGORY_COLORS.GGF, key: "GGF" },
         { label: t("agg.buf"), area: map.BUF, color: CATEGORY_COLORS.BUF, key: "BUF" },
@@ -248,7 +249,8 @@ const AGGREGATION_MODES = {
       ];
     },
     colorFn(props) {
-      const cls = SIA416[props.art] || "UUF";
+      if (props.bafu) return "#cccccc"; // BAFU rows: SIA 416 not derived
+      const cls = props.sia416 || "UUF";
       return CATEGORY_COLORS[cls] || "#888";
     },
   },
@@ -256,20 +258,23 @@ const AGGREGATION_MODES = {
     get label() { return t("agg.din277"); },
     getEntries(lc) {
       const map = { BF: 0, UF: 0 };
-      for (const f of lc) { const cls = DIN277[f.art] || "UF"; map[cls] += f.area_m2; }
+      for (const f of lc) { if (f._bafu) continue; const cls = f._din277 || "UF"; map[cls] += f.area_m2; }
       return [
         { label: t("agg.bf"), area: map.BF, color: "#c0392b", key: "BF" },
         { label: t("agg.uf"), area: map.UF, color: "#2980b9", key: "UF" },
       ];
     },
-    colorFn(props) { return (DIN277[props.art] || "UF") === "BF" ? "#c0392b" : "#2980b9"; },
+    colorFn(props) {
+      if (props.bafu) return "#cccccc";
+      return (props.din277 || "UF") === "BF" ? "#c0392b" : "#2980b9";
+    },
   },
   greenspace: {
     get label() { return t("agg.greenspace"); },
     getEntries(lc) {
       const map = { "soil": 0, "wooded": 0, "none": 0 };
       for (const f of lc) {
-        const gs = GREEN_SPACE[f.art];
+        const gs = f.check_greenspace;
         if (gs === "Green space (soil-covered)") map.soil += f.area_m2;
         else if (gs === "Green space (wooded)") map.wooded += f.area_m2;
         else map.none += f.area_m2;
@@ -281,7 +286,7 @@ const AGGREGATION_MODES = {
       ];
     },
     colorFn(props) {
-      const gs = GREEN_SPACE[props.art];
+      const gs = props.greenspace;
       if (gs === "Green space (soil-covered)") return "#27ae60";
       if (gs === "Green space (wooded)") return "#1e8449";
       return "#95a5a6";
@@ -291,19 +296,22 @@ const AGGREGATION_MODES = {
     get label() { return t("agg.sealed"); },
     getEntries(lc) {
       let sealed = 0, unsealed = 0;
-      for (const f of lc) { if (SEALED.has(f.art)) sealed += f.area_m2; else unsealed += f.area_m2; }
+      for (const f of lc) { if (f._bafu) continue; if (f._sealed) sealed += f.area_m2; else unsealed += f.area_m2; }
       return [
         { label: t("agg.sealed.yes"), area: sealed, color: "#c0392b", key: "sealed" },
         { label: t("agg.sealed.no"), area: unsealed, color: "#27ae60", key: "unsealed" },
       ];
     },
-    colorFn(props) { return SEALED.has(props.art) ? "#c0392b" : "#27ae60"; },
+    colorFn(props) {
+      if (props.bafu) return "#cccccc";
+      return props.sealed ? "#c0392b" : "#27ae60";
+    },
   },
   vbsKategorie: {
     get label() { return t("agg.vbs.kategorie"); },
     getEntries(lc) {
       const map = { kat_a: 0, kat_b: 0, kat_c: 0, kat_d: 0 };
-      for (const f of lc) { const k = VBS_KATEGORIE[f.art] || "kat_d"; map[k] += f.area_m2; }
+      for (const f of lc) { const k = f._vbsKategorie || "kat_d"; map[k] += f.area_m2; }
       return [
         { label: t("agg.vbs.kat_a"), area: map.kat_a, color: "#e74c3c", key: "kat_a" },
         { label: t("agg.vbs.kat_b"), area: map.kat_b, color: "#27ae60", key: "kat_b" },
@@ -312,7 +320,7 @@ const AGGREGATION_MODES = {
       ];
     },
     colorFn(props) {
-      const k = VBS_KATEGORIE[props.art] || "kat_d";
+      const k = props.vbsKategorie || "kat_d";
       return { kat_a: "#e74c3c", kat_b: "#27ae60", kat_c: "#1e8449", kat_d: "#95a5a6" }[k];
     },
   },
@@ -320,14 +328,14 @@ const AGGREGATION_MODES = {
     get label() { return t("agg.vbs.produktiv"); },
     getEntries(lc) {
       const map = { produktiv: 0, unproduktiv: 0 };
-      for (const f of lc) { const p = VBS_PRODUKTIV[f.art] || "unproduktiv"; map[p] += f.area_m2; }
+      for (const f of lc) { const p = f._vbsProduktiv || "unproduktiv"; map[p] += f.area_m2; }
       return [
         { label: t("agg.vbs.produktiv.yes"), area: map.produktiv, color: "#27ae60", key: "produktiv" },
         { label: t("agg.vbs.produktiv.no"), area: map.unproduktiv, color: "#95a5a6", key: "unproduktiv" },
       ];
     },
     colorFn(props) {
-      return (VBS_PRODUKTIV[props.art] || "unproduktiv") === "produktiv" ? "#27ae60" : "#95a5a6";
+      return (props.vbsProduktiv || "unproduktiv") === "produktiv" ? "#27ae60" : "#95a5a6";
     },
   },
   vbsTyp: {
@@ -335,7 +343,7 @@ const AGGREGATION_MODES = {
     getEntries(lc) {
       const map = { typ1: 0, typ2: 0, none: 0 };
       for (const f of lc) {
-        const typ = VBS_TYP[f.art];
+        const typ = f._vbsTyp;
         if (typ === "typ1") map.typ1 += f.area_m2;
         else if (typ === "typ2") map.typ2 += f.area_m2;
         else map.none += f.area_m2;
@@ -347,7 +355,7 @@ const AGGREGATION_MODES = {
       ];
     },
     colorFn(props) {
-      const typ = VBS_TYP[props.art];
+      const typ = props.vbsTyp;
       if (typ === "typ1") return "#27ae60";
       if (typ === "typ2") return "#1e8449";
       return "#95a5a6";
@@ -424,6 +432,7 @@ function updateSummaryPanel() {
           <div class="sp-kpi"><div class="sp-kpi-value">${fmt(totalSealed)}</div><div class="sp-kpi-label">${esc(t("summary.sealed"))}</div></div>
           <div class="sp-kpi"><div class="sp-kpi-value">${fmt(totalGreen)}</div><div class="sp-kpi-label">${esc(t("summary.green"))}</div></div>
         </div>
+        <div id="sp-bauzonen-container" class="sp-bauzonen-list"></div>
       </div>
     </div>
   `;
@@ -444,6 +453,7 @@ function updateSummaryPanel() {
   });
 
   renderDonutAndLegend();
+  renderBauzonenList();
 }
 
 function renderDonutAndLegend() {
@@ -523,6 +533,39 @@ function renderDonutAndLegend() {
 function applyAggColorsToMap() {
   const mode = AGGREGATION_MODES[currentAggMode];
   updateLandcoverColors(mode.colorFn);
+}
+
+/** Bauzonen breakdown list in the summary's "Weitere Kennzahlen" section — totals
+ *  per zone type across all parcels (no donut). Only renders when the opt-in
+ *  Bauzonen analysis was run (the bauzonen_<zone>_m2 columns exist). */
+function renderBauzonenList() {
+  const el = document.getElementById("sp-bauzonen-container");
+  if (!el) return;
+
+  const totals = {};
+  for (const p of processedResults.parcels) {
+    for (const k in p) {
+      if (k.startsWith("bauzonen_") && k.endsWith("_m2") && k !== "bauzonen_m2") {
+        const name = k.slice(9, -3); // strip "bauzonen_" … "_m2"
+        totals[name] = (totals[name] || 0) + (parseFloat(p[k]) || 0);
+      }
+    }
+  }
+
+  const entries = Object.entries(totals).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
+  if (!entries.length) { el.innerHTML = ""; return; }
+
+  const total = entries.reduce((s, [, v]) => s + v, 0);
+  const fmt = (n) => fmtNum(n, 1);
+  const rows = entries.map(([name, v]) => `
+    <div class="sp-legend-row">
+      <span class="sp-dist-dot" style="background:var(--gray-400)"></span>
+      <span class="sp-legend-label">${esc(name)}</span>
+      <span class="sp-legend-val">${fmt(v)} m²</span>
+      <span class="sp-legend-pct">${total > 0 ? ((v / total) * 100).toFixed(1) : "0"}%</span>
+    </div>`).join("");
+
+  el.innerHTML = `<div class="sp-bauzonen-title">${esc(t("col.bauzonen"))}</div>${rows}`;
 }
 
 function showResults() {

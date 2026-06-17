@@ -101,6 +101,23 @@ export const VBS_TYP = Object.fromEntries(
     .map(([art]) => [art, art === "Gartenanlage" ? "typ1" : "typ2"])
 );
 
+/** VBS code → stable English output value (written verbatim to export columns;
+ *  translated for on-screen display via vbsKategorieLabel/… below). */
+export const VBS_KATEGORIE_LABELS = {
+  kat_a: "A. Settlement area",
+  kat_b: "B. Agricultural area",
+  kat_c: "C. Wooded area",
+  kat_d: "D. Unproductive area",
+};
+export const VBS_PRODUKTIV_LABELS = {
+  produktiv: "1 Biologically productive",
+  unproduktiv: "2 Biologically unproductive",
+};
+export const VBS_TYP_LABELS = {
+  typ1: "Type 1 - Green spaces near buildings",
+  typ2: "Type 2 - Other green spaces",
+};
+
 /** Land cover types classified as sealed (versiegelt) */
 export const SEALED = new Set([
   "Gebaeude",
@@ -142,6 +159,48 @@ export const ART_LABELS = {
   Abbau_Deponie: "Abbau/Deponie",
   uebrige_vegetationslose: "Übrige vegetationslose",
 };
+
+/**
+ * BAFU Lebensraumkarte (TypoCH) fallback mapping — used where AV land cover is
+ * unavailable. Keyed by the TypoCH **level-1** code (the leading digit of the
+ * `typoch_de` label, e.g. "6.x.x Wald" → "6"). Only green space + VBS are
+ * derived; SIA 416 / DIN 277 / sealed are deliberately left blank for BAFU rows
+ * (BAFU is a modeled habitat map and cannot resolve building footprints).
+ *
+ * Starting-point mapping — pending validation by the sustainability dept.
+ * See docs/CLASSIFICATION.md (§Fallback) for rationale and the ⚠ judgment calls.
+ */
+export const BAFU_TYPOCH_L1 = {
+  "1": { name: "Gewässer", green: "Not green space", vbsKategorie: "kat_d", vbsProduktiv: "produktiv", vbsTyp: "typ2" },
+  "2": { name: "Ufer & Feuchtgebiete", green: "Green space (soil-covered)", vbsKategorie: "kat_d", vbsProduktiv: "produktiv", vbsTyp: "typ2" },
+  "3": { name: "Gletscher, Fels, Schutt, Geröll", green: "Not green space", vbsKategorie: "kat_d", vbsProduktiv: "unproduktiv", vbsTyp: null },
+  "4": { name: "Grünland", green: "Green space (soil-covered)", vbsKategorie: "kat_b", vbsProduktiv: "produktiv", vbsTyp: "typ2" },
+  "5": { name: "Krautsäume, Hochstauden, Gebüsche", green: "Green space (wooded)", vbsKategorie: "kat_c", vbsProduktiv: "produktiv", vbsTyp: "typ2" },
+  "6": { name: "Wälder", green: "Green space (wooded)", vbsKategorie: "kat_c", vbsProduktiv: "produktiv", vbsTyp: "typ2" },
+  "7": { name: "Pionier-/Ruderalvegetation", green: "Not green space", vbsKategorie: "kat_d", vbsProduktiv: "produktiv", vbsTyp: "typ2" },
+  "8": { name: "Pflanzungen, Äcker, Kulturen", green: "Green space (soil-covered)", vbsKategorie: "kat_b", vbsProduktiv: "produktiv", vbsTyp: "typ2" },
+  "9": { name: "Gebäude / Anlagen", green: "Not green space", vbsKategorie: "kat_a", vbsProduktiv: "unproduktiv", vbsTyp: null },
+};
+
+/** geo.admin.ch layer id of the BAFU habitat map used for the fallback. */
+export const BAFU_LAYER_ID = "ch.bafu.lebensraumkarte-schweiz";
+
+/** Classify a BAFU TypoCH habitat label (e.g. "6.3.1 Buchenwald") by its
+ *  level-1 code. Returns the same shape as classify() for the fields BAFU can
+ *  supply (greenSpace + VBS); SIA 416 / DIN 277 / sealed are intentionally null. */
+export function classifyBafu(typochDe) {
+  const code = String(typochDe || "").trim().charAt(0); // TypoCH level-1 digit
+  const m = BAFU_TYPOCH_L1[code] || { green: "Not green space", vbsKategorie: "kat_d", vbsProduktiv: "unproduktiv", vbsTyp: null };
+  return {
+    sia416: null,
+    din277: null,
+    sealed: null,
+    greenSpace: m.green,
+    vbsKategorie: m.vbsKategorie,
+    vbsProduktiv: m.vbsProduktiv,
+    vbsTyp: m.vbsTyp,
+  };
+}
 
 /** Classify a single BBArt type and return all classifications */
 export function classify(art) {
@@ -193,6 +252,53 @@ const GREEN_SPACE_I18N = {
 export function greenSpaceLabel(code) {
   const key = GREEN_SPACE_I18N[code];
   return key ? t(key) : code || "\u2013";
+}
+
+/** VBS display labels \u2014 translate the stable English output values at display time */
+const VBS_KATEGORIE_I18N = {
+  "A. Settlement area": "agg.vbs.kat_a",
+  "B. Agricultural area": "agg.vbs.kat_b",
+  "C. Wooded area": "agg.vbs.kat_c",
+  "D. Unproductive area": "agg.vbs.kat_d",
+};
+const VBS_PRODUKTIV_I18N = {
+  "1 Biologically productive": "agg.vbs.produktiv.yes",
+  "2 Biologically unproductive": "agg.vbs.produktiv.no",
+};
+const VBS_TYP_I18N = {
+  "Type 1 - Green spaces near buildings": "agg.vbs.typ1",
+  "Type 2 - Other green spaces": "agg.vbs.typ2",
+};
+
+export function vbsKategorieLabel(code) {
+  const key = VBS_KATEGORIE_I18N[code];
+  return key ? t(key) : code || "\u2013";
+}
+export function vbsProduktivLabel(code) {
+  const key = VBS_PRODUKTIV_I18N[code];
+  return key ? t(key) : code || "\u2013";
+}
+export function vbsTypLabel(code) {
+  const key = VBS_TYP_I18N[code];
+  return key ? t(key) : code || "\u2013";
+}
+
+/** Error / QA message codes (stable English) \u2192 i18n keys, translated at display. */
+const ERROR_I18N = {
+  "Invalid EGRID": "status.invalid",
+  "EGRID not found in AV": "status.notFound",
+  "Land cover unavailable (WFS)": "err.wfsError",
+};
+export function errorLabel(msg) {
+  if (!msg) return "";
+  if (ERROR_I18N[msg]) return t(ERROR_I18N[msg]);
+  if (msg.startsWith("Error: ")) return t("status.error", { message: msg.slice(7) });
+  return msg;
+}
+/** Translate + join an errors array (or single message) for display. */
+export function errorsLabel(arr) {
+  if (Array.isArray(arr)) return arr.map(errorLabel).filter(Boolean).join("; ");
+  return errorLabel(arr);
 }
 
 /** Shared HTML escape utility */

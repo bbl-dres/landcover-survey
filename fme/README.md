@@ -15,4 +15,4 @@ Open `Landcover Survey FME.fmw` in FME Form, point the readers at your parcel li
 - Land cover geometries are clipped raw and repaired afterwards (non-polygon artifacts and slivers < 0.001 m² are dropped) — the behavior the Python pipeline mirrors.
 - Unmatched parcels are preserved via a left join, with an error message instead of area.
 
-For the processing logic, data model, and full land cover classification, see the [Technical Specification](../docs/SPECIFICATION.md).
+For the land cover classification, see [CLASSIFICATION](../docs/CLASSIFICATION.md); for inputs/outputs, [DATAMODEL](../docs/DATAMODEL.md); for the processing logic, [ARCHITECTURE](../docs/ARCHITECTURE.md). ([docs index](../docs/README.md))

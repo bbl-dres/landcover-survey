@@ -91,6 +91,7 @@ async function handleFile(file) {
     parsedData.headers = parsedData.headers.map((h) => h.toLowerCase().trim());
 
     parsedData.filename = file.name;
+    parsedData.options = { bauzonen: !!document.getElementById("opt-bauzonen")?.checked };
     if (onReady) onReady(parsedData);
   } catch (err) {
     console.error("File parse error:", err);

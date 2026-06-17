@@ -75,4 +75,4 @@ Written next to the input file, timestamped:
 | [pandas](https://pandas.pydata.org) | >= 2.0 | Tabular data processing, CSV/Excel I/O |
 | [openpyxl](https://openpyxl.readthedocs.io) | — | Excel (.xlsx) reading |
 
-For the processing pipeline, data model, module responsibilities, and full land cover classification, see the [Technical Specification](../docs/SPECIFICATION.md).
+For the land cover classification, see [CLASSIFICATION](../docs/CLASSIFICATION.md); for inputs/outputs, [DATAMODEL](../docs/DATAMODEL.md); for the processing pipeline and module responsibilities, [ARCHITECTURE](../docs/ARCHITECTURE.md). ([docs index](../docs/README.md))

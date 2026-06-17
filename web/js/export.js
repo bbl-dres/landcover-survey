@@ -5,10 +5,12 @@ import { loadScript } from "./config.js";
 import { t } from "./i18n.js";
 
 /** Land cover export columns — shared by the CSV and XLSX exporters. */
-const LANDCOVER_HEADERS = ["id", "egrid", "fid", "art", "bfsnr", "gwr_egid", "check_greenspace", "area_m2"];
+const LANDCOVER_HEADERS = ["id", "egrid", "fid", "art", "bfsnr", "gwr_egid", "check_greenspace",
+  "VBS Kategorie", "VBS Biologisch produktiv", "VBS Typ", "area_m2", "lc_source", "prob"];
 
 /** Escape a CSV cell value (semicolon-delimited) */
 function csvCell(val) {
+  if (Array.isArray(val)) val = val.join("; ");
   const v = String(val ?? "").replace(/"/g, '""');
   return v.includes(";") || v.includes('"') || v.includes("\n") ? `"${v}"` : v;
 }
@@ -50,7 +52,7 @@ export async function downloadXLSX(parcels, landcover, filename = "landcover-res
   const pHeaders = Object.keys(parcels[0]).filter((k) => !k.startsWith("_"));
   const ws1 = XLSX.utils.json_to_sheet(parcels.map((row) => {
     const obj = {};
-    for (const h of pHeaders) obj[h] = row[h] ?? "";
+    for (const h of pHeaders) { const v = row[h]; obj[h] = Array.isArray(v) ? v.join("; ") : (v ?? ""); }
     return obj;
   }));
   XLSX.utils.book_append_sheet(wb, ws1, t("table.tab.parcels"));

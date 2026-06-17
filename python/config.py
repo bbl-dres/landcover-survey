@@ -187,6 +187,52 @@ VBS_TYP: dict[str, str] = {
 }
 
 # ---------------------------------------------------------------------------
+# VBS output values  (stable, language-independent strings)
+#
+# Written verbatim to the "VBS Kategorie" / "VBS Biologisch produktiv" /
+# "VBS Typ" output columns. The web app translates these for display; the
+# CSV carries them as-is. Mirrors the Check_GreenSpace string pattern.
+# Biologically unproductive types have NO Typ ("" — per the document hint
+# "Unterscheidung Typ 1 und Typ 2 innerhalb biologisch produktiver Fläche").
+# ---------------------------------------------------------------------------
+VBS_KATEGORIE_LABELS: dict[str, str] = {
+    "kat_a": "A. Settlement area",
+    "kat_b": "B. Agricultural area",
+    "kat_c": "C. Wooded area",
+    "kat_d": "D. Unproductive area",
+}
+VBS_PRODUKTIV_LABELS: dict[str, str] = {
+    "produktiv": "1 Biologically productive",
+    "unproduktiv": "2 Biologically unproductive",
+}
+VBS_TYP_LABELS: dict[str, str] = {
+    "typ1": "Type 1 - Green spaces near buildings",
+    "typ2": "Type 2 - Other green spaces",
+}
+
+# Defaults for Art values outside the BBArt domain (mirror the web classify()
+# fallbacks: unknown → kat_d / unproduktiv / no Typ).
+DEFAULT_VBS_KATEGORIE = VBS_KATEGORIE_LABELS["kat_d"]
+DEFAULT_VBS_PRODUKTIV = VBS_PRODUKTIV_LABELS["unproduktiv"]
+DEFAULT_VBS_TYP = ""
+
+# Art → stable output value (built from the code maps above)
+VBS_KATEGORIE_BY_ART: dict[str, str] = {
+    art: VBS_KATEGORIE_LABELS[kat] for art, kat in VBS_KATEGORIE.items()
+}
+VBS_PRODUKTIV_BY_ART: dict[str, str] = {
+    art: VBS_PRODUKTIV_LABELS[prod] for art, prod in VBS_PRODUKTIV.items()
+}
+VBS_TYP_BY_ART: dict[str, str] = {
+    art: VBS_TYP_LABELS[typ] for art, typ in VBS_TYP.items()
+}
+
+# Output column names (German, matching the source document)
+COL_VBS_KATEGORIE = "VBS Kategorie"
+COL_VBS_PRODUKTIV = "VBS Biologisch produktiv"
+COL_VBS_TYP = "VBS Typ"
+
+# ---------------------------------------------------------------------------
 # Check_EGRID messages
 # ---------------------------------------------------------------------------
 MSG_EGRID_FOUND = "EGRID found in AV"

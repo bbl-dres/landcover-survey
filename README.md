@@ -64,7 +64,10 @@ The original FME Form workspace (`.fmw`) that the other two solutions reproduce.
 
 - **Data source** — official Swiss cadastral survey (Amtliche Vermessung), data model [DM.01-AV-CH](https://www.cadastre-manual.admin.ch/), distributed via [geodienste.ch](https://www.geodienste.ch/services/av). CRS: EPSG:2056 (CH1903+ / LV95).
 - **[User Guide](docs/MANUAL.md)** — multilingual manual (DE/FR/IT/EN) with FAQ and data coverage.
-- **[Technical Specification](docs/SPECIFICATION.md)** — processing pipeline, data model, full land cover classification (26 BBArt types), and architecture.
+- **[Land Cover Classification](docs/CLASSIFICATION.md)** — how each of the 26 BBArt types maps to SIA 416, DIN 277, green space, sealed, and VBS, with decision trees.
+- **[Data Model](docs/DATAMODEL.md)** — inputs (CSV, AV `resf`/`lcsf`) and output column dictionaries.
+- **[Architecture](docs/ARCHITECTURE.md)** — processing pipeline, implementation, and limitations.
+- **[Docs index](docs/README.md)** — start here + glossary.
 
 ## Standards & References
 

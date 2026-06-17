@@ -635,7 +635,7 @@ export function plotResults(results) {
       if (!lc._geometry) continue;
       lcFeatures.push({
         type: "Feature", geometry: lc._geometry,
-        properties: { lc_index: lcIndex, art: lc.art, art_label: ART_LABELS[lc.art] || lc.art, area_m2: lc.area_m2, color: ART_COLORS[lc.art] || "#888", greenspace: lc.check_greenspace, sia416: lc._sia416 || "", parcel_id: p.id },
+        properties: { lc_index: lcIndex, art: lc.art, art_label: ART_LABELS[lc.art] || lc.art, area_m2: lc.area_m2, color: ART_COLORS[lc.art] || "#888", greenspace: lc.check_greenspace, sia416: lc._sia416 || "", din277: lc._din277 || "", sealed: lc._sealed ? 1 : 0, vbsKategorie: lc._vbsKategorie || "", vbsProduktiv: lc._vbsProduktiv || "", vbsTyp: lc._vbsTyp || "", bafu: lc._bafu ? 1 : 0, parcel_id: p.id },
       });
       lcIndex++;
     }

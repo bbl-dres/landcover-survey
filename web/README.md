@@ -106,4 +106,4 @@ js/
 | [swisstopo APIs](https://api3.geo.admin.ch) | — | Parcel lookup, search, WMTS/WMS tiles |
 | [geodienste.ch](https://www.geodienste.ch/services/av) | — | Official surveying WFS (land cover) |
 
-For the processing pipeline, data model, and full land cover classification, see the [Technical Specification](../docs/SPECIFICATION.md).
+For the land cover classification, see [CLASSIFICATION](../docs/CLASSIFICATION.md); for inputs/outputs, [DATAMODEL](../docs/DATAMODEL.md); for the processing pipeline, [ARCHITECTURE](../docs/ARCHITECTURE.md). ([docs index](../docs/README.md))

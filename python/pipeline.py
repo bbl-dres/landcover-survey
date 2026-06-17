@@ -16,9 +16,15 @@ from pandas import DataFrame
 
 from config import (
     COL_FLAECHE,
+    COL_VBS_KATEGORIE,
+    COL_VBS_PRODUKTIV,
+    COL_VBS_TYP,
     CRS_EPSG,
     CRS_STRING,
     DEFAULT_GREEN_SPACE,
+    DEFAULT_VBS_KATEGORIE,
+    DEFAULT_VBS_PRODUKTIV,
+    DEFAULT_VBS_TYP,
     DIN277,
     GREEN_SPACE,
     LAYER_LANDCOVER,
@@ -29,8 +35,11 @@ from config import (
     SLIVER_THRESHOLD,
     SQL_BATCH_SIZE,
     VBS_KATEGORIE,
+    VBS_KATEGORIE_BY_ART,
     VBS_PRODUKTIV,
+    VBS_PRODUKTIV_BY_ART,
     VBS_TYP,
+    VBS_TYP_BY_ART,
     VERSIEGELT_ARTS,
 )
 from geometry import clean_geometries, filter_clip_results
@@ -576,8 +585,15 @@ def _clip_single_parcel(
     # Classify green space
     result["Check_GreenSpace"] = result["Art"].map(GREEN_SPACE).fillna(DEFAULT_GREEN_SPACE)
 
+    # Classify VBS (Kategorie a–d, biological productivity, Typ 1/2). Typ is only
+    # assigned within biologically productive area — unproductive rows stay blank.
+    result[COL_VBS_KATEGORIE] = result["Art"].map(VBS_KATEGORIE_BY_ART).fillna(DEFAULT_VBS_KATEGORIE)
+    result[COL_VBS_PRODUKTIV] = result["Art"].map(VBS_PRODUKTIV_BY_ART).fillna(DEFAULT_VBS_PRODUKTIV)
+    result[COL_VBS_TYP] = result["Art"].map(VBS_TYP_BY_ART).fillna(DEFAULT_VBS_TYP)
+
     # Build output (keep geometry for optional layer analyses; dropped at CSV export)
-    output_cols = ["ID", "EGRID", "fid", "Art", "BFSNr", "GWR_EGID", "Check_GreenSpace", "area_m2", "geometry"]
+    output_cols = ["ID", "EGRID", "fid", "Art", "BFSNr", "GWR_EGID", "Check_GreenSpace",
+                   COL_VBS_KATEGORIE, COL_VBS_PRODUKTIV, COL_VBS_TYP, "area_m2", "geometry"]
     output_cols = [c for c in output_cols if c in result.columns]
     return result[output_cols].reset_index(drop=True)
 
@@ -588,6 +604,10 @@ def _clip_single_parcel(
 
 _SIA416_CATEGORIES = ("GGF", "BUF", "UUF")
 _DIN277_CATEGORIES = ("BF", "UF")
+# VBS Kategorie codes → parcel aggregation column names
+_VBS_KAT_COLS = {"kat_a": "VBS_Kat_A_m2", "kat_b": "VBS_Kat_B_m2",
+                 "kat_c": "VBS_Kat_C_m2", "kat_d": "VBS_Kat_D_m2"}
+_VBS_TYP_COLS = {"typ1": "VBS_Typ1_m2", "typ2": "VBS_Typ2_m2"}
 
 
 def _aggregate_landcover(
@@ -605,7 +625,13 @@ def _aggregate_landcover(
     """
     sia_cols = [f"{c}_m2" for c in _SIA416_CATEGORIES]
     din_cols = [f"DIN277_{c}_m2" for c in _DIN277_CATEGORIES]
-    fixed_cols = sia_cols + din_cols + ["Sealed_m2", "GreenSpace_m2", "VBS_Produktiv_m2", "VBS_Unproduktiv_m2"]
+    vbs_kat_cols = list(_VBS_KAT_COLS.values())
+    vbs_typ_cols = list(_VBS_TYP_COLS.values())
+    fixed_cols = (
+        sia_cols + din_cols
+        + ["Sealed_m2", "GreenSpace_m2", "VBS_Produktiv_m2", "VBS_Unproduktiv_m2"]
+        + vbs_kat_cols + vbs_typ_cols
+    )
 
     if lc_df.empty:
         for col in fixed_cols:
@@ -685,6 +711,35 @@ def _aggregate_landcover(
         .rename(columns={"area_m2": "VBS_Unproduktiv_m2"})
     )
 
+    # --- VBS Kategorie pivot (a–d) ---
+    lc["VBS_KAT"] = lc["Art"].map(VBS_KATEGORIE).fillna("kat_d")
+    vbs_kat_pivot = (
+        lc.groupby(["EGRID", "VBS_KAT"])["area_m2"]
+        .sum()
+        .unstack(fill_value=0.0)
+    )
+    for code in _VBS_KAT_COLS:
+        if code not in vbs_kat_pivot.columns:
+            vbs_kat_pivot[code] = 0.0
+    vbs_kat_pivot = vbs_kat_pivot[list(_VBS_KAT_COLS)]
+    vbs_kat_pivot.columns = list(_VBS_KAT_COLS.values())
+    vbs_kat_pivot = vbs_kat_pivot.reset_index()
+
+    # --- VBS Typ pivot (Typ 1 / Typ 2 — biologically productive only) ---
+    lc["VBS_TYP_CODE"] = lc["Art"].map(VBS_TYP)  # NaN for unproductive types
+    vbs_typ_only = lc[lc["VBS_TYP_CODE"].notna()]
+    vbs_typ_pivot = (
+        vbs_typ_only.groupby(["EGRID", "VBS_TYP_CODE"])["area_m2"]
+        .sum()
+        .unstack(fill_value=0.0)
+    )
+    for code in _VBS_TYP_COLS:
+        if code not in vbs_typ_pivot.columns:
+            vbs_typ_pivot[code] = 0.0
+    vbs_typ_pivot = vbs_typ_pivot[list(_VBS_TYP_COLS)]
+    vbs_typ_pivot.columns = list(_VBS_TYP_COLS.values())
+    vbs_typ_pivot = vbs_typ_pivot.reset_index()
+
     # --- Per-Art pivot ---
     art_pivot = (
         lc.groupby(["EGRID", "Art"])["area_m2"]
@@ -702,6 +757,8 @@ def _aggregate_landcover(
     result = result.merge(green, on="EGRID", how="left")
     result = result.merge(vbs_produktiv, on="EGRID", how="left")
     result = result.merge(vbs_unproduktiv, on="EGRID", how="left")
+    result = result.merge(vbs_kat_pivot, on="EGRID", how="left")
+    result = result.merge(vbs_typ_pivot, on="EGRID", how="left")
     result = result.merge(art_pivot, on="EGRID", how="left")
 
     # Fill NaN for parcels with no LC data
