@@ -24,10 +24,19 @@ function buildCSV(rows, headers) {
   return "\uFEFF" + lines.join("\n");
 }
 
+/** Union of non-internal keys across all rows — so per-parcel-varying columns
+ *  (per-Art, VBS aggregation, per-zone Bauzonen) aren't dropped when the first
+ *  row is an error parcel that lacks them. Preserves first-seen order. */
+function unionHeaders(rows) {
+  const set = new Set();
+  for (const r of rows) for (const k in r) if (!k.startsWith("_")) set.add(k);
+  return [...set];
+}
+
 /** Download parcels as CSV (semicolon-delimited, UTF-8 BOM) */
 export function downloadParcelCSV(parcels, filename = "landcover-parcels.csv") {
   if (!parcels.length) return;
-  const headers = Object.keys(parcels[0]).filter((k) => !k.startsWith("_"));
+  const headers = unionHeaders(parcels);
   saveBlob(new Blob([buildCSV(parcels, headers)], { type: "text/csv;charset=utf-8" }), filename);
 }
 
@@ -49,7 +58,7 @@ export async function downloadXLSX(parcels, landcover, filename = "landcover-res
 
   const wb = XLSX.utils.book_new();
 
-  const pHeaders = Object.keys(parcels[0]).filter((k) => !k.startsWith("_"));
+  const pHeaders = unionHeaders(parcels);
   const ws1 = XLSX.utils.json_to_sheet(parcels.map((row) => {
     const obj = {};
     for (const h of pHeaders) { const v = row[h]; obj[h] = Array.isArray(v) ? v.join("; ") : (v ?? ""); }

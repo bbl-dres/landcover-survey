@@ -1,3 +1,7 @@
 # Offline dashboard — built single-file HTML embeds parcel data (incl. personal
 # fields) and is distributed via ActaNova, not version-controlled.
 dashboard/
+
+# Python bytecode
+__pycache__/
+*.pyc
