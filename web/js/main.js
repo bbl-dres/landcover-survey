@@ -59,6 +59,51 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("btn-new").addEventListener("click", resetToUpload);
   document.querySelector(".header-left").addEventListener("click", resetToUpload);
 
+  // Share the current view via the system share sheet (mobile + supported desktop
+  // browsers); fall back to copying the link where the Web Share API is absent.
+  async function shareApp() {
+    const url = location.href;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: t("app.title"), url });
+      } else {
+        await navigator.clipboard.writeText(url);
+        showToast(t("share.copied"));
+      }
+    } catch (err) {
+      if (err?.name === "AbortError") return; // user dismissed the share sheet
+      try { await navigator.clipboard.writeText(url); showToast(t("share.copied")); } catch { /* clipboard blocked */ }
+    }
+  }
+  document.getElementById("btn-share")?.addEventListener("click", shareApp);
+
+  // Mobile overflow menu (☰): folds Language, Share and New Analysis. The
+  // individual header buttons are hidden via CSS on mobile; these items reuse
+  // their handlers, so there is one source of truth per action.
+  const headerMenuBtn = document.getElementById("header-menu-btn");
+  const headerMenu = document.getElementById("header-menu");
+  if (headerMenuBtn && headerMenu) {
+    const closeHeaderMenu = () => { headerMenu.hidden = true; headerMenuBtn.setAttribute("aria-expanded", "false"); };
+    const openHeaderMenu = () => {
+      // "Neue Analyse" only applies once results exist — mirror the header button.
+      document.getElementById("menu-new").hidden = document.getElementById("btn-new").hidden;
+      headerMenu.querySelectorAll(".header-menu-lang").forEach((b) => b.classList.toggle("active", b.dataset.lang === getLang()));
+      headerMenu.hidden = false;
+      headerMenuBtn.setAttribute("aria-expanded", "true");
+    };
+    headerMenuBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      headerMenu.hidden ? openHeaderMenu() : closeHeaderMenu();
+    });
+    headerMenu.querySelectorAll(".header-menu-lang").forEach((b) => {
+      b.addEventListener("click", () => setLang(b.dataset.lang)); // navigates (reloads with ?lang=)
+    });
+    document.getElementById("menu-share").addEventListener("click", () => { closeHeaderMenu(); shareApp(); });
+    document.getElementById("menu-new").addEventListener("click", () => { closeHeaderMenu(); resetToUpload(); });
+    document.addEventListener("click", (e) => { if (!e.target.closest("#header-menu-wrap")) closeHeaderMenu(); });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !headerMenu.hidden) closeHeaderMenu(); });
+  }
+
   // Summary panel
   document.getElementById("sp-close").addEventListener("click", () => {
     document.getElementById("summary-panel").classList.add("collapsed");

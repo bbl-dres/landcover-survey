@@ -79,12 +79,18 @@ function createMap() {
   const container = document.getElementById("single-map");
   if (!container || map) return;
 
+  // On phones the picker map sits inside a scrolling card, so a one-finger drag
+  // would pan the map and trap the page scroll. cooperativeGestures lets one
+  // finger scroll the page (two fingers pan the map); it's unneeded on desktop.
+  const touchMap = typeof window.matchMedia === "function" && window.matchMedia("(max-width: 767px)").matches;
   map = new maplibregl.Map({
     container,
     style: MAP_STYLES.positron.url,
     center: MAP_DEFAULT.center,
     zoom: MAP_DEFAULT.zoom,
     attributionControl: false,
+    cooperativeGestures: touchMap,
+    locale: { "CooperativeGesturesHandler.MobileText": t("map.twoFinger") },
   });
 
   map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
