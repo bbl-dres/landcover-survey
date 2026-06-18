@@ -11,15 +11,35 @@ import { downloadReportHTML } from "./report.js";
 import { initSearch, setSearchData } from "./search.js";
 import { ART_LABELS, ART_COLORS, CATEGORY_COLORS, isFound, esc, fmtNum,
          bauzoneColor, habitatColor, habitatL1Label, BRAND } from "./config.js";
-import { t, applyI18nDOM, setLang, getLang, getLocale } from "./i18n.js";
+import { t, applyI18nDOM, setLang, getLang, getLocale, onLangChange } from "./i18n.js";
 
 let processedResults = null;
 let currentFilename = "";
+let currentRunTime = null; // captured once per analysis so re-renders (e.g. a live language switch) keep the original time
 
 document.addEventListener("DOMContentLoaded", () => {
   // Apply i18n to static DOM elements
   applyI18nDOM();
   initLangSelector();
+
+  // Language now switches live (no reload), so the processed results survive.
+  // applyI18nDOM (run inside setLang) handles the static chrome; here we re-render
+  // the dynamically-built, language-dependent views and refresh the language UI.
+  onLangChange((lang) => {
+    const cur = document.getElementById("lang-current");
+    if (cur) cur.textContent = lang.toUpperCase();
+    document.querySelectorAll("#lang-dropdown .lang-option").forEach((o) => o.classList.toggle("active", o.dataset.lang === lang));
+    document.getElementById("lang-dropdown")?.classList.remove("show");
+    const headerMenu = document.getElementById("header-menu");
+    if (headerMenu && !headerMenu.hidden) {
+      headerMenu.hidden = true;
+      document.getElementById("header-menu-btn")?.setAttribute("aria-expanded", "false");
+    }
+    if (processedResults) {
+      updateSummaryPanel();
+      populateTable(processedResults.parcels, processedResults.landcover, processedResults.bauzonen, processedResults.habitat);
+    }
+  });
 
   initUpload(onStartProcessing);
   initSearch();
@@ -46,6 +66,7 @@ document.addEventListener("DOMContentLoaded", () => {
     resetUploadView();
     processedResults = null;
     currentFilename = "";
+    currentRunTime = null;
     currentAggMode = "landcover"; // reset Flächenanalyse layer selection for the next run
     showState("upload");
     document.getElementById("btn-new").hidden = true;
@@ -96,7 +117,7 @@ document.addEventListener("DOMContentLoaded", () => {
       headerMenu.hidden ? openHeaderMenu() : closeHeaderMenu();
     });
     headerMenu.querySelectorAll(".header-menu-lang").forEach((b) => {
-      b.addEventListener("click", () => setLang(b.dataset.lang)); // navigates (reloads with ?lang=)
+      b.addEventListener("click", () => setLang(b.dataset.lang)); // switches language live (no reload)
     });
     document.getElementById("menu-share").addEventListener("click", () => { closeHeaderMenu(); shareApp(); });
     document.getElementById("menu-new").addEventListener("click", () => { closeHeaderMenu(); resetToUpload(); });
@@ -504,7 +525,7 @@ function updateSummaryPanel() {
     totalGreen += parseFloat(p.GreenSpace_m2) || 0;
   }
 
-  const now = new Date();
+  const now = currentRunTime || new Date();
   const locale = getLocale();
   const fmt = (n) => fmtNum(n, 1);
 
@@ -713,20 +734,17 @@ function applyAggColorsToMap() {
 
 function showResults() {
   showState("results");
+  currentRunTime = new Date(); // stamp the run once; updateSummaryPanel reuses it across re-renders
   updateSummaryPanel();
 
   const isMobile = window.innerWidth <= 767;
   const isCompact = window.innerWidth <= 1280;
   const isShortScreen = window.innerHeight <= 800;
 
-  // On compact/mobile: collapse summary to give map more space
-  if (isMobile || isCompact) {
-    document.getElementById("summary-panel").classList.add("collapsed");
-    setSummaryToggleVisible(true);
-  } else {
-    document.getElementById("summary-panel").classList.remove("collapsed");
-    setSummaryToggleVisible(false);
-  }
+  // On compact/mobile: collapse the summary to give the map more space. The toggle
+  // control that re-opens it is created in initMap, so its visibility is synced
+  // there (below) once it exists — setting it here would act on a not-yet-created control.
+  document.getElementById("summary-panel").classList.toggle("collapsed", isMobile || isCompact);
 
   initTable(document.getElementById("results-table-container"), {
     onParcelSelect: (index) => highlightParcel(index),
@@ -769,6 +787,9 @@ function showResults() {
       plotResults(processedResults);
       applyAggColorsToMap();
       syncLayerSelection(currentAggMode);
+      // The summary toggle control exists only now — show it iff the panel is
+      // collapsed, so there's always a way to re-open the summary on mobile/compact.
+      setSummaryToggleVisible(document.getElementById("summary-panel").classList.contains("collapsed"));
     } catch (err) {
       console.error("Map initialization failed:", err);
       showToast(t("toast.map.failed"));

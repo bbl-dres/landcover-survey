@@ -1078,12 +1078,25 @@ export function applyI18nDOM() {
   document.title = t("app.title");
 }
 
-/** Change language and reload with ?lang= parameter */
+/** Listeners notified after a live language change, so the app can re-render
+ *  dynamically-built, language-dependent views (summary, table, …). */
+const langListeners = [];
+export function onLangChange(cb) { langListeners.push(cb); }
+
+/** Switch language live — no page reload, so in-memory results are preserved.
+ *  Updates the URL (shareable + survives a manual refresh), re-translates the
+ *  static DOM, then notifies listeners to re-render dynamic content. */
 export function setLang(lang) {
-  if (!SUPPORTED.includes(lang)) return;
+  if (!SUPPORTED.includes(lang) || lang === currentLang) return;
+  currentLang = lang;
   const url = new URL(window.location);
   url.searchParams.set("lang", lang);
-  window.location.href = url.toString();
+  try { history.replaceState(null, "", url); } catch { /* file:// may block replaceState — language still switches */ }
+  document.documentElement.lang = currentLang;
+  applyI18nDOM();
+  for (const cb of langListeners) {
+    try { cb(currentLang); } catch (err) { console.error("Language listener failed:", err); }
+  }
 }
 
 /** Get supported languages for building the dropdown */

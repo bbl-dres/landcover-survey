@@ -76,7 +76,7 @@ a { transition: color var(--transition-fast); }
   height: var(--control-sm); line-height: 1;
 }
 .lang-btn:hover { border-color: var(--gray-400); background: var(--gray-50); }
-.lang-arrow { font-size: 16px !important; color: var(--gray-500); }
+.lang-arrow { font-size: var(--icon-sm) !important; color: var(--gray-500); }
 .lang-dropdown {
   display: none; position: absolute; top: 100%; right: 0; margin-top: var(--space-1);
   background: var(--color-white); border: var(--space-px) solid var(--gray-300);
@@ -604,7 +604,7 @@ main { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: 
 @media (prefers-reduced-motion: reduce) { .toast { transition: opacity var(--duration-normal) ease; transform: none; } }
 
 /* Map controls styling */
-.map-3d-btn { font-weight: 700 !important; font-size: 13px !important; letter-spacing: -0.02em; }
+.map-3d-btn { font-weight: var(--font-bold) !important; font-size: var(--text-2xs) !important; letter-spacing: -0.02em; }
 .map-3d-btn.active { color: var(--swiss-red) !important; }
 
 /* -- Table panel -- */
@@ -1116,7 +1116,7 @@ main { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: 
     --summary-width: 260px;
     --text-base: 0.875rem;
     --text-sm: 0.8125rem;
-    --text-xs: 0.6875rem;
+    --text-xs: 0.75rem;
     --text-2xs: 0.625rem;
   }
 
@@ -1233,6 +1233,8 @@ main { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: 
   /* Search full width */
   .search-wrapper { max-width: 100%; flex: 1; }
   .search-results { max-height: 60vh; }
+  /* Inputs stay at 16px on mobile so iOS Safari doesn't zoom the page on focus */
+  #search-input, #parcel-search-input { font-size: 1rem; }
 
   /* Header actions: keep Download (icon-only); fold Share, Language & New Analysis into the ☰ menu */
   #btn-download span:last-child { display: none; }
@@ -1355,7 +1357,6 @@ main { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: 
   .header-left { gap: var(--space-2); }
 
   .search-container { height: var(--control-md); }
-  #search-input { font-size: var(--text-2xs); }
 
   #accordion-wrapper { margin: var(--space-2); }
   #accordion-panel { width: calc(100vw - var(--space-4)); max-width: 260px; }

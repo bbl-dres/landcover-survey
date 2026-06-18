@@ -825,6 +825,7 @@ function showOverlayPopup(lngLat, props, layerLabel) {
 export function teardownMap() {
   if (resizeObserver) { resizeObserver.disconnect(); resizeObserver = null; }
   if (map) { map.remove(); map = null; }
+  summaryToggleControl = null; // recreated by the next initMap; avoids acting on a removed control
 }
 export function is3DActive() { return is3D; }
 
