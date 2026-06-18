@@ -45,6 +45,13 @@ a { transition: color var(--transition-fast); }
 .share-btn:hover { border-color: var(--gray-400); background: var(--gray-50); }
 .share-btn .material-symbols-outlined { font-size: var(--icon-md); }
 
+/* -- Area-unit toggle (ha / m²) -- */
+.unit-toggle { display: inline-flex; height: var(--control-sm); border: var(--space-px) solid var(--gray-300); border-radius: var(--radius-sm); overflow: hidden; background: var(--color-white); }
+.unit-btn { padding: 0 var(--space-2); border: none; background: transparent; font-family: inherit; font-size: var(--text-2xs); font-weight: var(--font-semibold); color: var(--gray-600); cursor: pointer; transition: background var(--duration-fast), color var(--duration-fast); }
+.unit-btn + .unit-btn { border-left: var(--space-px) solid var(--gray-300); }
+.unit-btn:hover { background: var(--gray-50); }
+.unit-btn.active { background: var(--federal-blue); color: var(--color-white); }
+
 /* -- Header overflow menu (shown on mobile in place of the individual actions) -- */
 #header-menu-wrap { display: none; position: relative; }
 .header-menu {
@@ -1232,7 +1239,7 @@ main { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: 
 
   /* Header actions: keep Download (icon-only); fold Share, Language & New Analysis into the ☰ menu */
   #btn-download span:last-child { display: none; }
-  #btn-share, #lang-selector, #btn-new { display: none; }
+  #btn-share, #lang-selector, #btn-new, #unit-toggle { display: none; }
   #header-menu-wrap { display: block; }
 
   /* Footer — minimal on mobile */

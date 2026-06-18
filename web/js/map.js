@@ -2,7 +2,7 @@
  * MapLibre GL JS map with parcel polygons, land cover overlay,
  * Home/3D controls, and thumbnail basemap selector
  */
-import { API, ART_COLORS, CATEGORY_COLORS, ART_LABELS, MAP_STYLES, MAP_DEFAULT, greenSpaceLabel, esc, fmtNum, habitatColor, habitatL1Label, bauzoneColor, BRAND } from "./config.js";
+import { API, ART_COLORS, CATEGORY_COLORS, ART_LABELS, MAP_STYLES, MAP_DEFAULT, greenSpaceLabel, esc, fmtNum, habitatColor, habitatL1Label, bauzoneColor, BRAND, fmtArea } from "./config.js";
 import { setMap, readdSwisstopoLayers, loadGeokatalog, addSwisstopoLayer, removeSwisstopoLayer, activeSwisstopoLayers } from "./swisstopo.js";
 import { t, getLang } from "./i18n.js";
 import { poleOfInaccessibility } from "./polylabel.js";
@@ -782,7 +782,7 @@ function showParcelPopup(lngLat, props) {
       <div class="popup-title">${esc(props.id)} &middot; ${esc(props.egrid)}</div>
       <div class="popup-sub">${esc(t("col.nummer"))} ${esc(props.nummer)}</div>
       <table class="popup-table">
-        <tr><td>${esc(t("popup.area"))}</td><td>${fmtNum(props.area, 2)} m²</td></tr>
+        <tr><td>${esc(t("popup.area"))}</td><td>${fmtArea(props.area)}</td></tr>
       </table>
     </div>
   `).addTo(map);
@@ -796,7 +796,7 @@ function showLandcoverPopup(lngLat, props) {
       <div class="popup-title">${esc(props.art_label)}</div>
       <div class="popup-sub">${esc(t("popup.parcel.label"))} ${esc(props.parcel_id)}</div>
       <table class="popup-table">
-        <tr><td>${esc(t("popup.area"))}</td><td>${fmtNum(props.area_m2, 2)} m²</td></tr>
+        <tr><td>${esc(t("popup.area"))}</td><td>${fmtArea(props.area_m2)}</td></tr>
         <tr><td>${esc(t("popup.greenspace"))}</td><td>${gs}</td></tr>
         <tr><td>SIA 416</td><td>${esc(props.sia416)}</td></tr>
       </table>
@@ -814,7 +814,7 @@ function showOverlayPopup(lngLat, props, layerLabel) {
       <div class="popup-title">${esc(props.art)}</div>
       <div class="popup-sub">${esc(t("popup.parcel.label"))} ${esc(props.parcel_id)}</div>
       <table class="popup-table">
-        <tr><td>${esc(t("popup.area"))}</td><td>${fmtNum(props.area_m2, 2)} m²</td></tr>
+        <tr><td>${esc(t("popup.area"))}</td><td>${fmtArea(props.area_m2)}</td></tr>
         ${prob}
       </table>
     </div>

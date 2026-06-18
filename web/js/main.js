@@ -10,7 +10,8 @@ import { downloadParcelCSV, downloadLandcoverCSV, downloadXLSX, downloadGeoJSON 
 import { downloadReportHTML } from "./report.js";
 import { initSearch, setSearchData } from "./search.js";
 import { ART_LABELS, ART_COLORS, CATEGORY_COLORS, isFound, esc, fmtNum,
-         bauzoneColor, habitatColor, habitatL1Label, BRAND } from "./config.js";
+         bauzoneColor, habitatColor, habitatL1Label, BRAND,
+         getAreaUnit, setAreaUnit, onAreaUnitChange, areaUnitLabel, stripAreaUnit, fmtArea, fmtAreaValue } from "./config.js";
 import { t, applyI18nDOM, setLang, getLang, getLocale, onLangChange } from "./i18n.js";
 
 let processedResults = null;
@@ -22,6 +23,13 @@ document.addEventListener("DOMContentLoaded", () => {
   applyI18nDOM();
   initLangSelector();
 
+  // Close the mobile overflow (☰) menu — shared by the language/unit/share/new items.
+  const closeHeaderMenu = () => {
+    const hm = document.getElementById("header-menu");
+    if (hm) hm.hidden = true;
+    document.getElementById("header-menu-btn")?.setAttribute("aria-expanded", "false");
+  };
+
   // Language now switches live (no reload), so the processed results survive.
   // applyI18nDOM (run inside setLang) handles the static chrome; here we re-render
   // the dynamically-built, language-dependent views and refresh the language UI.
@@ -30,16 +38,18 @@ document.addEventListener("DOMContentLoaded", () => {
     if (cur) cur.textContent = lang.toUpperCase();
     document.querySelectorAll("#lang-dropdown .lang-option").forEach((o) => o.classList.toggle("active", o.dataset.lang === lang));
     document.getElementById("lang-dropdown")?.classList.remove("show");
-    const headerMenu = document.getElementById("header-menu");
-    if (headerMenu && !headerMenu.hidden) {
-      headerMenu.hidden = true;
-      document.getElementById("header-menu-btn")?.setAttribute("aria-expanded", "false");
-    }
-    if (processedResults) {
-      updateSummaryPanel();
-      populateTable(processedResults.parcels, processedResults.landcover, processedResults.bauzonen, processedResults.habitat);
-    }
+    closeHeaderMenu();
+    rerenderResults();
   });
+
+  // Area-unit toggle (ha / m²): the header control + the same buttons in the ☰
+  // menu both drive setAreaUnit; on change we refresh the active state, close the
+  // menu, and re-render the area-bearing views in place (data stays in m²).
+  const unitButtons = () => document.querySelectorAll("#unit-toggle .unit-btn, .header-menu-unit");
+  const syncUnitUI = () => unitButtons().forEach((b) => b.classList.toggle("active", b.dataset.unit === getAreaUnit()));
+  syncUnitUI();
+  unitButtons().forEach((b) => b.addEventListener("click", () => setAreaUnit(b.dataset.unit)));
+  onAreaUnitChange(() => { syncUnitUI(); closeHeaderMenu(); rerenderResults(); });
 
   initUpload(onStartProcessing);
   initSearch();
@@ -104,7 +114,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const headerMenuBtn = document.getElementById("header-menu-btn");
   const headerMenu = document.getElementById("header-menu");
   if (headerMenuBtn && headerMenu) {
-    const closeHeaderMenu = () => { headerMenu.hidden = true; headerMenuBtn.setAttribute("aria-expanded", "false"); };
     const openHeaderMenu = () => {
       // "Neue Analyse" only applies once results exist — mirror the header button.
       document.getElementById("menu-new").hidden = document.getElementById("btn-new").hidden;
@@ -577,8 +586,8 @@ function updateSummaryPanel() {
       </div>
       <div class="sp-collapse-content">
         <div class="sp-kpi-grid">
-          <div class="sp-kpi"><div class="sp-kpi-value">${fmt(totalSealed)}</div><div class="sp-kpi-label">${esc(t("summary.sealed"))}</div></div>
-          <div class="sp-kpi"><div class="sp-kpi-value">${fmt(totalGreen)}</div><div class="sp-kpi-label">${esc(t("summary.green"))}</div></div>
+          <div class="sp-kpi"><div class="sp-kpi-value">${fmtArea(totalSealed)}</div><div class="sp-kpi-label">${esc(stripAreaUnit(t("summary.sealed")))}</div></div>
+          <div class="sp-kpi"><div class="sp-kpi-value">${fmtArea(totalGreen)}</div><div class="sp-kpi-label">${esc(stripAreaUnit(t("summary.green")))}</div></div>
         </div>
         <div class="sp-subsection">
           <div class="sp-subsection-title">${esc(t("agg.greenspace"))}</div>
@@ -642,7 +651,7 @@ function renderBreakdownList(containerId, entries, opts = {}) {
     <div class="sp-legend-row ${cls}">
       <span class="sp-dist-dot" style="background:${color}"></span>
       <span class="sp-legend-label">${esc(label)}</span>
-      <span class="sp-legend-val">${fmt(area)} m²</span>
+      <span class="sp-legend-val">${fmtArea(area)}</span>
       <span class="sp-legend-pct">${p}%</span>
     </div>`;
   let html = "";
@@ -671,7 +680,7 @@ function renderDonutAndLegend() {
     if (arc > 0.01) {
       arcs += `<circle cx="64" cy="64" r="${R}" fill="none" stroke="${e.color}" stroke-width="${SW}" stroke-dasharray="${arc} ${C - arc}" stroke-dashoffset="${offset}" />`;
       // Invisible wider hit area for hover
-      hitArcs += `<circle class="donut-hit" cx="64" cy="64" r="${R}" fill="none" stroke="transparent" stroke-width="${HIT_SW}" stroke-dasharray="${arc} ${C - arc}" stroke-dashoffset="${offset}" data-label="${esc(e.label)}" data-value="${fmt(e.area)} m²" data-pct="${pctOf(e.area)}%" data-color="${e.color}"><title>${esc(e.label)}: ${fmt(e.area)} m² (${pctOf(e.area)}%)</title></circle>`;
+      hitArcs += `<circle class="donut-hit" cx="64" cy="64" r="${R}" fill="none" stroke="transparent" stroke-width="${HIT_SW}" stroke-dasharray="${arc} ${C - arc}" stroke-dashoffset="${offset}" data-label="${esc(e.label)}" data-value="${fmtArea(e.area)}" data-pct="${pctOf(e.area)}%" data-color="${e.color}"><title>${esc(e.label)}: ${fmtArea(e.area)} (${pctOf(e.area)}%)</title></circle>`;
     }
     offset -= arc;
   }
@@ -684,8 +693,8 @@ function renderDonutAndLegend() {
         ${hitArcs}
       </svg>
       <div class="sp-donut-text" id="sp-donut-center">
-        <div class="sp-donut-value" id="sp-donut-val">${fmt(totalArea)}</div>
-        <div class="sp-donut-label" id="sp-donut-lbl">m² Total</div>
+        <div class="sp-donut-value" id="sp-donut-val">${fmtAreaValue(totalArea)}</div>
+        <div class="sp-donut-label" id="sp-donut-lbl">${esc(areaUnitLabel())} ${esc(stripAreaUnit(t("summary.total")))}</div>
       </div>
       <div class="sp-donut-tooltip" id="sp-donut-tooltip" hidden></div>
     </div>
@@ -694,8 +703,8 @@ function renderDonutAndLegend() {
   // Hover: update center text with segment info
   const centerVal = document.getElementById("sp-donut-val");
   const centerLbl = document.getElementById("sp-donut-lbl");
-  const defaultVal = fmt(totalArea);
-  const defaultLbl = t("summary.total");
+  const defaultVal = fmtAreaValue(totalArea);
+  const defaultLbl = `${areaUnitLabel()} ${stripAreaUnit(t("summary.total"))}`;
 
   document.querySelectorAll(".donut-hit").forEach((hit) => {
     hit.addEventListener("mouseenter", () => {
@@ -717,7 +726,7 @@ function renderDonutAndLegend() {
       <div class="sp-legend-row">
         <span class="sp-dist-dot" style="background:${e.color}"></span>
         <span class="sp-legend-label">${esc(e.label)}</span>
-        <span class="sp-legend-val">${fmt(e.area)} m²</span>
+        <span class="sp-legend-val">${fmtArea(e.area)}</span>
         <span class="sp-legend-pct">${pctOf(e.area)}%</span>
       </div>
     `).join("");
@@ -730,6 +739,14 @@ function applyAggColorsToMap() {
   // Overlay-layer modes have no colorFn — their map layer keeps its per-type colours.
   if (!mode.colorFn) return;
   updateLandcoverColors(mode.colorFn);
+}
+
+/** Re-render the dynamic, locale-/unit-dependent result views in place — used by
+ *  the live language and area-unit switches (the data stays in memory). */
+function rerenderResults() {
+  if (!processedResults) return;
+  updateSummaryPanel();
+  populateTable(processedResults.parcels, processedResults.landcover, processedResults.bauzonen, processedResults.habitat);
 }
 
 function showResults() {

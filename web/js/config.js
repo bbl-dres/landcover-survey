@@ -387,6 +387,49 @@ export function fetchWithTimeout(url, { timeoutMs = 15000, ...opts } = {}) {
   return fetch(url, { ...opts, signal: controller.signal }).finally(() => clearTimeout(id));
 }
 
+/* ── Area display unit (frontend only — the underlying data stays in m²) ── */
+
+const AREA_UNIT_KEY = "areaUnit";
+let _areaUnit = "ha"; // default: hectares (raw m² values get very large)
+try { const s = localStorage.getItem(AREA_UNIT_KEY); if (s === "ha" || s === "m2") _areaUnit = s; } catch { /* storage blocked */ }
+const _areaUnitListeners = [];
+
+/** Current display unit: "ha" (default) or "m2". */
+export function getAreaUnit() { return _areaUnit; }
+
+/** Register a callback fired (with the new unit) after the display unit changes. */
+export function onAreaUnitChange(cb) { _areaUnitListeners.push(cb); }
+
+/** Switch the display unit (persisted) and notify listeners so the dynamic,
+ *  area-bearing views can re-render. No-op for an unknown or unchanged value. */
+export function setAreaUnit(unit) {
+  if ((unit !== "ha" && unit !== "m2") || unit === _areaUnit) return;
+  _areaUnit = unit;
+  try { localStorage.setItem(AREA_UNIT_KEY, unit); } catch { /* storage blocked */ }
+  for (const cb of _areaUnitListeners) { try { cb(unit); } catch (e) { console.error("Area-unit listener failed:", e); } }
+}
+
+/** The current unit's symbol ("ha" or "m²"). */
+export function areaUnitLabel(unit = _areaUnit) { return unit === "ha" ? "ha" : "m²"; }
+
+/** Strip a baked-in "m²" from a label so the live unit can be shown instead. */
+export function stripAreaUnit(s) { return String(s ?? "").replace(/\s*m²/g, "").trim(); }
+
+/** Format an m² value in the current unit, WITHOUT the unit suffix (e.g. table
+ *  cells, where the unit lives in the column header). ha → 2 dp, m² → 1 dp. */
+export function fmtAreaValue(m2, unit = _areaUnit) {
+  const v = parseFloat(m2);
+  if (isNaN(v)) return "–";
+  return unit === "ha" ? localeFmtNum(v / 10000, 2) : localeFmtNum(v, 1);
+}
+
+/** Format an m² value in the current unit, WITH the unit suffix (summary, popups). */
+export function fmtArea(m2, unit = _areaUnit) {
+  const v = parseFloat(m2);
+  if (isNaN(v)) return "–";
+  return `${fmtAreaValue(v, unit)} ${areaUnitLabel(unit)}`;
+}
+
 /** API endpoints */
 const WFS_LANG = { de: "deu", fr: "fra", it: "ita", en: "eng" };
 export const API = {

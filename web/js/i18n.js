@@ -12,7 +12,7 @@ let currentLang = DEFAULT_LANG;
 const translations = {
   de: {
     // HTML title
-    "app.title": "Bodenbedeckung \u2014 Fl\u00e4chenanalyse pro Parzelle",
+    "app.title": "Bodenbedeckung \u2014 Fl\u00e4chenanalyse pro Grundstück",
 
     // Noscript
     "noscript.title": "JavaScript erforderlich",
@@ -23,18 +23,19 @@ const translations = {
     "header.app": "Bodenbedeckung",
     "header.menu": "Menü",
     "header.language": "Sprache",
+    "header.unit": "Einheit",
     "btn.new": "Neue Analyse",
     "btn.download": "Herunterladen",
 
     // Search
-    "search.placeholder": "Parzellen oder Orte suchen",
+    "search.placeholder": "Grundstücke oder Orte suchen",
     "search.clear": "Suche l\u00f6schen",
     "search.results": "Suchergebnisse",
 
     // Upload state
     "upload.section": "Datei hochladen",
-    "upload.title": "Bodenbedeckung pro Parzelle analysieren",
-    "upload.desc": "W\u00e4hlen Sie eine Parzelle auf der Karte oder laden Sie eine CSV-Liste hoch. Pro Parzelle werden Bodenbedeckung (SIA 416, DIN 277, Versiegelung), Bauzonen und BAFU-Lebensr\u00e4ume ermittelt.",
+    "upload.title": "Bodenbedeckung pro Grundstück analysieren",
+    "upload.desc": "W\u00e4hlen Sie ein Grundstück auf der Karte oder laden Sie eine CSV-Liste hoch. Pro Grundstück werden Bodenbedeckung (SIA 416, DIN 277, Versiegelung), Bauzonen und BAFU-Lebensr\u00e4ume ermittelt.",
     "upload.dropzone": "CSV- oder Excel-Datei hierher ziehen",
     "upload.browse": "oder klicken zum Durchsuchen",
     "upload.hint": "Erforderlich: ID, EGRID \u00b7 Weitere Spalten werden beibehalten",
@@ -42,7 +43,7 @@ const translations = {
     "upload.template": "Vorlage herunterladen (CSV)",
     "upload.demo.prefix": "Oder testen Sie mit ",
     "upload.demo.link": "Beispieldaten",
-    "upload.privacy": "Ihre Daten bleiben im Browser. Nur EGRID (\u00f6ffentliche Parzellen-ID) wird an die swisstopo-API und geodienste.ch gesendet.",
+    "upload.privacy": "Ihre Daten bleiben im Browser. Nur EGRID (\u00f6ffentliche Grundstücks-ID) wird an die swisstopo-API und geodienste.ch gesendet.",
 
     // Upload errors
     "upload.error.format": "Dateiformat nicht unterst\u00fctzt. Bitte eine CSV- oder XLSX-Datei hochladen.",
@@ -55,9 +56,9 @@ const translations = {
 
     // Processing state
     "processing.section": "Verarbeitung",
-    "processing.title": "Parzellen werden analysiert\u2026",
+    "processing.title": "Grundstücke werden analysiert\u2026",
     "processing.progress": "Datei wird verarbeitet\u2026",
-    "processing.parcel": "Parzelle {processed} von {total} \u2014 {pct}\u202f%",
+    "processing.parcel": "Grundstück {processed} von {total} \u2014 {pct}\u202f%",
     "processing.eta": "Noch ca. {min}\u202fMin {sec}\u202fSek",
     "processing.finishing": "Wird abgeschlossen\u2026",
     "processing.stats": "Gefunden: {succeeded} \u00b7 Fehler: {failed}",
@@ -70,7 +71,7 @@ const translations = {
     "accordion.geokatalog": "Geokatalog",
     "accordion.activeLayers": "Aktive Ebenen",
     "layers.results": "Analyseergebnisse",
-    "layers.parcels": "Parzellen",
+    "layers.parcels": "Grundstücke",
     "layers.landcover": "Bodenbedeckung (Analyse)",
     "layers.labels": "Beschriftungen",
     "layers.external": "Externe Ebenen",
@@ -110,7 +111,7 @@ const translations = {
     "summary.extra": "Zus\u00e4tzliche Kennwerte",
     "summary.sealed": "Versiegelt m\u00b2",
     "summary.green": "Gr\u00fcnfl\u00e4che m\u00b2",
-    "summary.gsf.note": "GSF = klassierte Bodenbedeckung (GGF + BUF + UUF); kann von der amtlichen Parzellenfl\u00e4che abweichen.",
+    "summary.gsf.note": "GSF = klassierte Bodenbedeckung (GGF + BUF + UUF); kann von der amtlichen Grundstücksfl\u00e4che abweichen.",
     "summary.total": "m\u00b2 gesamt",
 
     // Layer info modal
@@ -125,8 +126,8 @@ const translations = {
     // Download modal
     "download.title": "Ergebnisse herunterladen",
     "download.close": "Dialog schliessen",
-    "download.parcels.csv": "Parzellen CSV",
-    "download.parcels.csv.desc": "Aggregierte Fl\u00e4chen pro Parzelle (SIA 416, DIN 277)",
+    "download.parcels.csv": "Grundstücke CSV",
+    "download.parcels.csv.desc": "Aggregierte Fl\u00e4chen pro Grundstück (SIA 416, DIN 277)",
     "download.lc.csv": "Bodenbedeckung CSV",
     "download.lc.csv.desc": "Detailzeilen pro zugeschnittenem Polygon",
     "download.xlsx": "Excel (.xlsx)",
@@ -144,7 +145,7 @@ const translations = {
     "footer.contact": "Kontakt",
 
     // Table
-    "table.tab.parcels": "Parzellen",
+    "table.tab.parcels": "Grundstücke",
     "table.tab.landcover": "Bodenbedeckung",
     "table.tab.bauzonen": "Bauzonen",
     "table.tab.habitat": "Lebensräume",
@@ -158,7 +159,7 @@ const translations = {
     "table.pagination.info": "{start}\u2013{end} von {total} {label}",
     "table.pagination.page": "Seite {current} von {total}",
     "table.pagination.rows": "Zeilen:",
-    "table.label.parcels": "Parzellen",
+    "table.label.parcels": "Grundstücke",
     "table.label.landcover": "Bodenbedeckungen",
     "table.label.bauzonen": "Bauzonen",
     "table.label.habitat": "Lebensräume",
@@ -171,13 +172,13 @@ const translations = {
     "col.status": "Status",
     "col.errors": "Fehler",
     "err.wfsError": "Bodenbedeckung nicht verf\u00fcgbar (WFS)",
-    "col.parcel_area": "Parzelle m\u00b2",
+    "col.parcel_area": "Grundstück m\u00b2",
     "col.ggf": "GGF m\u00b2",
     "col.buf": "BUF m\u00b2",
     "col.uuf": "UUF m\u00b2",
     "col.sealed": "Versiegelt m\u00b2",
     "col.green": "Gr\u00fcnfl\u00e4che m\u00b2",
-    "col.parcel_id": "Parzelle",
+    "col.parcel_id": "Grundstück",
     "col.fid": "FID",
     "col.art": "BB-Art",
     "col.type": "Bezeichnung",
@@ -194,14 +195,14 @@ const translations = {
     "upload.opt.habitat": "BAFU Lebensr\u00e4ume analysieren",
     "upload.mode.aria": "Analyseart w\u00e4hlen",
     "upload.mode.batch": "Stapel-Upload (CSV)",
-    "upload.mode.single": "Einzelne Parzelle",
-    "upload.single.search": "EGRID, Parzellennummer oder Adresse",
-    "upload.single.hint": "Auf eine Parzelle klicken oder oben suchen",
-    "upload.single.analyze": "Parzelle analysieren",
+    "upload.mode.single": "Einzelnes Grundstück",
+    "upload.single.search": "EGRID, Grundstücksnummer oder Adresse",
+    "upload.single.hint": "Auf ein Grundstück klicken oder oben suchen",
+    "upload.single.analyze": "Grundstück analysieren",
     "upload.single.remove": "Auswahl entfernen",
-    "upload.single.notfound": "Keine Parzelle an dieser Stelle gefunden",
-    "upload.single.lookupError": "Parzellenabfrage fehlgeschlagen. Bitte erneut versuchen.",
-    "upload.single.searching": "Parzelle wird gesucht …",
+    "upload.single.notfound": "Kein Grundstück an dieser Stelle gefunden",
+    "upload.single.lookupError": "Grundstücksabfrage fehlgeschlagen. Bitte erneut versuchen.",
+    "upload.single.searching": "Grundstück wird gesucht …",
     "col.area": "Fl\u00e4che m\u00b2",
 
     // Map controls
@@ -215,15 +216,15 @@ const translations = {
     "toast.report.failed": "Der HTML-Bericht konnte nicht erstellt werden.",
 
     // Map popups
-    "popup.parcel": "Parzelle",
+    "popup.parcel": "Grundstück",
     "popup.landcover": "Bodenbedeckung",
     "popup.area": "Fl\u00e4che",
     "popup.greenspace": "Gr\u00fcnfl\u00e4che",
     "popup.prob": "Wahrscheinlichkeit",
-    "popup.parcel.label": "Parzelle:",
+    "popup.parcel.label": "Grundstück:",
 
     // Search results
-    "search.section.parcels": "Parzellen",
+    "search.section.parcels": "Grundstücke",
     "search.section.locations": "Orte",
     "search.section.layers": "Geodaten",
     "search.empty": "Keine Ergebnisse",
@@ -285,20 +286,20 @@ const translations = {
     "layer.show": "Einblenden",
 
     // Internal layer meta
-    "layermeta.parcels.title": "Parzellen (Bodenbedeckung)",
-    "layermeta.parcels.desc": "Parzellen-Polygone aus der swisstopo Cadastralwebmap, abgefragt per EGRID \u00fcber die geo.admin.ch API.",
+    "layermeta.parcels.title": "Grundstücke (Bodenbedeckung)",
+    "layermeta.parcels.desc": "Grundstücks-Polygone aus der swisstopo Cadastralwebmap, abgefragt per EGRID \u00fcber die geo.admin.ch API.",
     "layermeta.parcels.source": "swisstopo / geo.admin.ch",
     "layermeta.parcels.format": "GeoJSON (Polygon)",
     "layermeta.landcover.title": "Bodenbedeckung",
-    "layermeta.landcover.desc": "Bodenbedeckungsfl\u00e4chen aus der amtlichen Vermessung (geodienste.ch WFS), zugeschnitten auf Parzellengrenzen. Klassifiziert nach SIA 416, DIN 277 und Versiegelungsgrad.",
+    "layermeta.landcover.desc": "Bodenbedeckungsfl\u00e4chen aus der amtlichen Vermessung (geodienste.ch WFS), zugeschnitten auf Grundstücksgrenzen. Klassifiziert nach SIA 416, DIN 277 und Versiegelungsgrad.",
     "layermeta.landcover.source": "geodienste.ch / Amtliche Vermessung",
     "layermeta.landcover.format": "GeoJSON (Polygon)",
     "layermeta.bauzonen.title": "Bauzonen (Analyse)",
-    "layermeta.bauzonen.desc": "Harmonisierte Bauzonen (ch.are.bauzonen), zugeschnitten auf die Parzellengrenzen. Fläche je Zonentyp pro Parzelle.",
+    "layermeta.bauzonen.desc": "Harmonisierte Bauzonen (ch.are.bauzonen), zugeschnitten auf die Grundstücksgrenzen. Fläche je Zonentyp pro Grundstück.",
     "layermeta.bauzonen.source": "geo.admin.ch / ARE — ch.are.bauzonen",
     "layermeta.bauzonen.format": "GeoJSON (Polygon)",
     "layermeta.habitat.title": "Lebensräume (Analyse)",
-    "layermeta.habitat.desc": "BAFU Lebensraumkarte (TypoCH), zugeschnitten auf die Parzellengrenzen. Modellierte, wahrscheinlichkeitsbehaftete Karte — keine amtlich vermessenen Flächen. Die VBS-/Grünflächen-Klassierung ist provisorisch.",
+    "layermeta.habitat.desc": "BAFU Lebensraumkarte (TypoCH), zugeschnitten auf die Grundstücksgrenzen. Modellierte, wahrscheinlichkeitsbehaftete Karte — keine amtlich vermessenen Flächen. Die VBS-/Grünflächen-Klassierung ist provisorisch.",
     "layermeta.habitat.source": "geo.admin.ch / BAFU — ch.bafu.lebensraumkarte-schweiz",
     "layermeta.habitat.format": "GeoJSON (Polygon)",
 
@@ -314,6 +315,7 @@ const translations = {
     "header.app": "Couverture du sol",
     "header.menu": "Menu",
     "header.language": "Langue",
+    "header.unit": "Unité",
     "btn.new": "Nouvelle analyse",
     "btn.download": "T\u00e9l\u00e9charger",
     "search.placeholder": "Rechercher parcelles ou lieux",
@@ -553,6 +555,7 @@ const translations = {
     "header.app": "Copertura del suolo",
     "header.menu": "Menu",
     "header.language": "Lingua",
+    "header.unit": "Unità",
     "btn.new": "Nuova analisi",
     "btn.download": "Scarica",
     "search.placeholder": "Cerca particelle o localit\u00e0",
@@ -792,6 +795,7 @@ const translations = {
     "header.app": "Land Cover",
     "header.menu": "Menu",
     "header.language": "Language",
+    "header.unit": "Unit",
     "btn.new": "New analysis",
     "btn.download": "Download",
     "search.placeholder": "Search parcels or locations",

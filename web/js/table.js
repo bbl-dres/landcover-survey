@@ -4,7 +4,8 @@
  */
 import { ART_LABELS, isFound, statusLabel, greenSpaceLabel, vbsKategorieLabel,
          vbsProduktivLabel, vbsTypLabel, errorsLabel, esc, fmtNum,
-         isBauzoneAreaKey, bauzoneNameFromKey, habitatL1Label } from "./config.js";
+         isBauzoneAreaKey, bauzoneNameFromKey, habitatL1Label,
+         fmtAreaValue, areaUnitLabel, stripAreaUnit } from "./config.js";
 import { t } from "./i18n.js";
 
 /* ── State ── */
@@ -340,11 +341,14 @@ function renderShell() {
 
 function renderHeaders(rowId, cols, tabName) {
   const row = container.querySelector(`#${rowId}`);
-  row.innerHTML = cols.map((c) =>
-    `<th class="${c.cls} sortable" data-key="${c.key}" role="columnheader" aria-sort="none" tabindex="0">
-      ${esc(c.label)} <span class="material-symbols-outlined sort-icon">unfold_more</span>
-    </th>`
-  ).join("");
+  row.innerHTML = cols.map((c) => {
+    // Numeric columns are area values: show the label unit-neutral with the live
+    // display unit in the header (e.g. "Parzelle (ha)"); cells stay bare numbers.
+    const label = c.numeric ? `${stripAreaUnit(c.label)} (${areaUnitLabel()})` : c.label;
+    return `<th class="${c.cls} sortable" data-key="${c.key}" role="columnheader" aria-sort="none" tabindex="0">
+      ${esc(label)} <span class="material-symbols-outlined sort-icon">unfold_more</span>
+    </th>`;
+  }).join("");
 
   const sortBy = (key) => {
     const st = tabState[tabName];
@@ -645,7 +649,7 @@ function fmtCell(val, numeric, fmt) {
     return s ? esc(s) : "\u2013";
   }
   if (val === null || val === undefined || val === "") return "\u2013";
-  if (numeric) return fmtNum(val, 2);
+  if (numeric) return fmtAreaValue(val); // area value in the current display unit (bare; unit is in the header)
   if (fmt) return esc(fmt(val));
   return esc(String(val));
 }
