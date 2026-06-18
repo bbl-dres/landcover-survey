@@ -1,12 +1,17 @@
 # Web App
 
-Browser-based land cover survey: upload a CSV of parcels and get a per-parcel land cover breakdown on an interactive map. Runs entirely client-side — no backend, no installation.
+Browser-based land cover survey: pick a parcel on an interactive map — or upload a CSV for batch analysis — and get a per-parcel land cover breakdown. Runs entirely client-side — no backend, no installation.
 
 **Live app:** https://bbl-dres.github.io/landcover-survey/
 
 ## How it works
 
-Upload a CSV with `ID` and `EGRID` columns; the app will:
+Choose parcels two ways:
+
+- **Single parcel (default landing)** — click a parcel on the map, or search by EGRID, parcel number, or address.
+- **Batch** — upload a CSV with `ID` and `EGRID` columns.
+
+Either way, the app will:
 
 1. Look up parcel geometries from [swisstopo](https://api3.geo.admin.ch) (`ch.kantone.cadastralwebmap-farbe`)
 2. Fetch land cover polygons from [geodienste.ch](https://geodienste.ch) WFS (`ms:LCSF`)
@@ -18,6 +23,7 @@ Multilingual — German (DE), French (FR), Italian (IT), and English (EN) via th
 
 ## Features
 
+- **Single-parcel picker** — The default landing: click a parcel on the map (resolved to an EGRID via swisstopo Identify) or search by EGRID / parcel number / address, then analyse it directly
 - **Interactive Map** — MapLibre GL JS with parcel + land cover polygons, 4 basemaps (CARTO + swisstopo aerial), 3D building extrusions, scale bar
 - **Accordion Menu** — Layer toggles and Geokatalog (all swisstopo layers)
 - **Search Bar** — Search parcels by ID/EGRID, Swiss locations, and swisstopo map layers
@@ -25,7 +31,7 @@ Multilingual — German (DE), French (FR), Italian (IT), and English (EN) via th
 - **Summary Panel** — Parcel status, area analysis with donut chart, and key metrics. Aggregation dropdown switches between land cover, SIA 416, DIN 277, green space, imperviousness, VBS Kategorie, VBS Produktivität, and VBS Typ — updating chart, legend, and map colors
 - **Context Menu** — Right-click to copy coordinates, share, or report issues
 - **External Layers** — Toggle official survey and habitat map overlays, or add any swisstopo layer via Geokatalog/search
-- **Export** — Parcels CSV, Land Cover CSV, Excel (both sheets), GeoJSON
+- **Export** — Parcels CSV, Land Cover CSV, Excel (one sheet per layer), GeoJSON (all analysed layers in one FeatureCollection, each feature tagged with a `layer` property), and a self-contained HTML report (single file with results embedded — opens straight into the results view)
 - **Privacy** — All data stays in the browser. Only EGRID and bounding box are sent to public APIs
 - **Responsive & accessible** — Map-first layout on tablet/mobile; ARIA roles, keyboard navigation, `<noscript>` fallback
 

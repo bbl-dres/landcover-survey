@@ -29,7 +29,7 @@ The same analysis is available three ways. Each has its own README with full det
 > [!TIP]
 > See related repo: https://github.com/bbl-dres/green-inventory
 
-Zero-install browser app: upload a CSV of parcels and explore per-parcel land cover on an interactive map, with export to CSV/Excel/GeoJSON. Multilingual (DE/FR/IT/EN).
+Zero-install browser app: pick a parcel on an interactive map — or upload a CSV for batch analysis — and explore per-parcel land cover, with export to CSV, Excel, GeoJSON, and a self-contained HTML report. Multilingual (DE/FR/IT/EN).
 
 - **Preview:** https://bbl-dres.github.io/landcover-survey/
 - **Source code:** [`web/`](web/)
