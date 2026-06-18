@@ -11,7 +11,7 @@
  * wired to the single results map through a shared global `mapRef`. Driving a
  * second map through that global would corrupt the results view's layer state.
  */
-import { API, MAP_STYLES, MAP_DEFAULT, esc, fetchWithTimeout } from "./config.js";
+import { API, MAP_STYLES, MAP_DEFAULT, esc, fetchWithTimeout, BRAND } from "./config.js";
 import { showToast } from "./toast.js";
 import { t, getLang } from "./i18n.js";
 import { poleOfInaccessibility } from "./polylabel.js";
@@ -105,8 +105,8 @@ function createMap() {
     map.addLayer({ id: "cadastral", type: "raster", source: "cadastral", paint: { "raster-opacity": 0.85 } });
 
     map.addSource("pick-highlight", { type: "geojson", data: emptyFC() });
-    map.addLayer({ id: "pick-fill", type: "fill", source: "pick-highlight", paint: { "fill-color": "#d8232a", "fill-opacity": 0.2 } });
-    map.addLayer({ id: "pick-line", type: "line", source: "pick-highlight", paint: { "line-color": "#d8232a", "line-width": 2.5 } });
+    map.addLayer({ id: "pick-fill", type: "fill", source: "pick-highlight", paint: { "fill-color": BRAND.red, "fill-opacity": 0.2 } });
+    map.addLayer({ id: "pick-line", type: "line", source: "pick-highlight", paint: { "line-color": BRAND.red, "line-width": 2.5 } });
 
     map.resize();
     selectDefaultParcel(); // open on a real, ready-to-analyse example parcel
@@ -315,7 +315,7 @@ function zoomToParcel(geometry, center) {
 /** Drop (or move) the single reusable selection pin. */
 function placeMarker(lng, lat) {
   if (!map || lng == null || lat == null) return;
-  if (!marker) marker = new maplibregl.Marker({ color: "#d8232a" });
+  if (!marker) marker = new maplibregl.Marker({ color: BRAND.red });
   marker.setLngLat([lng, lat]).addTo(map);
 }
 

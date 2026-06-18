@@ -2,7 +2,7 @@
  * MapLibre GL JS map with parcel polygons, land cover overlay,
  * Home/3D controls, and thumbnail basemap selector
  */
-import { API, ART_COLORS, CATEGORY_COLORS, ART_LABELS, MAP_STYLES, MAP_DEFAULT, greenSpaceLabel, esc, fmtNum, habitatColor, habitatL1Label, bauzoneColor } from "./config.js";
+import { API, ART_COLORS, CATEGORY_COLORS, ART_LABELS, MAP_STYLES, MAP_DEFAULT, greenSpaceLabel, esc, fmtNum, habitatColor, habitatL1Label, bauzoneColor, BRAND } from "./config.js";
 import { setMap, readdSwisstopoLayers, loadGeokatalog, addSwisstopoLayer, removeSwisstopoLayer, activeSwisstopoLayers } from "./swisstopo.js";
 import { t, getLang } from "./i18n.js";
 import { poleOfInaccessibility } from "./polylabel.js";
@@ -526,14 +526,14 @@ function addDataLayers() {
   }
 
   map.addSource("parcels", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
-  map.addLayer({ id: "parcels-fill", type: "fill", source: "parcels", paint: { "fill-color": "#1a365d", "fill-opacity": 0.08 } });
-  map.addLayer({ id: "parcels-line", type: "line", source: "parcels", paint: { "line-color": "#1a365d", "line-width": 2.5 } });
+  map.addLayer({ id: "parcels-fill", type: "fill", source: "parcels", paint: { "fill-color": BRAND.blue, "fill-opacity": 0.08 } });
+  map.addLayer({ id: "parcels-line", type: "line", source: "parcels", paint: { "line-color": BRAND.blue, "line-width": 2.5 } });
   map.addLayer({
     id: "parcels-label", type: "symbol", source: "parcels",
     // Anchor at the bottom and lift the text above the marker dot (which sits on
     // the same label point and is drawn on a later layer) so it isn't occluded.
     layout: { "text-field": ["get", "label"], "text-size": 12, "text-font": ["Open Sans Regular", "Arial Unicode MS Regular"], "text-anchor": "bottom", "text-offset": [0, -0.9] },
-    paint: { "text-color": "#1a365d", "text-halo-color": "#fff", "text-halo-width": 1.5 },
+    paint: { "text-color": BRAND.blue, "text-halo-color": "#fff", "text-halo-width": 1.5 },
   });
 
   // Clustered parcel centroids (visible when zoomed out)
@@ -550,7 +550,7 @@ function addDataLayers() {
     id: "parcel-clusters", type: "circle", source: "parcels-clusters",
     filter: ["has", "point_count"],
     paint: {
-      "circle-color": ["step", ["get", "point_count"], "#1a365d", 10, "#2d4a7a", 50, "#d8232a"],
+      "circle-color": ["step", ["get", "point_count"], BRAND.blue, 10, BRAND.blueLight, 50, BRAND.red],
       "circle-radius": ["step", ["get", "point_count"], 18, 10, 24, 50, 32],
       "circle-stroke-width": 2,
       "circle-stroke-color": "#fff",
@@ -574,7 +574,7 @@ function addDataLayers() {
     id: "parcel-unclustered", type: "circle", source: "parcels-clusters",
     filter: ["!", ["has", "point_count"]],
     paint: {
-      "circle-color": "#1a365d",
+      "circle-color": BRAND.blue,
       "circle-radius": 6,
       "circle-stroke-width": 1.5,
       "circle-stroke-color": "#fff",
@@ -766,7 +766,7 @@ export function flyToLocation(lng, lat, bbox) {
     map.flyTo({ center: [lng, lat], zoom: 15, duration: 800 });
   }
 
-  searchMarker = new maplibregl.Marker({ color: "#d8232a" }).setLngLat([lng, lat]).addTo(map);
+  searchMarker = new maplibregl.Marker({ color: BRAND.red }).setLngLat([lng, lat]).addTo(map);
 }
 
 export function fitAllParcels() {
@@ -923,14 +923,14 @@ function highlightIdentifyFeature(feature) {
     id: "identify-highlight-fill",
     type: "fill",
     source: "identify-highlight",
-    paint: { "fill-color": "#d8232a", "fill-opacity": 0.2 },
+    paint: { "fill-color": BRAND.red, "fill-opacity": 0.2 },
   });
 
   map.addLayer({
     id: "identify-highlight-line",
     type: "line",
     source: "identify-highlight",
-    paint: { "line-color": "#d8232a", "line-width": 2.5 },
+    paint: { "line-color": BRAND.red, "line-width": 2.5 },
   });
 }
 

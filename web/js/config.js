@@ -439,6 +439,16 @@ export const MAP_DEFAULT = { center: [8.2275, 46.8182], zoom: 7 };
 /** Sliver threshold in m² */
 export const SLIVER_THRESHOLD = 0.001;
 
+/** Brand colours — a JS-side mirror of the CSS tokens in tokens.css. MapLibre
+ *  paint properties and Marker options take literal colour strings (they can't
+ *  read CSS custom properties), so keep these in sync with tokens.css:
+ *  red = --swiss-red, blue = --federal-blue, blueLight = --federal-blue-light. */
+export const BRAND = {
+  red: "#d8232a",
+  blue: "#1a365d",
+  blueLight: "#2d4a7a",
+};
+
 /** Colors for land cover categories on the map */
 export const CATEGORY_COLORS = {
   GGF: "#e74c3c",      // buildings — red

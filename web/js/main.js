@@ -10,7 +10,7 @@ import { downloadParcelCSV, downloadLandcoverCSV, downloadXLSX, downloadGeoJSON 
 import { downloadReportHTML } from "./report.js";
 import { initSearch, setSearchData } from "./search.js";
 import { ART_LABELS, ART_COLORS, CATEGORY_COLORS, isFound, esc, fmtNum,
-         bauzoneColor, habitatColor, habitatL1Label } from "./config.js";
+         bauzoneColor, habitatColor, habitatL1Label, BRAND } from "./config.js";
 import { t, applyI18nDOM, setLang, getLang, getLocale } from "./i18n.js";
 
 let processedResults = null;
@@ -547,7 +547,7 @@ function updateSummaryPanel() {
   // Static breakdowns under "Weitere Kennzahlen" — always the land cover analysis.
   renderBreakdownList("sp-green-container", AGGREGATION_MODES.greenspace.getEntries(landcover));
   renderBreakdownList("sp-sia-container", AGGREGATION_MODES.sia416.getEntries(landcover),
-    { total: { label: t("agg.gsf"), color: "#1a365d" } });
+    { total: { label: t("agg.gsf"), color: BRAND.blue } });
 }
 
 /** Show only the selected analysis layer on the map and sync its accordion

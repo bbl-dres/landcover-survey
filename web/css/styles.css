@@ -204,7 +204,7 @@ main { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: 
 .parcel-chip-icon { font-size: var(--icon-lg); flex-shrink: 0; }
 .parcel-chip-text { font-weight: var(--font-medium); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .parcel-chip-clear { width: var(--control-sm); height: var(--control-sm); margin-left: var(--space-1); border: none; background: transparent; color: var(--color-good-text); font-size: var(--text-lg); line-height: 1; cursor: pointer; border-radius: var(--radius-full); flex-shrink: 0; }
-.parcel-chip-clear:hover { background: rgba(0, 0, 0, 0.06); }
+.parcel-chip-clear:hover { background: var(--hover-overlay); }
 
 #single-analyze { margin-top: var(--space-4); text-align: center; }
 .single-analyze-btn { min-width: 220px; justify-content: center; }
