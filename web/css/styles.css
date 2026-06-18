@@ -1,7 +1,7 @@
 /* -- Base -- */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 [hidden] { display: none !important; }
-html, body { height: 100%; font-family: var(--font-family); font-size: var(--text-base); color: var(--gray-800); background: var(--gray-50); }
+html, body { height: 100%; font-family: var(--font-family); font-size: var(--text-sm); color: var(--gray-800); background: var(--gray-50); }
 :focus-visible { outline: 2px solid var(--federal-blue); outline-offset: 2px; }
 
 /* Interactive refinements */
@@ -375,7 +375,7 @@ main { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: 
   padding: var(--space-3);
   border-bottom: var(--border-width) solid var(--border-color-strong);
   gap: var(--space-2);
-  font-size: var(--text-sm);
+  font-size: var(--text-xs);
   color: var(--gray-900);
 }
 
@@ -1018,16 +1018,22 @@ main { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: 
    Responsive — Small Laptop (max-width: 1400px)
    Tighter typography, accordion closed, narrower panels
    ══════════════════════════════════════════════ */
+/* Type scale — compact tier: one gentle reduction for the laptop/tablet range.
+   Desktop (>1400) and mobile (<768) keep the full, readable scale. --text-sm is
+   left untouched because the root font-size derives from it — redefining it here
+   would shrink the rem basis (and therefore all spacing) across this range. */
+@media (min-width: 768px) and (max-width: 1400px) {
+  :root {
+    --text-xs: 0.8125rem;
+    --text-2xs: 0.6875rem;
+  }
+}
+
 @media (max-width: 1400px) {
   :root {
     --summary-width: 300px;
     --header-height: 52px;
     --footer-height: 32px;
-    /* Scale down typography for dense laptop UI */
-    --text-base: 0.9375rem;
-    --text-sm: 0.8125rem;
-    --text-xs: 0.75rem;
-    --text-2xs: 0.6875rem;
   }
 
   .search-wrapper { max-width: 420px; }
@@ -1054,7 +1060,7 @@ main { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: 
   /* Tighter accordion */
   .accordion-header { font-size: var(--text-xs); }
   .accordion-content { font-size: var(--text-xs); }
-  .active-layer-item { padding: var(--space-2); font-size: var(--text-xs); }
+  .active-layer-item { padding: var(--space-2); }
   .layer-group-label { font-size: var(--text-2xs); }
 
   /* Tighter upload */
@@ -1078,10 +1084,6 @@ main { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: 
     --summary-width: 280px;
     --header-height: 48px;
     --footer-height: 30px;
-    --text-base: 0.875rem;
-    --text-sm: 0.8125rem;
-    --text-xs: 0.75rem;
-    --text-2xs: 0.625rem;
   }
 
   .header-agency { display: none; }
@@ -1114,10 +1116,6 @@ main { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: 
     --header-height: 48px;
     --footer-height: 28px;
     --summary-width: 260px;
-    --text-base: 0.875rem;
-    --text-sm: 0.8125rem;
-    --text-xs: 0.75rem;
-    --text-2xs: 0.625rem;
   }
 
   .header-agency { display: none; }
@@ -1215,10 +1213,6 @@ main { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: 
     --header-height: 48px;
     --footer-height: 28px;
     --summary-width: 100%;
-    --text-base: 0.875rem;
-    --text-sm: 0.8125rem;
-    --text-xs: 0.75rem;
-    --text-2xs: 0.625rem;
   }
 
   /* Header compact */
@@ -1371,9 +1365,9 @@ main { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: 
 
   /* Upload — even more compact */
   .upload-card { padding: var(--space-4) var(--space-3); }
-  .intro-title { font-size: var(--text-base); }
+  .intro-title { font-size: var(--text-sm); }
   .drop-zone { padding: var(--space-5) var(--space-3); }
-  .drop-zone h2 { font-size: var(--text-base); }
+  .drop-zone h2 { font-size: var(--text-sm); }
   .privacy-note { flex-direction: column; text-align: center; }
 
   /* Table panel shorter on tiny screens */
