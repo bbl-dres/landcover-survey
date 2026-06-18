@@ -90,10 +90,15 @@ function setMode(mode) {
   }
 }
 
-/** Return the upload view to its default state (default tab, no parcel selected). */
+/** Return the upload view to its default state: default tab, default parcel
+ *  re-selected, and the analysis options back to their defaults (both on). */
 export function resetUploadView() {
   resetParcelPicker();
   setMode(DEFAULT_MODE);
+  const bz = document.getElementById("opt-bauzonen");
+  const hb = document.getElementById("opt-habitat");
+  if (bz) bz.checked = true;
+  if (hb) hb.checked = true;
 }
 
 async function loadDemoFile() {

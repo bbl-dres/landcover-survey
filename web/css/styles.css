@@ -177,6 +177,9 @@ main { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: 
 .mode-tab { flex: 1; padding: var(--space-2) var(--space-3); border: none; background: transparent; border-radius: var(--radius-sm); font-family: var(--font-family); font-size: var(--text-sm); font-weight: var(--font-semibold); color: var(--gray-500); cursor: pointer; transition: background var(--transition-fast), color var(--transition-fast); }
 .mode-tab:hover { color: var(--gray-700); }
 .mode-tab.active { background: var(--color-white); color: var(--federal-blue); box-shadow: var(--shadow-sm); }
+.mode-tab:focus-visible,
+.parcel-search-clear:focus-visible,
+.parcel-chip-clear:focus-visible { outline: 2px solid var(--federal-blue); outline-offset: 2px; }
 
 /* Single-parcel picker */
 .parcel-search { position: relative; display: flex; align-items: center; }
@@ -199,7 +202,7 @@ main { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: 
 
 .parcel-chip { display: flex; align-items: center; gap: var(--space-2); width: max-content; max-width: 100%; margin: var(--space-3) auto 0; padding: var(--space-2) var(--space-3); background: var(--color-good-bg); border: var(--space-px) solid var(--color-good); border-radius: var(--radius-full); font-size: var(--text-sm); color: var(--color-good-text); }
 .parcel-chip-icon { font-size: var(--icon-lg); flex-shrink: 0; }
-.parcel-chip-text { font-weight: var(--font-medium); }
+.parcel-chip-text { font-weight: var(--font-medium); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .parcel-chip-clear { width: var(--control-sm); height: var(--control-sm); margin-left: var(--space-1); border: none; background: transparent; color: var(--color-good-text); font-size: var(--text-lg); line-height: 1; cursor: pointer; border-radius: var(--radius-full); flex-shrink: 0; }
 .parcel-chip-clear:hover { background: rgba(0, 0, 0, 0.06); }
 

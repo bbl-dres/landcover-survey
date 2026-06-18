@@ -28,16 +28,22 @@ const EGRID_RE = /^CH\d{9,}$/i;
 /** "Zoom to parcel" target — building-level detail with surrounding context.
  *  Used as the max zoom so small urban parcels don't zoom in too close. */
 const BUILDING_ZOOM = 17;
+/** Parcel pre-selected on the landing — Fellerstrasse 21, 3027 Bern (the federal
+ *  office). Gives the user a real, recognizable parcel to start from instead of
+ *  an empty country-level map where nothing is clickable. */
+const DEFAULT_EGRID = "CH373589574684";
 
 let map = null;
-let marker = null;      // single reusable selection pin
+let marker = null;       // single reusable selection pin
 let resizeObserver = null;
-let onAnalyze = null;   // callback(parsedData) — same shape as upload.js onReady
-let getOptions = null;  // () => { bauzonen, habitat }
-let selected = null;    // { id, egrid, nummer, geometry }
+let onAnalyze = null;    // callback(parsedData) — same shape as upload.js onReady
+let getOptions = null;   // () => { bauzonen, habitat }
+let selected = null;     // { id, egrid, nummer, geometry }
 let inited = false;
 let searchDebounce = null;
-let searchToken = 0;    // guards against out-of-order async search responses
+let searchToken = 0;     // guards against out-of-order async search responses
+let lookupPending = false; // a parcel lookup (identify/find) is in flight
+let defaultParcel = null;  // cached default parcel, so resets don't re-fetch
 
 const fetchT = (url) => fetchWithTimeout(url, { timeoutMs: REQUEST_TIMEOUT });
 const emptyFC = () => ({ type: "FeatureCollection", features: [] });
@@ -62,6 +68,9 @@ export function resetParcelPicker() {
   const clear = document.getElementById("parcel-search-clear");
   if (clear) clear.hidden = true;
   hideResults();
+  // Restore the default landing parcel so "Neue Analyse" returns to a clean,
+  // recognizable starting point — not wherever the last analysis left the map.
+  selectDefaultParcel();
 }
 
 /* ── Map ── */
@@ -100,27 +109,60 @@ function createMap() {
     map.addLayer({ id: "pick-line", type: "line", source: "pick-highlight", paint: { "line-color": "#d8232a", "line-width": 2.5 } });
 
     map.resize();
+    selectDefaultParcel(); // open on a real, ready-to-analyse example parcel
   });
 
   map.on("click", (e) => onMapClick(e.lngLat));
 }
 
-async function onMapClick(lngLat) {
-  if (!map) return;
-  const b = map.getBounds();
-  const c = map.getCanvas();
+/** Pre-select the default landing parcel (cached after the first fetch so resets
+ *  are instant). select() clears any prior selection as it sets the new one. */
+async function selectDefaultParcel() {
   try {
-    const hit = await identifyParcel(
-      lngLat.lng, lngLat.lat,
-      `${b.getWest()},${b.getSouth()},${b.getEast()},${b.getNorth()}`,
-      `${c.width},${c.height},96`
-    );
-    if (!hit) { showToast(t("upload.single.notfound")); return; }
-    select(hit, { fly: false });
+    if (!defaultParcel) defaultParcel = await findByEgrid(DEFAULT_EGRID);
+    if (defaultParcel) select(defaultParcel, { fly: true });
   } catch (err) {
-    console.warn("Parcel identify failed:", err.message);
-    showToast(t("upload.single.lookupError"));
+    console.warn("Default parcel load failed:", err.message);
   }
+}
+
+/** Run a parcel lookup with shared feedback: a progress cursor, a "searching…"
+ *  toast only if it's slow enough to notice, and a guard that ignores further
+ *  clicks while one is in flight (so an unacknowledged click isn't repeated). */
+async function withLookup(fn) {
+  if (lookupPending) return;
+  lookupPending = true;
+  if (map) map.getCanvas().style.cursor = "progress";
+  let toast = null;
+  const slow = setTimeout(() => { toast = showToast(t("upload.single.searching"), { duration: 10000 }); }, 400);
+  try {
+    await fn();
+  } finally {
+    clearTimeout(slow);
+    toast?.remove();
+    lookupPending = false;
+    if (map) map.getCanvas().style.cursor = "";
+  }
+}
+
+function onMapClick(lngLat) {
+  if (!map) return;
+  withLookup(async () => {
+    const b = map.getBounds();
+    const c = map.getCanvas();
+    try {
+      const hit = await identifyParcel(
+        lngLat.lng, lngLat.lat,
+        `${b.getWest()},${b.getSouth()},${b.getEast()},${b.getNorth()}`,
+        `${c.width},${c.height},96`
+      );
+      if (!hit) { showToast(t("upload.single.notfound")); return; }
+      select(hit, { fly: false });
+    } catch (err) {
+      console.warn("Parcel identify failed:", err.message);
+      showToast(t("upload.single.lookupError"));
+    }
+  });
 }
 
 /* ── geo.admin.ch lookups ── */
@@ -253,6 +295,13 @@ function markerPointOf(geometry) {
  *  closer than building level. cameraForBounds gives the fit zoom; we keep that
  *  zoom yet recentre on the marker so the pin stays in the middle of the view. */
 function zoomToParcel(geometry, center) {
+  // If the map isn't laid out yet (e.g. a reset while the upload view is hidden),
+  // cameraForBounds can't compute a fit — jump to a fixed building zoom instead;
+  // it renders correctly once the container is shown and the ResizeObserver fires.
+  if (!map.getCanvas().width) {
+    map.jumpTo({ center, zoom: BUILDING_ZOOM });
+    return;
+  }
   try {
     const bb = turf.bbox(geometry);
     const cam = map.cameraForBounds([[bb[0], bb[1]], [bb[2], bb[3]]], { padding: 60, maxZoom: BUILDING_ZOOM });
@@ -399,18 +448,20 @@ async function pickLocation(loc) {
   // Identify against a small synthetic box around the point (independent of the
   // in-flight map animation) so a precise address/parcel result auto-selects.
   const d = 0.0006;
-  try {
-    const hit = await identifyParcel(
-      loc.lng, loc.lat,
-      `${loc.lng - d},${loc.lat - d},${loc.lng + d},${loc.lat + d}`,
-      "256,256,96"
-    );
-    if (hit) select(hit, { fly: true }); // recentre on the parcel's pin
-    else showToast(t("upload.single.notfound"));
-  } catch (err) {
-    // Non-fatal: the map is already centred, so the user can click to pick.
-    console.warn("Location identify failed:", err.message);
-  }
+  await withLookup(async () => {
+    try {
+      const hit = await identifyParcel(
+        loc.lng, loc.lat,
+        `${loc.lng - d},${loc.lat - d},${loc.lng + d},${loc.lat + d}`,
+        "256,256,96"
+      );
+      if (hit) select(hit, { fly: true }); // recentre on the parcel's pin
+      else showToast(t("upload.single.notfound"));
+    } catch (err) {
+      // Non-fatal: the map is already centred, so the user can click to pick.
+      console.warn("Location identify failed:", err.message);
+    }
+  });
 }
 
 function hideResults() {

@@ -204,6 +204,7 @@ const translations = {
     "upload.single.remove": "Auswahl entfernen",
     "upload.single.notfound": "Keine Parzelle an dieser Stelle gefunden",
     "upload.single.lookupError": "Parzellenabfrage fehlgeschlagen. Bitte erneut versuchen.",
+    "upload.single.searching": "Parzelle wird gesucht …",
     "col.area": "Fl\u00e4che m\u00b2",
 
     // Map controls
@@ -466,6 +467,7 @@ const translations = {
     "upload.single.remove": "Supprimer la s\u00e9lection",
     "upload.single.notfound": "Aucune parcelle trouv\u00e9e \u00e0 cet endroit",
     "upload.single.lookupError": "\u00c9chec de la requ\u00eate de parcelle. Veuillez r\u00e9essayer.",
+    "upload.single.searching": "Recherche de la parcelle \u2026",
     "col.area": "Surface m\u00b2",
     "map.home": "Vue d\u2019ensemble Suisse",
     "map.3d": "2D / 3D",
@@ -706,6 +708,7 @@ const translations = {
     "upload.single.remove": "Rimuovi selezione",
     "upload.single.notfound": "Nessuna parcella trovata in questo punto",
     "upload.single.lookupError": "Richiesta della parcella non riuscita. Riprova.",
+    "upload.single.searching": "Ricerca della parcella …",
     "col.area": "Superficie m\u00b2",
     "map.home": "Vista d\u2019insieme Svizzera",
     "map.3d": "Commutare 2D/3D",
@@ -946,6 +949,7 @@ const translations = {
     "upload.single.remove": "Remove selection",
     "upload.single.notfound": "No parcel found at this location",
     "upload.single.lookupError": "Parcel lookup failed. Please try again.",
+    "upload.single.searching": "Looking up parcel …",
     "col.area": "Area m\u00b2",
     "map.home": "Switzerland overview",
     "map.3d": "2D / 3D",
