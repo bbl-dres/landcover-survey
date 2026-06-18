@@ -2,7 +2,7 @@
  * MapLibre GL JS map with parcel polygons, land cover overlay,
  * Home/3D controls, and thumbnail basemap selector
  */
-import { API, ART_COLORS, CATEGORY_COLORS, ART_LABELS, MAP_STYLES, MAP_DEFAULT, greenSpaceLabel, esc, fmtNum } from "./config.js";
+import { API, ART_COLORS, CATEGORY_COLORS, ART_LABELS, MAP_STYLES, MAP_DEFAULT, greenSpaceLabel, esc, fmtNum, habitatColor, habitatL1Label, bauzoneColor } from "./config.js";
 import { setMap, readdSwisstopoLayers, loadGeokatalog, addSwisstopoLayer, removeSwisstopoLayer, activeSwisstopoLayers } from "./swisstopo.js";
 import { t, getLang } from "./i18n.js";
 import { poleOfInaccessibility } from "./polylabel.js";
@@ -21,6 +21,8 @@ let searchMarker = null;
 // Store current data for re-adding after basemap change
 let currentParcelData = null;
 let currentLandcoverData = null;
+let currentBauzonenData = null;
+let currentHabitatData = null;
 
 /* ── Custom Controls ── */
 
@@ -262,7 +264,14 @@ export async function initMap(containerId, { onParcelSelect, onLandcoverSelect }
     if (onLandcoverClick && props.lc_index !== undefined) onLandcoverClick(props.lc_index);
   });
 
-  for (const layer of ["parcels-fill", "landcover-fill"]) {
+  map.on("click", "bauzonen-fill", (e) => {
+    if (e.features.length) showOverlayPopup(e.lngLat, e.features[0].properties, t("layers.bauzonen.result"));
+  });
+  map.on("click", "habitat-fill", (e) => {
+    if (e.features.length) showOverlayPopup(e.lngLat, e.features[0].properties, t("layers.habitat.result"));
+  });
+
+  for (const layer of ["parcels-fill", "landcover-fill", "bauzonen-fill", "habitat-fill"]) {
     map.on("mouseenter", layer, () => (map.getCanvas().style.cursor = "pointer"));
     map.on("mouseleave", layer, () => (map.getCanvas().style.cursor = ""));
   }
@@ -342,6 +351,8 @@ function initAccordionMenu() {
   // Layer visibility toggles
   initLayerToggle("layer-toggle-parcels", ["parcels-fill", "parcels-line", "parcels-label"]);
   initLayerToggle("layer-toggle-landcover", ["landcover-fill", "landcover-line"]);
+  initLayerToggle("layer-toggle-bauzonen-result", ["bauzonen-fill", "bauzonen-line"]);
+  initLayerToggle("layer-toggle-habitat-result", ["habitat-fill", "habitat-line"]);
   initLayerToggle("layer-toggle-labels", ["parcels-label"]);
 
   // Swisstopo overlay toggles (ÖREB, AV) — add/remove as swisstopo layers
@@ -440,7 +451,7 @@ function initContextMenu() {
     const lon = contextLngLat.lng.toFixed(5);
     const subject = encodeURIComponent(t("ctx.report.subject"));
     const body = encodeURIComponent(t("ctx.report.body", { lat, lon, url: location.href }));
-    window.location.href = `mailto:?subject=${subject}&body=${body}`;
+    window.location.href = `mailto:david.rasner@bbl.admin.ch?subject=${subject}&body=${body}`;
   });
 }
 
@@ -505,12 +516,23 @@ function addDataLayers() {
   map.addLayer({ id: "landcover-fill", type: "fill", source: "landcover", minzoom: 13, paint: { "fill-color": ["get", "color"], "fill-opacity": 0.5 } });
   map.addLayer({ id: "landcover-line", type: "line", source: "landcover", minzoom: 13, paint: { "line-color": ["get", "color"], "line-width": 1, "line-opacity": 0.8 } });
 
+  // Overlay result layers (Bauzonen, BAFU habitat). Hidden by default — toggled
+  // on via the Analyseergebnisse checkboxes — so they don't clutter the map or
+  // obscure the land cover. Coloured by feature `color` set in plotResults.
+  for (const id of ["bauzonen", "habitat"]) {
+    map.addSource(id, { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+    map.addLayer({ id: `${id}-fill`, type: "fill", source: id, layout: { visibility: "none" }, paint: { "fill-color": ["get", "color"], "fill-opacity": 0.45 } });
+    map.addLayer({ id: `${id}-line`, type: "line", source: id, layout: { visibility: "none" }, paint: { "line-color": ["get", "color"], "line-width": 1, "line-opacity": 0.8 } });
+  }
+
   map.addSource("parcels", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
   map.addLayer({ id: "parcels-fill", type: "fill", source: "parcels", paint: { "fill-color": "#1a365d", "fill-opacity": 0.08 } });
   map.addLayer({ id: "parcels-line", type: "line", source: "parcels", paint: { "line-color": "#1a365d", "line-width": 2.5 } });
   map.addLayer({
     id: "parcels-label", type: "symbol", source: "parcels",
-    layout: { "text-field": ["get", "label"], "text-size": 12, "text-font": ["Open Sans Regular", "Arial Unicode MS Regular"], "text-anchor": "center" },
+    // Anchor at the bottom and lift the text above the marker dot (which sits on
+    // the same label point and is drawn on a later layer) so it isn't occluded.
+    layout: { "text-field": ["get", "label"], "text-size": 12, "text-font": ["Open Sans Regular", "Arial Unicode MS Regular"], "text-anchor": "bottom", "text-offset": [0, -0.9] },
     paint: { "text-color": "#1a365d", "text-halo-color": "#fff", "text-halo-width": 1.5 },
   });
 
@@ -590,6 +612,8 @@ function reAddDataLayers() {
   addDataLayers();
   if (currentParcelData) map.getSource("parcels").setData(currentParcelData);
   if (currentLandcoverData) map.getSource("landcover").setData(currentLandcoverData);
+  if (currentBauzonenData) map.getSource("bauzonen").setData(currentBauzonenData);
+  if (currentHabitatData) map.getSource("habitat").setData(currentHabitatData);
   if (currentClusterData) map.getSource("parcels-clusters").setData(currentClusterData);
   if (is3D) show3DBuildings();
   readdSwisstopoLayers();
@@ -641,10 +665,35 @@ export function plotResults(results) {
     }
   });
 
+  // Overlay layers — one fill feature per clipped piece, coloured per type. The
+  // running index tracks the flat array position (processedResults.bauzonen /
+  // .habitat), so the table can highlight a feature by its row index.
+  const bauzonenFeatures = [];
+  const habitatFeatures = [];
+  let bzIdx = 0, hbIdx = 0;
+  results.parcels.forEach((p) => {
+    for (const bz of p._bauzonen || []) {
+      const idx = bzIdx++;
+      if (!bz._geometry) continue;
+      bauzonenFeatures.push({ type: "Feature", geometry: bz._geometry,
+        properties: { bz_index: idx, art: bz.art, area_m2: bz.area_m2, color: bauzoneColor(bz.bauzone_code), parcel_id: p.id } });
+    }
+    for (const h of p._habitat || []) {
+      const idx = hbIdx++;
+      if (!h._geometry) continue;
+      habitatFeatures.push({ type: "Feature", geometry: h._geometry,
+        properties: { hb_index: idx, art: h.art, art_label: habitatL1Label(h.art), area_m2: h.area_m2, prob: h.prob || "", color: habitatColor(h.art), parcel_id: p.id } });
+    }
+  });
+
   currentParcelData = { type: "FeatureCollection", features: parcelFeatures };
   currentLandcoverData = { type: "FeatureCollection", features: lcFeatures };
+  currentBauzonenData = { type: "FeatureCollection", features: bauzonenFeatures };
+  currentHabitatData = { type: "FeatureCollection", features: habitatFeatures };
   map.getSource("parcels").setData(currentParcelData);
   map.getSource("landcover").setData(currentLandcoverData);
+  map.getSource("bauzonen").setData(currentBauzonenData);
+  map.getSource("habitat").setData(currentHabitatData);
 
   // Build cluster points from parcel polygons. Use the pole of inaccessibility
   // (the same visual-center algorithm MapLibre uses to anchor polygon labels) so
@@ -685,6 +734,24 @@ export function highlightLandcover(lcIndex) {
   const center = turf.centroid(feature);
   const [lng, lat] = center.geometry.coordinates;
   showLandcoverPopup({ lng, lat }, feature.properties);
+}
+
+/** Highlight and zoom to an overlay feature (Bauzonen / habitat) by row index. */
+function highlightOverlay(data, key, index, layerLabel) {
+  if (!map || !data) return;
+  const feature = data.features.find((f) => f.properties[key] === index);
+  if (!feature) return;
+  const bounds = turf.bbox(feature);
+  map.fitBounds([[bounds[0], bounds[1]], [bounds[2], bounds[3]]], { padding: 80, maxZoom: 19, duration: 600 });
+  const center = turf.centroid(feature);
+  const [lng, lat] = center.geometry.coordinates;
+  showOverlayPopup({ lng, lat }, feature.properties, layerLabel);
+}
+export function highlightBauzonen(index) {
+  highlightOverlay(currentBauzonenData, "bz_index", index, t("layers.bauzonen.result"));
+}
+export function highlightHabitat(index) {
+  highlightOverlay(currentHabitatData, "hb_index", index, t("layers.habitat.result"));
 }
 
 /** Fly to a location and place a temporary marker */
@@ -737,6 +804,23 @@ function showLandcoverPopup(lngLat, props) {
   `).addTo(map);
 }
 
+/** Popup for an overlay-layer piece (Bauzonen / habitat). `props.art` holds the
+ *  type label (zone name or TypoCH label); `prob` shown when present (habitat). */
+function showOverlayPopup(lngLat, props, layerLabel) {
+  const prob = props.prob ? `<tr><td>${esc(t("popup.prob"))}</td><td>${esc(props.prob)}</td></tr>` : "";
+  popup.setLngLat(lngLat).setHTML(`
+    <div class="map-popup">
+      <div class="popup-layer">${esc(layerLabel)}</div>
+      <div class="popup-title">${esc(props.art)}</div>
+      <div class="popup-sub">${esc(t("popup.parcel.label"))} ${esc(props.parcel_id)}</div>
+      <table class="popup-table">
+        <tr><td>${esc(t("popup.area"))}</td><td>${fmtNum(props.area_m2, 2)} m²</td></tr>
+        ${prob}
+      </table>
+    </div>
+  `).addTo(map);
+}
+
 /** Tear down the map and its ResizeObserver (e.g. when returning to the upload view). */
 export function teardownMap() {
   if (resizeObserver) { resizeObserver.disconnect(); resizeObserver = null; }
@@ -753,7 +837,7 @@ function initIdentifyClick() {
 
   map.on("click", async (e) => {
     // Skip if click was handled by our own data layers
-    const ownFeatures = map.queryRenderedFeatures(e.point, { layers: ["parcels-fill", "landcover-fill"].filter((id) => map.getLayer(id)) });
+    const ownFeatures = map.queryRenderedFeatures(e.point, { layers: ["parcels-fill", "landcover-fill", "bauzonen-fill", "habitat-fill"].filter((id) => map.getLayer(id)) });
     if (ownFeatures.length > 0) return;
 
     // Find active swisstopo layers that are visible
@@ -855,6 +939,21 @@ function clearIdentifyHighlight() {
   if (map.getLayer("identify-highlight-fill")) map.removeLayer("identify-highlight-fill");
   if (map.getLayer("identify-highlight-line")) map.removeLayer("identify-highlight-line");
   if (map.getSource("identify-highlight")) map.removeSource("identify-highlight");
+}
+
+/** Show/hide one analysis overlay (landcover | bauzonen | habitat) by key. Used
+ *  by the summary's layer dropdown to drive which result layer is on the map. */
+const OVERLAY_LAYER_IDS = {
+  landcover: ["landcover-fill", "landcover-line"],
+  bauzonen: ["bauzonen-fill", "bauzonen-line"],
+  habitat: ["habitat-fill", "habitat-line"],
+};
+export function setOverlayLayerVisible(key, visible) {
+  if (!map) return;
+  const ids = OVERLAY_LAYER_IDS[key];
+  if (!ids) return;
+  const vis = visible ? "visible" : "none";
+  for (const id of ids) if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", vis);
 }
 
 /** Update landcover polygon colors based on a color mapping function.

@@ -3,15 +3,25 @@
  */
 import { loadScript } from "./config.js";
 import { t } from "./i18n.js";
+import { initParcelPicker, resetParcelPicker } from "./parcelpicker.js";
 
 const REQUIRED_COLUMNS = ["id", "egrid"];
 
 let onReady = null;
 
+/** Analysis options shared by both modes (batch + single parcel). */
+export function getUploadOptions() {
+  return {
+    bauzonen: !!document.getElementById("opt-bauzonen")?.checked,
+    habitat: !!document.getElementById("opt-habitat")?.checked,
+  };
+}
+
 export function initUpload(callback) {
   onReady = callback;
   const dropZone = document.getElementById("drop-zone");
   const fileInput = document.getElementById("file-input");
+  initModeToggle();
 
   dropZone.addEventListener("click", () => fileInput.click());
   dropZone.addEventListener("dragover", (e) => {
@@ -36,6 +46,54 @@ export function initUpload(callback) {
       loadDemoFile();
     });
   }
+
+  // Establish the default mode (single-parcel picker), which also eagerly builds
+  // the picker map. Skip it when a downloaded report boots straight into results:
+  // the upload view isn't shown there until "Neue Analyse" (which calls
+  // resetUploadView and inits the picker then).
+  if (!document.getElementById("__embedded_results__")) setMode(DEFAULT_MODE);
+}
+
+/* ── Mode toggle: single-parcel picker (default) vs batch CSV upload ── */
+
+const DEFAULT_MODE = "single";
+let pickerInited = false;
+
+function initModeToggle() {
+  const tabBatch = document.getElementById("mode-tab-batch");
+  const tabSingle = document.getElementById("mode-tab-single");
+  if (!tabBatch || !tabSingle) return;
+  tabBatch.addEventListener("click", () => setMode("batch"));
+  tabSingle.addEventListener("click", () => setMode("single"));
+}
+
+function setMode(mode) {
+  const single = mode === "single";
+  const tabBatch = document.getElementById("mode-tab-batch");
+  const tabSingle = document.getElementById("mode-tab-single");
+  tabBatch?.classList.toggle("active", !single);
+  tabSingle?.classList.toggle("active", single);
+  tabBatch?.setAttribute("aria-selected", String(!single));
+  tabSingle?.setAttribute("aria-selected", String(single));
+
+  const batch = document.getElementById("mode-batch");
+  const singleEl = document.getElementById("mode-single");
+  const analyze = document.getElementById("single-analyze");
+  if (batch) batch.hidden = single;
+  if (singleEl) singleEl.hidden = !single;     // shown before init so the map sizes correctly
+  if (analyze) analyze.hidden = !single;
+  hideError();
+
+  if (single && !pickerInited) {
+    pickerInited = true;
+    initParcelPicker({ onAnalyze: (data) => onReady && onReady(data), getOptions: getUploadOptions });
+  }
+}
+
+/** Return the upload view to its default state (default tab, no parcel selected). */
+export function resetUploadView() {
+  resetParcelPicker();
+  setMode(DEFAULT_MODE);
 }
 
 async function loadDemoFile() {
@@ -91,7 +149,7 @@ async function handleFile(file) {
     parsedData.headers = parsedData.headers.map((h) => h.toLowerCase().trim());
 
     parsedData.filename = file.name;
-    parsedData.options = { bauzonen: !!document.getElementById("opt-bauzonen")?.checked };
+    parsedData.options = getUploadOptions();
     if (onReady) onReady(parsedData);
   } catch (err) {
     console.error("File parse error:", err);

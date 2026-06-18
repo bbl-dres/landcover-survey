@@ -84,42 +84,53 @@
           <div class="intro">
             <h1 class="intro-title" data-i18n="upload.title">Bodenbedeckung pro Parzelle analysieren</h1>
             <p class="intro-desc" data-i18n="upload.desc">
-              Laden Sie eine CSV-Datei mit Parzellen-IDs und EGRID hoch.
-              Die App ermittelt automatisch die Bodenbedeckung (BBArt) pro Parzelle
-              und berechnet Flächenanteile nach SIA 416, DIN 277 und Versiegelungsgrad.
+              Wählen Sie eine Parzelle auf der Karte oder laden Sie eine CSV-Liste hoch.
+              Pro Parzelle werden Bodenbedeckung (SIA 416, DIN 277, Versiegelung),
+              Bauzonen und BAFU-Lebensräume ermittelt.
             </p>
           </div>
 
-          <div class="steps" role="list">
-            <div class="step" role="listitem">
-              <div class="step-number">1</div>
-              <div class="step-label"><span data-i18n="upload.step1">Hochladen</span><br><span data-i18n="upload.step1sub">CSV / XLSX</span></div>
+          <div class="upload-mode-toggle" role="tablist" data-i18n-aria="upload.mode.aria" aria-label="Analyseart wählen">
+            <button type="button" class="mode-tab active" id="mode-tab-single" role="tab" aria-selected="true" data-i18n="upload.mode.single">Einzelne Parzelle</button>
+            <button type="button" class="mode-tab" id="mode-tab-batch" role="tab" aria-selected="false" data-i18n="upload.mode.batch">Stapel-Upload (CSV)</button>
+          </div>
+
+          <div id="mode-batch" hidden>
+            <div id="drop-zone" class="drop-zone" role="button" tabindex="0" data-i18n-aria="upload.dropzone.aria" aria-label="Datei hier ablegen oder klicken zum Durchsuchen">
+              <div class="drop-zone-icon" aria-hidden="true">
+                <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              </div>
+              <h2 data-i18n="upload.dropzone">CSV- oder Excel-Datei hierher ziehen</h2>
+              <p data-i18n="upload.browse">oder klicken zum Durchsuchen</p>
+              <p class="drop-zone-hint" data-i18n="upload.hint">Erforderlich: ID, EGRID &middot; Weitere Spalten werden durchgereicht</p>
             </div>
-            <div class="step-arrow" aria-hidden="true">&#9654;</div>
-            <div class="step" role="listitem">
-              <div class="step-number">2</div>
-              <div class="step-label"><span data-i18n="upload.step2">Analysieren</span><br><span data-i18n="upload.step2sub">Karte + Tabelle</span></div>
+            <input type="file" id="file-input" accept=".csv,.xlsx,.xls,.tsv,.txt" hidden aria-label="Datei auswählen">
+            <p class="demo-link"><a href="../data/example.csv" download="vorlage-parzellen.csv" data-i18n="upload.template">Vorlage herunterladen (CSV)</a></p>
+            <p class="demo-link"><span data-i18n="upload.demo.prefix">Oder testen Sie mit </span><a href="#" id="load-demo" data-i18n="upload.demo.link">Beispieldaten</a></p>
+          </div>
+
+          <div id="mode-single">
+            <div class="parcel-search">
+              <span class="material-symbols-outlined parcel-search-icon" aria-hidden="true">search</span>
+              <input type="text" id="parcel-search-input" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="parcel-search-results" data-i18n-placeholder="upload.single.search" data-i18n-aria="upload.single.search" placeholder="EGRID, Parzellennummer oder Adresse">
+              <button type="button" id="parcel-search-clear" class="parcel-search-clear" hidden data-i18n-aria="search.clear" aria-label="Suche löschen">&times;</button>
+              <div id="parcel-search-results" class="parcel-search-results" role="listbox" hidden></div>
             </div>
-            <div class="step-arrow" aria-hidden="true">&#9654;</div>
-            <div class="step" role="listitem">
-              <div class="step-number">3</div>
-              <div class="step-label"><span data-i18n="upload.step3">Exportieren</span><br><span data-i18n="upload.step3sub">CSV / Excel</span></div>
+            <div id="single-map" class="single-map"></div>
+            <p class="parcel-pick-hint" data-i18n="upload.single.hint">Auf eine Parzelle klicken oder oben suchen</p>
+            <div id="parcel-chip" class="parcel-chip" hidden>
+              <span class="material-symbols-outlined parcel-chip-icon" aria-hidden="true">check_circle</span>
+              <span class="parcel-chip-text" id="parcel-chip-text"></span>
+              <button type="button" id="parcel-chip-clear" class="parcel-chip-clear" data-i18n-aria="upload.single.remove" aria-label="Auswahl entfernen">&times;</button>
             </div>
           </div>
 
-          <div id="drop-zone" class="drop-zone" role="button" tabindex="0" data-i18n-aria="upload.dropzone.aria" aria-label="Datei hier ablegen oder klicken zum Durchsuchen">
-            <div class="drop-zone-icon" aria-hidden="true">
-              <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-            </div>
-            <h2 data-i18n="upload.dropzone">CSV- oder Excel-Datei hierher ziehen</h2>
-            <p data-i18n="upload.browse">oder klicken zum Durchsuchen</p>
-            <p class="drop-zone-hint" data-i18n="upload.hint">Erforderlich: ID, EGRID &middot; Weitere Spalten werden durchgereicht</p>
-          </div>
-          <input type="file" id="file-input" accept=".csv,.xlsx,.xls,.tsv,.txt" hidden aria-label="Datei auswählen">
-          <p class="demo-link"><a href="../data/example.csv" download="vorlage-parzellen.csv" data-i18n="upload.template">Vorlage herunterladen (CSV)</a></p>
-          <p class="demo-link"><span data-i18n="upload.demo.prefix">Oder testen Sie mit </span><a href="#" id="load-demo" data-i18n="upload.demo.link">Beispieldaten</a></p>
+          <label class="upload-option"><input type="checkbox" id="opt-bauzonen" checked> <span data-i18n="upload.opt.bauzonen">Bauzonen analysieren</span></label>
+          <label class="upload-option"><input type="checkbox" id="opt-habitat" checked> <span data-i18n="upload.opt.habitat">BAFU Lebensräume analysieren</span></label>
 
-          <label class="upload-option"><input type="checkbox" id="opt-bauzonen"> <span data-i18n="upload.opt.bauzonen">Bauzonen analysieren (zusätzliche Abfrage, langsamer)</span></label>
+          <div id="single-analyze">
+            <button type="button" id="single-analyze-btn" class="btn btn-primary single-analyze-btn" disabled data-i18n="upload.single.analyze">Parzelle analysieren</button>
+          </div>
 
           <div id="upload-error" class="upload-error" role="alert" hidden></div>
 
@@ -192,8 +203,18 @@
                       </label>
                       <label class="active-layer-item" data-internal-layer="landcover">
                         <input type="checkbox" class="active-layer-checkbox" checked id="layer-toggle-landcover">
-                        <span class="active-layer-title" data-i18n="layers.landcover">Bodenbedeckung</span>
+                        <span class="active-layer-title" data-i18n="layers.landcover">Bodenbedeckung (Analyse)</span>
                         <button class="active-layer-info" data-info="internal" data-layer-key="landcover" data-i18n-aria="layers.landcover" aria-label="Info Bodenbedeckung"><span class="material-symbols-outlined">info</span></button>
+                      </label>
+                      <label class="active-layer-item" data-internal-layer="bauzonen-result">
+                        <input type="checkbox" class="active-layer-checkbox" id="layer-toggle-bauzonen-result">
+                        <span class="active-layer-title" data-i18n="layers.bauzonen.result">Bauzonen (Analyse)</span>
+                        <button class="active-layer-info" data-info="internal" data-layer-key="bauzonen-result" data-i18n-aria="layers.bauzonen.result" aria-label="Info Bauzonen"><span class="material-symbols-outlined">info</span></button>
+                      </label>
+                      <label class="active-layer-item" data-internal-layer="habitat-result">
+                        <input type="checkbox" class="active-layer-checkbox" id="layer-toggle-habitat-result">
+                        <span class="active-layer-title" data-i18n="layers.habitat.result">Lebensräume (Analyse)</span>
+                        <button class="active-layer-info" data-info="internal" data-layer-key="habitat-result" data-i18n-aria="layers.habitat.result" aria-label="Info Lebensräume"><span class="material-symbols-outlined">info</span></button>
                       </label>
                       <label class="active-layer-item">
                         <input type="checkbox" class="active-layer-checkbox" checked id="layer-toggle-labels">
@@ -327,6 +348,10 @@
         <button class="dl-option" id="dl-geojson">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
           <div class="dl-option-text"><strong data-i18n="download.geojson">GeoJSON</strong><span data-i18n="download.geojson.desc">Parzellen-Polygone mit Attributen</span></div>
+        </button>
+        <button class="dl-option" id="dl-report">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 9h20"/><circle cx="5.5" cy="6.5" r="0.6" fill="currentColor"/><circle cx="7.7" cy="6.5" r="0.6" fill="currentColor"/></svg>
+          <div class="dl-option-text"><strong data-i18n="download.report">Bericht (HTML)</strong><span data-i18n="download.report.desc">Eigenständige Web-App mit eingebetteten Daten (eine HTML-Datei)</span></div>
         </button>
       </div>
     </div>

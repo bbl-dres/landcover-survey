@@ -346,6 +346,18 @@ function getInternalLayerMeta(key) {
       source: t("layermeta.landcover.source"),
       format: t("layermeta.landcover.format"),
     },
+    "bauzonen-result": {
+      title: t("layermeta.bauzonen.title"),
+      description: t("layermeta.bauzonen.desc"),
+      source: t("layermeta.bauzonen.source"),
+      format: t("layermeta.bauzonen.format"),
+    },
+    "habitat-result": {
+      title: t("layermeta.habitat.title"),
+      description: t("layermeta.habitat.desc"),
+      source: t("layermeta.habitat.source"),
+      format: t("layermeta.habitat.format"),
+    },
   }[key];
 }
 

@@ -1,14 +1,16 @@
 /**
  * App state machine: upload → processing → results
  */
-import { initUpload } from "./upload.js";
+import { initUpload, resetUploadView } from "./upload.js";
 import { processRows, cancelProcessing } from "./processor.js";
-import { initMap, plotResults, highlightParcel, highlightLandcover, onSummaryToggle, setSummaryToggleVisible, updateLandcoverColors, showMapSpinner, hideMapSpinner, teardownMap } from "./map.js";
+import { initMap, plotResults, highlightParcel, highlightLandcover, highlightBauzonen, highlightHabitat, onSummaryToggle, setSummaryToggleVisible, updateLandcoverColors, setOverlayLayerVisible, showMapSpinner, hideMapSpinner, teardownMap } from "./map.js";
 import { showToast } from "./toast.js";
 import { initTable, populateTable, highlightRow, highlightLcRow } from "./table.js";
 import { downloadParcelCSV, downloadLandcoverCSV, downloadXLSX, downloadGeoJSON } from "./export.js";
+import { downloadReportHTML } from "./report.js";
 import { initSearch, setSearchData } from "./search.js";
-import { ART_LABELS, ART_COLORS, CATEGORY_COLORS, isFound, esc, fmtNum, isBauzoneAreaKey, bauzoneNameFromKey } from "./config.js";
+import { ART_LABELS, ART_COLORS, CATEGORY_COLORS, isFound, esc, fmtNum,
+         bauzoneColor, habitatColor, habitatL1Label } from "./config.js";
 import { t, applyI18nDOM, setLang, getLang, getLocale } from "./i18n.js";
 
 let processedResults = null;
@@ -41,8 +43,10 @@ document.addEventListener("DOMContentLoaded", () => {
   function resetToUpload() {
     cancelProcessing();
     teardownMap();
+    resetUploadView();
     processedResults = null;
     currentFilename = "";
+    currentAggMode = "landcover"; // reset Flächenanalyse layer selection for the next run
     showState("upload");
     document.getElementById("btn-new").hidden = true;
     document.getElementById("btn-download").hidden = true;
@@ -108,7 +112,7 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("dl-xlsx").addEventListener("click", async () => {
     if (processedResults) {
       try {
-        await downloadXLSX(processedResults.parcels, processedResults.landcover);
+        await downloadXLSX(processedResults.parcels, processedResults.landcover, processedResults.bauzonen, processedResults.habitat);
       } catch (err) {
         console.error("XLSX export failed:", err);
       }
@@ -116,9 +120,44 @@ document.addEventListener("DOMContentLoaded", () => {
     closeDownloadModal();
   });
   document.getElementById("dl-geojson").addEventListener("click", () => {
-    if (processedResults) downloadGeoJSON(processedResults.parcels);
+    if (processedResults) downloadGeoJSON(processedResults);
     closeDownloadModal();
   });
+  document.getElementById("dl-report").addEventListener("click", async () => {
+    if (processedResults) {
+      const toast = showToast(t("download.report.generating"), { duration: 60000 });
+      try {
+        await downloadReportHTML(processedResults, { filename: currentFilename, lang: getLang() });
+      } catch (err) {
+        console.error("Report export failed:", err);
+        showToast(t("toast.report.failed"));
+      } finally {
+        toast?.remove();
+      }
+    }
+    closeDownloadModal();
+  });
+
+  // Embedded-report mode: a downloaded report bakes the results in as JSON and
+  // boots straight into the results view (no upload/processing step).
+  const embeddedEl = document.getElementById("__embedded_results__");
+  if (embeddedEl) {
+    try {
+      const data = JSON.parse(embeddedEl.textContent);
+      // Each flat detail array equals its per-parcel _array concatenated in order
+      // (see processRows flatten), so rebuild them instead of embedding twice.
+      data.landcover = data.parcels.flatMap((p) => p._landcover || []);
+      data.bauzonen = data.parcels.flatMap((p) => p._bauzonen || []);
+      data.habitat = data.parcels.flatMap((p) => p._habitat || []);
+      processedResults = data;
+      currentFilename = window.__EMBEDDED_META__?.filename || "";
+      // A report can't regenerate itself (no source files to fetch) — hide that option.
+      document.getElementById("dl-report")?.setAttribute("hidden", "");
+      showResults();
+    } catch (err) {
+      console.error("Embedded report failed to load:", err);
+    }
+  }
 });
 
 function initLangSelector() {
@@ -360,12 +399,54 @@ const AGGREGATION_MODES = {
       return "#95a5a6";
     },
   },
+  // Overlay-layer modes. These read their own result array (mode.source) instead
+  // of the land cover, and have no colorFn — their map layer keeps its per-type
+  // colours (set in plotResults). Shown in the dropdown only when data exists.
+  bauzonen: {
+    source: "bauzonen",
+    available: () => (processedResults?.bauzonen?.length || 0) > 0,
+    get label() { return t("agg.bauzonen"); },
+    getEntries(rows) {
+      const map = {};
+      for (const f of rows) {
+        if (!map[f.art]) map[f.art] = { area: 0, code: f.bauzone_code };
+        map[f.art].area += f.area_m2;
+      }
+      return Object.entries(map)
+        .map(([k, v]) => ({ label: k, area: v.area, color: bauzoneColor(v.code), key: k }))
+        .sort((a, b) => b.area - a.area);
+    },
+  },
+  habitat: {
+    source: "habitat",
+    available: () => (processedResults?.habitat?.length || 0) > 0,
+    get label() { return t("agg.habitat"); },
+    getEntries(rows) {
+      const map = {};
+      for (const f of rows) {
+        const key = habitatL1Label(f.art);
+        if (!map[key]) map[key] = { area: 0, color: habitatColor(f.art) };
+        map[key].area += f.area_m2;
+      }
+      return Object.entries(map)
+        .map(([k, v]) => ({ label: k, area: v.area, color: v.color, key: k }))
+        .sort((a, b) => b.area - a.area);
+    },
+  },
 };
 
+// The Flächenanalyse dropdown offers one entry per analysis layer; selecting one
+// drives the donut/legend AND which result layer is shown on the map.
+const LAYER_MODES = ["landcover", "bauzonen", "habitat"];
 let currentAggMode = "landcover";
 
 function updateSummaryPanel() {
   if (!processedResults) return;
+  // Reset to the default layer if the selected one is invalid or now unavailable
+  // (e.g. a new analysis without that overlay).
+  if (!LAYER_MODES.includes(currentAggMode)) currentAggMode = "landcover";
+  const m = AGGREGATION_MODES[currentAggMode];
+  if (m?.available && !m.available()) currentAggMode = "landcover";
   const parcels = processedResults.parcels;
   const landcover = processedResults.landcover;
   const total = parcels.length;
@@ -383,9 +464,11 @@ function updateSummaryPanel() {
   const fmt = (n) => fmtNum(n, 1);
 
   // Build dropdown options
-  const modeOptions = Object.entries(AGGREGATION_MODES).map(([k, v]) =>
-    `<option value="${k}" ${k === currentAggMode ? "selected" : ""}>${esc(v.label)}</option>`
-  ).join("");
+  const modeOptions = LAYER_MODES
+    .filter((k) => { const v = AGGREGATION_MODES[k]; return !v.available || v.available(); })
+    .map((k) =>
+      `<option value="${k}" ${k === currentAggMode ? "selected" : ""}>${esc(AGGREGATION_MODES[k].label)}</option>`
+    ).join("");
 
   document.getElementById("sp-body").innerHTML = `
     <!-- Section 1: Parzellen-Zuordnung -->
@@ -431,7 +514,15 @@ function updateSummaryPanel() {
           <div class="sp-kpi"><div class="sp-kpi-value">${fmt(totalSealed)}</div><div class="sp-kpi-label">${esc(t("summary.sealed"))}</div></div>
           <div class="sp-kpi"><div class="sp-kpi-value">${fmt(totalGreen)}</div><div class="sp-kpi-label">${esc(t("summary.green"))}</div></div>
         </div>
-        <div id="sp-bauzonen-container" class="sp-bauzonen-list"></div>
+        <div class="sp-subsection">
+          <div class="sp-subsection-title">${esc(t("agg.greenspace"))}</div>
+          <div id="sp-green-container" class="sp-breakdown-list"></div>
+        </div>
+        <div class="sp-subsection">
+          <div class="sp-subsection-title">${esc(t("agg.sia416"))}</div>
+          <div id="sp-sia-container" class="sp-breakdown-list"></div>
+          <div class="sp-footnote">${esc(t("summary.gsf.note"))}</div>
+        </div>
       </div>
     </div>
   `;
@@ -444,21 +535,60 @@ function updateSummaryPanel() {
     });
   });
 
-  // Aggregation dropdown
+  // Layer dropdown — drives the donut/legend and which result layer is on the map.
   document.getElementById("sp-agg-mode")?.addEventListener("change", (e) => {
     currentAggMode = e.target.value;
     renderDonutAndLegend();
     applyAggColorsToMap();
+    syncLayerSelection(currentAggMode);
   });
 
   renderDonutAndLegend();
-  renderBauzonenList();
+  // Static breakdowns under "Weitere Kennzahlen" — always the land cover analysis.
+  renderBreakdownList("sp-green-container", AGGREGATION_MODES.greenspace.getEntries(landcover));
+  renderBreakdownList("sp-sia-container", AGGREGATION_MODES.sia416.getEntries(landcover),
+    { total: { label: t("agg.gsf"), color: "#1a365d" } });
+}
+
+/** Show only the selected analysis layer on the map and sync its accordion
+ *  checkbox; the other two result layers are hidden. */
+function syncLayerSelection(selected) {
+  const cbIds = { landcover: "layer-toggle-landcover", bauzonen: "layer-toggle-bauzonen-result", habitat: "layer-toggle-habitat-result" };
+  for (const key of LAYER_MODES) {
+    const on = key === selected;
+    setOverlayLayerVisible(key, on);
+    const cb = document.getElementById(cbIds[key]);
+    if (cb) cb.checked = on;
+  }
+}
+
+/** Render a static breakdown (coloured dot · label · m² · %) into a container.
+ *  `opts.total` prepends an emphasised 100% row whose value is the sum of the
+ *  entries (e.g. SIA 416's GSF = whole parcel = GGF + BUF + UUF). */
+function renderBreakdownList(containerId, entries, opts = {}) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  const list = entries.filter((e) => e.area > 0);
+  const total = list.reduce((s, e) => s + e.area, 0);
+  const fmt = (n) => fmtNum(n, 1);
+  const pct = (a) => (total > 0 ? ((a / total) * 100).toFixed(1) : "0");
+  const row = (color, label, area, p, cls = "") => `
+    <div class="sp-legend-row ${cls}">
+      <span class="sp-dist-dot" style="background:${color}"></span>
+      <span class="sp-legend-label">${esc(label)}</span>
+      <span class="sp-legend-val">${fmt(area)} m²</span>
+      <span class="sp-legend-pct">${p}%</span>
+    </div>`;
+  let html = "";
+  if (opts.total && total > 0) html += row(opts.total.color || "var(--gray-500)", opts.total.label, total, "100.0");
+  html += list.map((e) => row(e.color, e.label, e.area, pct(e.area))).join("");
+  el.innerHTML = html;
 }
 
 function renderDonutAndLegend() {
-  const landcover = processedResults.landcover;
   const mode = AGGREGATION_MODES[currentAggMode];
-  const entries = mode.getEntries(landcover);
+  const data = processedResults[mode.source || "landcover"] || [];
+  const entries = mode.getEntries(data);
   const totalArea = entries.reduce((s, e) => s + e.area, 0);
 
   const fmt = (n) => fmtNum(n, 1);
@@ -531,40 +661,9 @@ function renderDonutAndLegend() {
 
 function applyAggColorsToMap() {
   const mode = AGGREGATION_MODES[currentAggMode];
+  // Overlay-layer modes have no colorFn — their map layer keeps its per-type colours.
+  if (!mode.colorFn) return;
   updateLandcoverColors(mode.colorFn);
-}
-
-/** Bauzonen breakdown list in the summary's "Weitere Kennzahlen" section — totals
- *  per zone type across all parcels (no donut). Only renders when the opt-in
- *  Bauzonen analysis was run (the bauzonen_<zone>_m2 columns exist). */
-function renderBauzonenList() {
-  const el = document.getElementById("sp-bauzonen-container");
-  if (!el) return;
-
-  const totals = {};
-  for (const p of processedResults.parcels) {
-    for (const k in p) {
-      if (isBauzoneAreaKey(k)) {
-        const name = bauzoneNameFromKey(k);
-        totals[name] = (totals[name] || 0) + (parseFloat(p[k]) || 0);
-      }
-    }
-  }
-
-  const entries = Object.entries(totals).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
-  if (!entries.length) { el.innerHTML = ""; return; }
-
-  const total = entries.reduce((s, [, v]) => s + v, 0);
-  const fmt = (n) => fmtNum(n, 1);
-  const rows = entries.map(([name, v]) => `
-    <div class="sp-legend-row">
-      <span class="sp-dist-dot" style="background:var(--gray-400)"></span>
-      <span class="sp-legend-label">${esc(name)}</span>
-      <span class="sp-legend-val">${fmt(v)} m²</span>
-      <span class="sp-legend-pct">${total > 0 ? ((v / total) * 100).toFixed(1) : "0"}%</span>
-    </div>`).join("");
-
-  el.innerHTML = rows;
 }
 
 function showResults() {
@@ -587,8 +686,10 @@ function showResults() {
   initTable(document.getElementById("results-table-container"), {
     onParcelSelect: (index) => highlightParcel(index),
     onLandcoverSelect: (lcIndex) => highlightLandcover(lcIndex),
+    onBauzonenSelect: (i) => highlightBauzonen(i),
+    onHabitatSelect: (i) => highlightHabitat(i),
   });
-  populateTable(processedResults.parcels, processedResults.landcover);
+  populateTable(processedResults.parcels, processedResults.landcover, processedResults.bauzonen, processedResults.habitat);
 
   // On mobile or short screens: start with table collapsed so map gets full space
   if (isMobile || isShortScreen) {
@@ -604,6 +705,14 @@ function showResults() {
   document.getElementById("btn-new").hidden = false;
   setSearchData(processedResults.parcels);
 
+  // Hide the overlay map toggles when their layer wasn't analysed / has no data
+  // (keeps the Analyseergebnisse list consistent with the table tabs + dropdown).
+  const overlayHas = { "bauzonen-result": processedResults.bauzonen, "habitat-result": processedResults.habitat };
+  for (const [key, rows] of Object.entries(overlayHas)) {
+    const item = document.querySelector(`[data-internal-layer="${key}"]`);
+    if (item) item.hidden = !(rows && rows.length);
+  }
+
   requestAnimationFrame(async () => {
     showMapSpinner();
     try {
@@ -614,6 +723,7 @@ function showResults() {
       });
       plotResults(processedResults);
       applyAggColorsToMap();
+      syncLayerSelection(currentAggMode);
     } catch (err) {
       console.error("Map initialization failed:", err);
       showToast(t("toast.map.failed"));

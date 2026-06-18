@@ -4,27 +4,34 @@
  */
 import { ART_LABELS, isFound, statusLabel, greenSpaceLabel, vbsKategorieLabel,
          vbsProduktivLabel, vbsTypLabel, errorsLabel, esc, fmtNum,
-         isBauzoneAreaKey, bauzoneNameFromKey } from "./config.js";
+         isBauzoneAreaKey, bauzoneNameFromKey, habitatL1Label } from "./config.js";
 import { t } from "./i18n.js";
 
 /* ── State ── */
 
 let parcelsData = [];
 let landcoverData = [];
+let bauzonenData = [];
+let habitatData = [];
 let activeTab = "parcels";
 let onParcelRowClick = null;
 let onLcRowClick = null;
+let onBzRowClick = null;
+let onHbRowClick = null;
 let container = null;
 
 // Memoized Bauzonen column metadata — recomputed once per dataset (populateTable)
 // instead of rescanning every parcel on each render/sort/keystroke.
 let hasBauzonen = false;
+let hasHabitat = false;
 let bauzonenCols = [];
 
 // Per-tab view state (sort / search / pagination)
 const tabState = {
   parcels: { sortField: "id", sortAsc: true, search: "", page: 1, pageSize: 50 },
   landcover: { sortField: "id", sortAsc: true, search: "", page: 1, pageSize: 50 },
+  bauzonen: { sortField: "id", sortAsc: true, search: "", page: 1, pageSize: 50 },
+  habitat: { sortField: "id", sortAsc: true, search: "", page: 1, pageSize: 50 },
 };
 
 /* ── Column definitions ── */
@@ -86,20 +93,55 @@ function getLcCols() {
   ];
 }
 
+function getBauzonenCols() {
+  return [
+    { key: "id", label: t("col.parcel_id"), cls: "col-bz-id" },
+    { key: "egrid", label: t("col.egrid"), cls: "col-bz-egrid" },
+    { key: "art", label: t("col.bauzone"), cls: "col-bz-art" },
+    { key: "bauzone_code", label: t("col.bauzone_code"), cls: "col-bz-code" },
+    { key: "area_m2", label: t("col.area"), cls: "col-bz-area", numeric: true },
+    { key: "lc_source", label: t("col.source"), cls: "col-bz-source" },
+  ];
+}
+
+function getHabitatCols() {
+  return [
+    { key: "id", label: t("col.parcel_id"), cls: "col-hb-id" },
+    { key: "egrid", label: t("col.egrid"), cls: "col-hb-egrid" },
+    { key: "fid", label: t("col.fid"), cls: "col-hb-fid" },
+    { key: "art", label: t("col.habitat"), cls: "col-hb-art" },
+    { key: "art_label", label: t("col.habitat_group"), cls: "col-hb-group" },
+    { key: "check_greenspace", label: t("col.greenspace"), cls: "col-hb-green", fmt: greenSpaceLabel },
+    { key: "VBS Kategorie", label: t("agg.vbs.kategorie"), cls: "col-hb-vbskat", fmt: vbsKategorieLabel },
+    { key: "VBS Biologisch produktiv", label: t("agg.vbs.produktiv"), cls: "col-hb-vbsprod", fmt: vbsProduktivLabel },
+    { key: "VBS Typ", label: t("agg.vbs.typ"), cls: "col-hb-vbstyp", fmt: vbsTypLabel },
+    { key: "prob", label: t("col.prob"), cls: "col-hb-prob" },
+    { key: "area_m2", label: t("col.area"), cls: "col-hb-area", numeric: true },
+    { key: "lc_source", label: t("col.source"), cls: "col-hb-source" },
+  ];
+}
+
 /* ── Init ── */
 
-export function initTable(el, { onParcelSelect, onLandcoverSelect } = {}) {
+export function initTable(el, { onParcelSelect, onLandcoverSelect, onBauzonenSelect, onHabitatSelect } = {}) {
   container = el;
   onParcelRowClick = onParcelSelect || null;
   onLcRowClick = onLandcoverSelect || null;
+  onBzRowClick = onBauzonenSelect || null;
+  onHbRowClick = onHabitatSelect || null;
 }
 
-export function populateTable(parcels, landcover) {
+export function populateTable(parcels, landcover, bauzonen, habitat) {
   // Shallow-copy so we can attach view-only fields (_idx, art_label) without
   // mutating the shared result objects held by main.js / used for export.
   parcelsData = (parcels || []).map((p, i) => ({ ...p, _idx: i }));
   landcoverData = (landcover || []).map((lc, i) => ({ ...lc, _idx: i, art_label: ART_LABELS[lc.art] || lc.art }));
-  hasBauzonen = parcelsData.some((p) => "bauzonen" in p);
+  bauzonenData = (bauzonen || []).map((r, i) => ({ ...r, _idx: i }));
+  habitatData = (habitat || []).map((r, i) => ({ ...r, _idx: i, art_label: habitatL1Label(r.art) }));
+  // Gate the tabs on actual detail rows (consistent with the summary dropdown),
+  // not just on whether the option ran — an empty layer gets no tab.
+  hasBauzonen = bauzonenData.length > 0;
+  hasHabitat = habitatData.length > 0;
   bauzonenCols = computeBauzonenCols(parcelsData);
   for (const st of Object.values(tabState)) { st.page = 1; st.search = ""; }
   activeTab = "parcels";
@@ -144,8 +186,7 @@ function switchToTab(tabName) {
     t.classList.toggle("active", t.dataset.tab === activeTab);
     t.setAttribute("aria-selected", t.dataset.tab === activeTab);
   });
-  container.querySelector("#tab-parcels")?.classList.toggle("active", activeTab === "parcels");
-  container.querySelector("#tab-landcover")?.classList.toggle("active", activeTab === "landcover");
+  container.querySelectorAll(".table-tab-content").forEach((c) => c.classList.toggle("active", c.id === `tab-${activeTab}`));
   updateColumnsDropdown();
   renderActiveTab();
 }
@@ -167,6 +208,8 @@ function renderShell() {
         <div class="table-tabs" role="tablist">
           <button class="table-tab active" data-tab="parcels" role="tab" aria-selected="true">${esc(t("table.tab.parcels"))}</button>
           <button class="table-tab" data-tab="landcover" role="tab" aria-selected="false">${esc(t("table.tab.landcover"))}</button>
+          ${hasBauzonen ? `<button class="table-tab" data-tab="bauzonen" role="tab" aria-selected="false">${esc(t("table.tab.bauzonen"))}</button>` : ""}
+          ${hasHabitat ? `<button class="table-tab" data-tab="habitat" role="tab" aria-selected="false">${esc(t("table.tab.habitat"))}</button>` : ""}
         </div>
         <div class="toolbar-actions">
           <div class="dropdown-container">
@@ -203,6 +246,26 @@ function renderShell() {
         </div>
         <div class="pagination-footer" id="lc-pagination"></div>
       </div>
+      ${hasBauzonen ? `
+      <div class="table-tab-content" id="tab-bauzonen">
+        <div class="list-table-wrapper">
+          <table class="base-table list-table" id="bz-table">
+            <thead><tr id="bz-header-row"></tr></thead>
+            <tbody id="bz-body"></tbody>
+          </table>
+        </div>
+        <div class="pagination-footer" id="bz-pagination"></div>
+      </div>` : ""}
+      ${hasHabitat ? `
+      <div class="table-tab-content" id="tab-habitat">
+        <div class="list-table-wrapper">
+          <table class="base-table list-table" id="hb-table">
+            <thead><tr id="hb-header-row"></tr></thead>
+            <tbody id="hb-body"></tbody>
+          </table>
+        </div>
+        <div class="pagination-footer" id="hb-pagination"></div>
+      </div>` : ""}
     </div>
   `;
 
@@ -214,13 +277,11 @@ function renderShell() {
         t.classList.toggle("active", t.dataset.tab === activeTab);
         t.setAttribute("aria-selected", t.dataset.tab === activeTab);
       });
-      container.querySelector("#tab-parcels").classList.toggle("active", activeTab === "parcels");
-      container.querySelector("#tab-landcover").classList.toggle("active", activeTab === "landcover");
+      container.querySelectorAll(".table-tab-content").forEach((c) => c.classList.toggle("active", c.id === `tab-${activeTab}`));
       const input = container.querySelector("#tbl-search-input");
       input.value = "";
       container.querySelector("#tbl-search-clear").hidden = true;
-      tabState.parcels.search = "";
-      tabState.landcover.search = "";
+      for (const st of Object.values(tabState)) st.search = "";
       updateColumnsDropdown();
       renderActiveTab();
     });
@@ -270,6 +331,8 @@ function renderShell() {
   // Build headers
   renderHeaders("parcels-header-row", getParcelCols(), "parcels");
   renderHeaders("lc-header-row", getLcCols(), "landcover");
+  if (hasBauzonen) renderHeaders("bz-header-row", getBauzonenCols(), "bauzonen");
+  if (hasHabitat) renderHeaders("hb-header-row", getHabitatCols(), "habitat");
   updateColumnsDropdown();
 }
 
@@ -319,7 +382,7 @@ function updateSortIndicators(rowId, activeKey, asc) {
 
 function updateColumnsDropdown() {
   const list = container.querySelector("#columns-list");
-  const cols = activeTab === "parcels" ? getParcelCols() : getLcCols();
+  const cols = TAB_CONFIG[activeTab].getCols();
   list.innerHTML = cols.map((c) =>
     `<label class="dropdown-menu-item">
       <input type="checkbox" ${c.hidden ? "" : "checked"} data-column="${c.cls}"> ${esc(c.label)}
@@ -371,6 +434,28 @@ const TAB_CONFIG = {
     searchText: (r) => `${r.id} ${r.egrid} ${r.art} ${r.art_label} ${r.check_greenspace} ${r["VBS Kategorie"]} ${r["VBS Biologisch produktiv"]} ${r["VBS Typ"]}`,
     rowClass: () => "",
     onRowClick: (idx) => { if (onLcRowClick) onLcRowClick(idx); },
+  },
+  bauzonen: {
+    getCols: getBauzonenCols,
+    getData: () => bauzonenData,
+    bodyId: "bz-body",
+    paginationId: "bz-pagination",
+    rowAttr: "data-bz-index",
+    label: () => t("table.label.bauzonen"),
+    searchText: (r) => `${r.id} ${r.egrid} ${r.art} ${r.bauzone_code}`,
+    rowClass: () => "",
+    onRowClick: (idx) => { if (onBzRowClick) onBzRowClick(idx); },
+  },
+  habitat: {
+    getCols: getHabitatCols,
+    getData: () => habitatData,
+    bodyId: "hb-body",
+    paginationId: "hb-pagination",
+    rowAttr: "data-hb-index",
+    label: () => t("table.label.habitat"),
+    searchText: (r) => `${r.id} ${r.egrid} ${r.art} ${r.art_label} ${r.check_greenspace}`,
+    rowClass: () => "",
+    onRowClick: (idx) => { if (onHbRowClick) onHbRowClick(idx); },
   },
 };
 

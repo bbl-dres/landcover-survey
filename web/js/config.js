@@ -171,25 +171,41 @@ export const ART_LABELS = {
  * See docs/CLASSIFICATION.md (§Fallback) for rationale and the ⚠ judgment calls.
  */
 export const BAFU_TYPOCH_L1 = {
-  "1": { name: "Gewässer", green: "Not green space", vbsKategorie: "kat_d", vbsProduktiv: "produktiv", vbsTyp: "typ2" },
-  "2": { name: "Ufer & Feuchtgebiete", green: "Green space (soil-covered)", vbsKategorie: "kat_d", vbsProduktiv: "produktiv", vbsTyp: "typ2" },
-  "3": { name: "Gletscher, Fels, Schutt, Geröll", green: "Not green space", vbsKategorie: "kat_d", vbsProduktiv: "unproduktiv", vbsTyp: null },
-  "4": { name: "Grünland", green: "Green space (soil-covered)", vbsKategorie: "kat_b", vbsProduktiv: "produktiv", vbsTyp: "typ2" },
-  "5": { name: "Krautsäume, Hochstauden, Gebüsche", green: "Green space (wooded)", vbsKategorie: "kat_c", vbsProduktiv: "produktiv", vbsTyp: "typ2" },
-  "6": { name: "Wälder", green: "Green space (wooded)", vbsKategorie: "kat_c", vbsProduktiv: "produktiv", vbsTyp: "typ2" },
-  "7": { name: "Pionier-/Ruderalvegetation", green: "Not green space", vbsKategorie: "kat_d", vbsProduktiv: "produktiv", vbsTyp: "typ2" },
-  "8": { name: "Pflanzungen, Äcker, Kulturen", green: "Green space (soil-covered)", vbsKategorie: "kat_b", vbsProduktiv: "produktiv", vbsTyp: "typ2" },
-  "9": { name: "Gebäude / Anlagen", green: "Not green space", vbsKategorie: "kat_a", vbsProduktiv: "unproduktiv", vbsTyp: null },
+  "1": { name: "Gewässer", color: "#2980b9", green: "Not green space", vbsKategorie: "kat_d", vbsProduktiv: "produktiv", vbsTyp: "typ2" },
+  "2": { name: "Ufer & Feuchtgebiete", color: "#16a085", green: "Green space (soil-covered)", vbsKategorie: "kat_d", vbsProduktiv: "produktiv", vbsTyp: "typ2" },
+  "3": { name: "Gletscher, Fels, Schutt, Geröll", color: "#aab7b8", green: "Not green space", vbsKategorie: "kat_d", vbsProduktiv: "unproduktiv", vbsTyp: null },
+  "4": { name: "Grünland", color: "#2ecc71", green: "Green space (soil-covered)", vbsKategorie: "kat_b", vbsProduktiv: "produktiv", vbsTyp: "typ2" },
+  "5": { name: "Krautsäume, Hochstauden, Gebüsche", color: "#82c341", green: "Green space (wooded)", vbsKategorie: "kat_c", vbsProduktiv: "produktiv", vbsTyp: "typ2" },
+  "6": { name: "Wälder", color: "#1e8449", green: "Green space (wooded)", vbsKategorie: "kat_c", vbsProduktiv: "produktiv", vbsTyp: "typ2" },
+  "7": { name: "Pionier-/Ruderalvegetation", color: "#d4ac0d", green: "Not green space", vbsKategorie: "kat_d", vbsProduktiv: "produktiv", vbsTyp: "typ2" },
+  "8": { name: "Pflanzungen, Äcker, Kulturen", color: "#a3d977", green: "Green space (soil-covered)", vbsKategorie: "kat_b", vbsProduktiv: "produktiv", vbsTyp: "typ2" },
+  "9": { name: "Gebäude / Anlagen", color: "#c0392b", green: "Not green space", vbsKategorie: "kat_a", vbsProduktiv: "unproduktiv", vbsTyp: null },
 };
 
-/** geo.admin.ch layer id of the BAFU habitat map used for the fallback. */
+/** geo.admin.ch layer id of the BAFU habitat map (own layer + legacy fallback). */
 export const BAFU_LAYER_ID = "ch.bafu.lebensraumkarte-schweiz";
+
+/** TypoCH level-1 digit of a habitat label ("6.3.1 Buchenwald" → "6"). */
+export function typochL1(typochDe) {
+  return String(typochDe || "").trim().charAt(0);
+}
+
+/** Display name for a TypoCH level-1 code, falling back to the raw label. */
+export function habitatL1Label(typochDe) {
+  const m = BAFU_TYPOCH_L1[typochL1(typochDe)];
+  return m ? m.name : (typochDe || "–");
+}
+
+/** Map/legend color for a habitat label, by its TypoCH level-1 code. */
+export function habitatColor(typochDe) {
+  return BAFU_TYPOCH_L1[typochL1(typochDe)]?.color || "#888";
+}
 
 /** Classify a BAFU TypoCH habitat label (e.g. "6.3.1 Buchenwald") by its
  *  level-1 code. Returns the same shape as classify() for the fields BAFU can
  *  supply (greenSpace + VBS); SIA 416 / DIN 277 / sealed are intentionally null. */
 export function classifyBafu(typochDe) {
-  const code = String(typochDe || "").trim().charAt(0); // TypoCH level-1 digit
+  const code = typochL1(typochDe); // TypoCH level-1 digit
   const m = BAFU_TYPOCH_L1[code] || { green: "Not green space", vbsKategorie: "kat_d", vbsProduktiv: "unproduktiv", vbsTyp: null };
   return {
     sia416: null,
@@ -200,6 +216,24 @@ export function classifyBafu(typochDe) {
     vbsProduktiv: m.vbsProduktiv,
     vbsTyp: m.vbsTyp,
   };
+}
+
+/** Harmonised Bauzonen main-use category (ch.are.bauzonen `ch_code_hn`) → colour,
+ *  loosely following Swiss zoning-plan conventions. Keyed by the harmonised code
+ *  so a category gets the same colour in every municipality. */
+export const BAUZONEN_HN_COLORS = {
+  "11": "#f4c430", // Wohnzonen — residential yellow
+  "12": "#8e8e8e", // Arbeitszonen — work / industry grey
+  "13": "#e08a3c", // Mischzonen — mixed orange
+  "14": "#b5651d", // Zentrumszonen — centre brown
+  "15": "#6fa8dc", // Zonen für öffentliche Nutzungen — public blue-grey
+  "16": "#7cb342", // eingeschränkte Bauzonen — restricted green
+  "17": "#c2549d", // Tourismus- und Freizeitzonen — tourism magenta
+  "18": "#5d6d7e", // Verkehrszonen innerhalb der Bauzonen — transport slate
+};
+/** Colour for a Bauzone by its harmonised use code; grey fallback for unknown. */
+export function bauzoneColor(code) {
+  return BAUZONEN_HN_COLORS[String(code ?? "").trim()] || "#9e9e9e";
 }
 
 /** Classify a single BBArt type and return all classifications */
