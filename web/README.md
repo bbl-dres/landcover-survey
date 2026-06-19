@@ -91,7 +91,7 @@ css/
 js/
   main.js       State machine (upload → processing → results)
   upload.js     CSV/XLSX parsing with auto-delimiter detection
-  processor.js  EGRID lookup + WFS query + Turf.js clipping (5x parallel)
+  processor.js  EGRID lookup + WFS query + Turf.js clipping (8x parallel)
   map.js        MapLibre map, controls, popups, layer management
   table.js      Table widget (tabs, sorting, pagination, column toggle)
   search.js     Header search (parcels + locations + layers)

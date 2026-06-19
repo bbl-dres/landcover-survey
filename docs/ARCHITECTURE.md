@@ -160,22 +160,25 @@ Available layers: **Bauzonen** (`ch.are.bauzonen`) and **Habitat**
 > For large-scale work (Mode 2 or thousands of parcels), download the datasets
 > locally rather than hitting the API per parcel.
 
-### BAFU land cover fallback (web app only)
+### BAFU habitat overlay (web app)
 
-The geodienste WFS doesn't cover every canton. When `fetchLandCover()` returns
-**zero AV features** for a parcel, the web app queries the **BAFU Lebensraumkarte**
-(`ch.bafu.lebensraumkarte-schweiz`) via the geo.admin.ch Identify endpoint, clips
-those habitat polygons to the parcel, and classifies them by **TypoCH level-1**
-class (the leading digit of `typoch_de`). This is **per-parcel and self-correcting**
-— it covers no-access cantons *and* coverage gaps without a hardcoded canton list.
+The web app analyses the **BAFU Lebensraumkarte** (`ch.bafu.lebensraumkarte-schweiz`)
+as an **optional overlay layer** (on by default), independently of the AV land cover —
+much like the Bauzonen overlay above. Per parcel it fetches the habitat polygons via
+the geo.admin.ch Identify endpoint, clips them to the parcel, and classifies them by
+**TypoCH level-1** class (the leading digit of `typoch_de`). The result is its own
+detail layer (`lc_source = BAFU`), exported as a separate GeoJSON `layer` / Excel sheet
+alongside land cover and Bauzonen.
 
-A parcel is wholly AV **or** wholly BAFU (never mixed). BAFU rows derive only green
-space + VBS; SIA 416 / DIN 277 / sealed are left blank because a modeled habitat map
-can't resolve building footprints. The source is recorded in `lc_source`
-(`AV` / `BAFU`). The TypoCH→classification mapping lives in `BAFU_TYPOCH_L1`
-([web/js/config.js](../web/js/config.js)); rules and caveats are in
-[CLASSIFICATION.md](CLASSIFICATION.md) §Fallback. The Python CLI has no fallback —
-it reads a full local GeoPackage.
+BAFU rows derive only green space + VBS; SIA 416 / DIN 277 / sealed are left blank
+because a modeled habitat map can't resolve building footprints. The TypoCH→classification
+mapping lives in `BAFU_TYPOCH_L1` ([web/js/config.js](../web/js/config.js)); rules and
+caveats are in [CLASSIFICATION.md](CLASSIFICATION.md) §BAFU Lebensraumkarte.
+
+> **Not a fallback.** Earlier the web app substituted BAFU where AV was missing; it no
+> longer does. The AV land cover stays pure AV, so parcels in no-coverage cantons get
+> empty land cover (0 m²) and BAFU is a separate, parallel layer. The Python CLI reads a
+> full local GeoPackage and has neither behaviour.
 
 ---
 
@@ -232,9 +235,10 @@ no build step, static ES modules.
   missing or outdated. Missing municipalities produce no rows, not errors.
 - **Web app WFS coverage** — the geodienste.ch WFS requires cantonal approval in
   6 cantons (JU, LU, NE, NW, OW, VD); those parcels are found by EGRID but return
-  0 m² AV land cover (coverage also incomplete in TI, VS, NE). The web app then
-  **falls back to the BAFU Lebensraumkarte** for those parcels (see below). The
-  Python CLI has full coverage from the local GeoPackage. See [MANUAL.md](MANUAL.md).
+  0 m² AV land cover (coverage also incomplete in TI, VS, NE) — the web app analyses
+  the BAFU Lebensraumkarte as a *separate* overlay layer (see below); it does **not**
+  fill the AV gap with it. The Python CLI has full coverage from the local GeoPackage.
+  See [MANUAL.md](MANUAL.md).
 - **DMAV transition** — DM.01-AV-CH is replaced by DMAV by 2027-12-31; BBArt
   values and `resf`/`lcsf` schemas may change.
 - **SDR without geometry** — some SDR entries carry an EGRID but no polygon; these

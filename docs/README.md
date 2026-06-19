@@ -7,7 +7,7 @@ official Amtliche Vermessung (AV) data.
 
 | I want to… | Read |
 |------------|------|
-| **Use the web app** (upload a CSV, read results) | **[MANUAL.md](MANUAL.md)** — multilingual guide + FAQ |
+| **Use the web app** (pick a parcel or upload a CSV, read results) | **[MANUAL.md](MANUAL.md)** — multilingual guide + FAQ |
 | **Know what a land cover type maps to** (SIA 416, green space, sealed, VBS) | **[CLASSIFICATION.md](CLASSIFICATION.md)** — mappings + decision trees ★ |
 | **Understand the input/output columns** | **[DATAMODEL.md](DATAMODEL.md)** — inputs, outputs, modes |
 | **Understand how it works / extend it** | **[ARCHITECTURE.md](ARCHITECTURE.md)** — pipeline, implementation, limits |

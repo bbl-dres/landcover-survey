@@ -62,7 +62,7 @@ The original FME Form workspace (`.fmw`) that the other two solutions reproduce.
 
 > **Data coverage note:** The Web App uses the geodienste.ch WFS, which requires cantonal approval in 6 cantons (JU, LU, NE, NW, OW, VD). Parcels in these cantons are found by EGRID but return 0 m² land cover. Coverage is also incomplete in TI, VS, and NE. The Python CLI has full coverage from a local GeoPackage. See the [User Guide](docs/MANUAL.md) for details.
 
-- **Data source** — official Swiss cadastral survey (Amtliche Vermessung), data model [DM.01-AV-CH](https://www.cadastre-manual.admin.ch/), distributed via [geodienste.ch](https://www.geodienste.ch/services/av). CRS: EPSG:2056 (CH1903+ / LV95).
+- **Data sources** — land cover from the official Swiss cadastral survey (Amtliche Vermessung, data model [DM.01-AV-CH](https://www.cadastre-manual.admin.ch/)) via [geodienste.ch](https://www.geodienste.ch/services/av); parcel geometry by EGRID from the swisstopo cadastral webmap; and two overlay layers via the [geo.admin.ch Identify API](https://api3.geo.admin.ch) — harmonised building zones (`ch.are.bauzonen`, ARE) and the BAFU habitat map (`ch.bafu.lebensraumkarte-schweiz`). CRS: EPSG:2056 (CH1903+ / LV95).
 - **[User Guide](docs/MANUAL.md)** — multilingual manual (DE/FR/IT/EN) with FAQ and data coverage.
 - **[Land Cover Classification](docs/CLASSIFICATION.md)** — how each of the 26 BBArt types maps to SIA 416, DIN 277, green space, sealed, and VBS, with decision trees.
 - **[Data Model](docs/DATAMODEL.md)** — inputs (CSV, AV `resf`/`lcsf`) and output column dictionaries.

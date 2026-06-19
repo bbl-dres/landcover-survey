@@ -254,14 +254,14 @@ but reclassified as biologically unproductive.
 
 ---
 
-## Fallback: BAFU Lebensraumkarte (where AV is unavailable)
+## BAFU Lebensraumkarte (habitat overlay layer)
 
-The AV land cover (geodienste WFS) is not freely available in every canton. **In the
-web app**, when the AV WFS returns *no* land cover for a parcel (no-access canton
-or coverage gap), the tool falls back to the **BAFU Lebensraumkarte Schweiz**
-(`ch.bafu.lebensraumkarte-schweiz`, TypoCH habitat types) for that parcel. A parcel
-is wholly AV **or** wholly BAFU — never mixed — and the source is recorded in the
-`lc_source` column (`AV` / `BAFU`); see [DATAMODEL.md](DATAMODEL.md).
+**In the web app**, the **BAFU Lebensraumkarte Schweiz** (`ch.bafu.lebensraumkarte-schweiz`,
+TypoCH habitat types) is analysed as an **optional overlay layer** (on by default),
+independently of the AV land cover. It is its own detail layer (`lc_source = BAFU`; see
+[DATAMODEL.md](DATAMODEL.md)) — *not* a substitute for AV. It's especially useful where the
+AV WFS isn't freely available (no-access cantons, coverage gaps), since the habitat map
+still characterises those parcels, but it runs everywhere regardless of AV coverage.
 
 BAFU is a **modeled** habitat map (probabilistic, ~10 m), not a cadastral surface
 map. It maps well to **green space and VBS** (naturalness), but **cannot resolve

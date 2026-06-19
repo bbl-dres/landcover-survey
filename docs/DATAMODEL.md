@@ -100,7 +100,7 @@ Aggregation columns are included by default (Python: `--no-aggregate` to omit).
 | `VBS_Unproduktiv_m2` | `float` | Biologically unproductive area (VBS) |
 | `VBS_Kat_A_m2` … `VBS_Kat_D_m2` | `float` | Area per VBS Kategorie (A. Siedlung, B. Landwirtschaft, C. bestockt, D. unproduktiv) |
 | `VBS_Typ1_m2`, `VBS_Typ2_m2` | `float` | Area per VBS Typ — biologically productive only |
-| `lc_source` | `varchar` | Land cover source for this parcel: `AV` or `BAFU` (web app only). For `BAFU` parcels, GGF/BUF/UUF/DIN277/Sealed and the per-`{Art}` columns are **blank** |
+| `lc_source` | `varchar` | Land cover source for the parcel — always `AV` (the authoritative cadastral surface). Web app only. The optional Bauzonen and BAFU habitat overlays are **separate** detail layers, not the parcel's land-cover source |
 | `{Art}_m2` | `float` | One column per land cover type present (e.g. `Gebaeude_m2`, `Strasse_Weg_m2`). AV parcels only |
 | `bauzonen`, `bauzonen_m2` | `varchar` | Building zones intersecting the parcel + areas, semicolon-joined (Python `--bauzonen`; web app: opt-in checkbox) |
 | `bauzonen_{zone}_m2` | `float` | **Web app (opt-in):** one column per building-zone type with its area in the parcel (e.g. `bauzonen_Wohnzonen_m2`, `bauzonen_Zentrumszonen_m2`); 0 where the zone is absent. Pivot-friendly since a parcel can span several zones |
@@ -130,7 +130,7 @@ disable with `--no-landcover`).
 | `VBS Biologisch produktiv` | `varchar` | `1 Biologically productive` / `2 Biologically unproductive` |
 | `VBS Typ` | `varchar` | `Type 1 - …` / `Type 2 - …`; **blank** for biologically unproductive types |
 | `area_m2` | `float` | Calculated 2D planar area of the clipped land cover polygon |
-| `lc_source` | `varchar` | Land cover source: `AV` (Amtliche Vermessung) or `BAFU` (Lebensraumkarte fallback). Web app only |
+| `lc_source` | `varchar` | Always `AV` (Amtliche Vermessung) in this layer. Web app only. The optional Bauzonen / BAFU habitat overlays are **separate** detail layers (own Excel sheet + GeoJSON `layer`) carrying `lc_source` = `Bauzonen` / `BAFU` |
 | `prob` | `varchar` | BAFU model probability (`prob_de`) for `BAFU` rows; empty for `AV` rows. Web app only |
 | `bauzonen`, `bauzonen_m2` | `varchar` | Building zones intersecting this green-space feature + areas (Python `--bauzonen`, green spaces only) |
 | `habitat`, `habitat_m2` | `varchar` | Habitat types intersecting this green-space feature + areas (Python `--habitat`, green spaces only) |
@@ -172,12 +172,23 @@ to the output; **EN** / **DE** = the labels the web app shows for it.
 | `ok` | OK | OK | All land cover features clipped successfully |
 | `N_skipped` | N skipped | N übersprungen | N features could not be clipped (invalid geometry) and were dropped |
 
+### `check_bauzonen` / `check_habitat` (Parcels — web app only)
+
+Present when the matching overlay was analysed (both on by default in the web app).
+
+| Code | EN | DE | Description |
+|------|----|----|-------------|
+| `ok` | OK | OK | Overlay features retrieved and clipped |
+| `truncated` | Truncated | Abgeschnitten | Identify hit the per-bbox feature cap (200); the result may be incomplete |
+| `error` | Error | Fehler | Identify request failed; no overlay data for this parcel |
+
 ### `lc_source` (Parcels & Land Cover — web app only)
 
 | Code | EN | DE | Description |
 |------|----|----|-------------|
 | `AV` | AV | AV | Amtliche Vermessung land cover (authoritative cadastral surface) |
-| `BAFU` | BAFU | BAFU | BAFU Lebensraumkarte fallback (modeled habitat) — used where AV is unavailable. Only green space + VBS are derived; SIA 416 / DIN 277 / sealed are blank. See [CLASSIFICATION.md](CLASSIFICATION.md) §Fallback |
+| `BAFU` | BAFU | BAFU | BAFU Lebensraumkarte (modeled habitat) — the web app's optional **habitat overlay layer** (not an AV fallback). Only green space + VBS derived; SIA 416 / DIN 277 / sealed blank. See [CLASSIFICATION.md](CLASSIFICATION.md) §BAFU Lebensraumkarte |
+| `Bauzonen` | Bauzonen | Bauzonen | Harmonised building zones (`ch.are.bauzonen`) — the web app's optional **building-zone overlay layer**; `art` holds the zone name |
 
 ### `Check_GreenSpace` (Land Cover)
 
