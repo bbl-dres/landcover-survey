@@ -6,14 +6,14 @@ import { t } from "./i18n.js";
 
 /** Land cover export columns — shared by the CSV and XLSX exporters. */
 const LANDCOVER_HEADERS = ["id", "egrid", "fid", "art", "bfsnr", "gwr_egid", "check_greenspace",
-  "VBS Kategorie", "VBS Biologisch produktiv", "VBS Typ", "area_m2", "lc_source", "prob"];
+  "vbs_kategorie", "vbs_produktiv", "vbs_typ", "area_m2", "lc_source", "prob"];
 
 /** Bauzonen detail export columns. */
 const BAUZONEN_HEADERS = ["id", "egrid", "fid", "art", "bauzone_code", "area_m2", "lc_source"];
 
 /** BAFU habitat detail export columns. */
 const HABITAT_HEADERS = ["id", "egrid", "fid", "art", "check_greenspace",
-  "VBS Kategorie", "VBS Biologisch produktiv", "VBS Typ", "area_m2", "prob", "lc_source"];
+  "vbs_kategorie", "vbs_produktiv", "vbs_typ", "area_m2", "prob", "lc_source"];
 
 /** Escape a CSV cell value (semicolon-delimited) */
 function csvCell(val) {

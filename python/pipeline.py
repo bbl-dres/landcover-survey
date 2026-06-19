@@ -41,6 +41,8 @@ from config import (
     VBS_TYP,
     VBS_TYP_BY_ART,
     VERSIEGELT_ARTS,
+    habitat_l1_name,
+    slugify,
 )
 from geometry import clean_geometries, filter_clip_results
 from swisstopo import LayerConfig, intersect_with_features
@@ -110,7 +112,8 @@ def run(
         Timestamp string for output filenames. Generated if not provided.
     aggregate : bool
         If True (default), add per-parcel land cover area summary columns
-        (GGF_m2, BUF_m2, UUF_m2) to the parcels output.
+        (sia416_*, din277_*, sealed_m2, greenspace_m2, vbs_*, av_<art>_m2)
+        to the parcels output.
     export_parcels : bool
         If True (default), export the parcels CSV.
     export_landcover : bool
@@ -168,14 +171,20 @@ def run(
                 parcels_out, lc_out = _run_layer_analysis(
                     BAUZONEN_CONFIG, "bauzonen",
                     parcels_gdf, parcels_out, lc_out,
+                    key_fn=slugify,
                 )
             if habitat:
                 parcels_out, lc_out = _run_layer_analysis(
                     HABITAT_CONFIG, "habitat",
                     parcels_gdf, parcels_out, lc_out,
+                    key_fn=lambda name: slugify(habitat_l1_name(name)),
                 )
         else:
             logger.warning("No parcel geometries available — skipping layer analyses")
+
+    # Lowercase the static identifier / QA columns to the final output schema.
+    parcels_out = _lowercase_schema(parcels_out)
+    lc_out = _lowercase_schema(lc_out)
 
     # Export final results (drop geometry columns before CSV export)
     logger.info("Exporting final results")
@@ -602,12 +611,33 @@ def _clip_single_parcel(
 # Output helpers
 # ---------------------------------------------------------------------------
 
+# Final output schema: lowercase the static identifier / QA column ids. The
+# aggregate (sia416_/din277_/vbs_/sealed/greenspace), per-type (av_/bauzonen_/
+# habitat_) and detail vbs_* columns are already produced with their new names.
+_OUTPUT_RENAME = {
+    "ID": "id",
+    "EGRID": "egrid",
+    "Nummer": "nummer",
+    "BFSNr": "bfsnr",
+    "Check_EGRID": "check_egrid",
+    "Flaeche": "flaeche",
+    "GWR_EGID": "gwr_egid",
+    "Art": "art",
+    "Check_GreenSpace": "check_greenspace",
+}
+
+
+def _lowercase_schema(df: DataFrame) -> DataFrame:
+    """Rename the static capitalized identifier/QA columns to the output schema."""
+    return df.rename(columns=_OUTPUT_RENAME)
+
+
 _SIA416_CATEGORIES = ("GGF", "BUF", "UUF")
 _DIN277_CATEGORIES = ("BF", "UF")
 # VBS Kategorie codes → parcel aggregation column names
-_VBS_KAT_COLS = {"kat_a": "VBS_Kat_A_m2", "kat_b": "VBS_Kat_B_m2",
-                 "kat_c": "VBS_Kat_C_m2", "kat_d": "VBS_Kat_D_m2"}
-_VBS_TYP_COLS = {"typ1": "VBS_Typ1_m2", "typ2": "VBS_Typ2_m2"}
+_VBS_KAT_COLS = {"kat_a": "vbs_kat_a_m2", "kat_b": "vbs_kat_b_m2",
+                 "kat_c": "vbs_kat_c_m2", "kat_d": "vbs_kat_d_m2"}
+_VBS_TYP_COLS = {"typ1": "vbs_typ1_m2", "typ2": "vbs_typ2_m2"}
 
 
 def _aggregate_landcover(
@@ -616,20 +646,20 @@ def _aggregate_landcover(
 ) -> DataFrame:
     """Add per-parcel land cover area summary columns to the parcels output.
 
-    Columns added:
-    - ``GGF_m2``, ``BUF_m2``, ``UUF_m2`` — SIA 416 area breakdown
-    - ``Sealed_m2`` — sealed area (GGF + befestigt)
-    - ``GreenSpace_m2`` — green space area (humusiert + bestockt)
-    - ``VBS_Produktiv_m2``, ``VBS_Unproduktiv_m2`` — VBS biological productivity
-    - One column per ``Art`` value present (e.g. ``Gebaeude_m2``)
+    Columns added (lowercase, namespaced — matches the web-app schema):
+    - ``sia416_ggf_m2`` / ``sia416_buf_m2`` / ``sia416_uuf_m2`` — SIA 416 breakdown
+    - ``din277_bf_m2`` / ``din277_uf_m2`` — DIN 277
+    - ``sealed_m2`` — sealed (GGF + befestigt); ``greenspace_m2`` — humusiert + bestockt
+    - ``vbs_produktiv_m2`` / ``vbs_unproduktiv_m2`` / ``vbs_kat_a_m2``…``d`` / ``vbs_typ1_m2`` / ``vbs_typ2_m2``
+    - ``av_<art>_m2`` — one column per AV land-cover type present (e.g. ``av_gebaeude_m2``)
     """
-    sia_cols = [f"{c}_m2" for c in _SIA416_CATEGORIES]
-    din_cols = [f"DIN277_{c}_m2" for c in _DIN277_CATEGORIES]
+    sia_cols = [f"sia416_{c.lower()}_m2" for c in _SIA416_CATEGORIES]
+    din_cols = [f"din277_{c.lower()}_m2" for c in _DIN277_CATEGORIES]
     vbs_kat_cols = list(_VBS_KAT_COLS.values())
     vbs_typ_cols = list(_VBS_TYP_COLS.values())
     fixed_cols = (
         sia_cols + din_cols
-        + ["Sealed_m2", "GreenSpace_m2", "VBS_Produktiv_m2", "VBS_Unproduktiv_m2"]
+        + ["sealed_m2", "greenspace_m2", "vbs_produktiv_m2", "vbs_unproduktiv_m2"]
         + vbs_kat_cols + vbs_typ_cols
     )
 
@@ -681,7 +711,7 @@ def _aggregate_landcover(
         .groupby("EGRID")["area_m2"]
         .sum()
         .reset_index()
-        .rename(columns={"area_m2": "Sealed_m2"})
+        .rename(columns={"area_m2": "sealed_m2"})
     )
 
     # --- Green space ---
@@ -691,7 +721,7 @@ def _aggregate_landcover(
         .groupby("EGRID")["area_m2"]
         .sum()
         .reset_index()
-        .rename(columns={"area_m2": "GreenSpace_m2"})
+        .rename(columns={"area_m2": "greenspace_m2"})
     )
 
     # --- VBS biological productivity ---
@@ -701,14 +731,14 @@ def _aggregate_landcover(
         .groupby("EGRID")["area_m2"]
         .sum()
         .reset_index()
-        .rename(columns={"area_m2": "VBS_Produktiv_m2"})
+        .rename(columns={"area_m2": "vbs_produktiv_m2"})
     )
     vbs_unproduktiv = (
         lc[lc["VBS_PRODUKTIV"] == "unproduktiv"]
         .groupby("EGRID")["area_m2"]
         .sum()
         .reset_index()
-        .rename(columns={"area_m2": "VBS_Unproduktiv_m2"})
+        .rename(columns={"area_m2": "vbs_unproduktiv_m2"})
     )
 
     # --- VBS Kategorie pivot (a–d) ---
@@ -746,7 +776,7 @@ def _aggregate_landcover(
         .sum()
         .unstack(fill_value=0.0)
     )
-    art_pivot.columns = [f"{a}_m2" for a in art_pivot.columns]
+    art_pivot.columns = [f"av_{str(a).lower()}_m2" for a in art_pivot.columns]
     art_pivot = art_pivot.reset_index()
 
     # --- Merge all onto parcels ---
@@ -896,6 +926,7 @@ def _run_layer_analysis(
     parcels_gdf: GeoDataFrame,
     parcels_out: DataFrame,
     lc_out: DataFrame,
+    key_fn=None,
 ) -> tuple[DataFrame, DataFrame]:
     """Intersect parcels and green spaces with a Swisstopo layer.
 
@@ -953,6 +984,15 @@ def _run_layer_analysis(
     parcels_out = parcels_out.merge(parcel_agg, on="EGRID", how="left")
     parcels_out[f"{label}"] = parcels_out[f"{label}"].fillna("")
     parcels_out[f"{label}_m2"] = parcels_out[f"{label}_m2"].fillna("")
+
+    # Per-type area columns: {label}_{slug}_m2 (rectangular, 0-filled).
+    if key_fn is not None:
+        pertype = _aggregate_layer_pertype(raw_parcels, "EGRID", name_col, label, key_fn)
+        pertype_cols = [c for c in pertype.columns if c != "EGRID"]
+        if pertype_cols:
+            parcels_out = parcels_out.merge(pertype, on="EGRID", how="left")
+            for col in pertype_cols:
+                parcels_out[col] = parcels_out[col].fillna(0.0)
 
     # --- Phase 3: Intersect green-space land covers with CACHED features ---
     has_geometry = "geometry" in lc_out.columns
@@ -1042,5 +1082,30 @@ def _aggregate_layer_results(
     ).reset_index()
 
     return grouped
+
+
+def _aggregate_layer_pertype(
+    raw: DataFrame,
+    group_key: str,
+    name_col: str,
+    label: str,
+    key_fn,
+) -> DataFrame:
+    """Per-type area columns for an overlay: one ``{label}_{slug}_m2`` per group.
+
+    ``key_fn`` maps a raw feature name to its column slug (Bauzonen: the zone
+    name slugified; Habitat: the TypoCH level-1 group name slugified).
+    """
+    if raw.empty:
+        return DataFrame(columns=[group_key])
+    df = raw[[group_key, name_col, "intersection_area_m2"]].copy()
+    df["_key"] = df[name_col].map(key_fn)
+    pivot = (
+        df.groupby([group_key, "_key"])["intersection_area_m2"]
+        .sum()
+        .unstack(fill_value=0.0)
+    )
+    pivot.columns = [f"{label}_{k}_m2" for k in pivot.columns]
+    return pivot.reset_index()
 
 

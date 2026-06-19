@@ -1,5 +1,6 @@
 """Constants, classification mappings, and default paths."""
 
+import re
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
@@ -189,9 +190,9 @@ VBS_TYP: dict[str, str] = {
 # ---------------------------------------------------------------------------
 # VBS output values  (stable, language-independent strings)
 #
-# Written verbatim to the "VBS Kategorie" / "VBS Biologisch produktiv" /
-# "VBS Typ" output columns. The web app translates these for display; the
-# CSV carries them as-is. Mirrors the Check_GreenSpace string pattern.
+# Written verbatim to the vbs_kategorie / vbs_produktiv / vbs_typ output columns.
+# The web app translates these for display; the CSV carries them as-is.
+# Mirrors the check_greenspace string pattern.
 # Biologically unproductive types have NO Typ ("" — per the document hint
 # "Unterscheidung Typ 1 und Typ 2 innerhalb biologisch produktiver Fläche").
 # ---------------------------------------------------------------------------
@@ -227,10 +228,10 @@ VBS_TYP_BY_ART: dict[str, str] = {
     art: VBS_TYP_LABELS[typ] for art, typ in VBS_TYP.items()
 }
 
-# Output column names (German, matching the source document)
-COL_VBS_KATEGORIE = "VBS Kategorie"
-COL_VBS_PRODUKTIV = "VBS Biologisch produktiv"
-COL_VBS_TYP = "VBS Typ"
+# Output column ids (lowercase snake_case — matches the web-app schema)
+COL_VBS_KATEGORIE = "vbs_kategorie"
+COL_VBS_PRODUKTIV = "vbs_produktiv"
+COL_VBS_TYP = "vbs_typ"
 
 # ---------------------------------------------------------------------------
 # Check_EGRID messages
@@ -238,3 +239,36 @@ COL_VBS_TYP = "VBS Typ"
 MSG_EGRID_FOUND = "EGRID found in AV"
 MSG_EGRID_MERGED = "EGRID found in AV ({n} entries merged)"
 MSG_EGRID_NOT_FOUND = "EGRID missing or not in AV"
+
+# ---------------------------------------------------------------------------
+# Field-id helpers — keep the lowercase snake_case schema in sync with the web
+# app (web/js/config.js). Used for the per-zone / per-habitat-type columns.
+# ---------------------------------------------------------------------------
+
+def slugify(s: str) -> str:
+    """Lowercase snake_case token (umlauts → ae/oe/ue/ss). Matches web slugify()."""
+    s = str(s).lower()
+    s = s.replace("ä", "ae").replace("ö", "oe").replace("ü", "ue").replace("ß", "ss")
+    s = re.sub(r"[^a-z0-9]+", "_", s)
+    return s.strip("_")
+
+
+# BAFU Lebensraumkarte TypoCH level-1 group names (leading digit → German name).
+# Habitat is aggregated to parcels by this group (mirrors the web app).
+BAFU_TYPOCH_L1: dict[str, str] = {
+    "1": "Gewässer",
+    "2": "Ufer & Feuchtgebiete",
+    "3": "Gletscher, Fels, Schutt, Geröll",
+    "4": "Grünland",
+    "5": "Krautsäume, Hochstauden, Gebüsche",
+    "6": "Wälder",
+    "7": "Pionier-/Ruderalvegetation",
+    "8": "Pflanzungen, Äcker, Kulturen",
+    "9": "Gebäude / Anlagen",
+}
+
+
+def habitat_l1_name(typoch: str) -> str:
+    """TypoCH level-1 group name ('6.3.1 Buchenwald' → 'Wälder'); raw label if unknown."""
+    digit = str(typoch or "").strip()[:1]
+    return BAFU_TYPOCH_L1.get(digit, str(typoch or "–"))

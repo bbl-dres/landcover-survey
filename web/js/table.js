@@ -5,6 +5,7 @@
 import { ART_LABELS, isFound, statusLabel, greenSpaceLabel, vbsKategorieLabel,
          vbsProduktivLabel, vbsTypLabel, errorsLabel, esc, fmtNum,
          isBauzoneAreaKey, bauzoneNameFromKey, habitatL1Label,
+         isHabitatAreaKey, habitatNameFromKey,
          fmtAreaValue, areaUnitLabel, stripAreaUnit } from "./config.js";
 import { t } from "./i18n.js";
 
@@ -26,6 +27,7 @@ let container = null;
 let hasBauzonen = false;
 let hasHabitat = false;
 let bauzonenCols = [];
+let habitatCols = [];
 
 // Per-tab view state (sort / search / pagination)
 const tabState = {
@@ -46,11 +48,11 @@ function getParcelCols() {
     { key: "status", label: t("col.status"), cls: "col-p-status", fmt: statusLabel },
     { key: "errors", label: t("col.errors"), cls: "col-p-errors", fmt: errorsLabel },
     { key: "parcel_area_m2", label: t("col.parcel_area"), cls: "col-p-area", numeric: true },
-    { key: "GGF_m2", label: t("col.ggf"), cls: "col-p-ggf", numeric: true },
-    { key: "BUF_m2", label: t("col.buf"), cls: "col-p-buf", numeric: true },
-    { key: "UUF_m2", label: t("col.uuf"), cls: "col-p-uuf", numeric: true },
-    { key: "Sealed_m2", label: t("col.sealed"), cls: "col-p-sealed", numeric: true },
-    { key: "GreenSpace_m2", label: t("col.green"), cls: "col-p-green", numeric: true },
+    { key: "sia416_ggf_m2", label: t("col.ggf"), cls: "col-p-ggf", numeric: true },
+    { key: "sia416_buf_m2", label: t("col.buf"), cls: "col-p-buf", numeric: true },
+    { key: "sia416_uuf_m2", label: t("col.uuf"), cls: "col-p-uuf", numeric: true },
+    { key: "sealed_m2", label: t("col.sealed"), cls: "col-p-sealed", numeric: true },
+    { key: "greenspace_m2", label: t("col.green"), cls: "col-p-green", numeric: true },
     { key: "lc_source", label: t("col.source"), cls: "col-p-source" },
   ];
   // Bauzonen is opt-in; only show the columns when the analysis was run.
@@ -58,6 +60,11 @@ function getParcelCols() {
   if (hasBauzonen) {
     cols.push({ key: "bauzonen", label: t("col.bauzonen"), cls: "col-p-bauzonen" });
     cols.push(...bauzonenCols);
+  }
+  // Habitat is opt-in; joined column + per-TypoCH-group columns (memoized).
+  if (hasHabitat) {
+    cols.push({ key: "habitat", label: t("col.habitat_group"), cls: "col-p-habitat" });
+    cols.push(...habitatCols);
   }
   return cols;
 }
@@ -76,6 +83,20 @@ function computeBauzonenCols(parcels) {
   }));
 }
 
+/** Per-type habitat column defs (default-hidden, toggleable) — one per
+ *  `habitat_<group>_m2` key found in the data. Computed once per dataset. */
+function computeHabitatCols(parcels) {
+  const keys = new Set();
+  for (const p of parcels) for (const k in p) if (isHabitatAreaKey(k)) keys.add(k);
+  return [...keys].sort().map((k) => ({
+    key: k,
+    label: `${habitatNameFromKey(k)} m²`,
+    cls: "col-p-" + k.replace(/[^a-zA-Z0-9_-]/g, "-"),
+    numeric: true,
+    hidden: true,
+  }));
+}
+
 function getLcCols() {
   return [
     { key: "id", label: t("col.parcel_id"), cls: "col-lc-id" },
@@ -86,9 +107,9 @@ function getLcCols() {
     { key: "bfsnr", label: t("col.bfsnr"), cls: "col-lc-bfsnr" },
     { key: "gwr_egid", label: t("col.gwr_egid"), cls: "col-lc-gwregid" },
     { key: "check_greenspace", label: t("col.greenspace"), cls: "col-lc-green", fmt: greenSpaceLabel },
-    { key: "VBS Kategorie", label: t("agg.vbs.kategorie"), cls: "col-lc-vbskat", fmt: vbsKategorieLabel },
-    { key: "VBS Biologisch produktiv", label: t("agg.vbs.produktiv"), cls: "col-lc-vbsprod", fmt: vbsProduktivLabel },
-    { key: "VBS Typ", label: t("agg.vbs.typ"), cls: "col-lc-vbstyp", fmt: vbsTypLabel },
+    { key: "vbs_kategorie", label: t("agg.vbs.kategorie"), cls: "col-lc-vbskat", fmt: vbsKategorieLabel },
+    { key: "vbs_produktiv", label: t("agg.vbs.produktiv"), cls: "col-lc-vbsprod", fmt: vbsProduktivLabel },
+    { key: "vbs_typ", label: t("agg.vbs.typ"), cls: "col-lc-vbstyp", fmt: vbsTypLabel },
     { key: "area_m2", label: t("col.area"), cls: "col-lc-area", numeric: true },
     { key: "lc_source", label: t("col.source"), cls: "col-lc-source" },
   ];
@@ -113,9 +134,9 @@ function getHabitatCols() {
     { key: "art", label: t("col.habitat"), cls: "col-hb-art" },
     { key: "art_label", label: t("col.habitat_group"), cls: "col-hb-group" },
     { key: "check_greenspace", label: t("col.greenspace"), cls: "col-hb-green", fmt: greenSpaceLabel },
-    { key: "VBS Kategorie", label: t("agg.vbs.kategorie"), cls: "col-hb-vbskat", fmt: vbsKategorieLabel },
-    { key: "VBS Biologisch produktiv", label: t("agg.vbs.produktiv"), cls: "col-hb-vbsprod", fmt: vbsProduktivLabel },
-    { key: "VBS Typ", label: t("agg.vbs.typ"), cls: "col-hb-vbstyp", fmt: vbsTypLabel },
+    { key: "vbs_kategorie", label: t("agg.vbs.kategorie"), cls: "col-hb-vbskat", fmt: vbsKategorieLabel },
+    { key: "vbs_produktiv", label: t("agg.vbs.produktiv"), cls: "col-hb-vbsprod", fmt: vbsProduktivLabel },
+    { key: "vbs_typ", label: t("agg.vbs.typ"), cls: "col-hb-vbstyp", fmt: vbsTypLabel },
     { key: "prob", label: t("col.prob"), cls: "col-hb-prob" },
     { key: "area_m2", label: t("col.area"), cls: "col-hb-area", numeric: true },
     { key: "lc_source", label: t("col.source"), cls: "col-hb-source" },
@@ -144,6 +165,7 @@ export function populateTable(parcels, landcover, bauzonen, habitat) {
   hasBauzonen = bauzonenData.length > 0;
   hasHabitat = habitatData.length > 0;
   bauzonenCols = computeBauzonenCols(parcelsData);
+  habitatCols = computeHabitatCols(parcelsData);
   for (const st of Object.values(tabState)) { st.page = 1; st.search = ""; }
   activeTab = "parcels";
   renderShell();
@@ -435,7 +457,7 @@ const TAB_CONFIG = {
     paginationId: "lc-pagination",
     rowAttr: "data-lc-index",
     label: () => t("table.label.landcover"),
-    searchText: (r) => `${r.id} ${r.egrid} ${r.art} ${r.art_label} ${r.check_greenspace} ${r["VBS Kategorie"]} ${r["VBS Biologisch produktiv"]} ${r["VBS Typ"]}`,
+    searchText: (r) => `${r.id} ${r.egrid} ${r.art} ${r.art_label} ${r.check_greenspace} ${r.vbs_kategorie} ${r.vbs_produktiv} ${r.vbs_typ}`,
     rowClass: () => "",
     onRowClick: (idx) => { if (onLcRowClick) onLcRowClick(idx); },
   },

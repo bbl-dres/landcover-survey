@@ -11,7 +11,8 @@
  */
 import { API, SLIVER_THRESHOLD, STATUS, classify, classifyBafu, isFound, fetchWithTimeout,
          BAFU_LAYER_ID, VBS_KATEGORIE_LABELS, VBS_PRODUKTIV_LABELS, VBS_TYP_LABELS,
-         ERR_MSG, ERR_RUNTIME_PREFIX, bauzoneAreaKey, isBauzoneAreaKey } from "./config.js";
+         ERR_MSG, ERR_RUNTIME_PREFIX, bauzoneAreaKey, isBauzoneAreaKey,
+         habitatL1Label, habitatAreaKey, isHabitatAreaKey } from "./config.js";
 
 // Parcels processed in parallel. Each parcel makes two sequential requests to
 // two different hosts (swisstopo find + geodienste WFS), both HTTP/2, so a
@@ -155,6 +156,11 @@ export async function processRows(rows, onProgress, options = {}) {
           parcel.habitat = hbAgg.habitat;
           parcel.habitat_m2 = hbAgg.habitat_m2;
           parcel.check_habitat = bafu.error ? "error" : (bafu.truncated ? "truncated" : "ok");
+          // One column per TypoCH level-1 habitat group (m²) — e.g. habitat_waelder_m2.
+          // Made rectangular across all parcels in the flatten pass below.
+          for (const [name, area] of Object.entries(hbAgg.types)) {
+            parcel[habitatAreaKey(name)] = area;
+          }
         } catch (err) {
           console.warn(`Habitat analysis failed for ${egrid}:`, err.message);
           parcel.habitat = "";
@@ -212,6 +218,17 @@ export async function processRows(rows, onProgress, options = {}) {
       }
     }
   }
+  // Same for the per-habitat-type columns (habitat_<group>_m2).
+  let habitatKeys = null;
+  if (options.habitat) {
+    habitatKeys = new Set();
+    for (const r of results) {
+      if (!r) continue;
+      for (const k in r.parcel) {
+        if (isHabitatAreaKey(k)) habitatKeys.add(k);
+      }
+    }
+  }
 
   // Flatten results. Each overlay keeps its own flat detail array (parallel to
   // landcover) for the table/summary/export; the per-parcel _arrays drive the map.
@@ -233,6 +250,7 @@ export async function processRows(rows, onProgress, options = {}) {
       if (!("habitat" in r.parcel)) r.parcel.habitat = "";
       if (!("habitat_m2" in r.parcel)) r.parcel.habitat_m2 = "";
       if (!("check_habitat" in r.parcel)) r.parcel.check_habitat = "";
+      for (const k of habitatKeys) if (!(k in r.parcel)) r.parcel[k] = 0;
     }
     parcels.push(r.parcel);
     landcover.push(...r.landcover);
@@ -541,18 +559,26 @@ function aggregateBauzonen(rows) {
   };
 }
 
-/** Aggregate BAFU habitat detail rows into parcel columns: semicolon-joined
- *  `habitat` (TypoCH labels) + `habitat_m2` (areas), largest first — mirrors the
- *  Python `--habitat` parcel-level output. */
+/** Aggregate BAFU habitat detail rows into parcel columns, grouped by TypoCH
+ *  **level-1** category (the 91 fine labels collapse to ~9 groups — the same
+ *  grouping the map/table use). Returns semicolon-joined `habitat` (group names)
+ *  + `habitat_m2` (areas) + a `types` map (group name → area) that becomes one
+ *  `habitat_<slug>_m2` column per group, largest first. */
 function aggregateHabitat(rows) {
-  const byTyp = new Map(); // TypoCH label → area m²
-  for (const r of rows) byTyp.set(r.art, (byTyp.get(r.art) || 0) + (r._rawArea ?? r.area_m2));
+  const byTyp = new Map(); // TypoCH level-1 group name → area m²
+  for (const r of rows) {
+    const name = habitatL1Label(r.art);
+    byTyp.set(name, (byTyp.get(name) || 0) + (r._rawArea ?? r.area_m2));
+  }
 
-  if (byTyp.size === 0) return { habitat: "", habitat_m2: "" };
+  if (byTyp.size === 0) return { habitat: "", habitat_m2: "", types: {} };
   const sorted = [...byTyp.entries()].sort((a, b) => b[1] - a[1]);
+  const types = {};
+  for (const [n, a] of sorted) types[n] = round2(a);
   return {
     habitat: sorted.map(([n]) => n).join("; "),
     habitat_m2: sorted.map(([, a]) => a.toFixed(1)).join("; "),
+    types,
   };
 }
 
@@ -575,9 +601,9 @@ function clipLandCover(parcelGeom, lcFeatures, id, egrid) {
       check_greenspace: cls.greenSpace,
       // VBS classification — stable English output values (translated for display).
       // Typ is only assigned within biologically productive area; blank otherwise.
-      "VBS Kategorie": VBS_KATEGORIE_LABELS[cls.vbsKategorie] || "",
-      "VBS Biologisch produktiv": VBS_PRODUKTIV_LABELS[cls.vbsProduktiv] || "",
-      "VBS Typ": cls.vbsTyp ? (VBS_TYP_LABELS[cls.vbsTyp] || "") : "",
+      vbs_kategorie: VBS_KATEGORIE_LABELS[cls.vbsKategorie] || "",
+      vbs_produktiv: VBS_PRODUKTIV_LABELS[cls.vbsProduktiv] || "",
+      vbs_typ: cls.vbsTyp ? (VBS_TYP_LABELS[cls.vbsTyp] || "") : "",
       lc_source: "AV",
       prob: "",
       area_m2: round2(area),
@@ -612,9 +638,9 @@ function clipHabitat(parcelGeom, bafuFeatures, id, egrid) {
       bfsnr: "",
       gwr_egid: "",
       check_greenspace: cls.greenSpace,
-      "VBS Kategorie": VBS_KATEGORIE_LABELS[cls.vbsKategorie] || "",
-      "VBS Biologisch produktiv": VBS_PRODUKTIV_LABELS[cls.vbsProduktiv] || "",
-      "VBS Typ": cls.vbsTyp ? (VBS_TYP_LABELS[cls.vbsTyp] || "") : "",
+      vbs_kategorie: VBS_KATEGORIE_LABELS[cls.vbsKategorie] || "",
+      vbs_produktiv: VBS_PRODUKTIV_LABELS[cls.vbsProduktiv] || "",
+      vbs_typ: cls.vbsTyp ? (VBS_TYP_LABELS[cls.vbsTyp] || "") : "",
       lc_source: "BAFU",
       prob,
       area_m2: round2(area),
@@ -633,22 +659,25 @@ function clipHabitat(parcelGeom, bafuFeatures, id, egrid) {
 
 /** Aggregate clipped land cover into summary columns */
 function aggregateLandCover(clippedFeatures) {
+  // Aggregation columns — all lowercase, namespaced by classification scheme
+  // (sia416_/din277_/vbs_) or imperviousness/green. Raw per-Art areas are added
+  // below as av_<art>_m2 (source = AV land cover).
   const agg = {
-    GGF_m2: 0,
-    BUF_m2: 0,
-    UUF_m2: 0,
-    DIN277_BF_m2: 0,
-    DIN277_UF_m2: 0,
-    Sealed_m2: 0,
-    GreenSpace_m2: 0,
-    VBS_Produktiv_m2: 0,
-    VBS_Unproduktiv_m2: 0,
-    VBS_Kat_A_m2: 0,
-    VBS_Kat_B_m2: 0,
-    VBS_Kat_C_m2: 0,
-    VBS_Kat_D_m2: 0,
-    VBS_Typ1_m2: 0,
-    VBS_Typ2_m2: 0,
+    sia416_ggf_m2: 0,
+    sia416_buf_m2: 0,
+    sia416_uuf_m2: 0,
+    din277_bf_m2: 0,
+    din277_uf_m2: 0,
+    sealed_m2: 0,
+    greenspace_m2: 0,
+    vbs_produktiv_m2: 0,
+    vbs_unproduktiv_m2: 0,
+    vbs_kat_a_m2: 0,
+    vbs_kat_b_m2: 0,
+    vbs_kat_c_m2: 0,
+    vbs_kat_d_m2: 0,
+    vbs_typ1_m2: 0,
+    vbs_typ2_m2: 0,
   };
 
   const artAreas = {};
@@ -661,36 +690,37 @@ function aggregateLandCover(clippedFeatures) {
     const area = f._rawArea ?? f.area_m2;
 
     // SIA 416
-    if (f._sia416 === "GGF") agg.GGF_m2 += area;
-    else if (f._sia416 === "BUF") agg.BUF_m2 += area;
-    else agg.UUF_m2 += area;
+    if (f._sia416 === "GGF") agg.sia416_ggf_m2 += area;
+    else if (f._sia416 === "BUF") agg.sia416_buf_m2 += area;
+    else agg.sia416_uuf_m2 += area;
 
     // DIN 277
-    if (f._din277 === "BF") agg.DIN277_BF_m2 += area;
-    else agg.DIN277_UF_m2 += area;
+    if (f._din277 === "BF") agg.din277_bf_m2 += area;
+    else agg.din277_uf_m2 += area;
 
-    if (f._sealed) agg.Sealed_m2 += area;
+    if (f._sealed) agg.sealed_m2 += area;
 
-    const artKey = `${f.art}_m2`;
+    // Raw AV land-cover area per BBArt type → av_<art>_m2 (art value lowercased).
+    const artKey = `av_${String(f.art).toLowerCase()}_m2`;
     artAreas[artKey] = (artAreas[artKey] || 0) + area;
 
     // Green space
-    if (f.check_greenspace !== "Not green space") agg.GreenSpace_m2 += area;
+    if (f.check_greenspace !== "Not green space") agg.greenspace_m2 += area;
 
     // VBS biological productivity
-    if (f._vbsProduktiv === "produktiv") agg.VBS_Produktiv_m2 += area;
-    else agg.VBS_Unproduktiv_m2 += area;
+    if (f._vbsProduktiv === "produktiv") agg.vbs_produktiv_m2 += area;
+    else agg.vbs_unproduktiv_m2 += area;
 
     // VBS Kategorie (a–d); unknown falls back to kat_d
     const kat = f._vbsKategorie || "kat_d";
-    if (kat === "kat_a") agg.VBS_Kat_A_m2 += area;
-    else if (kat === "kat_b") agg.VBS_Kat_B_m2 += area;
-    else if (kat === "kat_c") agg.VBS_Kat_C_m2 += area;
-    else agg.VBS_Kat_D_m2 += area;
+    if (kat === "kat_a") agg.vbs_kat_a_m2 += area;
+    else if (kat === "kat_b") agg.vbs_kat_b_m2 += area;
+    else if (kat === "kat_c") agg.vbs_kat_c_m2 += area;
+    else agg.vbs_kat_d_m2 += area;
 
     // VBS Typ — biologically productive only (unproductive contributes to neither)
-    if (f._vbsTyp === "typ1") agg.VBS_Typ1_m2 += area;
-    else if (f._vbsTyp === "typ2") agg.VBS_Typ2_m2 += area;
+    if (f._vbsTyp === "typ1") agg.vbs_typ1_m2 += area;
+    else if (f._vbsTyp === "typ2") agg.vbs_typ2_m2 += area;
   }
 
   for (const k of Object.keys(agg)) agg[k] = round2(agg[k]);

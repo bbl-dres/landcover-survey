@@ -1,6 +1,10 @@
-# Offline dashboard — built single-file HTML embeds parcel data (incl. personal
-# fields) and is distributed via ActaNova, not version-controlled.
-dashboard/
+# Dashboard: the source is tracked (index.html template + css/ + js/ + docs).
+# NOT tracked:
+#  - the parcel GeoJSON (user data — large, may carry personal fields), incl. backups
+#  - any *built* single-file HTML (embeds parcel data; distributed via ActaNova)
+dashboard/*.geojson*
+dashboard/*.html
+!dashboard/index.html
 
 # Python bytecode
 __pycache__/

@@ -530,8 +530,8 @@ function updateSummaryPanel() {
 
   let totalSealed = 0, totalGreen = 0;
   for (const p of parcels) {
-    totalSealed += parseFloat(p.Sealed_m2) || 0;
-    totalGreen += parseFloat(p.GreenSpace_m2) || 0;
+    totalSealed += parseFloat(p.sealed_m2) || 0;
+    totalGreen += parseFloat(p.greenspace_m2) || 0;
   }
 
   const now = currentRunTime || new Date();

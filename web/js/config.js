@@ -344,15 +344,59 @@ export function errorsLabel(arr) {
   return errorLabel(arr);
 }
 
-/** Bauzonen per-zone area columns: `bauzonen_<zone>_m2`. Encode/decode helpers
- *  centralized so the producer (processor) and consumers (table, summary) agree. */
+/** Slugify a label into a lowercase snake_case field-id token (umlauts → ae/oe/ue/ss). */
+export function slugify(s) {
+  return String(s).toLowerCase()
+    .replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/ß/g, "ss")
+    .replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+}
+
+/** Bauzonen per-zone area columns: `bauzonen_<slug>_m2` (slug = slugified zone
+ *  name, lowercase). Encode/decode helpers centralized so the producer (processor)
+ *  and consumers (table, summary, offline dashboard) agree on the field id. */
 const BAUZONEN_PREFIX = "bauzonen_";
 const BAUZONEN_SUFFIX = "_m2";
-export function bauzoneAreaKey(name) { return `${BAUZONEN_PREFIX}${name}${BAUZONEN_SUFFIX}`; }
+/** Display label per zone slug (ARE harmonised Hauptnutzung set). */
+export const BAUZONE_LABELS = {
+  wohnzonen: "Wohnzonen",
+  arbeitszonen: "Arbeitszonen",
+  mischzonen: "Mischzonen",
+  zentrumszonen: "Zentrumszonen",
+  zonen_fuer_oeffentliche_nutzungen: "Zonen für öffentliche Nutzungen",
+  eingeschraenkte_bauzonen: "eingeschränkte Bauzonen",
+  tourismus_und_freizeitzonen: "Tourismus- und Freizeitzonen",
+  verkehrszonen_innerhalb_der_bauzonen: "Verkehrszonen innerhalb der Bauzonen",
+  weitere_bauzonen: "weitere Bauzonen",
+};
+export function bauzoneAreaKey(name) { return `${BAUZONEN_PREFIX}${slugify(name)}${BAUZONEN_SUFFIX}`; }
 export function isBauzoneAreaKey(k) {
   return k.startsWith(BAUZONEN_PREFIX) && k.endsWith(BAUZONEN_SUFFIX) && k !== "bauzonen_m2";
 }
-export function bauzoneNameFromKey(k) { return k.slice(BAUZONEN_PREFIX.length, -BAUZONEN_SUFFIX.length); }
+/** Zone slug from a column key (`bauzonen_wohnzonen_m2` → `wohnzonen`). */
+export function bauzoneSlugFromKey(k) { return k.slice(BAUZONEN_PREFIX.length, -BAUZONEN_SUFFIX.length); }
+/** Display label from a column key, falling back to a prettified slug. */
+export function bauzoneNameFromKey(k) {
+  const slug = bauzoneSlugFromKey(k);
+  return BAUZONE_LABELS[slug] || slug.replace(/_/g, " ");
+}
+
+/** Habitat per-type area columns: `habitat_<slug>_m2` (slug = slugified TypoCH
+ *  level-1 group name). Mirrors the Bauzonen helpers. */
+const HABITAT_PREFIX = "habitat_";
+const HABITAT_SUFFIX = "_m2";
+/** Display label per habitat slug — derived from the TypoCH level-1 groups. */
+export const HABITAT_LABELS = Object.fromEntries(
+  Object.values(BAFU_TYPOCH_L1).map((m) => [slugify(m.name), m.name])
+);
+export function habitatAreaKey(name) { return `${HABITAT_PREFIX}${slugify(name)}${HABITAT_SUFFIX}`; }
+export function isHabitatAreaKey(k) {
+  return k.startsWith(HABITAT_PREFIX) && k.endsWith(HABITAT_SUFFIX) && k !== "habitat_m2";
+}
+export function habitatSlugFromKey(k) { return k.slice(HABITAT_PREFIX.length, -HABITAT_SUFFIX.length); }
+export function habitatNameFromKey(k) {
+  const slug = habitatSlugFromKey(k);
+  return HABITAT_LABELS[slug] || slug.replace(/_/g, " ");
+}
 
 /** Shared HTML escape utility */
 const _escDiv = document.createElement("div");
