@@ -4,18 +4,17 @@
 
 ### Was macht diese Anwendung?
 
-Die Anwendung berechnet, wie viel Fläche (m²) jeder **Bodenbedeckungsart** innerhalb einer Schweizer Katasterparzelle liegt. Sie nutzt offizielle Daten der amtlichen Vermessung (geodienste.ch) und swisstopo.
+Die Anwendung berechnet pro Schweizer **Grundstück**, wie viel Fläche jede **Bodenbedeckungsart** einnimmt, und analysiert zusätzlich **Bauzonen** und **BAFU-Lebensräume**. Sie nutzt offizielle Daten der amtlichen Vermessung (geodienste.ch) und von swisstopo / geo.admin.ch. Flächen werden in Hektar (ha) angezeigt — in der Kopfzeile auf m² umschaltbar.
 
 ### Kurzanleitung
 
-1. **CSV- oder Excel-Datei hochladen** mit mindestens zwei Spalten: `ID` und `EGRID`.
-   Weitere Spalten werden beibehalten und im Export mit dem Präfix `input_` ausgegeben.
-2. **Ergebnisse prüfen** — Karte, Tabelle und Zusammenfassung zeigen die Bodenbedeckung pro Parzelle.
-3. **Exportieren** — CSV, Excel oder GeoJSON herunterladen.
+1. **Grundstück wählen** — auf der Karte ein Grundstück anklicken oder nach EGRID, Grundstücksnummer oder Adresse suchen. Alternativ im Tab **Stapel-Upload (CSV)** eine CSV-/Excel-Datei mit den Spalten `ID` und `EGRID` hochladen (weitere Spalten werden mit dem Präfix `input_` durchgereicht).
+2. **Ergebnisse prüfen** — Karte, Tabelle und Zusammenfassung zeigen pro Grundstück die Bodenbedeckung, Bauzonen und BAFU-Lebensräume.
+3. **Exportieren** — Grundstücke-CSV, Bodenbedeckung-CSV, Excel (ein Blatt pro Ebene), GeoJSON (alle Ebenen in einer FeatureCollection, je Feature ein `layer`-Feld) oder ein eigenständiger HTML-Bericht.
 
 ### Was ist EGRID?
 
-Der **Eidgenössische Grundstücksidentifikator** (z.B. `CH955832730536`) ist die schweizweit eindeutige Parzellen-ID. Sie finden den EGRID:
+Der **Eidgenössische Grundstücksidentifikator** (z.B. `CH955832730536`) ist die schweizweit eindeutige Grundstück-ID. Sie finden den EGRID:
 - im Grundbuch
 - auf der [Karte geo.admin.ch](https://map.geo.admin.ch/#/map?lang=de&center=2660000,1190000&z=1&topic=ech&layers=ch.swisstopo-vd.stand-oerebkataster&bgLayer=ch.swisstopo.pixelkarte-farbe) (Ebene ÖREB-Kataster)
 - bei Ihrem kantonalen Grundbuchamt
@@ -33,15 +32,15 @@ Der **Eidgenössische Grundstücksidentifikator** (z.B. `CH955832730536`) ist di
 ### Häufige Fragen
 
 **Wohin werden meine Daten gesendet?**
-Ihre Datei wird nur lokal im Browser verarbeitet. Einzig der EGRID wird an die swisstopo-API und geodienste.ch gesendet, um Parzellen- und Bodenbedeckungsdaten abzurufen.
+Ihre Datei wird nur lokal im Browser verarbeitet. Einzig der EGRID wird an die swisstopo-API und geodienste.ch gesendet, um Grundstücks- und Bodenbedeckungsdaten abzurufen.
 
-**Warum zeigt eine Parzelle 0 m² Bodenbedeckung?**
-Mögliche Ursachen: (1) Die Parzelle liegt in einem Kanton, der noch keine Bodenbedeckungsdaten auf geodienste.ch publiziert. (2) Die WFS-Abfrage war vorübergehend nicht verfügbar — prüfen Sie die Spalte `check_wfs` im Export.
+**Warum zeigt ein Grundstück 0 m² Bodenbedeckung?**
+Mögliche Ursachen: (1) Das Grundstück liegt in einem Kanton, der noch keine Bodenbedeckungsdaten auf geodienste.ch publiziert. (2) Die WFS-Abfrage war vorübergehend nicht verfügbar — prüfen Sie die Spalte `check_wfs` im Export.
 
 **Was bedeutet der Status „Nicht gefunden"?**
 Der EGRID konnte in der swisstopo-Datenbank nicht zugeordnet werden. Prüfen Sie, ob der EGRID korrekt und aktuell ist.
 
-**Kann ich mehrere Parzellen gleichzeitig analysieren?**
+**Kann ich mehrere Grundstücke gleichzeitig analysieren?**
 Ja. Die CSV-Datei kann beliebig viele Zeilen enthalten. Die Verarbeitung erfolgt parallel (max. 8 gleichzeitig).
 
 **Welches Koordinatensystem wird verwendet?**
@@ -60,7 +59,7 @@ NE (teilweise + gesperrt), TI (nur Siedlungsgebiete), VS (teilweise, jährliche 
 **Vollständige Abdeckung (20 Kantone):**
 AG, AI, AR, BE, BL, BS, FR, GE, GL, GR, SG, SH, SO, SZ, TG, UR, ZG, ZH und teilweise TI, VS
 
-Parzellen in Kantonen ohne WFS-Zugang werden zwar per EGRID gefunden, zeigen aber 0 m² Bodenbedeckung. Prüfen Sie die Spalte `check_wfs` im Export.
+Grundstücke in Kantonen ohne WFS-Zugang werden zwar per EGRID gefunden, zeigen aber 0 m² Bodenbedeckung. Prüfen Sie die Spalte `check_wfs` im Export.
 
 Quelle: [geodienste.ch/services/av](https://www.geodienste.ch/services/av) — Stand März 2025.
 
@@ -70,14 +69,13 @@ Quelle: [geodienste.ch/services/av](https://www.geodienste.ch/services/av) — S
 
 ### Que fait cette application ?
 
-L'application calcule la surface (m²) de chaque **type de couverture du sol** à l'intérieur de chaque parcelle cadastrale suisse, à partir des données officielles de la mensuration (geodienste.ch) et de swisstopo.
+L'application calcule, par **parcelle** cadastrale suisse, la surface qu'occupe chaque **type de couverture du sol**, et analyse en plus les **zones à bâtir** et les **milieux naturels OFEV**. Elle s'appuie sur les données officielles de la mensuration (geodienste.ch) et de swisstopo / geo.admin.ch. Les surfaces sont affichées en hectares (ha) — commutables en m² dans l'en-tête.
 
 ### Guide rapide
 
-1. **Charger un fichier CSV ou Excel** contenant au minimum deux colonnes : `ID` et `EGRID`.
-   Les colonnes supplémentaires sont conservées et exportées avec le préfixe `input_`.
-2. **Consulter les résultats** — carte, tableau et résumé affichent la couverture du sol par parcelle.
-3. **Exporter** — télécharger en CSV, Excel ou GeoJSON.
+1. **Choisir une parcelle** — cliquer sur une parcelle de la carte ou rechercher par EGRID, numéro de parcelle ou adresse. Ou, dans l'onglet **Téléversement par lot (CSV)**, charger un fichier CSV/Excel avec les colonnes `ID` et `EGRID` (les colonnes supplémentaires sont conservées avec le préfixe `input_`).
+2. **Consulter les résultats** — carte, tableau et résumé affichent, par parcelle, la couverture du sol, les zones à bâtir et les milieux naturels OFEV.
+3. **Exporter** — CSV des parcelles, CSV de couverture du sol, Excel (une feuille par couche), GeoJSON (toutes les couches dans une FeatureCollection, un champ `layer` par entité) ou un rapport HTML autonome.
 
 ### Qu'est-ce que l'EGRID ?
 
@@ -133,14 +131,13 @@ Source : [geodienste.ch/services/av](https://www.geodienste.ch/services/av) — 
 
 ### Cosa fa questa applicazione?
 
-L'applicazione calcola la superficie (m²) di ciascun **tipo di copertura del suolo** all'interno di ogni particella catastale svizzera, utilizzando i dati ufficiali della misurazione (geodienste.ch) e di swisstopo.
+L'applicazione calcola, per ogni **particella** catastale svizzera, la superficie occupata da ciascun **tipo di copertura del suolo** e analizza inoltre le **zone edificabili** e gli **ambienti naturali UFAM**. Utilizza i dati ufficiali della misurazione (geodienste.ch) e di swisstopo / geo.admin.ch. Le superfici sono visualizzate in ettari (ha) — commutabili in m² nell'intestazione.
 
 ### Guida rapida
 
-1. **Caricare un file CSV o Excel** con almeno due colonne: `ID` ed `EGRID`.
-   Le colonne aggiuntive vengono conservate ed esportate con il prefisso `input_`.
-2. **Consultare i risultati** — carta, tabella e riepilogo mostrano la copertura del suolo per particella.
-3. **Esportare** — scaricare in CSV, Excel o GeoJSON.
+1. **Scegliere una particella** — fare clic su una particella nella carta oppure cercare per EGRID, numero di particella o indirizzo. In alternativa, nella scheda **Caricamento in blocco (CSV)**, caricare un file CSV/Excel con le colonne `ID` ed `EGRID` (le colonne aggiuntive vengono mantenute con il prefisso `input_`).
+2. **Consultare i risultati** — carta, tabella e riepilogo mostrano, per particella, la copertura del suolo, le zone edificabili e gli ambienti naturali UFAM.
+3. **Esportare** — CSV delle particelle, CSV della copertura del suolo, Excel (un foglio per livello), GeoJSON (tutti i livelli in una FeatureCollection, un campo `layer` per elemento) o un rapporto HTML autonomo.
 
 ### Cos'è l'EGRID?
 
@@ -193,14 +190,13 @@ Fonte: [geodienste.ch/services/av](https://www.geodienste.ch/services/av) — st
 
 ### What does this application do?
 
-The application calculates the area (m²) of each **land cover type** within each Swiss cadastral parcel, using official surveying data from geodienste.ch and swisstopo.
+The application calculates, per Swiss cadastral **parcel**, the area each **land cover type** occupies, and additionally analyses **building zones** and **FOEN habitats**. It uses official surveying data from geodienste.ch and swisstopo / geo.admin.ch. Areas are shown in hectares (ha) — switchable to m² in the header.
 
 ### Quick start
 
-1. **Upload a CSV or Excel file** with at least two columns: `ID` and `EGRID`.
-   Additional columns are preserved and exported with the prefix `input_`.
-2. **Review results** — map, table, and summary show land cover per parcel.
-3. **Export** — download as CSV, Excel, or GeoJSON.
+1. **Pick a parcel** — click a parcel on the map, or search by EGRID, parcel number, or address. Or, in the **Batch upload (CSV)** tab, upload a CSV/Excel file with `ID` and `EGRID` columns (extra columns are preserved with the `input_` prefix).
+2. **Review results** — map, table, and summary show land cover, building zones, and FOEN habitats per parcel.
+3. **Export** — Parcels CSV, Land Cover CSV, Excel (one sheet per layer), GeoJSON (all layers in one FeatureCollection, a `layer` field per feature), or a self-contained HTML report.
 
 ### What is EGRID?
 
@@ -259,5 +255,7 @@ Source: [geodienste.ch/services/av](https://www.geodienste.ch/services/av) — a
 
 | Daten | Quelle | URL |
 |-------|--------|-----|
-| Parzellen | swisstopo Cadastralwebmap | api3.geo.admin.ch |
-| Bodenbedeckung | Amtliche Vermessung (WFS) | geodienste.ch |
+| Grundstücke / Parcels | swisstopo Cadastralwebmap (find + Identify) | api3.geo.admin.ch |
+| Bodenbedeckung / Land cover | Amtliche Vermessung (WFS) | geodienste.ch |
+| Bauzonen / Building zones | ARE, harmonisiert (`ch.are.bauzonen`, Identify) | geo.admin.ch |
+| Lebensräume / Habitats | BAFU Lebensraumkarte (`ch.bafu.lebensraumkarte-schweiz`, Identify) | geo.admin.ch |
