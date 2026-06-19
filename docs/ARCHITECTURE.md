@@ -193,6 +193,60 @@ caveats are in [CLASSIFICATION.md](CLASSIFICATION.md) §BAFU Lebensraumkarte.
 The web app uses **Turf.js** for clipping/area and **MapLibre GL** for display —
 no build step, static ES modules.
 
+### External APIs & data sources (web app)
+
+Everything runs in the browser — there is no backend. All requests are anonymous,
+read-only `GET`s (no API key). The federal geodata is served by the geo.admin.ch
+geoportal; AV land cover comes from geodienste.ch.
+
+**geo.admin.ch REST services** — base `https://api3.geo.admin.ch/rest/services`:
+
+| Endpoint | Type | How the web app uses it | Layer(s) | Code |
+|----------|------|-------------------------|----------|------|
+| `…/all/MapServer/find` | JSON | Resolve a parcel by EGRID (`searchField=egris_egrid`) → geometry + parcel number | `ch.kantone.cadastralwebmap-farbe` | `processor.js`, `parcelpicker.js` |
+| `…/all/MapServer/identify` | JSON | Click-to-identify the parcel under the cursor; intersect the parcel envelope with the building-zone and habitat overlays | `ch.kantone.cadastralwebmap-farbe`, `ch.are.bauzonen`, `ch.bafu.lebensraumkarte-schweiz` | `processor.js`, `parcelpicker.js` |
+| `…/ech/SearchServer` | JSON | Address / place / parcel search box (`type=locations`) | — | `parcelpicker.js` |
+| `…/all/MapServer/layersConfig?lang=…` | JSON | Look up how to render a user-added layer (WMTS vs WMS, format, timestamp) | any | `swisstopo.js` |
+| `…/ech/CatalogServer?lang=…` | JSON | Build the Geokatalog layer tree (browse & add any geo.admin.ch layer) | any | `swisstopo.js` |
+| `…/api/MapServer/{id}/legend?lang=…` | HTML | Legend + metadata in the layer-info modal (sanitised before injection) | any | `swisstopo.js` |
+
+**Map tiles & feature services:**
+
+| Service (URL template) | Type | How the web app uses it | Layer / typename |
+|------------------------|------|-------------------------|------------------|
+| `wmts.geo.admin.ch/1.0.0/ch.swisstopo.swissimage/default/current/3857/{z}/{x}/{y}.jpeg` | WMTS | "Luftbild" aerial basemap option + thumbnail | `ch.swisstopo.swissimage` |
+| `wmts.geo.admin.ch/1.0.0/{layerId}/default/{time}/3857/{z}/{x}/{y}.{fmt}` | WMTS | Render user-added overlays that `layersConfig` reports as `wmts` | any |
+| `wms.geo.admin.ch/?…REQUEST=GetMap&LAYERS=ch.kantone.cadastralwebmap-farbe&CRS=EPSG:3857&BBOX={bbox-epsg-3857}…` | WMS | Cadastral parcel overlay on the picker map | `ch.kantone.cadastralwebmap-farbe` |
+| `wms.geo.admin.ch/?…REQUEST=GetMap&LAYERS={layers}…` | WMS | Render user-added overlays that `layersConfig` reports as `wms`/aggregate | any |
+| `geodienste.ch/db/av_0/{deu\|fra\|ita\|eng}?…REQUEST=GetFeature&TYPENAMES=ms:LCSF&COUNT=1000` | WFS | Fetch official AV land-cover surfaces in the parcel bbox, then clip client-side with Turf.js | `ms:LCSF` |
+
+**Third-party CDN assets** (loaded directly in the browser):
+
+| Asset | Used for | Source |
+|-------|----------|--------|
+| MapLibre GL JS 4.7.1 | Map rendering | `unpkg.com` |
+| Turf.js 7 | Client-side geometry clip + area | `unpkg.com` |
+| SheetJS (`xlsx`) 0.18.5 | Excel import/export (loaded on demand) | `cdn.jsdelivr.net` |
+| CARTO basemaps (positron / voyager / dark-matter GL styles + raster thumbnails) | Vector/raster basemaps | `basemaps.cartocdn.com` |
+| Google Fonts (Source Sans 3, Material Symbols) | Typography + icons | `fonts.googleapis.com` |
+
+**Attribution / accreditation:**
+
+- **geo.admin.ch / swisstopo** — all `*.geo.admin.ch` services are the Swiss
+  Confederation's federal geoportal; attribution **© swisstopo** is shown on the
+  map for every layer. Data owners of the specific layers used:
+  - `ch.kantone.cadastralwebmap-farbe` — cantonal cadastral survey (AV).
+  - `ch.are.bauzonen` — **ARE** (Federal Office for Spatial Development),
+    harmonised building zones.
+  - `ch.bafu.lebensraumkarte-schweiz` — **BAFU/FOEN** (Federal Office for the
+    Environment), Habitat Map of Switzerland (TypoCH).
+  - `ch.swisstopo.swissimage` — **swisstopo** orthophoto mosaic.
+- **AV land cover (`ms:LCSF`)** — Official Cadastral Survey, owned by the cantons
+  and distributed via **geodienste.ch** (operated by the KGK-CGC).
+- **CARTO basemaps** — © OpenStreetMap contributors, © CARTO.
+- Federal geodata is published as Open Government Data; reuse requires citing the
+  source (see [geo.admin.ch terms of use](https://www.geo.admin.ch/en/general-terms-of-use-fsdi)).
+
 ### Performance
 - **Mode 2** processes ~3.5M Swiss parcels — loading all land cover at once is not
   feasible. Municipality-level batching (by `BFSNr`) keeps memory bounded.

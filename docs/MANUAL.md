@@ -29,6 +29,18 @@ Der **Eidgenössische Grundstücksidentifikator** (z.B. `CH955832730536`) ist di
 | **BF** | Bebaute Fläche | Grundfläche der Gebäude (DIN 277) |
 | **UF** | Unbebaute Fläche | Alles ausser Gebäude (DIN 277) |
 
+Zusätzlich berechnet die App pro Grundstück weitere Klassierungen, umschaltbar im Auswahlfeld **Flächenanalyse** der Zusammenfassung:
+
+| Klassierung | Werte |
+|-------------|-------|
+| **Grünfläche** | Grünfläche (humusiert) · Grünfläche (bestockt) · Nicht begrünt |
+| **Versiegelung** | Versiegelt · Unversiegelt |
+| **VBS Kategorie** | A. Siedlungsfläche · B. Landwirtschaftsfläche · C. Bestockte Fläche · D. Unproduktive Fläche |
+| **VBS Produktivität** | 1 Biologisch produktiv · 2 Biologisch unproduktiv |
+| **VBS Typ** | Typ 1 — Grünflächen in Gebäudeumgebung · Typ 2 — Übrige Grünflächen |
+
+Die vollständige Zuordnung aller 26 Bodenbedeckungsarten zu diesen Klassen finden Sie in [CLASSIFICATION.md](CLASSIFICATION.md).
+
 ### Häufige Fragen
 
 **Wohin werden meine Daten gesendet?**
@@ -94,6 +106,18 @@ L'**identifiant fédéral de bien-fonds** (p. ex. `CH955832730536`) est l'identi
 | **BF** | Surface bâtie | Emprise des bâtiments (DIN 277) |
 | **UF** | Surface non bâtie | Tout sauf les bâtiments (DIN 277) |
 
+Par ailleurs, l'application calcule pour chaque parcelle d'autres classifications, sélectionnables dans le champ **Analyse des surfaces** du résumé :
+
+| Classification | Valeurs |
+|----------------|---------|
+| **Espace vert** | Espace vert (sol humifère) · Espace vert (boisé) · Non végétalisé |
+| **Imperméabilisation** | Imperméabilisé · Non imperméabilisé |
+| **Catégorie VBS** | A. Surface d'habitat · B. Surface agricole · C. Surface boisée · D. Surface improductive |
+| **Productivité VBS** | 1 Biologiquement productif · 2 Biologiquement improductif |
+| **Type VBS** | Type 1 — Espaces verts autour des bâtiments · Type 2 — Autres espaces verts |
+
+La correspondance complète des 26 types de couverture du sol avec ces classes figure dans [CLASSIFICATION.md](CLASSIFICATION.md).
+
 ### Questions fréquentes
 
 **Où vont mes données ?**
@@ -156,6 +180,18 @@ L'**identificatore federale dei fondi** (ad es. `CH955832730536`) è l'identific
 | **BF** | Superficie costruita | Impronta degli edifici (DIN 277) |
 | **UF** | Superficie non costruita | Tutto tranne gli edifici (DIN 277) |
 
+Inoltre l'applicazione calcola per ogni particella altre classificazioni, selezionabili nel campo **Analisi delle superfici** del riepilogo:
+
+| Classificazione | Valori |
+|-----------------|--------|
+| **Spazio verde** | Spazio verde (humus) · Spazio verde (boscato) · Non inverdito |
+| **Impermeabilizzazione** | Impermeabilizzato · Non impermeabilizzato |
+| **Categoria VBS** | A. Superficie insediativa · B. Superficie agricola · C. Superficie boscata · D. Superficie improduttiva |
+| **Produttività VBS** | 1 Biologicamente produttivo · 2 Biologicamente improduttivo |
+| **Tipo VBS** | Tipo 1 — Spazi verdi nell'area edificata · Tipo 2 — Altri spazi verdi |
+
+La corrispondenza completa dei 26 tipi di copertura del suolo con queste classi è riportata in [CLASSIFICATION.md](CLASSIFICATION.md).
+
 ### Domande frequenti
 
 **Dove finiscono i miei dati?**
@@ -214,6 +250,18 @@ The **Federal Property Identifier** (e.g. `CH955832730536`) is the unique ID for
 | **UUF** | Undeveloped surroundings (*Unbearbeitete Umgebungsfläche*) | Forest, water bodies, rock, undeveloped areas (SIA 416, sec. 1.2.2) |
 | **BF** | Built-up area | Building footprint (DIN 277) |
 | **UF** | Unbuilt area | Everything except buildings (DIN 277) |
+
+The app also derives further classifications per parcel, switchable in the **Area analysis** selector of the summary:
+
+| Classification | Values |
+|----------------|--------|
+| **Green space** | Green space (soil-covered) · Green space (wooded) · Not vegetated |
+| **Imperviousness** | Sealed · Unsealed |
+| **VBS Category** | A. Settlement area · B. Agricultural area · C. Wooded area · D. Unproductive area |
+| **VBS Productivity** | 1 Biologically productive · 2 Biologically unproductive |
+| **VBS Type** | Type 1 — Green spaces near buildings · Type 2 — Other green spaces |
+
+The full mapping of all 26 land cover types to these classes is in [CLASSIFICATION.md](CLASSIFICATION.md).
 
 ### FAQ
 
