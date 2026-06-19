@@ -9,8 +9,7 @@ technical ordinance on official surveying (TVAV, SR 211.432.21, Art. 14–19). T
 data model will be replaced by **DMAV** by 2027-12-31.
 
 For each clipped land cover piece, the tool assigns it to **five** classification
-schemes. This page explains each one as a decision tree, with the full lookup
-table at the end.
+schemes. This page explains each one, with the full lookup table at the end.
 
 | Scheme | Output | What it answers |
 |--------|--------|-----------------|
@@ -78,14 +77,9 @@ BBArt = (
 total parcel area **GSF** (*Grundstücksfläche*) = **GGF** + **UF**, where
 **UF** (*Umgebungsfläche*) = **BUF** + **UUF**.
 
-```mermaid
-flowchart TD
-  A[Land cover Art] --> G{Gebäude?}
-  G -->|yes| GGF[GGF — Gebäudegrundfläche<br/>building footprint]
-  G -->|no| B{befestigt or humusiert?<br/>incl. Wytweide}
-  B -->|yes| BUF[BUF — Bearbeitete Umgebungsfläche<br/>developed surrounding]
-  B -->|no| UUF[UUF — Unbearbeitete Umgebungsfläche<br/>undeveloped surrounding: water, forest, unvegetated]
-```
+- **GGF** — `Gebaeude` (building footprint).
+- **BUF** — all *befestigt* and *humusiert* types, incl. Wytweide (developed surroundings).
+- **UUF** — everything else: water, wooded, and unvegetated types (undeveloped surroundings).
 
 > **Note:** `Wytweide_dicht`/`Wytweide_offen` are officially *bestockt* (wooded)
 > but counted as **BUF** here — actively managed pasture is *bearbeitet*.
@@ -103,18 +97,8 @@ flowchart TD
 
 ## Green space
 
-Project-specific classification with two deliberate exceptions to the AV groups:
-
-```mermaid
-flowchart TD
-  A[Land cover Art] --> Q1{geschlossener_Wald or<br/>uebrige_bestockte?}
-  Q1 -->|yes| WD[Green space — wooded]
-  Q1 -->|no| Q2{Soil-covered group?<br/>Acker_Wiese_Weide, Reben, Gartenanlage,<br/>Hoch_Flachmoor, uebrige_humusierte,<br/>Wytweide_dicht, Wytweide_offen}
-  Q2 -->|yes| SC[Green space — soil-covered]
-  Q2 -->|no| N[Not green space<br/>incl. uebrige_Intensivkultur, befestigt,<br/>Gewässer, vegetationslos, Gebäude]
-```
-
-The two exceptions:
+Project-specific classification, following the AV *humusiert* (soil-covered) and
+*bestockt* (wooded) groups with two deliberate exceptions:
 
 - **Wytweide** (`Wytweide_dicht`, `Wytweide_offen`) — officially *bestockt*, but
   treated as **soil-covered** green space because pasture dominates over tree cover.
@@ -145,21 +129,6 @@ Everything else is unsealed.
 Based on the arImmo internal document *"Auswertung naturnahe VBS Flächen"*. Three
 **layers**, applied in order. The key subtlety: **Typ exists only within
 biologically productive area** — biologically unproductive types get no Typ.
-
-```mermaid
-flowchart TD
-  A[Land cover Art] --> B{Main category?}
-  B -->|a. Siedlungsfläche| U[2 Biologisch unproduktiv]
-  B -->|b. Landwirtschaftsfläche| P[1 Biologisch produktiv]
-  B -->|c. Bestockte Fläche| P
-  B -->|d. Unproduktive Fläche| D{Fels / Gletscher_Firn / Geroell_Sand?}
-  D -->|yes| U
-  D -->|no| P
-  P --> T{Gartenanlage?}
-  T -->|yes| T1[Typ 1 — Grünfläche Gebäudeumgebung]
-  T -->|no| T2[Typ 2 — übrige Grünfläche]
-  U --> TN[no Typ]
-```
 
 ### Layer 1 — VBS Kategorie (base category a–d)
 
