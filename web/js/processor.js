@@ -130,12 +130,26 @@ export async function processRows(rows, onProgress, options = {}) {
       if (options.bauzonen && parcelGeom) {
         try {
           const bz = await fetchBauzonen(parcelGeom);
-          bauzonenRows = clipBauzonen(parcelGeom, bz.features, id, egrid).results;
+          const clip = clipBauzonen(parcelGeom, bz.features, id, egrid);
+          bauzonenRows = clip.results;
+          // Building zones aren't wall-to-wall, so the parcel area no zone covers is
+          // genuinely zone-free — emit it as an explicit "Ohne Bauzone" polygon so the
+          // zones sum to the full parcel area. Area is exact (parcel − covered); the
+          // geometry is best-effort (null on complex parcels — see ohneBauzoneGeometry).
+          const covered = bauzonenRows.reduce((s, r) => s + r._rawArea, 0);
+          const gap = parcelArea - covered;
+          if (gap > OHNE_BAUZONE_MIN_AREA) {
+            bauzonenRows.push(makeBauzoneRow(id, egrid, "Ohne Bauzone", "", "", gap, ohneBauzoneGeometry(parcelGeom, bauzonenRows)));
+          }
           const bzAgg = aggregateBauzonen(bauzonenRows);
           parcel.bauzonen = bzAgg.bauzonen;
           parcel.bauzonen_m2 = bzAgg.bauzonen_m2;
-          parcel.check_bauzonen = bz.truncated ? "truncated" : "ok";
-          // One column per zone type (m²) — e.g. bauzonen_Wohnzonen_m2. Made
+          // ok | truncated / partial — a capped or dropped zone may be hiding inside
+          // "Ohne Bauzone", so the computed zone-free area can't be fully trusted.
+          parcel.check_bauzonen = bz.truncated ? "truncated"
+            : (bz.dropped.length > 0 || clip.skipped > 0) ? "partial"
+            : "ok";
+          // One column per zone type (m²) — e.g. bauzonen_wohnzonen_m2. Made
           // rectangular across all parcels in the flatten pass below.
           for (const [name, area] of Object.entries(bzAgg.zones)) {
             parcel[bauzoneAreaKey(name)] = area;
@@ -151,11 +165,37 @@ export async function processRows(rows, onProgress, options = {}) {
       if (options.habitat && parcelGeom) {
         try {
           const bafu = await fetchLandCoverBAFU(parcelGeom);
-          habitatRows = clipHabitat(parcelGeom, bafu.features, id, egrid).results;
+          const clip = clipHabitat(parcelGeom, bafu.features, id, egrid);
+          habitatRows = clip.results;
+          // BAFU Lebensraumkarte is wall-to-wall, but geo.admin.ch returns `null`
+          // geometry for oversized features (e.g. city-scale "Asphalt- und
+          // Betonstrasse"), which then can't be clipped. The parcel area the returned
+          // features leave uncovered is exactly that dropped feature's share — so when
+          // exactly one feature was dropped and the data is trustworthy (complete +
+          // no clip failures), attribute the whole gap to its type. Exact for area;
+          // it has no geometry, so it can't be drawn on the map.
+          const covered = habitatRows.reduce((s, r) => s + r._rawArea, 0);
+          const gap = parcelArea - covered;
+          const significantGap = gap > parcelArea * HABITAT_GAP_MIN_FRAC;
+          const trustworthy = !bafu.truncated && clip.skipped === 0;
+          let gapFilled = false;
+          if (trustworthy && bafu.dropped.length === 1 && significantGap) {
+            const typoch = bafu.dropped[0].properties?.typoch_de || "";
+            if (typoch) {
+              habitatRows.push(makeHabitatRow(id, egrid, typoch, "", bafu.dropped[0].id, gap, null));
+              gapFilled = true;
+            }
+          }
           const hbAgg = aggregateHabitat(habitatRows);
           parcel.habitat = hbAgg.habitat;
           parcel.habitat_m2 = hbAgg.habitat_m2;
-          parcel.check_habitat = bafu.error ? "error" : (bafu.truncated ? "truncated" : "ok");
+          // ok | estimated (a dropped feature was gap-filled) | partial (dropped
+          // feature(s) we couldn't safely attribute) | truncated | error.
+          parcel.check_habitat = bafu.error ? "error"
+            : bafu.truncated ? "truncated"
+            : gapFilled ? "estimated"
+            : (bafu.dropped.length > 0 && significantGap) ? "partial"
+            : "ok";
           // One column per TypoCH level-1 habitat group (m²) — e.g. habitat_waelder_m2.
           // Made rectangular across all parcels in the flatten pass below.
           for (const [name, area] of Object.entries(hbAgg.types)) {
@@ -465,13 +505,25 @@ async function fetchIdentify(layerId, parcelGeom, limit) {
   });
   const resp = await fetchWithRetry(`${API.IDENTIFY}?${params}`);
   const data = await resp.json();
-  return (data.results || [])
-    .filter((r) => r.geometry)
-    .map((r) => ({ geometry: r.geometry, properties: r.properties || r.attributes || {}, id: r.featureId ?? r.id }));
+  const results = data.results || [];
+  // geo.admin.ch returns `geometry: null` for features whose geometry exceeds a
+  // server-side size cap (e.g. city-scale "Asphalt- und Betonstrasse"). Keep those
+  // aside (type only) so callers can account for them instead of silently losing them.
+  const features = [], dropped = [];
+  for (const r of results) {
+    const properties = r.properties || r.attributes || {};
+    if (r.geometry) features.push({ geometry: r.geometry, properties, id: r.featureId ?? r.id });
+    else dropped.push({ properties, id: r.featureId ?? r.id });
+  }
+  return { features, dropped, total: results.length };
 }
 
 /** Max BAFU habitat features requested per parcel bbox (Identify limit cap). */
 const BAFU_MAX_FEATURES = 200;
+
+/** Min share of the parcel a dropped (null-geometry) habitat feature must cover
+ *  before we gap-fill it — below this it's sliver noise, not a missing big feature. */
+const HABITAT_GAP_MIN_FRAC = 0.01;
 
 /**
  * Fetch BAFU Lebensraumkarte (habitat) features for a parcel — fallback where AV
@@ -479,11 +531,11 @@ const BAFU_MAX_FEATURES = 200;
  */
 async function fetchLandCoverBAFU(parcelGeom) {
   try {
-    const features = await fetchIdentify(BAFU_LAYER_ID, parcelGeom, BAFU_MAX_FEATURES);
-    return { features, error: false, truncated: features.length >= BAFU_MAX_FEATURES };
+    const { features, dropped, total } = await fetchIdentify(BAFU_LAYER_ID, parcelGeom, BAFU_MAX_FEATURES);
+    return { features, dropped, error: false, truncated: total >= BAFU_MAX_FEATURES };
   } catch (err) {
     console.warn("BAFU identify failed after retries:", err.message);
-    return { features: [], error: true, truncated: false };
+    return { features: [], dropped: [], error: true, truncated: false };
   }
 }
 
@@ -492,10 +544,16 @@ async function fetchLandCoverBAFU(parcelGeom) {
 const BAUZONEN_LAYER_ID = "ch.are.bauzonen";
 const BAUZONEN_MAX_FEATURES = 200; // identify honours up to 200; matches BAFU cap
 
+/** Min zone-free area (m²) before we emit an "Ohne Bauzone" remainder row — keeps
+ *  the zones summing to the parcel area without adding sub-m² sliver rows. */
+const OHNE_BAUZONE_MIN_AREA = 1;
+
 /** Fetch building-zone features intersecting a parcel bbox (geo.admin.ch Identify). */
 async function fetchBauzonen(parcelGeom) {
-  const features = await fetchIdentify(BAUZONEN_LAYER_ID, parcelGeom, BAUZONEN_MAX_FEATURES);
-  return { features, truncated: features.length >= BAUZONEN_MAX_FEATURES };
+  // A dropped (null-geometry) zone would inflate the "Ohne Bauzone" remainder, so the
+  // caller flags those parcels rather than trusting the computed zone-free area.
+  const { features, dropped, total } = await fetchIdentify(BAUZONEN_LAYER_ID, parcelGeom, BAUZONEN_MAX_FEATURES);
+  return { features, dropped, truncated: total >= BAUZONEN_MAX_FEATURES };
 }
 
 /** Clip each `features` item to `parcelGeom` and call `onPiece(feature, geometry,
@@ -522,21 +580,42 @@ function clipFeatures(parcelGeom, features, onPiece) {
 /** Clip Bauzonen (building zones) to a parcel — one detail row per clipped piece.
  *  `art` holds the zone name (the generic "type" field shared by all overlay
  *  layers, so the map/table/summary treat it uniformly). */
+/** Build one Bauzonen detail row. Shared by the clip and the "Ohne Bauzone"
+ *  remainder (which passes name "Ohne Bauzone", no code, and a best-effort geometry). */
+function makeBauzoneRow(id, egrid, name, code, fid, area, geometry) {
+  return {
+    id, egrid, fid,
+    art: name,
+    bauzone_code: code,
+    lc_source: "Bauzonen",
+    area_m2: round2(area),
+    _rawArea: area,
+    _geometry: geometry,
+  };
+}
+
+/** Best-effort geometry for the zone-free remainder: parcel minus the union of the
+ *  clipped zones. Returns the whole parcel when no zone touches it, and null when
+ *  turf.union/difference throws on a complex parcel — the caller keeps the exact area. */
+function ohneBauzoneGeometry(parcelGeom, zoneRows) {
+  if (zoneRows.length === 0) return parcelGeom;
+  try {
+    const feats = zoneRows.map((r) => turf.feature(r._geometry));
+    const union = feats.length === 1 ? feats[0] : turf.union(turf.featureCollection(feats));
+    const diff = union && turf.difference(turf.featureCollection([turf.feature(parcelGeom), union]));
+    return diff ? diff.geometry : null;
+  } catch {
+    return null;
+  }
+}
+
 function clipBauzonen(parcelGeom, features, id, egrid) {
   const results = [];
   const skipped = clipFeatures(parcelGeom, features, (bz, geometry, area) => {
     const name = bz.properties?.ch_bez_d || bz.properties?.bz_bezeichnung || "?";
     const code = bz.properties?.ch_code_hn || bz.properties?.bz_nutzung || "";
     const fid = bz.id || bz.properties?.fid || "";
-    results.push({
-      id, egrid, fid,
-      art: name,
-      bauzone_code: code,
-      lc_source: "Bauzonen",
-      area_m2: round2(area),
-      _rawArea: area,
-      _geometry: geometry,
-    });
+    results.push(makeBauzoneRow(id, egrid, name, code, fid, area, geometry));
   });
   return { results, skipped };
 }
@@ -623,36 +702,40 @@ function clipLandCover(parcelGeom, lcFeatures, id, egrid) {
 /** Clip BAFU habitat features to a parcel and classify via TypoCH. `art` holds the
  *  TypoCH label; SIA 416 / DIN 277 / sealed are `null` (a modeled habitat map can't
  *  supply them) so aggregation/summary skip them via the null check. */
+/** Build one BAFU habitat detail row. Shared by the clip and the gap-fill — the
+ *  gap-fill passes `geometry: null` (the dropped feature whose geometry the Identify
+ *  endpoint won't serve), so the row carries area but can't be drawn. */
+function makeHabitatRow(id, egrid, typoch, prob, fid, area, geometry) {
+  const cls = classifyBafu(typoch);
+  return {
+    id,
+    egrid,
+    fid,
+    art: typoch, // TypoCH habitat label, e.g. "6.3.1 Buchenwald"
+    bfsnr: "",
+    gwr_egid: "",
+    check_greenspace: cls.greenSpace,
+    vbs_kategorie: VBS_KATEGORIE_LABELS[cls.vbsKategorie] || "",
+    vbs_produktiv: VBS_PRODUKTIV_LABELS[cls.vbsProduktiv] || "",
+    vbs_typ: cls.vbsTyp ? (VBS_TYP_LABELS[cls.vbsTyp] || "") : "",
+    lc_source: "BAFU",
+    prob,
+    area_m2: round2(area),
+    _rawArea: area,
+    _geometry: geometry,
+    _sia416: null, // not derivable from a modeled habitat map
+    _din277: null,
+    _sealed: null,
+    _vbsKategorie: cls.vbsKategorie,
+    _vbsProduktiv: cls.vbsProduktiv,
+    _vbsTyp: cls.vbsTyp,
+  };
+}
+
 function clipHabitat(parcelGeom, bafuFeatures, id, egrid) {
   const results = [];
   const skipped = clipFeatures(parcelGeom, bafuFeatures, (lc, geometry, area) => {
-    const typoch = lc.properties?.typoch_de || "";
-    const prob = lc.properties?.prob_de || "";
-    const fid = lc.id || lc.properties?.polyid || "";
-    const cls = classifyBafu(typoch);
-    results.push({
-      id,
-      egrid,
-      fid,
-      art: typoch, // TypoCH habitat label, e.g. "6.3.1 Buchenwald"
-      bfsnr: "",
-      gwr_egid: "",
-      check_greenspace: cls.greenSpace,
-      vbs_kategorie: VBS_KATEGORIE_LABELS[cls.vbsKategorie] || "",
-      vbs_produktiv: VBS_PRODUKTIV_LABELS[cls.vbsProduktiv] || "",
-      vbs_typ: cls.vbsTyp ? (VBS_TYP_LABELS[cls.vbsTyp] || "") : "",
-      lc_source: "BAFU",
-      prob,
-      area_m2: round2(area),
-      _rawArea: area,
-      _geometry: geometry,
-      _sia416: null, // not derivable from a modeled habitat map
-      _din277: null,
-      _sealed: null,
-      _vbsKategorie: cls.vbsKategorie,
-      _vbsProduktiv: cls.vbsProduktiv,
-      _vbsTyp: cls.vbsTyp,
-    });
+    results.push(makeHabitatRow(id, egrid, lc.properties?.typoch_de || "", lc.properties?.prob_de || "", lc.id || lc.properties?.polyid || "", area, geometry));
   });
   return { results, skipped };
 }

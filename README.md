@@ -69,6 +69,30 @@ The original FME Form workspace (`.fmw`) that the other two solutions reproduce.
 - **[Architecture](docs/ARCHITECTURE.md)** — processing pipeline, implementation, and limitations.
 - **[Docs index](docs/README.md)** — start here + glossary.
 
+## Known limitations
+
+- **Land-cover coverage** depends on cantonal WFS approval — see the data
+  coverage note above. 6 cantons return 0 m² in the Web App; the Python CLI has
+  full coverage from a local GeoPackage.
+- **Overlay API caps (geo.admin.ch Identify).** The Bauzonen and BAFU habitat
+  layers are fetched per parcel from the Identify API, which returns at most
+  **200 features per request** and **omits the geometry of oversized features**
+  (e.g. a city-scale `Asphalt- und Betonstrasse` habitat polygon comes back with
+  `null` geometry). The **Web App works around this** — it attributes the
+  uncovered parcel area to the dropped type so each layer still sums to the
+  parcel area, and flags affected parcels via `check_habitat` / `check_bauzonen`
+  (`estimated` / `partial` / `truncated`). The **Python CLI does not yet** apply
+  these workarounds (see [`python/TODO.md`](python/TODO.md)), so web and Python
+  results can differ for parcels with very large overlay features.
+- **BAFU habitat latency.** The habitat layer is slow to identify (~0.3–1 s per
+  parcel, occasional multi-second spikes) and is the main source of request
+  timeouts on large batches. It is available as a bulk
+  [STAC](https://data.geo.admin.ch/api/stac/v1/collections/ch.bafu.lebensraumkarte-schweiz)
+  download, which the Python pipeline should prefer for large runs.
+- **"Ohne Bauzone" geometry is best-effort.** The per-parcel zone-free remainder
+  has an exact area, but its polygon may be omitted on complex parcels where the
+  geometry difference fails (the area is always correct).
+
 ## Standards & References
 
 - [SIA 416:2003](https://www.sia.ch/de/dienstleistungen/sia-norm/geodaten/) — building surfaces and volumes (GGF / BUF / UUF)

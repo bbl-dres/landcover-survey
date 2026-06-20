@@ -146,7 +146,9 @@ main { padding: 22px 24px 40px; max-width: 1320px; margin: 0 auto; }
 .dropdown-menu.open { display: block; }
 .dropdown-menu label { display: flex; align-items: center; gap: 8px; padding: 4px 6px; font-size: 13px; cursor: pointer; border-radius: 4px; }
 .dropdown-menu label:hover { background: var(--gray-50); }
-.table-wrap { background: #fff; border: 1px solid var(--gray-200); border-radius: var(--radius); overflow: auto; }
+.table-wrap { background: #fff; border: 1px solid var(--gray-200); border-radius: var(--radius); overflow: hidden; }
+/* Only the table scrolls horizontally — the pager (a sibling) stays put. */
+.table-scroll { overflow-x: auto; }
 table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
 th, td { padding: 8px 12px; text-align: left; white-space: nowrap; border-bottom: 1px solid var(--gray-100); }
 th {
@@ -229,7 +231,7 @@ footer#footer .footer-links a:hover { text-decoration: underline; }
   main { max-width: none; padding: 8px 0 0; }
   .card, .panel, .table-wrap { box-shadow: none; border: 1px solid var(--gray-300); break-inside: avoid; }
   .charts, .bar-row, tr { break-inside: avoid; }
-  .table-wrap { overflow: visible; }
+  .table-wrap, .table-scroll { overflow: visible; }
   thead th, tfoot td { position: static; }
   .egrid-link { color: #000; text-decoration: none; }
   .pill-x, .pill-reset, .filtered-flag { display: none !important; }
@@ -300,6 +302,8 @@ footer#footer .footer-links a:hover { text-decoration: underline; }
 /* summary tables (replace bar charts) */
 .summary-tables { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
 .summary-tables .panel.span2 { grid-column: 1 / -1; }
+/* Datenqualität: breathing room between the KPI cards and the tables below */
+#panel-quality .summary-tables { margin-top: 24px; }
 table.sumtbl { width: 100%; border-collapse: collapse; font-size: 13px; }
 table.sumtbl th, table.sumtbl td { padding: 6px 8px; border-bottom: 1px solid var(--gray-100); }
 table.sumtbl th { text-align: left; font-size: 12px; color: var(--gray-500); font-weight: 500; }
@@ -338,8 +342,38 @@ table.sumtbl .sumbar > i { display: block; height: 100%; background: #9db4cc; bo
 
 /* Map widget (swisstopo polygons, MapLibre loaded on demand) */
 .map-panel { padding: 0; overflow: hidden; }
-#map { height: 460px; width: 100%; }
+#map { height: 560px; width: 100%; }
 .map-msg { padding: 32px 24px; color: var(--gray-500); font-size: 14px; text-align: center; }
 .maplibregl-popup-content { font: inherit; font-size: 12.5px; line-height: 1.5; padding: 9px 12px; border-radius: var(--radius); }
 .maplibregl-ctrl-group button.map-home { display: flex; align-items: center; justify-content: center; color: #333; }
 .maplibregl-ctrl-group button.map-home:hover { color: #000; }
+/* Map layer control (top-left) */
+.maplibregl-ctrl-group.layer-ctrl { padding: 6px 9px; }
+.layer-ctrl label { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--gray-700); cursor: pointer; line-height: 1.8; white-space: nowrap; }
+.layer-ctrl input { cursor: pointer; margin: 0; }
+/* Map scale bar (bottom-left) */
+.maplibregl-ctrl-scale { background: rgba(255,255,255,0.72); border-color: var(--gray-400); color: var(--gray-700); font-size: 11px; }
+/* Map legend (bottom-right) — swatches for the visible layers */
+.map-legend { background: rgba(255,255,255,0.92); border-radius: var(--radius); box-shadow: var(--shadow-sm); padding: 7px 10px; font-size: 11px; color: var(--gray-700); line-height: 1.5; max-height: 300px; overflow-y: auto; max-width: 230px; }
+.map-legend .lg-title { font-weight: 600; color: var(--gray-600); margin: 4px 0 1px; }
+.map-legend .lg-title:first-child { margin-top: 0; }
+.map-legend .lg-row { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.map-legend .lg-sw { display: inline-block; width: 11px; height: 11px; border-radius: 2px; flex: 0 0 auto; }
+/* Popup secondary line (layer name) */
+.maplibregl-popup-content .pop-sub { color: var(--gray-500); }
+/* Category colour swatch in summary tables */
+.cat-sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 7px; vertical-align: baseline; flex: 0 0 auto; }
+/* Map right-click context menu (mirrors the web app) */
+.map-ctxmenu { position: absolute; z-index: 1000; display: none; min-width: 200px; overflow: hidden;
+  background: #fff; border: 1px solid var(--gray-200); border-radius: var(--radius); box-shadow: var(--shadow-md);
+  font-size: 13px; color: var(--gray-700); }
+.map-ctxmenu.show { display: block; }
+.map-ctxmenu.flip-h { transform: translateX(-100%); }
+.map-ctxmenu.flip-v { transform: translateY(-100%); }
+.map-ctxmenu.flip-h.flip-v { transform: translate(-100%, -100%); }
+.map-ctxmenu .ctxitem { display: flex; align-items: center; gap: 10px; padding: 9px 13px; cursor: pointer; white-space: nowrap; }
+.map-ctxmenu .ctxitem:hover { background: var(--gray-50); }
+.map-ctxmenu .ctxitem svg { color: var(--gray-500); flex: 0 0 auto; }
+.map-ctxmenu .ctx-coords-text { font-variant-numeric: tabular-nums; }
+.map-ctxmenu .ctxitem.copied { background: #e6f4ea; color: #137333; }
+.map-ctxmenu .ctxitem.copied svg { color: #137333; }

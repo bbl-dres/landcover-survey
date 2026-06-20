@@ -171,13 +171,13 @@ def run(
                 parcels_out, lc_out = _run_layer_analysis(
                     BAUZONEN_CONFIG, "bauzonen",
                     parcels_gdf, parcels_out, lc_out,
-                    key_fn=slugify,
+                    # Bauzonen names are already the harmonised Hauptnutzung categories.
                 )
             if habitat:
                 parcels_out, lc_out = _run_layer_analysis(
                     HABITAT_CONFIG, "habitat",
                     parcels_gdf, parcels_out, lc_out,
-                    key_fn=lambda name: slugify(habitat_l1_name(name)),
+                    name_fn=habitat_l1_name,  # group TypoCH labels to level-1 (names + per-type)
                 )
         else:
             logger.warning("No parcel geometries available — skipping layer analyses")
@@ -611,25 +611,20 @@ def _clip_single_parcel(
 # Output helpers
 # ---------------------------------------------------------------------------
 
-# Final output schema: lowercase the static identifier / QA column ids. The
-# aggregate (sia416_/din277_/vbs_/sealed/greenspace), per-type (av_/bauzonen_/
-# habitat_) and detail vbs_* columns are already produced with their new names.
-_OUTPUT_RENAME = {
-    "ID": "id",
-    "EGRID": "egrid",
-    "Nummer": "nummer",
-    "BFSNr": "bfsnr",
-    "Check_EGRID": "check_egrid",
-    "Flaeche": "flaeche",
-    "GWR_EGID": "gwr_egid",
-    "Art": "art",
-    "Check_GreenSpace": "check_greenspace",
-}
-
-
 def _lowercase_schema(df: DataFrame) -> DataFrame:
-    """Rename the static capitalized identifier/QA columns to the output schema."""
-    return df.rename(columns=_OUTPUT_RENAME)
+    """Final output schema: lowercase every column id except passthrough ``input_*``.
+
+    The aggregate / per-type / detail columns are already produced lowercase; this
+    catches the static identifier/QA columns (ID, EGRID, Nummer, BFSNr, Check_EGRID,
+    Flaeche, GWR_EGID, Art, Check_GreenSpace) and — by generalizing over *all*
+    columns rather than an allowlist — any future capitalized output column too, so
+    none can silently ship mis-cased. User passthrough columns keep their original
+    casing (only the ``input_`` prefix is lowercase).
+    """
+    return df.rename(columns={
+        c: c.lower() for c in df.columns
+        if c != c.lower() and not c.startswith("input_")
+    })
 
 
 _SIA416_CATEGORIES = ("GGF", "BUF", "UUF")
@@ -926,7 +921,7 @@ def _run_layer_analysis(
     parcels_gdf: GeoDataFrame,
     parcels_out: DataFrame,
     lc_out: DataFrame,
-    key_fn=None,
+    name_fn=None,
 ) -> tuple[DataFrame, DataFrame]:
     """Intersect parcels and green spaces with a Swisstopo layer.
 
@@ -980,19 +975,21 @@ def _run_layer_analysis(
         parcel_results.extend(h.to_dict() for _, h in hits.iterrows())
 
     raw_parcels = DataFrame(parcel_results) if parcel_results else DataFrame()
-    parcel_agg = _aggregate_layer_results(raw_parcels, "EGRID", name_col, label)
+    parcel_agg = _aggregate_layer_results(raw_parcels, "EGRID", name_col, label, name_fn=name_fn)
     parcels_out = parcels_out.merge(parcel_agg, on="EGRID", how="left")
     parcels_out[f"{label}"] = parcels_out[f"{label}"].fillna("")
     parcels_out[f"{label}_m2"] = parcels_out[f"{label}_m2"].fillna("")
 
-    # Per-type area columns: {label}_{slug}_m2 (rectangular, 0-filled).
-    if key_fn is not None:
-        pertype = _aggregate_layer_pertype(raw_parcels, "EGRID", name_col, label, key_fn)
-        pertype_cols = [c for c in pertype.columns if c != "EGRID"]
-        if pertype_cols:
-            parcels_out = parcels_out.merge(pertype, on="EGRID", how="left")
-            for col in pertype_cols:
-                parcels_out[col] = parcels_out[col].fillna(0.0)
+    # Per-type area columns: {label}_{slug}_m2 (rectangular, 0-filled). The slug is
+    # derived from the SAME grouping (name_fn) as the joined names above, so the two
+    # can't diverge.
+    slug_fn = slugify if name_fn is None else (lambda v: slugify(name_fn(v)))
+    pertype = _aggregate_layer_pertype(raw_parcels, "EGRID", name_col, label, slug_fn)
+    pertype_cols = [c for c in pertype.columns if c != "EGRID"]
+    if pertype_cols:
+        parcels_out = parcels_out.merge(pertype, on="EGRID", how="left")
+        for col in pertype_cols:
+            parcels_out[col] = parcels_out[col].fillna(0.0)
 
     # --- Phase 3: Intersect green-space land covers with CACHED features ---
     has_geometry = "geometry" in lc_out.columns
@@ -1053,20 +1050,33 @@ def _run_layer_analysis(
 
 def _aggregate_layer_results(
     raw: DataFrame,
-    group_key: str | list[str],
+    group_key: str,
     name_col: str,
     label: str,
+    name_fn=None,
 ) -> DataFrame:
-    """Aggregate intersection results into semicolon-separated arrays.
+    """Aggregate intersection results into semicolon-separated arrays per parcel.
 
-    Groups by *group_key* and produces two columns:
-    - ``{label}`` — semicolon-separated feature names
-    - ``{label}_m2`` — semicolon-separated intersection areas
+    Names are first mapped through *name_fn* (e.g. the habitat TypoCH→level-1
+    grouping; identity for Bauzonen), then **deduplicated and area-summed per
+    group** so ``{label}`` (names) shares the exact grouping of the per-type
+    ``{label}_{slug}_m2`` columns. Produces, largest area first:
+    - ``{label}`` — semicolon-separated group names
+    - ``{label}_m2`` — semicolon-separated summed areas
     """
     if raw.empty:
-        if isinstance(group_key, str):
-            group_key = [group_key]
-        return DataFrame(columns=group_key + [label, f"{label}_m2"])
+        return DataFrame(columns=[group_key, label, f"{label}_m2"])
+
+    df = raw[[group_key, name_col, "intersection_area_m2"]].copy()
+    if name_fn is not None:
+        df[name_col] = df[name_col].map(name_fn)
+    # Sum area per (parcel, group name), largest first.
+    by = (
+        df.groupby([group_key, name_col])["intersection_area_m2"]
+        .sum()
+        .reset_index()
+        .sort_values([group_key, "intersection_area_m2"], ascending=[True, False])
+    )
 
     def _join_names(s):
         return "; ".join(str(v) for v in s)
@@ -1074,7 +1084,7 @@ def _aggregate_layer_results(
     def _join_areas(s):
         return "; ".join(f"{v:.1f}" for v in s)
 
-    grouped = raw.groupby(group_key, sort=False).agg(
+    grouped = by.groupby(group_key, sort=False).agg(
         **{
             label: (name_col, _join_names),
             f"{label}_m2": ("intersection_area_m2", _join_areas),

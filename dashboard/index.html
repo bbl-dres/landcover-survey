@@ -40,7 +40,8 @@
       <label class="dl-title">Titel<input id="dl-title" type="text" value="BBL Landcover Dashboard"></label>
       <button class="dl-item" id="dl-html">Dashboard (HTML, offline)</button>
       <button class="dl-item" id="dl-xlsx">Tabelle als Excel (.xlsx)</button>
-      <div class="dl-hint" id="dl-hint">HTML = alle Grundstücke · Excel = aktuelle (gefilterte) Tabelle</div>
+      <button class="dl-item" id="dl-geojson">Grundstücke als GeoJSON (.geojson)</button>
+      <div class="dl-hint" id="dl-hint">HTML = alle Grundstücke · Excel &amp; GeoJSON = aktuelle (gefilterte) Auswahl</div>
     </div>
   </div>
 </header>
@@ -161,11 +162,13 @@
         </div>
       </div>
       <div class="table-wrap">
-        <table id="table">
-          <thead><tr id="thead-row"></tr></thead>
-          <tbody id="tbody"></tbody>
-          <tfoot><tr id="tfoot-row"></tr></tfoot>
-        </table>
+        <div class="table-scroll">
+          <table id="table">
+            <thead><tr id="thead-row"></tr></thead>
+            <tbody id="tbody"></tbody>
+            <tfoot><tr id="tfoot-row"></tr></tfoot>
+          </table>
+        </div>
         <div class="pager">
           <span class="spacer"></span>
           <button class="btn" id="prev">◀ Zurück</button>
@@ -188,10 +191,20 @@
       </div>
       <div class="section-title">Auffällige Grundstücke <span class="count" id="q-count"></span></div>
       <div class="table-wrap">
-        <table id="q-table">
-          <thead><tr><th>ID</th><th>E-GRID</th><th>Ort</th><th>Hinweis</th></tr></thead>
-          <tbody id="q-tbody"></tbody>
-        </table>
+        <div class="table-scroll">
+          <table id="q-table">
+            <thead><tr><th>ID</th><th>E-GRID</th><th>Ort</th><th>Hinweis</th></tr></thead>
+            <tbody id="q-tbody"></tbody>
+          </table>
+        </div>
+        <div class="pager">
+          <span class="spacer"></span>
+          <button class="btn" id="q-prev">◀ Zurück</button>
+          <span id="q-page-info"></span>
+          <button class="btn" id="q-next">Weiter ▶</button>
+          <span class="spacer"></span>
+          <label>Zeilen: <select id="q-page-size"><option>25</option><option>50</option><option>100</option></select></label>
+        </div>
       </div>
     </section>
 
