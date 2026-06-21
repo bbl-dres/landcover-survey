@@ -34,17 +34,42 @@
   </a>
   <span class="spacer"></span>
   <button class="hbtn hbtn-light" id="btn-new" title="Andere GeoJSON laden">Neue Datei</button>
-  <div class="dropdown dl-wrap">
-    <button class="hbtn" id="dl-btn" aria-haspopup="true">Herunterladen</button>
-    <div class="dropdown-menu dl-menu" id="dl-menu">
-      <label class="dl-title">Titel<input id="dl-title" type="text" value="BBL Landcover Dashboard"></label>
-      <button class="dl-item" id="dl-html">Dashboard (HTML, offline)</button>
-      <button class="dl-item" id="dl-xlsx">Tabelle als Excel (.xlsx)</button>
-      <button class="dl-item" id="dl-geojson">Grundstücke als GeoJSON (.geojson)</button>
-      <div class="dl-hint" id="dl-hint">HTML = alle Grundstücke · Excel &amp; GeoJSON = aktuelle (gefilterte) Auswahl</div>
-    </div>
-  </div>
+  <span class="dl-wrap"><button class="hbtn" id="dl-btn" type="button" aria-haspopup="dialog">Herunterladen</button></span>
 </header>
+
+<!-- Download modal: offline HTML deliverable + GeoJSON/Excel per scope -->
+<div class="modal-backdrop" id="dl-modal" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="dl-modal-title">
+    <div class="modal-head">
+      <h2 id="dl-modal-title">Herunterladen</h2>
+      <button class="modal-x" id="dl-close" type="button" aria-label="Schliessen">&times;</button>
+    </div>
+    <label class="dl-title">Titel<input id="dl-title" type="text" value="BBL Landcover Dashboard"></label>
+    <button class="dl-item dl-html-item" id="dl-html" type="button">&#8595; Dashboard (HTML, offline)</button>
+    <div class="dl-sect-label">Daten exportieren</div>
+    <div class="dl-grid">
+      <div class="dl-scope">
+        <div class="dl-scope-name">Alle Grundstücke <span class="dl-scope-n" id="dl-n-all"></span></div>
+        <div class="dl-scope-sub">vollständiger Datensatz</div>
+      </div>
+      <button class="dl-fmt" id="dl-all-geo" type="button">GeoJSON</button>
+      <button class="dl-fmt" id="dl-all-xlsx" type="button">Excel</button>
+      <div class="dl-scope">
+        <div class="dl-scope-name">Gefiltert <span class="dl-scope-n" id="dl-n-flt"></span></div>
+        <div class="dl-scope-sub">aktive Filter im Seitenpanel</div>
+      </div>
+      <button class="dl-fmt" id="dl-flt-geo" type="button">GeoJSON</button>
+      <button class="dl-fmt" id="dl-flt-xlsx" type="button">Excel</button>
+      <div class="dl-scope">
+        <div class="dl-scope-name">Priorisiert <span class="dl-scope-n" id="dl-n-prio"></span></div>
+        <div class="dl-scope-sub">Top-N aus der Priorisierung (+ Rang/Score/Segment)</div>
+      </div>
+      <button class="dl-fmt" id="dl-prio-geo" type="button">GeoJSON</button>
+      <button class="dl-fmt" id="dl-prio-xlsx" type="button">Excel</button>
+    </div>
+    <div class="dl-hint" id="dl-hint">GeoJSON enthält die Parzellengeometrie (WGS84) · Excel nutzt die sichtbaren Tabellenspalten.</div>
+  </div>
+</div>
 
 <div id="app">
   <aside id="filter-panel" aria-label="Filter">
@@ -108,12 +133,13 @@
       </div>
     </div>
     <div class="tabs" role="tablist">
-      <button class="tab is-active" data-tab="overview" role="tab">Übersicht</button>
-      <button class="tab" data-tab="quality" role="tab">Datenqualität</button>
-      <button class="tab" data-tab="about" role="tab">Über</button>
+      <button class="tab is-active" id="tab-overview" data-tab="overview" role="tab" aria-controls="panel-overview" aria-selected="true">Übersicht</button>
+      <button class="tab" id="tab-quality" data-tab="quality" role="tab" aria-controls="panel-quality" aria-selected="false" tabindex="-1">Datenqualität</button>
+      <button class="tab" id="tab-priority" data-tab="priority" role="tab" aria-controls="panel-priority" aria-selected="false" tabindex="-1">Priorisierung</button>
+      <button class="tab" id="tab-about" data-tab="about" role="tab" aria-controls="panel-about" aria-selected="false" tabindex="-1">Über</button>
     </div>
 
-    <section class="tab-panel" id="panel-overview" role="tabpanel">
+    <section class="tab-panel" id="panel-overview" role="tabpanel" aria-labelledby="tab-overview">
       <div class="section-title">Kennzahlen</div>
       <div class="kpis" id="kpis"></div>
 
@@ -126,7 +152,7 @@
 
       <div class="section-title">Karte</div>
       <div class="chart-note">Parzellen der aktuellen Auswahl auf der Grundkarte (CARTO / OpenStreetMap, benötigt eine Internetverbindung). Herauszoomen gruppiert die Punkte; Polygon oder Cluster anklicken.</div>
-      <div class="panel map-panel"><div id="map"></div></div>
+      <div class="panel map-panel" id="ov-map-panel"><div id="map"></div></div>
 
       <div class="section-title">Auswertungen</div>
       <div class="summary-tables">
@@ -181,13 +207,13 @@
       <div id="footer-note"></div>
     </section>
 
-    <section class="tab-panel" id="panel-quality" role="tabpanel" hidden>
+    <section class="tab-panel" id="panel-quality" role="tabpanel" aria-labelledby="tab-quality" hidden>
       <div class="section-title">Datenqualität</div>
       <div class="chart-note">Bezieht sich auf die aktuelle Auswahl.</div>
       <div class="kpis" id="q-kpis"></div>
       <div class="summary-tables">
-        <div class="panel"><h3>EGRID-Auflösung</h3><div id="q-egrid"></div></div>
-        <div class="panel"><h3>Bodenbedeckung (WFS)</h3><div id="q-wfs"></div></div>
+        <div class="panel"><h3>EGRID-Status</h3><div id="q-egrid"></div></div>
+        <div class="panel"><h3>Prüfregeln</h3><div id="q-rules"></div></div>
       </div>
       <div class="section-title">Auffällige Grundstücke <span class="count" id="q-count"></span></div>
       <div class="table-wrap">
@@ -208,7 +234,57 @@
       </div>
     </section>
 
-    <section class="tab-panel" id="panel-about" role="tabpanel" hidden>
+    <section class="tab-panel" id="panel-priority" role="tabpanel" aria-labelledby="tab-priority" hidden>
+      <div class="section-title">Priorisierung — Begehungs-Kandidaten</div>
+      <div class="chart-note">Triage des Bundes-Portfolios: welche Grundstücke zuerst vor Ort begehen (Natur &amp; Wirtschaft)? Eingrenzen, Signale gewichten, Top-N wählen. Eigene Eingrenzung — die Filter links wirken hier nicht.</div>
+      <div class="kpis" id="pr-kpis"></div>
+      <div class="prio-grid">
+        <div class="panel">
+          <h3>Auswahl-Trichter</h3>
+          <label class="prio-chk"><input type="checkbox" id="pr-federal" checked> Nur Bund (Eigentumsart 1)</label>
+          <label class="prio-chk"><input type="checkbox" id="pr-sap" checked> Reale Parzellen (SAP-Filter)</label>
+          <div class="prio-rng"><label for="pr-uf">Umgebungsfläche UF ≥ <strong id="pr-uf-val">1000</strong> m²</label><input type="range" id="pr-uf" min="0" max="5000" step="100" value="1000"></div>
+          <label class="prio-chk"><input type="checkbox" id="pr-bauzone" checked> In Bauzone (Anteil ≥ <strong id="pr-bz-val">50</strong> %)</label>
+          <div class="prio-rng"><input type="range" id="pr-bz" min="0" max="100" step="5" value="50" aria-label="Mindest-Bauzonenanteil in Prozent"></div>
+        </div>
+        <div class="panel">
+          <h3>Gewichtung <button class="pill-reset" id="pr-reset-w" type="button">Standard</button></h3>
+          <div id="pr-weights"></div>
+          <div class="prio-wnote">Gewichte werden normalisiert — nur das Verhältnis zählt.</div>
+        </div>
+        <div class="panel">
+          <h3>Auswahl</h3>
+          <div class="prio-rng"><label for="pr-topn">Top-N: <strong id="pr-topn-val">100</strong></label><input type="range" id="pr-topn" min="10" max="300" step="10" value="100"></div>
+          <label class="prio-chk"><input type="checkbox" id="pr-cap" checked> max <input type="number" id="pr-cap-n" value="20" min="1" max="100" aria-label="Maximale Anzahl pro Kanton"> pro Kanton</label>
+          <label class="prio-chk"><input type="checkbox" id="pr-tcap" checked> max <input type="number" id="pr-tcap-n" value="30" min="1" max="200" aria-label="Maximale Anzahl pro Teilportfolio"> pro Teilportfolio</label>
+        </div>
+      </div>
+      <div class="summary-tables">
+        <div class="panel"><h3>Kantone der Auswahl</h3><div id="pr-rg"></div></div>
+        <div class="panel"><h3>Teilportfolio der Auswahl</h3><div id="pr-tpf"></div></div>
+      </div>
+      <div class="section-title">Karte der Auswahl</div>
+      <div class="panel map-panel" id="pr-map-panel"></div>
+      <div class="section-title">Rangliste <span class="count" id="pr-count"></span><span style="flex:1"></span><button class="hbtn hbtn-light" id="pr-export" type="button">⤓ Auswahl als GeoJSON</button></div>
+      <div class="table-wrap">
+        <div class="table-scroll">
+          <table id="pr-table">
+            <thead><tr><th>Rang</th><th>ID</th><th>E-GRID</th><th>Ort</th><th>Kt</th><th>Segment</th><th class="num" data-tip="Umgebungsfläche = SIA 416 BUF + UUF (Grundstück ohne Gebäudegrundfläche).">UF</th><th class="num" data-tip="Grünanteil an der Umgebungsfläche UF (nicht an der Grundstücksfläche).">Grün&nbsp;%</th><th class="num" data-tip="Gewichteter Mittelwert von 6 Perzentil-Signalen (0–1); höher = höhere Begehungs-Priorität.">Score</th></tr></thead>
+            <tbody id="pr-tbody"></tbody>
+          </table>
+        </div>
+        <div class="pager">
+          <span class="spacer"></span>
+          <button class="btn" id="pr-prev">◀ Zurück</button>
+          <span id="pr-page-info"></span>
+          <button class="btn" id="pr-next">Weiter ▶</button>
+          <span class="spacer"></span>
+          <label>Zeilen: <select id="pr-page-size"><option>25</option><option>50</option><option>100</option></select></label>
+        </div>
+      </div>
+    </section>
+
+    <section class="tab-panel" id="panel-about" role="tabpanel" aria-labelledby="tab-about" hidden>
       <div class="about">
         <div class="section-title">Über diese Auswertung</div>
         <p>Diese Offline-Auswertung zeigt pro Schweizer Grundstück (Liegenschaft / SDR), wie sich die Grundstücksfläche auf <strong>Bodenbedeckungsarten</strong>, <strong>Bauzonen</strong> und <strong>BAFU-Lebensräume</strong> verteilt. Die Daten sind in diese Datei eingebettet und laufen vollständig offline.</p>

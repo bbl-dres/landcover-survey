@@ -100,7 +100,7 @@
     document.body.classList.add("builder-mode"); // .builder-mode shows the picker, hides the dashboard
     var bEl = function (id) { return document.getElementById(id); };
     var fmtN = new Intl.NumberFormat("de-CH");
-    var setStatus = function (h) { bEl("b-status").innerHTML = h; };
+    var setStatus = function (h) { bEl("b-status").textContent = h; }; // plain text only — avoids injecting a parse-error message containing markup
     var geo = null;
     bEl("b-geojson").addEventListener("change", function (e) {
       var f = e.target.files[0]; if (!f) return;
@@ -394,7 +394,7 @@
     var maxVal = items.reduce(function (m, it) { return it.muted ? m : Math.max(m, it.value); }, 0) || 1;
     var body = items.map(function (it) {
       var cls = ((it.muted ? "muted-row " : "") + (it.key ? "clickable" : "") + (it.selected ? " selected" : "")).trim();
-      var attr = it.key ? ' data-key="' + esc(it.key) + '"' : "";
+      var attr = it.key ? ' data-key="' + esc(it.key) + '" tabindex="0" role="button"' : "";
       var tip = it.key ? ' data-tip="' + esc(it.name + " — anklicken zum Filtern") + '"' : "";
       var anteil = total ? pct(it.value, total) + " %" : "";
       var bar = it.muted ? "" : '<span class="sumbar"><i style="width:' + (it.value / maxVal * 100).toFixed(1) + '%"></i></span>';
@@ -521,18 +521,19 @@
       qa = "Datenqualität: " + parts.join(", ") + ". ";
     }
     document.getElementById("footer-note").innerHTML =
-      "Anteile = % der klassifizierten Bodenbedeckung (" + fmtAreaU(a.classified) + "). " +
+      "Tabellen-Anteile beziehen sich auf die Grundstücksfläche (GSF); die KPI-Anteile oben auf die klassifizierte Bodenbedeckung (" + fmtAreaU(a.classified) + "). " +
       fmt(a.len - a.withData) + " Grundstücke ohne Bodenbedeckung. " + qa;
   }
 
   // ---- Datenqualität tab (uses the existing check_* / status columns) ----
   var qProblems = [], qState = { page: 1, pageSize: 25 };
+  var qAllProblems = [], qRules = {}, qActiveRule = null; // qActiveRule = a clicked Prüfregel → table shows its fails
   function renderQuality(rows) {
     if (!document.getElementById("q-kpis")) return;
-    var c = { found:0, merged:0, not_found:0, invalid:0, error:0 }, withCov = 0, woCov = 0, wfsIssue = 0, geomIssue = 0;
+    var c = { found:0, merged:0, not_found:0, invalid:0, error:0 }, cOther = 0, withCov = 0, woCov = 0, wfsIssue = 0, geomIssue = 0;
     var problems = [];
     rows.forEach(function (p) {
-      var sk = statusKey(p); if (c[sk] != null) c[sk]++;
+      var sk = statusKey(p); if (c[sk] != null) c[sk]++; else cOther++; // e.g. empty check_egrid → "—"
       var cov = isCovered(p); if (cov) withCov++; else woCov++;
       var wfs = p.check_wfs && p.check_wfs !== "ok"; if (wfs) wfsIssue++;
       var geom = p.check_geom && p.check_geom !== "ok"; if (geom) geomIssue++;
@@ -555,16 +556,18 @@
       return '<div class="card"><div class="label">' + esc(k.label) + '</div><div class="value">' + k.value + '</div><div class="sub">' + esc(k.sub) + '</div></div>';
     }).join("");
     renderValTable("q-egrid", [
-      { name:"Gefunden", value:c.found }, { name:"Zusammengeführt", value:c.merged },
-      { name:"Nicht gefunden", value:c.not_found }, { name:"Ungültige EGRID", value:c.invalid }, { name:"Fehler", value:c.error }
+      { name:"Gefunden", value:c.found + c.merged },
+      { name:"Nicht gefunden", value:c.not_found + c.error },
+      { name:"Ungültige EGRID", value:c.invalid },
+      { name:"Ohne Status", value:cOther }
     ].filter(function (it) { return it.value > 0; }), rows.length, fmt, true, "Anzahl", "Anteil an der Auswahl (Anzahl Grundstücke).");
-    renderValTable("q-wfs", [
-      { name:"mit Bodenbedeckung", value:withCov }, { name:"ohne (0 m² / kein WFS)", value:woCov }
-    ], rows.length, fmt, true, "Anzahl", "Anteil an der Auswahl (Anzahl Grundstücke).");
-    document.getElementById("q-count").textContent = fmt(problems.length) + (problems.length === 1 ? " Grundstück" : " Grundstücke");
-    qProblems = problems;
+    qAllProblems = problems;
+    qRules = computeRules(rows);
+    // Keep the active rule filter across selection changes, unless it no longer has fails.
+    if (qActiveRule && !(qRules[qActiveRule] && qRules[qActiveRule].fails.length)) qActiveRule = null;
+    renderRulesTable();
     qState.page = 1; // new selection → back to the first page (mirrors the Übersicht table)
-    renderQBody();
+    applyQView();
   }
   // Paginate "Auffällige Grundstücke" — same 25/50/100 pager as the Übersicht table.
   function renderQBody() {
@@ -584,6 +587,78 @@
     if (info) info.textContent = "Seite " + qState.page + " von " + pages;
     if (prev) prev.disabled = qState.page <= 1;
     if (next) next.disabled = qState.page >= pages;
+  }
+
+  // ---- Datenqualität-Prüfregeln (per Grundstück geprüft, als Regel/Ergebnis/Status) ----
+  var RULE_DEFS = [
+    { key: "bbCover", name: "Bodenbedeckung deckt Grundstück", tip: "Σ klassifizierte Bodenbedeckung = Grundstücksfläche (Grundstücke mit WFS-Daten)." },
+    { key: "bzCover", name: "Bauzonen decken Grundstück", tip: "Σ Bauzonen inkl. „Ohne Bauzone“ = Grundstücksfläche." },
+    { key: "hbCover", name: "Lebensräume decken Grundstück", tip: "Σ Lebensräume = Grundstücksfläche." },
+    { key: "sealgreen", name: "Versiegelt + Grünfläche ≤ Bodenbedeckung", tip: "Versiegelte und Grünflächen sind disjunkte Teilmengen der klassifizierten Bodenbedeckung — ihre Summe darf sie nicht überschreiten (sonst Doppelzählung)." },
+    { key: "bounds", name: "Keine Fläche grösser als das Grundstück", tip: "Keine einzelne Bodenbedeckungs-/Zonen-/Lebensraum-Komponente überschreitet die Grundstücksfläche." },
+    { key: "egrid", name: "Alle EGRID aufgelöst", tip: "Keine nicht gefundenen, ungültigen oder fehlerhaften EGRID." },
+    { key: "bzOk", name: "Bauzonen vollständig", tip: "Kein Grundstück mit gekappten/unsicheren Bauzonen-Daten (truncated/partial)." },
+    { key: "hbOk", name: "Lebensräume vollständig", tip: "Kein Grundstück mit gekappten/unsicheren Lebensraum-Daten; geschätzte (gap-gefüllte) werden separat ausgewiesen." }
+  ];
+  function computeRules(rows) {
+    var R = {}; RULE_DEFS.forEach(function (d) { R[d.key] = { name: d.name, pass: 0, fail: 0, est: 0, fails: [] }; });
+    rows.forEach(function (p) {
+      var area = num(p.parcel_area_m2), tol = Math.max(1, area * 0.01);
+      var nearOK = function (a, b) { return Math.abs(a - b) <= tol; };
+      // pass → count; fail → count + remember the parcel so a click can list them.
+      var rec = function (key, ok) { if (ok) R[key].pass++; else { R[key].fail++; R[key].fails.push({ p: p, hint: R[key].name }); } };
+      var classified = num(p.sia416_ggf_m2) + num(p.sia416_buf_m2) + num(p.sia416_uuf_m2);
+      var sumBz = 0, sumHb = 0, maxComp = 0;
+      // maxComp = largest single land-cover / zone / habitat piece (av_*, bauzonen_<slug>,
+      // habitat_<slug>) — NOT the SIA/DIN/VBS/sealed/green aggregates, which legitimately
+      // approach the parcel area and would make the bounds check spurious.
+      for (var k in p) {
+        if (k.slice(-3) !== "_m2" || k === "parcel_area_m2") continue;
+        var v = num(p[k]), bz = BAUZONE_RE.test(k), hb = HABITAT_RE.test(k);
+        if (bz) sumBz += v;
+        else if (hb) sumHb += v;
+        if ((bz || hb || k.indexOf("av_") === 0) && v > maxComp) maxComp = v;
+      }
+      var cov = isCovered(p);
+      if (cov) rec("bbCover", nearOK(classified, area));
+      if (sumBz > 0 || (!!p.check_bauzonen && p.check_bauzonen !== "error")) rec("bzCover", nearOK(sumBz, area));
+      if (sumHb > 0 || (!!p.check_habitat && p.check_habitat !== "error")) rec("hbCover", nearOK(sumHb, area));
+      // Versiegelt + Grünfläche are disjoint subsets of the classified cover (can over-count on a bug).
+      if (cov) rec("sealgreen", num(p.sealed_m2) + num(p.greenspace_m2) <= classified + tol);
+      if (area > 0) rec("bounds", maxComp <= area + tol);
+      var sk = statusKey(p);
+      rec("egrid", sk === "found" || sk === "merged");
+      if (p.check_bauzonen) rec("bzOk", p.check_bauzonen === "ok");
+      if (p.check_habitat) {
+        if (p.check_habitat === "estimated") { R.hbOk.pass++; R.hbOk.est++; }
+        else rec("hbOk", p.check_habitat === "ok");
+      }
+    });
+    return R;
+  }
+  function renderRulesTable() {
+    var el = document.getElementById("q-rules"); if (!el) return;
+    var body = RULE_DEFS.map(function (d) {
+      var r = qRules[d.key], checked = r.pass + r.fail, status, cls, result, aLabel;
+      if (checked === 0) { status = "–"; cls = "rule-na"; result = "keine Daten"; aLabel = "keine Daten"; }
+      else if (r.fail === 0) { status = "✓"; cls = "rule-ok"; result = fmt(r.pass) + " / " + fmt(checked) + (r.est ? " · " + fmt(r.est) + " geschätzt" : ""); aLabel = "bestanden"; }
+      else { status = "⚠"; cls = "rule-warn"; result = fmt(r.fail) + " von " + fmt(checked) + " abweichend"; aLabel = "Abweichung"; }
+      var attr = (r.fail > 0 ? ' class="clickable' + (d.key === qActiveRule ? ' selected' : '') + '" data-rk="' + d.key + '" tabindex="0" role="button"' : '') + ' data-tip="' + esc(d.tip) + '"';
+      return '<tr' + attr + '><td>' + esc(d.name) + '</td><td class="num rule-res">' + esc(result) + '</td><td class="rule-status ' + cls + '" role="img" aria-label="' + aLabel + '">' + status + '</td></tr>';
+    }).join("");
+    el.innerHTML = '<table class="sumtbl rules-tbl"><thead><tr><th>Regel</th><th class="num">Ergebnis</th><th class="rule-status">Status</th></tr></thead><tbody>' + body + '</tbody></table>';
+  }
+  // Switch the Auffällige-Grundstücke table between all problems and one clicked rule's fails.
+  function applyQView() {
+    var active = (qActiveRule && qRules[qActiveRule] && qRules[qActiveRule].fails.length) ? qActiveRule : null;
+    qActiveRule = active;
+    qProblems = active ? qRules[active].fails : qAllProblems;
+    var cnt = document.getElementById("q-count");
+    if (cnt) {
+      if (active) cnt.innerHTML = "Regel »" + esc(qRules[active].name) + "« · " + fmt(qProblems.length) + " · <span class='q-filter-x' id='q-filter-x' role='button' tabindex='0'>✕ Filter aufheben</span>";
+      else cnt.textContent = fmt(qProblems.length) + " " + (qProblems.length === 1 ? "Grundstück" : "Grundstücke");
+    }
+    renderQBody();
   }
 
   // ---- Table ----
@@ -707,7 +782,7 @@
     renderDashboard(rows);
     renderQuality(rows);
     renderTable();
-    renderMap(rows);
+    if (mapMode !== "priority") renderMap(rows); // the priority tab owns the map while active
     var n = activeGroups(), b = document.getElementById("filter-badge");
     if (b) { b.textContent = n; b.classList.toggle("show", n > 0); }
     var filtered = rows.length < PARCELS.length;
@@ -820,12 +895,17 @@
 
   // ---- Chart click → toggle the matching "Enthält" filter; pill click → remove/reset ----
   function chartToggle(elId, facet) {
-    document.getElementById(elId).addEventListener("click", function (e) {
-      var row = e.target.closest("[data-key]"); if (!row) return;
+    var el = document.getElementById(elId); if (!el) return;
+    var act = function (e) {
+      if (e.type === "keydown" && e.key !== "Enter" && e.key !== " ") return;
+      var row = e.target.closest && e.target.closest("[data-key]"); if (!row) return;
+      if (e.type === "keydown") e.preventDefault(); // Space would scroll
       var k = row.getAttribute("data-key");
       if (filters[facet][k]) delete filters[facet][k]; else filters[facet][k] = true;
       syncDrawer(); commit();
-    });
+    };
+    el.addEventListener("click", act);
+    el.addEventListener("keydown", act); // Enter/Space on a focused row
   }
   chartToggle("tbl-art", "arts");        // per-Art types (summary-table rows)
   chartToggle("tbl-sia", "has");         // GGF / BUF / UUF
@@ -833,7 +913,9 @@
   chartToggle("tbl-bauzonen", "bauzonen"); // ARE-Bauzonentypen
   chartToggle("tbl-tpf", "tpf");         // Portfolio (input_tpf)
   chartToggle("tbl-rg", "cantons");      // Region (input_rg → Kanton-Filter)
-  // BAFU Lebensräume: no per-type aggregation in the export yet — static placeholder.
+  // BAFU Lebensräume fallback: this note shows only when the export has no habitat
+  // columns; when it does, renderDashboard's tbl-habitat render (guarded by
+  // habitatListAll.length) overwrites it with the real per-TypoCH-L1 table.
   var habEl = document.getElementById("tbl-habitat");
   if (habEl) habEl.innerHTML = '<div class="empty-note">Keine BAFU-Lebensraum-Daten im Export. Mit aktivierter Lebensraum-Analyse exportieren.</div>';
 
@@ -898,6 +980,20 @@
   document.getElementById("q-page-size").addEventListener("change", function (e) {
     qState.pageSize = parseInt(e.target.value, 10); qState.page = 1; renderQBody();
   });
+  // Click a failed Prüfregel → filter "Auffällige Grundstücke" to its parcels (toggle).
+  var qRuleAct = function (e) {
+    if (e.type === "keydown" && e.key !== "Enter" && e.key !== " ") return;
+    var tr = e.target.closest && e.target.closest("tr[data-rk]"); if (!tr) return;
+    if (e.type === "keydown") e.preventDefault();
+    var key = tr.getAttribute("data-rk");
+    qActiveRule = (qActiveRule === key) ? null : key;
+    qState.page = 1; renderRulesTable(); applyQView();
+  };
+  document.getElementById("q-rules").addEventListener("click", qRuleAct);
+  document.getElementById("q-rules").addEventListener("keydown", qRuleAct);
+  document.getElementById("q-count").addEventListener("click", function (e) {
+    if (e.target && e.target.id === "q-filter-x") { qActiveRule = null; qState.page = 1; renderRulesTable(); applyQView(); }
+  });
 
   // ---- Filter panel (single column, capped with a "Alle anzeigen" toggle) ----
   var MAX_FILTER = 8;
@@ -957,14 +1053,205 @@
 
   // ---- Tabs ----
   var tabBtns = Array.prototype.slice.call(document.querySelectorAll(".tab"));
+  var mapMode = "overview"; // which tab owns the single shared map widget
   function showTab(name) {
-    tabBtns.forEach(function (t) { t.classList.toggle("is-active", t.getAttribute("data-tab") === name); });
-    ["overview", "quality", "about"].forEach(function (n) {
+    tabBtns.forEach(function (t) {
+      var on = t.getAttribute("data-tab") === name;
+      t.classList.toggle("is-active", on);
+      t.setAttribute("aria-selected", on ? "true" : "false");
+      t.tabIndex = on ? 0 : -1; // roving tabindex
+    });
+    ["overview", "quality", "about", "priority"].forEach(function (n) {
       var panel = document.getElementById("panel-" + n);
       if (panel) panel.hidden = (n !== name);
     });
+    var mapEl = document.getElementById("map"), resize = function () { if (map && mapReady) setTimeout(function () { map.resize(); }, 30); };
+    if (name === "priority") {
+      mapMode = "priority";
+      var slot = document.getElementById("pr-map-panel"); if (slot && mapEl && mapEl.parentNode !== slot) slot.appendChild(mapEl);
+      ensureMap(); refitMap = true; renderPriority(); resize(); // renderPriority renders the selection onto the moved map
+    } else if (mapMode === "priority") {
+      mapMode = "overview";
+      var ov = document.getElementById("ov-map-panel"); if (ov && mapEl && mapEl.parentNode !== ov) ov.appendChild(mapEl);
+      refitMap = true; renderMap(state.rows); resize(); // back to the filtered selection
+    }
   }
   tabBtns.forEach(function (t) { t.addEventListener("click", function () { showTab(t.getAttribute("data-tab")); }); });
+  var tablistEl = document.querySelector(".tabs[role=tablist]");
+  if (tablistEl) tablistEl.addEventListener("keydown", function (e) {
+    var idx = tabBtns.indexOf(document.activeElement); if (idx < 0) return;
+    var n = tabBtns.length, j = idx;
+    if (e.key === "ArrowRight") j = (idx + 1) % n; else if (e.key === "ArrowLeft") j = (idx - 1 + n) % n;
+    else if (e.key === "Home") j = 0; else if (e.key === "End") j = n - 1; else return;
+    e.preventDefault(); showTab(tabBtns[j].getAttribute("data-tab")); tabBtns[j].focus();
+  });
+
+  // ---- Priorisierung tab: gate → score (6 percentile signals) → top-N + Kanton cap ----
+  var WEIGHT_DEFS = [
+    { key: "green", name: "Grünumgebung", def: 25 },
+    { key: "scale", name: "Grösse / Skala", def: 15 },
+    { key: "urban", name: "Urbane Relevanz", def: 15 },
+    { key: "habitat", name: "Lebensräume", def: 10 },
+    { key: "diversity", name: "Strukturvielfalt", def: 5 },
+    { key: "quality", name: "Datenqualität", def: 10 }
+  ];
+  // Building-zone relevance for N&W (developed grounds): Arbeits/öffentlich highest.
+  var PRIO_BZ_REL = { arbeitszonen: 1, zonen_fuer_oeffentliche_nutzungen: 1, zentrumszonen: 0.9, tourismus_und_freizeitzonen: 0.7, mischzonen: 0.75, wohnzonen: 0.6, eingeschraenkte_bauzonen: 0.5, weitere_bauzonen: 0.4, verkehrszonen_innerhalb_der_bauzonen: 0.3 };
+  var PRIO_NAT_HAB = { gewaesser: 1, ufer_feuchtgebiete: 1, gletscher_fels_schutt_geroell: 1, gruenland: 1, krautsaeume_hochstauden_gebuesche: 1, waelder: 1, pionier_ruderalvegetation: 1 };
+  var prio = { federal: true, sap: true, ufMin: 1000, bauzone: true, bzMin: 50, topN: 100, cap: true, capN: 20, tpfCap: true, tpfCapN: 30, page: 1, pageSize: 25, weights: {}, selected: [], poolCount: 0 };
+  WEIGHT_DEFS.forEach(function (w) { prio.weights[w.key] = w.def; });
+  function prioUF(p) { return num(p.sia416_buf_m2) + num(p.sia416_uuf_m2); }
+  function prioMetrics(p) {
+    var area = num(p.parcel_area_m2), uf = prioUF(p), green = num(p.greenspace_m2);
+    var bzSum = 0, bzDom = 0, bzDomSlug = "", hbNat = 0, hbAll = 0, nLc = 0, nHb = 0;
+    for (var k in p) {
+      if (!Object.prototype.hasOwnProperty.call(p, k)) continue;
+      var bm = BAUZONE_RE.exec(k);
+      if (bm) { if (bm[1] !== "ohne_bauzone") { var bv = num(p[k]); bzSum += bv; if (bv > bzDom) { bzDom = bv; bzDomSlug = bm[1]; } } continue; }
+      var hm = HABITAT_RE.exec(k);
+      if (hm) { var hv = num(p[k]); if (hv > 0) nHb++; hbAll += hv; if (PRIO_NAT_HAB[hm[1]]) hbNat += hv; continue; }
+      if (k.indexOf("av_") === 0 && k.slice(-3) === "_m2" && num(p[k]) > 0) nLc++;
+    }
+    // Feasibility: authoritative AV cover is best; no land cover at all = little to survey.
+    var q = (p.lc_source === "AV" ? 1 : 0.6);
+    if (!isCovered(p)) q -= 0.3;
+    if (p.check_geom && p.check_geom !== "ok") q -= 0.2;
+    if (p.check_wfs && p.check_wfs !== "ok") q -= 0.2;
+    return {
+      area: area, uf: uf, green: green,
+      greenShare: uf ? Math.min(1, green / uf) : 0,          // a share — clamp at 100 %
+      urban: (PRIO_BZ_REL[bzDomSlug] || 0),                  // zone-type fit; Bauzone-share is the gate, not the score
+      natShare: hbAll ? hbNat / hbAll : 0,                   // natural share of MAPPED habitat (robust to partial coverage)
+      diversity: Math.max(nLc, nHb),                         // max, not sum — don't double-weight parcels that have both layers
+      quality: Math.max(0, q)
+    };
+  }
+  function prioSeg(m) { return m.greenShare >= 0.30 ? "Grün-reich" : m.greenShare >= 0.15 ? "Gemischt" : "Versiegelt"; } // ≥30 % / 15–30 %, per SURVEY_PRIORITIZATION.md
+  function prioGate(p) {
+    if (prio.federal && String(p["input_eigent.art"]) !== "1") return false;
+    if (prio.sap && EXCLUDE_RULES.some(function (r) { return nameMatches(p, r); })) return false;
+    if (prioUF(p) < prio.ufMin) return false;
+    if (prio.bauzone) {
+      var area = num(p.parcel_area_m2), bz = 0;
+      for (var k in p) { var bm = BAUZONE_RE.exec(k); if (bm && bm[1] !== "ohne_bauzone") bz += num(p[k]); }
+      if (!area || bz / area < prio.bzMin / 100) return false;
+    }
+    return true;
+  }
+  // Percentile rank in [0,1] for each value within its pool (robust to outliers).
+  function pctRanks(vals) {
+    var n = vals.length, idx = vals.map(function (v, i) { return i; }).sort(function (a, b) { return vals[a] - vals[b]; });
+    var r = new Array(n);
+    idx.forEach(function (ix, pos) { r[ix] = n > 1 ? pos / (n - 1) : 1; });
+    return r;
+  }
+  function prioBlend(a, b, wa) { return a.map(function (v, i) { return wa * v + (1 - wa) * b[i]; }); }
+  function computePrio() {
+    var pool = PARCELS.filter(prioGate);
+    var M = pool.map(prioMetrics);
+    var sc = {
+      green: prioBlend(pctRanks(M.map(function (m) { return m.greenShare; })), pctRanks(M.map(function (m) { return m.green; })), 0.6),
+      scale: pctRanks(M.map(function (m) { return Math.log(1 + m.uf); })),
+      urban: pctRanks(M.map(function (m) { return m.urban; })),
+      habitat: pctRanks(M.map(function (m) { return m.natShare; })),
+      diversity: pctRanks(M.map(function (m) { return m.diversity; })),
+      quality: pctRanks(M.map(function (m) { return m.quality; }))
+    };
+    var W = prio.weights, Wsum = WEIGHT_DEFS.reduce(function (s, w) { return s + (W[w.key] || 0); }, 0) || 1;
+    var scored = pool.map(function (p, i) {
+      return { p: p, m: M[i], score: (W.green * sc.green[i] + W.scale * sc.scale[i] + W.urban * sc.urban[i] + W.habitat * sc.habitat[i] + W.diversity * sc.diversity[i] + W.quality * sc.quality[i]) / Wsum };
+    });
+    scored.sort(function (a, b) { return b.score - a.score; });
+    var out = [], kt = {}, tp = {}, capK = prio.cap ? prio.capN : 0, capT = prio.tpfCap ? prio.tpfCapN : 0;
+    for (var i = 0; i < scored.length && out.length < prio.topN; i++) {
+      var sp = scored[i].p, k = sp.input_rg || "?", t = (sp.input_tpf == null || sp.input_tpf === "") ? "?" : String(sp.input_tpf);
+      if (capK && (kt[k] || 0) >= capK) continue;
+      if (capT && (tp[t] || 0) >= capT) continue;
+      kt[k] = (kt[k] || 0) + 1; tp[t] = (tp[t] || 0) + 1; out.push(scored[i]);
+    }
+    prio.poolCount = pool.length; prio.selected = out;
+  }
+  function renderPrioWeights() {
+    var el = document.getElementById("pr-weights"); if (!el) return;
+    el.innerHTML = WEIGHT_DEFS.map(function (w) {
+      return '<div class="prio-w"><label for="prw-' + w.key + '">' + esc(w.name) + ' <strong>' + prio.weights[w.key] + '</strong></label>' +
+             '<input type="range" id="prw-' + w.key + '" data-wk="' + w.key + '" aria-label="Gewicht ' + esc(w.name) + '" min="0" max="40" step="1" value="' + prio.weights[w.key] + '"></div>';
+    }).join("");
+  }
+  var PRIO_SEGS = ["Grün-reich", "Gemischt", "Versiegelt"], PRIO_SEG_COL = { "Grün-reich": "#7cb342", "Gemischt": "#e0a23c", "Versiegelt": "#8d99a6" };
+  // Count of selected parcels grouped by a field (Kanton / Teilportfolio) → renderValTable items, top-N + Übrige.
+  function prioCountItems(field, topN) {
+    var map = {};
+    prio.selected.forEach(function (s) { var v = s.p[field], key = (v == null || v === "") ? "—" : String(v); map[key] = (map[key] || 0) + 1; });
+    var keys = Object.keys(map).sort(function (a, b) { return map[b] - map[a]; });
+    var items = keys.slice(0, topN).map(function (key) { return { name: key, value: map[key] }; });
+    if (keys.length > topN) { var rest = keys.slice(topN).reduce(function (s, key) { return s + map[key]; }, 0); items.push({ name: "Übrige (" + (keys.length - topN) + ")", value: rest }); }
+    return items;
+  }
+  function renderPriority() {
+    if (!document.getElementById("pr-tbody")) return;
+    computePrio();
+    var n = prio.selected.length, total = n || 1;
+    var segCnt = { "Grün-reich": 0, "Gemischt": 0, "Versiegelt": 0 }, sumArea = 0, sumGreen = 0;
+    prio.selected.forEach(function (s) { segCnt[prioSeg(s.m)]++; sumArea += num(s.p.parcel_area_m2); sumGreen += num(s.p.greenspace_m2); });
+    var card = function (label, value, sub) { return '<div class="card"><div class="label">' + esc(label) + '</div><div class="value">' + value + '</div><div class="sub">' + esc(sub) + '</div></div>'; };
+    var segMix = '<div class="prio-stack">' + PRIO_SEGS.map(function (s) { return segCnt[s] ? '<span style="width:' + (100 * segCnt[s] / total).toFixed(1) + '%;background:' + PRIO_SEG_COL[s] + '"></span>' : ""; }).join("") + '</div>' +
+      '<div class="prio-legend">' + PRIO_SEGS.map(function (s) { return '<span><i style="background:' + PRIO_SEG_COL[s] + '"></i>' + s + ' ' + fmt(segCnt[s]) + '</span>'; }).join("") + '</div>';
+    document.getElementById("pr-kpis").innerHTML =
+      card("Kandidaten", fmt(prio.poolCount), "nach Eingrenzung") +
+      card("Auswahl", fmt(n), "Top-N " + prio.topN) +
+      card("Grundstücksfläche", fmtAreaU(sumArea), fmt(n) + " Grundstücke") +
+      card("Grünfläche", fmtAreaU(sumGreen), (sumArea ? pct(sumGreen, sumArea) : 0) + "% der Fläche") +
+      '<div class="card prio-seg-card"><div class="label">Segment-Mix der Auswahl</div>' + segMix + '</div>';
+    renderValTable("pr-rg", prioCountItems("input_rg", 12), n, fmt, true, "Anzahl", "Anteil an der Auswahl (Anzahl Grundstücke).");
+    renderValTable("pr-tpf", prioCountItems("input_tpf", 12), n, fmt, true, "Anzahl", "Anteil an der Auswahl (Anzahl Grundstücke).");
+    document.getElementById("pr-count").textContent = fmt(n) + " von " + fmt(prio.poolCount) + " Kandidaten";
+    prio.page = 1; renderPrioBody();
+    if (mapMode === "priority") renderMap(prio.selected.map(function (s) { return s.p; })); // selected parcels on the map
+  }
+  function renderPrioBody() {
+    var tb = document.getElementById("pr-tbody"); if (!tb) return;
+    var rows = prio.selected, pages = Math.max(1, Math.ceil(rows.length / prio.pageSize));
+    if (prio.page > pages) prio.page = pages; if (prio.page < 1) prio.page = 1;
+    var start = (prio.page - 1) * prio.pageSize;
+    tb.innerHTML = rows.length
+      ? rows.slice(start, start + prio.pageSize).map(function (s, i) {
+          var p = s.p, m = s.m;
+          return "<tr><td>" + (start + i + 1) + "</td><td>" + esc(p.id || "") + "</td><td>" + (p.egrid ? esc(p.egrid) : '<span class="muted">–</span>') +
+                 "</td><td>" + esc(p.input_ort || "") + "</td><td>" + esc(p.input_rg || "") + "</td><td>" + esc(prioSeg(m)) +
+                 "</td><td class='num'>" + fmtArea(m.uf) + "</td><td class='num'>" + Math.round(100 * m.greenShare) + "</td><td class='num'>" + s.score.toFixed(3) + "</td></tr>";
+        }).join("")
+      : '<tr><td colspan="9" class="empty">Keine Kandidaten — Eingrenzung lockern.</td></tr>';
+    var info = document.getElementById("pr-page-info"), prev = document.getElementById("pr-prev"), next = document.getElementById("pr-next");
+    if (info) info.textContent = "Seite " + prio.page + " von " + pages;
+    if (prev) prev.disabled = prio.page <= 1;
+    if (next) next.disabled = prio.page >= pages;
+  }
+  if (document.getElementById("pr-uf")) {
+    renderPrioWeights();
+    var prBind = function (id, ev, fn) { var el = document.getElementById(id); if (el) el.addEventListener(ev, fn); };
+    prBind("pr-federal", "change", function (e) { prio.federal = e.target.checked; renderPriority(); });
+    prBind("pr-sap", "change", function (e) { prio.sap = e.target.checked; renderPriority(); });
+    prBind("pr-uf", "input", function (e) { prio.ufMin = +e.target.value; document.getElementById("pr-uf-val").textContent = fmt(prio.ufMin); renderPriority(); });
+    prBind("pr-bauzone", "change", function (e) { prio.bauzone = e.target.checked; renderPriority(); });
+    prBind("pr-bz", "input", function (e) { prio.bzMin = +e.target.value; document.getElementById("pr-bz-val").textContent = prio.bzMin; renderPriority(); });
+    prBind("pr-topn", "input", function (e) { prio.topN = +e.target.value; document.getElementById("pr-topn-val").textContent = prio.topN; renderPriority(); });
+    prBind("pr-cap", "change", function (e) { prio.cap = e.target.checked; renderPriority(); });
+    prBind("pr-cap-n", "input", function (e) { prio.capN = Math.max(1, +e.target.value || 1); renderPriority(); });
+    prBind("pr-tcap", "change", function (e) { prio.tpfCap = e.target.checked; renderPriority(); });
+    prBind("pr-tcap-n", "input", function (e) { prio.tpfCapN = Math.max(1, +e.target.value || 1); renderPriority(); });
+    prBind("pr-reset-w", "click", function () { WEIGHT_DEFS.forEach(function (w) { prio.weights[w.key] = w.def; }); renderPrioWeights(); renderPriority(); });
+    document.getElementById("pr-weights").addEventListener("input", function (e) {
+      var wk = e.target.getAttribute && e.target.getAttribute("data-wk"); if (!wk) return;
+      prio.weights[wk] = +e.target.value;
+      var st = e.target.previousElementSibling && e.target.previousElementSibling.querySelector("strong"); if (st) st.textContent = prio.weights[wk];
+      renderPriority();
+    });
+    prBind("pr-prev", "click", function () { if (prio.page > 1) { prio.page--; renderPrioBody(); } });
+    prBind("pr-next", "click", function () { if (prio.page < Math.ceil(prio.selected.length / prio.pageSize)) { prio.page++; renderPrioBody(); } });
+    prBind("pr-page-size", "change", function (e) { prio.pageSize = parseInt(e.target.value, 10); prio.page = 1; renderPrioBody(); });
+    prBind("pr-export", "click", function () { exportGeojsonRows(prioRows(), "priorisierung-top" + prio.topN + ".geojson"); });
+  }
 
   // ---- Filter panel collapse / expand ----
   var appEl = document.getElementById("app");
@@ -991,49 +1278,86 @@
   document.addEventListener("focusin", function (e) { var t = e.target.closest("[data-tip]"); if (t) showTip(t); });
   document.addEventListener("focusout", hideTip);
 
-  // ---- Download menu (header): offline HTML deliverable + Excel of the table ----
+  // ---- Export helpers (shared by the download modal + the Priorisierung tab) ----
+  // Parcels → GeoJSON features: geometry + all non-internal props (PII stripped on import). WGS84.
+  function parcelFeatures(parcels) {
+    return parcels.map(function (p) {
+      var props = {};
+      for (var k in p) { if (Object.prototype.hasOwnProperty.call(p, k) && k.charAt(0) !== "_") props[k] = p[k]; }
+      return { type: "Feature", geometry: p._geom || null, properties: props };
+    });
+  }
+  function exportGeojsonRows(parcels, fname) {
+    saveBlob(JSON.stringify({ type: "FeatureCollection", features: parcelFeatures(parcels) }), "application/geo+json", fname);
+  }
+  // Excel: the visible table columns, optionally prefixed with extra columns ({label, key, num}).
+  function exportXlsxRows(parcels, fname, sheet, extraCols) {
+    return loadXlsx().then(function (XLSX) {
+      var cols = (extraCols || []).concat(COLUMNS.filter(function (c) { return c.visible; }));
+      var aoa = [cols.map(function (c) { return c.label; })];
+      parcels.forEach(function (p) { aoa.push(cols.map(function (c) { return c.num ? num(p[c.key]) : (p[c.key] == null ? "" : String(p[c.key])); })); });
+      var wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), sheet);
+      XLSX.writeFile(wb, fname);
+    });
+  }
+  var PRIO_XLSX_COLS = [{ label: "Rang", key: "survey_rank", num: true }, { label: "Score", key: "survey_score", num: true }, { label: "Segment", key: "survey_segment" }];
+  // Top-N prioritised parcels as flat rows (incl. _geom) tagged with survey rank / score / segment.
+  function prioRows() {
+    computePrio();
+    return prio.selected.map(function (s, i) {
+      var r = {}; for (var k in s.p) { if (Object.prototype.hasOwnProperty.call(s.p, k)) r[k] = s.p[k]; }
+      r.survey_rank = i + 1; r.survey_score = +s.score.toFixed(4); r.survey_segment = prioSeg(s.m);
+      return r;
+    });
+  }
+
+  // ---- Download modal (header): offline HTML + GeoJSON/Excel per scope (Alle / Gefiltert / Priorisiert) ----
   (function () {
-    var btn = document.getElementById("dl-btn"), menu = document.getElementById("dl-menu");
-    var titleInput = document.getElementById("dl-title"), hint = document.getElementById("dl-hint");
+    var btn = document.getElementById("dl-btn"), modal = document.getElementById("dl-modal"), card = modal.querySelector(".modal-card");
+    var titleInput = document.getElementById("dl-title"), hint = document.getElementById("dl-hint"), defHint = hint.textContent, lastFocus = null;
     if (window.DASHBOARD_TITLE) titleInput.value = window.DASHBOARD_TITLE;
     var titleVal = function () { return (titleInput.value || "BBL Landcover Dashboard").trim(); };
-    btn.addEventListener("click", function (e) { e.stopPropagation(); menu.classList.toggle("open"); });
-    menu.addEventListener("click", function (e) { e.stopPropagation(); });
-    document.addEventListener("click", function () { menu.classList.remove("open"); });
+    var base = function () { return slug(titleVal()); };
+    function refreshCounts() {
+      computePrio();
+      document.getElementById("dl-n-all").textContent = "(" + fmt(PARCELS.length) + ")";
+      document.getElementById("dl-n-flt").textContent = "(" + fmt(state.rows.length) + ")";
+      document.getElementById("dl-n-prio").textContent = "(" + fmt(prio.selected.length) + ")";
+    }
+    function openModal() { lastFocus = document.activeElement; refreshCounts(); hint.textContent = defHint; modal.hidden = false; document.getElementById("dl-close").focus(); }
+    function closeModal() { modal.hidden = true; if (lastFocus && lastFocus.focus) lastFocus.focus(); }
+    btn.addEventListener("click", openModal);
+    document.getElementById("dl-close").addEventListener("click", closeModal);
+    modal.addEventListener("click", function (e) { if (e.target === modal) closeModal(); }); // click on the backdrop
+    document.addEventListener("keydown", function (e) { if (e.key === "Escape" && !modal.hidden) closeModal(); });
+    card.addEventListener("keydown", function (e) { // simple focus trap so Tab stays inside the dialog
+      if (e.key !== "Tab") return;
+      var f = card.querySelectorAll("button, input, [tabindex]"); if (!f.length) return;
+      var first = f[0], last = f[f.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    });
+    // Run an export, surfacing progress / errors in the hint line; the modal stays open for more downloads.
+    function busy(msg, fn) {
+      hint.textContent = msg;
+      var done = function () { hint.textContent = defHint; }, fail = function (err) { hint.textContent = "Fehler: " + ((err && err.message) || err); };
+      var r; try { r = fn(); } catch (err) { fail(err); return; }
+      if (r && typeof r.then === "function") r.then(done, fail); else done();
+    }
     document.getElementById("dl-html").addEventListener("click", function () {
-      var prev = hint.textContent; hint.textContent = "HTML wird erstellt…";
-      buildDeliverable(PARCELS, OVERLAYS, titleVal()).then(function (html) {
-        saveBlob(html, "text/html;charset=utf-8", slug(titleVal()) + ".html");
-        hint.textContent = prev; menu.classList.remove("open");
-      }).catch(function (err) {
-        hint.textContent = "HTML-Download benötigt einen Webserver (fetch ist über file:// blockiert). " + err.message;
+      busy("HTML wird erstellt…", function () {
+        return buildDeliverable(PARCELS, OVERLAYS, titleVal()).then(function (html) { saveBlob(html, "text/html;charset=utf-8", base() + ".html"); })
+          .catch(function (err) { throw new Error("HTML-Download benötigt einen Webserver (fetch ist über file:// blockiert). " + err.message); });
       });
     });
-    document.getElementById("dl-xlsx").addEventListener("click", function () {
-      var prev = hint.textContent; hint.textContent = "Excel wird erstellt…";
-      loadXlsx().then(function (XLSX) {
-        var vis = COLUMNS.filter(function (c) { return c.visible; });
-        var aoa = [vis.map(function (c) { return c.label; })];
-        state.rows.forEach(function (p) {
-          aoa.push(vis.map(function (c) { return c.num ? num(p[c.key]) : (p[c.key] == null ? "" : String(p[c.key])); }));
-        });
-        var wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), "Grundstücke");
-        XLSX.writeFile(wb, slug(titleVal()) + "-tabelle.xlsx");
-        hint.textContent = prev; menu.classList.remove("open");
-      }).catch(function (err) { hint.textContent = "Excel-Fehler: " + err.message; });
-    });
-    // GeoJSON: the current (filtered) parcels as polygons + all non-internal
-    // properties (PII was already stripped on import). WGS84, per the GeoJSON spec.
-    document.getElementById("dl-geojson").addEventListener("click", function () {
-      var features = state.rows.map(function (p) {
-        var props = {};
-        for (var k in p) { if (Object.prototype.hasOwnProperty.call(p, k) && k.charAt(0) !== "_") props[k] = p[k]; }
-        return { type: "Feature", geometry: p._geom || null, properties: props };
-      });
-      saveBlob(JSON.stringify({ type: "FeatureCollection", features: features }), "application/geo+json", slug(titleVal()) + ".geojson");
-      menu.classList.remove("open");
-    });
+    // Scopes — Alle = full dataset · Gefiltert = active side-panel filters · Priorisiert = Top-N (+ survey rank/score/segment).
+    document.getElementById("dl-all-geo").addEventListener("click", function () { busy("GeoJSON wird erstellt…", function () { exportGeojsonRows(PARCELS, base() + "-alle.geojson"); }); });
+    document.getElementById("dl-all-xlsx").addEventListener("click", function () { busy("Excel wird erstellt…", function () { return exportXlsxRows(PARCELS, base() + "-alle.xlsx", "Grundstücke"); }); });
+    document.getElementById("dl-flt-geo").addEventListener("click", function () { busy("GeoJSON wird erstellt…", function () { exportGeojsonRows(state.rows, base() + "-gefiltert.geojson"); }); });
+    document.getElementById("dl-flt-xlsx").addEventListener("click", function () { busy("Excel wird erstellt…", function () { return exportXlsxRows(state.rows, base() + "-gefiltert.xlsx", "Grundstücke"); }); });
+    document.getElementById("dl-prio-geo").addEventListener("click", function () { busy("GeoJSON wird erstellt…", function () { exportGeojsonRows(prioRows(), base() + "-priorisierung-top" + prio.topN + ".geojson"); }); });
+    document.getElementById("dl-prio-xlsx").addEventListener("click", function () { busy("Excel wird erstellt…", function () { return exportXlsxRows(prioRows(), base() + "-priorisierung-top" + prio.topN + ".xlsx", "Priorisierung", PRIO_XLSX_COLS); }); });
   })();
 
   // ---- "Neue Datei": reload to a clean URL → file picker (served builder) ----
@@ -1049,6 +1373,7 @@
       areaUnit = u;
       try { localStorage.setItem("dashAreaUnit", u); } catch (e) { /* storage may be blocked */ }
       syncUnitUI(); update();
+      if (!document.getElementById("panel-priority").hidden) renderPriority(); // reformat area KPIs + table on unit change
     });
   });
   syncUnitUI();
