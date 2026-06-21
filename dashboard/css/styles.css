@@ -162,6 +162,7 @@ th .arrow { color: var(--secondary-500); font-size: 11px; }
 th[data-key]:not(.sorted)::after { content: "↕"; color: var(--gray-500); font-size: 11px; margin-left: 5px; opacity: 0; }
 th[data-key]:hover:not(.sorted)::after { opacity: 1; }
 tbody tr:hover { background: var(--secondary-50); }
+#table tbody tr, #pr-table tbody tr { cursor: pointer; } /* rows are clickable → zoom/select on the map */
 tbody tr.row-selected { background: #fdecec; }
 tbody tr.row-selected td:first-child { box-shadow: inset 3px 0 0 #d8232a; }
 td.muted { color: var(--gray-500); }
