@@ -1,10 +1,6 @@
-# Dashboard: the source is tracked (index.html template + css/ + js/ + docs).
-# NOT tracked:
-#  - the parcel GeoJSON (user data — large, may carry personal fields), incl. backups
-#  - any *built* single-file HTML (embeds parcel data; distributed via ActaNova)
+# Dashboard: the whole folder is tracked. The ONLY exclusion is the parcel
+# GeoJSON (user data — large, may carry personal fields), incl. backups.
 dashboard/*.geojson*
-dashboard/*.html
-!dashboard/index.html
 
 # Python bytecode
 __pycache__/

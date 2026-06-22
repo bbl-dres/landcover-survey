@@ -5,6 +5,8 @@ body {
   word-spacing: 0.0625em; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
 }
 :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.skip-link { position: absolute; left: 8px; top: -48px; z-index: 3000; background: var(--primary-700); color: #fff; padding: 10px 16px; border-radius: 4px; text-decoration: none; font-weight: 600; }
+.skip-link:focus { top: 8px; }
 a { color: var(--link); }
 .fp-toggle, .map-print-img { display: none; }   /* shown only on mobile / in print, respectively */
 /* Hover info (light secondary-50 box, no underline affordance) */
@@ -282,6 +284,8 @@ footer#footer .footer-links a:hover { text-decoration: underline; }
 .modal-x { background: none; border: none; font-size: 18px; line-height: 1; padding: 4px 6px; cursor: pointer; color: var(--gray-500); border-radius: var(--radius-sm); }
 .modal-x:hover { color: var(--gray-900); background: var(--gray-100); }
 .dl-html-item { font-weight: 600; }
+.dl-doc-t { display: block; font-weight: 600; }
+.dl-doc-s { display: block; font-size: 12px; color: var(--gray-500); font-weight: 400; margin-top: 2px; line-height: 1.35; }
 .dl-sect-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--gray-500); margin: 18px 0 10px; }
 .dl-grid { display: grid; grid-template-columns: 1fr auto auto; gap: 10px 8px; align-items: center; }
 .dl-scope { line-height: 1.25; }
@@ -290,6 +294,16 @@ footer#footer .footer-links a:hover { text-decoration: underline; }
 .dl-scope-sub { font-size: 12px; color: var(--gray-500); }
 .dl-fmt { padding: 7px 12px; background: var(--secondary-50); border: 1px solid var(--secondary-200); border-radius: var(--radius); cursor: pointer; font: inherit; font-size: 13px; color: var(--secondary-700); white-space: nowrap; }
 .dl-fmt:hover { background: var(--secondary-100); border-color: var(--secondary-300); }
+.dl-progress { margin: 8px 0 2px; }
+.dl-progress[hidden] { display: none; }
+.dl-progress-track { height: 8px; background: var(--gray-200); border-radius: 999px; overflow: hidden; }
+.dl-progress-track > i { display: block; height: 100%; width: 0; background: var(--swiss-red); border-radius: 999px; transition: width .25s ease; }
+.dl-progress-txt { display: block; font-size: 11px; color: var(--gray-600); margin-top: 5px; font-variant-numeric: tabular-nums; }
+.dl-progress-row { display: flex; align-items: center; gap: 10px; }
+.dl-progress-row .dl-progress-track { flex: 1; }
+.dl-abort { background: #fff; border: 1px solid var(--secondary-300); border-radius: var(--radius-sm); padding: 4px 11px; font: inherit; font-size: 12px; color: var(--secondary-600); cursor: pointer; white-space: nowrap; }
+.dl-abort:hover { background: var(--secondary-50); border-color: var(--secondary-500); }
+.dl-abort:disabled { opacity: .5; cursor: default; }
 
 /* ── App layout: header + (left filter panel | main) ── */
 #app { display: flex; align-items: stretch; }
@@ -319,6 +333,8 @@ footer#footer .footer-links a:hover { text-decoration: underline; }
 .tab.is-active { color: var(--primary-700); border-bottom-color: var(--swiss-red); } /* darker red text for AA; brand-red underline */
 .tab-panel { padding: 18px 24px 44px; background: var(--secondary-50); }
 .tab-panel[hidden] { display: none; }
+/* Über tab has little content — fill the viewport on large screens so its background reaches the footer (no white gap). */
+@media (min-width: 901px) { #panel-about { min-height: calc(100vh - 100px); } }
 /* Active-filter pills live in the filter panel now */
 #filter-panel .pill-row { margin: 8px 0 4px; padding-bottom: 12px; border-bottom: 1px solid var(--secondary-200); }
 #filter-panel .pill-row:empty { display: none; }
@@ -351,8 +367,6 @@ table.sumtbl .sumbar > i { display: block; height: 100%; background: var(--bar-f
 .about ul { margin: 6px 0; padding-left: 20px; color: var(--gray-700); line-height: 1.7; }
 .about .muted { color: var(--gray-500); font-size: 13px; }
 .about-links a { font-weight: 600; }
-.about-repo { background: var(--secondary-50); border: 1px solid var(--secondary-100); border-left: 3px solid var(--swiss-red); border-radius: var(--radius); padding: 11px 14px; margin: 14px 0 20px; font-size: 14px; }
-.about-repo a { font-weight: 600; }
 
 @media (max-width: 900px) {
   .fp-toggle { display: inline-flex; }

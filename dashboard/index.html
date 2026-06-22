@@ -14,6 +14,7 @@
 <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
+<a class="skip-link" href="#main">Zum Inhalt springen</a>
 <div id="builder-screen">
   <div class="builder-card">
     <h1>Daten laden</h1>
@@ -45,7 +46,13 @@
       <button class="modal-x" id="dl-close" type="button" aria-label="Schliessen">&times;</button>
     </div>
     <label class="dl-title">Titel<input id="dl-title" type="text" value="Auswertung Bodenbedeckung"></label>
-    <button class="dl-item dl-html-item" id="dl-html" type="button">Dashboard (HTML)</button>
+    <div class="dl-sect-label">Dokumente</div>
+    <button class="dl-item dl-doc" id="dl-html" type="button"><span class="dl-doc-t">Dashboard (HTML)</span><span class="dl-doc-s">interaktive Auswertung als eigenständige Datei zum Weitergeben</span></button>
+    <button class="dl-item dl-doc" id="dl-pdf" type="button"><span class="dl-doc-t">Priorisierte Grundstücke (PDF)</span><span class="dl-doc-s">A3-Bericht, eine Seite pro Grundstück (Karte &amp; Kennzahlen)</span></button>
+    <div class="dl-progress" id="dl-progress" hidden>
+      <div class="dl-progress-row"><div class="dl-progress-track"><i id="dl-progress-bar"></i></div><button class="dl-abort" id="dl-abort" type="button">Abbrechen</button></div>
+      <span class="dl-progress-txt" id="dl-progress-txt"></span>
+    </div>
     <div class="dl-sect-label">Daten exportieren</div>
     <div class="dl-grid">
       <div class="dl-scope">
@@ -67,7 +74,7 @@
       <button class="dl-fmt" id="dl-prio-geo" type="button">GeoJSON</button>
       <button class="dl-fmt" id="dl-prio-xlsx" type="button">Excel</button>
     </div>
-    <div class="dl-hint" id="dl-hint">GeoJSON enthält die Parzellengeometrie (WGS84) · Excel nutzt die sichtbaren Tabellenspalten.</div>
+    <div class="dl-hint" id="dl-hint">GeoJSON enthält die Parzellengeometrie (WGS84) · Excel nutzt die sichtbaren Tabellenspalten · PDF-Bericht benötigt eine Internetverbindung (Kartenbilder).</div>
   </div>
 </div>
 
@@ -120,7 +127,7 @@
   <button class="fp-expand" id="fp-expand" title="Filter anzeigen">Filter ›</button>
   <div class="fp-scrim" id="fp-scrim" hidden></div>
 
-  <main id="main">
+  <main id="main" tabindex="-1">
     <div class="main-head">
       <button class="hbtn hbtn-light fp-toggle" id="fp-toggle" type="button" aria-label="Filter ein-/ausblenden" aria-expanded="false">☰ Filter</button>
       <h1 class="dash-title" id="dash-title">Auswertung Bodenbedeckung</h1>
@@ -160,17 +167,17 @@
       <div class="summary-tables">
         <div class="panel card-tabs">
           <div class="ctab-head" role="tablist">
-            <button type="button" class="ctab is-active" data-ctab="vbskat" role="tab">VBS Kategorien</button>
-            <button type="button" class="ctab" data-ctab="vbsprod" role="tab">VBS Produktiv</button>
+            <button type="button" class="ctab is-active" data-ctab="vbskat" role="tab" aria-selected="true">VBS Kategorien</button>
+            <button type="button" class="ctab" data-ctab="vbsprod" role="tab" aria-selected="false">VBS Produktiv</button>
           </div>
           <div class="ctab-pane" data-pane="vbskat" role="tabpanel"><div id="tbl-vbs"></div></div>
           <div class="ctab-pane" data-pane="vbsprod" role="tabpanel" hidden><div id="tbl-vbsprod"></div></div>
         </div>
         <div class="panel card-tabs">
           <div class="ctab-head" role="tablist">
-            <button type="button" class="ctab is-active" data-ctab="bauzonen" role="tab">Bauzonen</button>
-            <button type="button" class="ctab" data-ctab="sia" role="tab">SIA 416</button>
-            <button type="button" class="ctab" data-ctab="vers" role="tab">Versiegelung</button>
+            <button type="button" class="ctab is-active" data-ctab="bauzonen" role="tab" aria-selected="true">Bauzonen</button>
+            <button type="button" class="ctab" data-ctab="sia" role="tab" aria-selected="false">SIA 416</button>
+            <button type="button" class="ctab" data-ctab="vers" role="tab" aria-selected="false">Versiegelung</button>
           </div>
           <div class="ctab-pane" data-pane="bauzonen" role="tabpanel"><div id="tbl-bauzonen"></div></div>
           <div class="ctab-pane" data-pane="sia" role="tabpanel" hidden><div id="tbl-sia"></div></div>
@@ -221,7 +228,7 @@
       <div class="table-wrap">
         <div class="table-scroll">
           <table id="q-table">
-            <thead><tr><th>ID</th><th>E-GRID</th><th>Ort</th><th>Hinweis</th></tr></thead>
+            <thead><tr><th scope="col">ID</th><th scope="col">E-GRID</th><th scope="col">Ort</th><th scope="col">Hinweis</th></tr></thead>
             <tbody id="q-tbody"></tbody>
           </table>
         </div>
@@ -244,7 +251,7 @@
         <div class="panel">
           <h3>Auswahl-Trichter <span class="ftip" data-tip="Harte Vorfilter — nur Grundstücke, die alle aktiven Kriterien erfüllen, gelangen in die Bewertung.">ⓘ</span></h3>
           <label class="prio-chk"><input type="checkbox" id="pr-federal" checked> Nur Bund (Eigentumsart 1) <span class="ftip" data-tip="Behält nur Grundstücke im Bundeseigentum (Eigentumsart = 1).">ⓘ</span></label>
-          <label class="prio-chk"><input type="checkbox" id="pr-sap" checked> Reale Parzellen (SAP-Filter) <span class="ftip" data-tip="Schliesst per Bezeichnung ausgeschlossene Objekte aus (gleiche Regeln wie der Bezeichnungs-Filter) — z. B. technische oder Strassenparzellen.">ⓘ</span></label>
+          <label class="prio-chk"><input type="checkbox" id="pr-sap" checked> Reale Grundstücke (ohne Parkplätze, Löschvermerke, Abgänge) <span class="ftip" data-tip="Schliesst per Bezeichnung ausgeschlossene Objekte aus: Abgänge (ABGA), Löschvermerke (LÖVM) und Parkplätze (PP) — gleiche Regeln wie der Bezeichnungs-Filter.">ⓘ</span></label>
           <div class="prio-rng"><label for="pr-uf">Umgebungsfläche UF ≥ <strong id="pr-uf-val">1000</strong> m² <span class="ftip" data-tip="Mindest-Umgebungsfläche (SIA 416 BUF + UUF = Grundstück ohne Gebäudegrundfläche). Schliesst kleine Restflächen aus.">ⓘ</span></label><input type="range" id="pr-uf" min="0" max="5000" step="100" value="1000"></div>
           <label class="prio-chk"><input type="checkbox" id="pr-bauzone" checked> In Bauzone (Anteil ≥ <strong id="pr-bz-val">50</strong> %) <span class="ftip" data-tip="Mindestanteil der Grundstücksfläche, der in einer Bauzone (ARE-harmonisiert) liegt.">ⓘ</span></label>
           <div class="prio-rng"><input type="range" id="pr-bz" min="0" max="100" step="5" value="50" aria-label="Mindest-Bauzonenanteil in Prozent"></div>
@@ -290,8 +297,7 @@
       <div class="about">
         <div class="section-title">Über diese Auswertung</div>
         <p>Diese Auswertung zeigt pro Schweizer Grundstück (Liegenschaft / SDR), wie sich die Grundstücksfläche auf <strong>Bodenbedeckungsarten</strong>, <strong>Bauzonen</strong> und <strong>BAFU-Lebensräume</strong> verteilt. Die Daten sind in diese Datei eingebettet; Auswertung, Tabellen, Diagramme und Filter laufen ohne Server direkt im Browser. Die interaktive Karte und der Excel-Export benötigen eine Internetverbindung.</p>
-        <p class="about-repo"><strong>Mehr erfahren:</strong> Methodik, Quellcode und vollständige Dokumentation auf <a href="https://github.com/bbl-dres/landcover-survey" target="_blank" rel="noopener">github.com/bbl-dres/landcover-survey</a></p>
-        <h3>Datengrundlagen</h3>
+        <div class="section-title">Datengrundlagen</div>
         <ul>
           <li><strong>Bodenbedeckung</strong> — Amtliche Vermessung (AV), DM.01-AV-CH · <a href="https://www.geodienste.ch/services/av" target="_blank" rel="noopener">geodienste.ch</a></li>
           <li><strong>Grundstücke</strong> — Amtliche Vermessung, Liegenschaften (E-GRID) · <a href="https://map.geo.admin.ch/#/map?lang=de&amp;bgLayer=ch.swisstopo.pixelkarte-grau&amp;layers=ch.kantone.cadastralwebmap-farbe" target="_blank" rel="noopener">map.geo.admin.ch</a></li>
@@ -299,14 +305,12 @@
           <li><strong>Lebensräume</strong> — BAFU Lebensraumkarte · <code>ch.bafu.lebensraumkarte-schweiz</code> · <a href="https://map.geo.admin.ch/#/map?lang=de&amp;center=2622715,1205155.21&amp;z=1.921&amp;topic=ech&amp;layers=ch.bafu.lebensraumkarte-schweiz&amp;bgLayer=void" target="_blank" rel="noopener">map.geo.admin.ch</a></li>
         </ul>
         <p class="muted">Metadaten-Katalog: <a href="https://www.geocat.ch/geonetwork/srv/ger/catalog.search#/home" target="_blank" rel="noopener">geocat.ch</a> · © swisstopo / Kantone (AV) · ARE · BAFU</p>
-        <h3>Klassifizierung</h3>
-        <p>SIA 416 (GGF / BUF / UUF) · DIN 277 · Grünfläche · Versiegelung · VBS naturnahe Flächen.</p>
-        <h3>Hinweise</h3>
+        <div class="section-title">Hinweise</div>
         <ul>
           <li>Die berechnete Grundstücksfläche entspricht <em>nicht</em> dem amtlichen Flächenmass.</li>
           <li>Persönliche Felder werden beim Erstellen der Datei automatisch entfernt.</li>
         </ul>
-        <h3>Weiterführende Informationen</h3>
+        <div class="section-title">Weiterführende Informationen</div>
         <ul class="about-links">
           <li><a href="https://github.com/bbl-dres/landcover-survey" target="_blank" rel="noopener">Projekt auf GitHub (Quellcode &amp; Dokumentation)</a></li>
           <li><a href="https://github.com/bbl-dres/landcover-survey/blob/main/docs/MANUAL.md" target="_blank" rel="noopener">Anleitung (MANUAL)</a></li>
@@ -331,6 +335,7 @@
 
 <!-- PARCEL-DATA:START — embed data with the in-browser builder (open this file and pick a GeoJSON); do not edit by hand -->
 <!-- PARCEL-DATA:END -->
+<script src="js/ch-map.js"></script>
 <script src="js/dashboard.js"></script>
 </body>
 </html>

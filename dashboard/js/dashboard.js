@@ -5,11 +5,13 @@
   // carries a clean shell with data swapped into the PARCEL-DATA markers.
   var TEMPLATE_HTML = "<!doctype html>\n" + document.documentElement.outerHTML;
   // PII allowlist (mirrors the old build_dashboard.py): keep every non-input_
-  // column; of input_ keep only these five. The rest never reach a saved file.
+  // column; of input_ keep only these six. The rest never reach a saved file.
   var KEEP_INPUT = { "input_ort":1, "input_plz":1, "input_rg":1, "input_bez. grundstück":1, "input_eigent.art":1, "input_tpf":1 };
   var keepKey = function (k) { return k.indexOf("input_") === 0 ? !!KEEP_INPUT[k] : true; };
   var DATA_MARKERS = /<!-- PARCEL-DATA:START[\s\S]*?PARCEL-DATA:END -->/;
-  var jsonSafe = function (o) { return JSON.stringify(o).replace(/</g, "\\u003c"); };
+  // Escape `<` (→ no </script> breakout) and U+2028/U+2029 (legal in JSON, but
+  // terminate a JS string literal inside an inline <script> → silent corruption).
+  var jsonSafe = function (o) { return JSON.stringify(o).replace(new RegExp("[<" + String.fromCharCode(0x2028, 0x2029) + "]", "g"), function (c) { return String.fromCharCode(92) + "u" + ("000" + c.charCodeAt(0).toString(16)).slice(-4); }); };
   var slug = function (s) { return (String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")) || "landcover-dashboard"; };
   var saveBlob = function (data, type, name) {
     var a = document.createElement("a");
@@ -50,7 +52,7 @@
         if (f && f.geometry) o._geom = f.geometry; // for the map (survives the allowlist)
         parcels.push(o);
       } else if (overlays[layer] && f && f.geometry) {
-        overlays[layer].features.push({ type: "Feature", geometry: f.geometry, properties: { art: pr.art || pr.Art || pr.bauzone_code || "", area_m2: +pr.area_m2 || 0 } });
+        overlays[layer].features.push({ type: "Feature", geometry: f.geometry, properties: { id: pr.id || "", art: pr.art || pr.Art || pr.bauzone_code || "", area_m2: +pr.area_m2 || 0 } });
       }
     });
     return { parcels: parcels, overlays: overlays };
@@ -63,6 +65,9 @@
       for (var k in p) { if (!Object.prototype.hasOwnProperty.call(p, k)) continue; if (keepKey(k)) o[k] = p[k]; else droppedSet[k] = 1; }
       return o;
     });
+    // Defence-in-depth: keepKey only filters input_* keys; warn if a non-input_ column
+    // looks like PII — it would otherwise ship unfiltered into the deliverable.
+    if (cleaned[0]) { var piiRe = /(^|_)(name|mieter|tenant|e?mail|telefon|phone|adresse|kontakt|person)(_|$)/i; Object.keys(cleaned[0]).forEach(function (k) { if (k.indexOf("input_") !== 0 && piiRe.test(k)) console.warn("[allowlist] mögliche PII-Spalte ohne input_-Präfix wird eingebettet:", k); }); }
     return { cleaned: cleaned, dropped: Object.keys(droppedSet).sort() };
   };
   // Self-contained deliverable: clean template + embedded (allowlisted) parcels.
@@ -225,7 +230,7 @@
   function num(v) { var n = parseFloat(v); return isFinite(n) ? n : 0; }
   function fmt(v) { return nf.format(Math.round(v)); }
   function ha(m2) { return m2 / 1e4; }
-  function fmtHa(m2) { var h = ha(m2); return nf.format(h >= 100 ? Math.round(h) : Math.round(h*10)/10); }
+  function fmtHa(m2) { var h = ha(m2); if (h > 0 && h < 0.01) return "< 0.01"; return nf.format(h >= 100 ? Math.round(h) : h >= 1 ? Math.round(h * 10) / 10 : Math.round(h * 100) / 100); }
   // ---- Area display unit (ha default / m²) — display only; the data stays m² ----
   var areaUnit = "ha";
   try { var _su = localStorage.getItem("dashAreaUnit"); if (_su === "ha" || _su === "m2") areaUnit = _su; } catch (e) { /* file:// may block storage */ }
@@ -234,7 +239,7 @@
   function fmtAreaU(m2) { return fmtArea(m2) + " " + unitLabel(); }
   function stripM2(s) { return String(s == null ? "" : s).replace(/\s*m²$/, ""); }
   function pct(part, whole) { return whole > 0 ? Math.round(part/whole*100) : 0; }
-  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"})[c]; }); }
+  function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[c]; }); }
   function isCovered(p) { return num(p.sia416_ggf_m2) + num(p.sia416_buf_m2) + num(p.sia416_uuf_m2) > 0; }
 
 
@@ -409,8 +414,8 @@
              '<td class="bar-col">' + bar + '</td>' +
              '<td class="num">' + fmtVal(it.value) + '</td><td class="num">' + anteil + '</td></tr>';
     }).join("");
-    var totalRow = showTotal ? '<tr class="total"><td>Total</td><td class="bar-col"></td><td class="num">' + fmtVal(sum) + '</td><td class="num">' + (total ? "100 %" : "") + '</td></tr>' : "";
-    var anteilTh = "Anteil" + (anteilHint ? ' <span class="ftip" data-tip="' + esc(anteilHint) + '">ⓘ</span>' : "");
+    var totalRow = showTotal ? '<tr class="total"><td>Total</td><td class="bar-col"></td><td class="num">' + fmtVal(sum) + '</td><td class="num">' + (total ? pct(sum, total) + " %" : "") + '</td></tr>' : "";
+    var anteilTh = "Anteil" + (anteilHint ? ' <span class="ftip" tabindex="0" role="img" aria-label="' + esc(anteilHint) + '" data-tip="' + esc(anteilHint) + '">ⓘ</span>' : "");
     el.innerHTML = '<table class="sumtbl"><thead><tr><th>Kategorie</th><th class="bar-col"></th><th class="num">' + (valHeader || "") +
                    '</th><th class="num">' + anteilTh + '</th></tr></thead><tbody>' + body + totalRow + '</tbody></table>';
   }
@@ -714,7 +719,7 @@
       var tip = c.tip ? ' data-tip="' + esc(c.tip) + '"' : "";
       var cls = (c.num ? "num" : "") + (sorted ? " sorted" : "");
       var lbl = c.num ? stripM2(c.label) + " (" + unitLabel() + ")" : c.label;
-      return '<th class="' + cls + '" data-key="' + esc(c.key) + '"' + tip + ">" + esc(lbl) + arrow + "</th>";
+      return '<th class="' + cls + '" scope="col" tabindex="0" aria-sort="' + (sorted ? (state.dir < 0 ? "descending" : "ascending") : "none") + '" data-key="' + esc(c.key) + '"' + tip + ">" + esc(lbl) + arrow + "</th>";
     }).join("");
   }
   function renderBody() {
@@ -728,7 +733,7 @@
     document.getElementById("tbody").innerHTML = pageRows.map(function (p) {
       var pid = (p.id == null ? "" : String(p.id));
       var sel = (selectedParcelId && pid === selectedParcelId) ? ' class="row-selected"' : "";
-      return '<tr data-id="' + esc(pid) + '"' + sel + ">" + vis.map(function (c) {
+      return '<tr data-id="' + esc(pid) + '" tabindex="0"' + sel + ">" + vis.map(function (c) {
         var v = p[c.key];
         if (c.num) return '<td class="num">' + (num(v) ? fmtArea(num(v)) : '<span class="muted">0</span>') + "</td>";
         if (c.render) return "<td>" + c.render(v == null ? "" : String(v), p) + "</td>";
@@ -957,7 +962,7 @@
     head.addEventListener("click", function (e) {
       var b = e.target.closest(".ctab"); if (!b) return;
       var key = b.getAttribute("data-ctab");
-      Array.prototype.forEach.call(head.querySelectorAll(".ctab"), function (t) { t.classList.toggle("is-active", t === b); });
+      Array.prototype.forEach.call(head.querySelectorAll(".ctab"), function (t) { var on = t === b; t.classList.toggle("is-active", on); t.setAttribute("aria-selected", on ? "true" : "false"); });
       Array.prototype.forEach.call(card.querySelectorAll(".ctab-pane"), function (pane) { pane.hidden = pane.getAttribute("data-pane") !== key; });
     });
   });
@@ -983,24 +988,36 @@
   document.addEventListener("click", function () { document.getElementById("cols-menu").classList.remove("open"); });
 
   // ---- Sorting / search / pager ----
-  document.getElementById("thead-row").addEventListener("click", function (e) {
-    var th = e.target.closest("th"); if (!th) return;
-    var key = th.getAttribute("data-key");
-    if (state.sort === key) state.dir = -state.dir;
-    else { state.sort = key; state.dir = colByKey[key] && colByKey[key].num ? -1 : 1; }
-    sortRows(); state.page = 1; renderTable();
-  });
+  (function () {
+    function sortAct(e) {
+      if (e.type === "keydown" && e.key !== "Enter" && e.key !== " ") return;
+      var th = e.target.closest("th[data-key]"); if (!th) return;
+      if (e.type === "keydown") e.preventDefault();
+      var key = th.getAttribute("data-key");
+      if (state.sort === key) state.dir = -state.dir;
+      else { state.sort = key; state.dir = colByKey[key] && colByKey[key].num ? -1 : 1; }
+      sortRows(); state.page = 1; renderTable();
+    }
+    var th = document.getElementById("thead-row");
+    th.addEventListener("click", sortAct); th.addEventListener("keydown", sortAct); // Enter/Space sorts a focused header
+  })();
   var searchTimer;
   document.getElementById("search").addEventListener("input", function (e) {
     clearTimeout(searchTimer);
     var v = e.target.value;
     searchTimer = setTimeout(function () { state.search = v; commit(); }, 150);
   });
-  // Click a table row → select the parcel on the map + zoom to it (Übersicht).
-  document.getElementById("tbody").addEventListener("click", function (e) {
-    var tr = e.target.closest && e.target.closest("tr[data-id]"); if (!tr) return;
-    focusParcel(tr.getAttribute("data-id"));
-  });
+  // Click or Enter/Space on a row → select the parcel on the map + zoom to it (Übersicht).
+  (function () {
+    function rowAct(e) {
+      if (e.type === "keydown" && e.key !== "Enter" && e.key !== " ") return;
+      var tr = e.target.closest && e.target.closest("tr[data-id]"); if (!tr) return;
+      if (e.type === "keydown") e.preventDefault();
+      focusParcel(tr.getAttribute("data-id"));
+    }
+    var tb = document.getElementById("tbody");
+    tb.addEventListener("click", rowAct); tb.addEventListener("keydown", rowAct);
+  })();
   document.getElementById("prev").addEventListener("click", function () { if (state.page > 1) { state.page--; renderBody(); renderPager(); } });
   document.getElementById("next").addEventListener("click", function () {
     var pages = Math.ceil(state.rows.length / state.pageSize);
@@ -1158,6 +1175,7 @@
       area: area, uf: uf, green: green,
       greenShare: uf ? Math.min(1, green / uf) : 0,          // a share — clamp at 100 %
       urban: (PRIO_BZ_REL[bzDomSlug] || 0),                  // zone-type fit; Bauzone-share is the gate, not the score
+      hbAll: hbAll,                                          // total mapped habitat area (0 = BAFU layer not queried for this parcel)
       natShare: hbAll ? hbNat / hbAll : 0,                   // natural share of MAPPED habitat (robust to partial coverage)
       diversity: Math.max(nLc, nHb),                         // max, not sum — don't double-weight parcels that have both layers
       quality: Math.max(0, q)
@@ -1175,11 +1193,24 @@
     }
     return true;
   }
-  // Percentile rank in [0,1] for each value within its pool (robust to outliers).
+  // Percentile rank in [0,1] within the pool, using midrank for ties so identical
+  // values always get the same score (no spurious gradient from array order).
   function pctRanks(vals) {
-    var n = vals.length, idx = vals.map(function (v, i) { return i; }).sort(function (a, b) { return vals[a] - vals[b]; });
-    var r = new Array(n);
-    idx.forEach(function (ix, pos) { r[ix] = n > 1 ? pos / (n - 1) : 1; });
+    var n = vals.length;
+    if (n <= 1) return vals.map(function () { return 0.5; }); // a lone candidate has no percentile context
+    var idx = vals.map(function (v, i) { return i; }).sort(function (a, b) { return vals[a] - vals[b]; });
+    var r = new Array(n), i = 0;
+    while (i < n) { var j = i; while (j + 1 < n && vals[idx[j + 1]] === vals[idx[i]]) j++; var mid = ((i + j) / 2) / (n - 1); for (var k = i; k <= j; k++) r[idx[k]] = mid; i = j + 1; }
+    return r;
+  }
+  // Like pctRanks, but null/undefined/non-finite values (e.g. parcels with no habitat
+  // data) are excluded from the ranking and scored neutrally (0.5), so missing data is
+  // not mistaken for an ecologically poor parcel.
+  function pctRanksDefined(vals) {
+    var pos = [], defined = [];
+    vals.forEach(function (v, i) { if (v != null && isFinite(v)) { pos.push(i); defined.push(v); } });
+    var r = []; for (var i = 0; i < vals.length; i++) r[i] = 0.5;
+    var dr = pctRanks(defined); pos.forEach(function (origI, k) { r[origI] = dr[k]; });
     return r;
   }
   function prioBlend(a, b, wa) { return a.map(function (v, i) { return wa * v + (1 - wa) * b[i]; }); }
@@ -1190,7 +1221,7 @@
       green: prioBlend(pctRanks(M.map(function (m) { return m.greenShare; })), pctRanks(M.map(function (m) { return m.green; })), 0.6),
       scale: pctRanks(M.map(function (m) { return Math.log(1 + m.uf); })),
       urban: pctRanks(M.map(function (m) { return m.urban; })),
-      habitat: pctRanks(M.map(function (m) { return m.natShare; })),
+      habitat: pctRanksDefined(M.map(function (m) { return m.hbAll > 0 ? m.natShare : null; })),
       diversity: pctRanks(M.map(function (m) { return m.diversity; })),
       quality: pctRanks(M.map(function (m) { return m.quality; }))
     };
@@ -1212,7 +1243,7 @@
   function renderPrioWeights() {
     var el = document.getElementById("pr-weights"); if (!el) return;
     el.innerHTML = WEIGHT_DEFS.map(function (w) {
-      return '<div class="prio-w"><label for="prw-' + w.key + '"><span>' + esc(w.name) + (w.tip ? ' <span class="ftip" data-tip="' + esc(w.tip) + '">ⓘ</span>' : '') + '</span><strong>' + prio.weights[w.key] + '</strong></label>' +
+      return '<div class="prio-w"><label for="prw-' + w.key + '"><span>' + esc(w.name) + (w.tip ? ' <span class="ftip" tabindex="0" role="img" aria-label="' + esc(w.tip) + '" data-tip="' + esc(w.tip) + '">ⓘ</span>' : '') + '</span><strong>' + prio.weights[w.key] + '</strong></label>' +
              '<input type="range" id="prw-' + w.key + '" data-wk="' + w.key + '" aria-label="Gewicht ' + esc(w.name) + '" min="0" max="40" step="1" value="' + prio.weights[w.key] + '"></div>';
     }).join("");
   }
@@ -1265,7 +1296,7 @@
     tr.innerHTML = PRIO_COLS.map(function (c) {
       var sorted = prio.sort === c.key, arrow = sorted ? ' <span class="arrow">' + (prio.dir < 0 ? "▼" : "▲") + "</span>" : "";
       var tip = c.tip ? ' data-tip="' + esc(c.tip) + '"' : "";
-      return '<th class="' + (c.num ? "num" : "") + (sorted ? " sorted" : "") + '" data-key="' + c.key + '"' + tip + ">" + c.label + arrow + "</th>";
+      return '<th class="' + (c.num ? "num" : "") + (sorted ? " sorted" : "") + '" scope="col" tabindex="0" aria-sort="' + (sorted ? (prio.dir < 0 ? "descending" : "ascending") : "none") + '" data-key="' + c.key + '"' + tip + ">" + c.label + arrow + "</th>";
     }).join("");
   }
   function renderPrioBody() {
@@ -1282,7 +1313,7 @@
       ? rows.slice(start, start + prio.pageSize).map(function (s) {
           var p = s.p, m = s.m, pid = (p.id == null ? "" : String(p.id));
           var rs = (selectedParcelId && pid === selectedParcelId) ? ' class="row-selected"' : "";
-          return '<tr data-id="' + esc(pid) + '"' + rs + "><td>" + s.rank + "</td><td>" + esc(p.id || "") + "</td><td>" + (p.egrid ? esc(p.egrid) : '<span class="muted">–</span>') +
+          return '<tr data-id="' + esc(pid) + '" tabindex="0"' + rs + "><td>" + s.rank + "</td><td>" + esc(p.id || "") + "</td><td>" + (p.egrid ? esc(p.egrid) : '<span class="muted">–</span>') +
                  "</td><td>" + esc(p.input_ort || "") + "</td><td>" + esc(p.input_rg || "") + "</td><td>" + esc(prioSeg(m)) +
                  "</td><td class='num'>" + fmtArea(m.uf) + "</td><td class='num'>" + Math.round(100 * m.greenShare) + "</td><td class='num'>" + s.score.toFixed(3) + "</td></tr>";
         }).join("")
@@ -1312,22 +1343,28 @@
       var st = e.target.previousElementSibling && e.target.previousElementSibling.querySelector("strong"); if (st) st.textContent = prio.weights[wk];
       renderPriority();
     });
-    prBind("pr-tbody", "click", function (e) { // click a row → select on map + zoom (Priorisierung)
+    var prRowAct = function (e) { // click or Enter/Space a row → select on map + zoom (Priorisierung)
+      if (e.type === "keydown" && e.key !== "Enter" && e.key !== " ") return;
       var tr = e.target.closest && e.target.closest("tr[data-id]"); if (!tr) return;
+      if (e.type === "keydown") e.preventDefault();
       focusParcel(tr.getAttribute("data-id"));
-    });
+    };
+    prBind("pr-tbody", "click", prRowAct); prBind("pr-tbody", "keydown", prRowAct);
     prBind("pr-prev", "click", function () { if (prio.page > 1) { prio.page--; renderPrioBody(); } });
     prBind("pr-next", "click", function () { if (prio.page < Math.ceil(prio.selected.length / prio.pageSize)) { prio.page++; renderPrioBody(); } });
     prBind("pr-page-size", "change", function (e) { prio.pageSize = parseInt(e.target.value, 10); prio.page = 1; renderPrioBody(); });
     prBind("pr-export", "click", function () { var b = document.getElementById("dl-btn"); if (b) b.click(); }); // → öffnet das Download-Fenster (Priorisiert-Bereich)
     var prTh = document.getElementById("pr-thead-row"); // sortable Rangliste columns (mirrors the Übersicht thead)
-    if (prTh) prTh.addEventListener("click", function (e) {
+    function prSortAct(e) {
+      if (e.type === "keydown" && e.key !== "Enter" && e.key !== " ") return;
       var th = e.target.closest && e.target.closest("th[data-key]"); if (!th) return;
+      if (e.type === "keydown") e.preventDefault();
       var key = th.getAttribute("data-key");
       if (prio.sort === key) prio.dir = -prio.dir;
       else { prio.sort = key; prio.dir = prioColByKey[key] && prioColByKey[key].num ? -1 : 1; }
       prio.page = 1; renderPrioHead(); renderPrioBody();
-    });
+    }
+    if (prTh) { prTh.addEventListener("click", prSortAct); prTh.addEventListener("keydown", prSortAct); }
   }
 
   // ---- Filter panel collapse / expand ----
@@ -1377,6 +1414,9 @@
   document.addEventListener("mouseout", function (e) { if (e.target.closest("[data-tip]")) hideTip(); });
   document.addEventListener("focusin", function (e) { var t = e.target.closest("[data-tip]"); if (t) showTip(t); });
   document.addEventListener("focusout", hideTip);
+  // Make the static ⓘ info bubbles keyboard-focusable so the focusin tooltip + SR aria-label reach them
+  // (the JS-rendered ftips already carry tabindex/aria-label inline, so they are skipped here).
+  Array.prototype.forEach.call(document.querySelectorAll(".ftip[data-tip]:not([aria-label])"), function (el) { el.tabIndex = 0; el.setAttribute("role", "img"); el.setAttribute("aria-label", el.getAttribute("data-tip")); });
 
   // ---- Export helpers (shared by the download modal + the Priorisierung tab) ----
   // Parcels → GeoJSON features: geometry + all non-internal props (PII stripped on import). WGS84.
@@ -1412,6 +1452,279 @@
     });
   }
 
+  // ──────────────────────────────────────────────────────────────────────────
+  // Grundstücksbericht (PDF, A3 hoch) — eine Seite je priorisiertes Grundstück.
+  // Vollständig clientseitig: swisstopo-WMS-Bilder (CORS-frei) → Canvas (+ rote
+  // Parzellengrenze) → jsPDF. Benötigt Internet (WMS-Bilder + jsPDF vom CDN).
+  // ──────────────────────────────────────────────────────────────────────────
+  var _jspdfP = null;
+  function loadJsPDF() {
+    if (window.jspdf && window.jspdf.jsPDF) return Promise.resolve(window.jspdf.jsPDF);
+    if (!_jspdfP) _jspdfP = new Promise(function (res, rej) {
+      var s = document.createElement("script");
+      s.src = "https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js";
+      s.onload = function () { res(window.jspdf.jsPDF); };
+      s.onerror = function () { _jspdfP = null; rej(new Error("jsPDF konnte nicht geladen werden (Internetverbindung nötig).")); };
+      document.head.appendChild(s);
+    });
+    return _jspdfP;
+  }
+  function _merc(lon, lat) { var R = 20037508.342789; return [lon * R / 180, Math.log(Math.tan((90 + lat) * Math.PI / 360)) * R / Math.PI]; }
+  // WGS84 → LV95 (EPSG:2056) — swisstopo approximate formula (~1 m), for the geo.admin.ch deep-link.
+  function wgs84ToLv95(lon, lat) {
+    var p = (lat * 3600 - 169028.66) / 10000, l = (lon * 3600 - 26782.5) / 10000;
+    var E = 2600072.37 + 211455.93 * l - 10938.51 * l * p - 0.36 * l * p * p - 44.54 * l * l * l;
+    var N = 1200147.07 + 308807.95 * p + 3745.25 * l * l + 76.63 * p * p - 194.56 * l * l * p + 119.79 * p * p * p;
+    return [E, N];
+  }
+  function _hexRgb(h) { h = String(h).replace("#", ""); if (h.length === 3) h = h.charAt(0) + h.charAt(0) + h.charAt(1) + h.charAt(1) + h.charAt(2) + h.charAt(2); return [parseInt(h.slice(0, 2), 16) || 0, parseInt(h.slice(2, 4), 16) || 0, parseInt(h.slice(4, 6), 16) || 0]; }
+  function _eachRing(geom, fn) { if (!geom) return; var ps = geom.type === "MultiPolygon" ? geom.coordinates : geom.type === "Polygon" ? [geom.coordinates] : []; ps.forEach(function (poly) { poly.forEach(fn); }); }
+  // swisstopo WMS image for the parcel bbox + a red boundary overlay → JPEG data URL (CORS-clean).
+  function reportSectionImage(geom, layers, wPx, hPx, fillsFor, label, pid, checkAbort) {
+    var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    _eachRing(geom, function (ring) { ring.forEach(function (pt) { var m = _merc(pt[0], pt[1]); if (m[0] < minX) minX = m[0]; if (m[0] > maxX) maxX = m[0]; if (m[1] < minY) minY = m[1]; if (m[1] > maxY) maxY = m[1]; }); });
+    if (!isFinite(minX)) return Promise.resolve(null);
+    var padX = (maxX - minX) * 0.18 || 40, padY = (maxY - minY) * 0.18 || 40;
+    minX -= padX; maxX += padX; minY -= padY; maxY += padY;
+    var bw = maxX - minX, bh = maxY - minY, want = wPx / hPx, cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+    if (bw / bh < want) { bw = bh * want; minX = cx - bw / 2; maxX = cx + bw / 2; } else { bh = bw / want; minY = cy - bh / 2; maxY = cy + bh / 2; }
+    function project(pt) { var m = _merc(pt[0], pt[1]); return [(m[0] - minX) / (maxX - minX) * wPx, (1 - (m[1] - minY) / (maxY - minY)) * hPx]; }
+    function fillGeom(ctx, g) { var ps = g.type === "MultiPolygon" ? g.coordinates : g.type === "Polygon" ? [g.coordinates] : []; ps.forEach(function (poly) { ctx.beginPath(); poly.forEach(function (ring) { ring.forEach(function (pt, i) { var q = project(pt); if (i) ctx.lineTo(q[0], q[1]); else ctx.moveTo(q[0], q[1]); }); ctx.closePath(); }); ctx.fill("evenodd"); }); }
+    var url = "https://wms.geo.admin.ch/?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&FORMAT=image/png&CRS=EPSG:3857&STYLES=&WIDTH=" + wPx + "&HEIGHT=" + hPx + "&LAYERS=" + encodeURIComponent(layers) + "&BBOX=" + [minX, minY, maxX, maxY].join(",");
+    return new Promise(function (resolve) {
+      var settled = false, to, iv;
+      function finish(v) { if (settled) return; settled = true; clearTimeout(to); clearInterval(iv); resolve(v); }
+      to = setTimeout(function () { finish(null); }, 20000); // a stalled WMS tile must not hang the whole report
+      iv = setInterval(function () { try { if (checkAbort) checkAbort(); } catch (e) { finish(null); } }, 250); // let Abbrechen interrupt an in-flight load
+      var img = new Image(); img.crossOrigin = "anonymous";
+      img.onload = function () {
+        try {
+          var cv = document.createElement("canvas"); cv.width = wPx; cv.height = hPx;
+          var ctx = cv.getContext("2d"); ctx.drawImage(img, 0, 0, wPx, hPx); ctx.lineJoin = "round";
+          if (fillsFor) { ctx.globalAlpha = 0.72; fillsFor([minX, minY, maxX, maxY], pid).forEach(function (fl) { ctx.fillStyle = fl.color; fillGeom(ctx, fl.geometry); }); ctx.globalAlpha = 1; }
+          function trace() { _eachRing(geom, function (ring) { ctx.beginPath(); ring.forEach(function (pt, i) { var q = project(pt); if (i) ctx.lineTo(q[0], q[1]); else ctx.moveTo(q[0], q[1]); }); ctx.closePath(); ctx.stroke(); }); }
+          ctx.strokeStyle = "rgba(255,255,255,0.9)"; ctx.lineWidth = 8.5; trace();
+          ctx.strokeStyle = "#d8232a"; ctx.lineWidth = 4.5; trace();
+          // centre marker + E-GRID label at the pole of inaccessibility (the parcel's visual centre)
+          var pole = poleOfGeom(geom);
+          if (pole) {
+            var pp = project(pole);
+            ctx.beginPath(); ctx.arc(pp[0], pp[1], 12, 0, 2 * Math.PI); ctx.fillStyle = "#d8232a"; ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = "#fff"; ctx.stroke();
+            ctx.beginPath(); ctx.arc(pp[0], pp[1], 4, 0, 2 * Math.PI); ctx.fillStyle = "#fff"; ctx.fill();
+            if (label) {
+              ctx.font = "bold 26px Arial, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "top";
+              var tw = ctx.measureText(label).width, lx = pp[0], ly = pp[1] + 18, lpad = 9, half = tw / 2 + lpad;
+              if (lx - half < 4) lx = half + 4; if (lx + half > wPx - 4) lx = wPx - half - 4;
+              ctx.fillStyle = "rgba(255,255,255,0.9)"; ctx.fillRect(lx - tw / 2 - lpad, ly, tw + 2 * lpad, 36);
+              ctx.fillStyle = "#1f2937"; ctx.fillText(label, lx, ly + 5);
+            }
+          }
+          // scale bar (bottom-left), corrected for Web-Mercator latitude distortion
+          var cosLat = Math.cos((pole ? pole[1] : 47) * Math.PI / 180), mPerPx = (maxX - minX) * cosLat / wPx, raw = wPx * 0.22 * mPerPx;
+          var p10 = Math.pow(10, Math.floor(Math.log(raw) / Math.LN10)), nf = raw / p10, D = (nf >= 5 ? 5 : nf >= 2 ? 2 : 1) * p10, barPx = D / mPerPx;
+          var bx = 24, by = hPx - 28, dLabel = D >= 1000 ? (D / 1000) + " km" : D + " m";
+          ctx.font = "bold 22px Arial, sans-serif"; ctx.textAlign = "left"; ctx.textBaseline = "middle";
+          ctx.fillStyle = "rgba(255,255,255,0.82)"; ctx.fillRect(bx - 8, by - 16, barPx + 20 + ctx.measureText(dLabel).width, 32);
+          ctx.strokeStyle = "#1f2937"; ctx.fillStyle = "#1f2937"; ctx.lineWidth = 3;
+          ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx + barPx, by); ctx.moveTo(bx, by - 6); ctx.lineTo(bx, by + 6); ctx.moveTo(bx + barPx, by - 6); ctx.lineTo(bx + barPx, by + 6); ctx.stroke();
+          ctx.fillText(dLabel, bx + barPx + 8, by + 1);
+          finish(cv.toDataURL("image/jpeg", 0.88));
+        } catch (e) { finish(null); }
+      };
+      img.onerror = function () { finish(null); };
+      img.src = url;
+    });
+  }
+  function reportSia(p) { return [
+    { label: "Gebäudegrundfläche (GGF)", area: num(p.sia416_ggf_m2) },
+    { label: "Bearbeitete Umgebung (BUF)", area: num(p.sia416_buf_m2) },
+    { label: "Unbearbeitete Umgebung (UUF)", area: num(p.sia416_uuf_m2) }
+  ]; }
+  function reportLandcover(p) {
+    // Full BBArt detail (not collapsed to the 6 Hauptgruppen): "Hauptgruppe · BBArt", coloured by main category.
+    return ART_KEYS.map(function (a) {
+      return { label: (ART_MAIN[a] && ART_MAIN[a] !== ART_LABELS[a] ? ART_MAIN[a] + " · " : "") + (ART_LABELS[a] || a), area: num(p[artCol(a)]), color: mainColor(a) };
+    }).filter(function (r) { return r.area > 0; }).sort(function (x, y) { return y.area - x.area; });
+  }
+  function reportHabitat(p) {
+    var out = []; for (var k in p) { if (Object.prototype.hasOwnProperty.call(p, k)) { var hm = HABITAT_RE.exec(k); if (hm) { var v = num(p[k]); if (v > 0) out.push({ label: hbLabel(hm[1]), area: v, color: habColor(hm[1]) }); } } }
+    return out.sort(function (a, b) { return b.area - a.area; });
+  }
+  var ROWS_PER_TOC = 40;
+  // Embedded overlay polygons bucketed by SAP-id → { id: [{geometry, color, bb}] }.
+  // Built once (cached); the per-id bucket makes fills lookup O(features-on-parcel),
+  // not a full scan of all ~16k–20k overlay features per report section.
+  function _overlayIndex(fc, colorFn) {
+    var byId = {};
+    ((fc && fc.features) || []).forEach(function (f) {
+      if (!f || !f.geometry || !f.properties) return; // tolerate a malformed feature instead of crashing the whole PDF
+      var mnX = Infinity, mnY = Infinity, mxX = -Infinity, mxY = -Infinity;
+      _eachRing(f.geometry, function (ring) { ring.forEach(function (pt) { var m = _merc(pt[0], pt[1]); if (m[0] < mnX) mnX = m[0]; if (m[0] > mxX) mxX = m[0]; if (m[1] < mnY) mnY = m[1]; if (m[1] > mxY) mxY = m[1]; }); });
+      var id = String(f.properties.id == null ? "" : f.properties.id);
+      (byId[id] || (byId[id] = [])).push({ geometry: f.geometry, color: colorFn(f.properties.art), bb: [mnX, mnY, mxX, mxY] });
+    });
+    return byId;
+  }
+  // Overlay polygons for one parcel (by SAP-id, string-normalised) that also fall in the section bbox.
+  function _forParcel(idx, b, pid) {
+    var list = idx[String(pid == null ? "" : pid)] || [];
+    return list.filter(function (it) { return it.bb[0] <= b[2] && it.bb[2] >= b[0] && it.bb[1] <= b[3] && it.bb[3] >= b[1]; });
+  }
+  function habColorArt(a) { var m = String(a).match(/(\d)/); return (m && HABITAT_L1_COLORS[m[1]]) || "#8e7cc3"; } // TypoCH code → L1 colour
+  var _lcIdx = null, _hbIdx = null;
+  function landcoverFills(b, pid) { if (_lcIdx === null) _lcIdx = _overlayIndex(OVERLAYS && OVERLAYS.landcover, mainColor); return _forParcel(_lcIdx, b, pid); }
+  function habitatFills(b, pid) { if (_hbIdx === null) _hbIdx = _overlayIndex(OVERLAYS && OVERLAYS.habitat, habColorArt); return _forParcel(_hbIdx, b, pid); }
+  var REPORT_SECTIONS = [
+    { n: "1", title: "Lage & SIA 416", layers: "ch.swisstopo.swissimage", tbl: "SIA 416 (Umgebung)", rows: reportSia },
+    { n: "2", title: "Bodenbedeckung (AV)", layers: "ch.swisstopo.pixelkarte-grau", tbl: "Bodenbedeckung", rows: reportLandcover, fills: landcoverFills },
+    { n: "3", title: "BAFU Lebensräume", layers: "ch.swisstopo.pixelkarte-grau", tbl: "Lebensräume (TypoCH)", rows: reportHabitat, fills: habitatFills }
+  ];
+  function reportTable(pdf, x, y, w, title, rows, totalArea) {
+    var pctX = x + w - 26; // % column right edge; area at x+w
+    pdf.setTextColor(31, 41, 55); pdf.setFont("helvetica", "bold"); pdf.setFontSize(11); pdf.text(title, x, y);
+    var hy = y + 6.5; // column header row
+    pdf.setFont("helvetica", "bold"); pdf.setFontSize(8); pdf.setTextColor(120);
+    pdf.text("Kategorie", x, hy); pdf.text("Anteil GSF", pctX, hy, { align: "right" }); pdf.text("Fläche", x + w, hy, { align: "right" });
+    pdf.setDrawColor(205); pdf.line(x, hy + 1.6, x + w, hy + 1.6);
+    var ry = hy + 6, sum = 0; pdf.setFontSize(9.5);
+    function pct(a) { return totalArea ? Math.round(a / totalArea * 100) + "%" : "–"; }
+    var rowsSum = rows.reduce(function (s, r) { return s + num(r.area); }, 0), draw = rows.slice();
+    if (totalArea > 0 && totalArea - rowsSum > totalArea * 0.005) draw.push({ label: "Ohne Bodenbedeckung", area: totalArea - rowsSum, muted: true }); // mirror the on-screen remainder → Total reads 100 %
+    draw.forEach(function (r) {
+      pdf.setFont("helvetica", "normal");
+      if (r.color) { var c = _hexRgb(r.color); pdf.setFillColor(c[0], c[1], c[2]); pdf.setDrawColor(140); pdf.rect(x, ry - 2.9, 3.2, 3.2, "FD"); }
+      pdf.setTextColor(r.muted ? 150 : 40); pdf.text(String(r.label), x + (r.color ? 5.5 : 0), ry, { maxWidth: w - 46 });
+      pdf.setTextColor(130); pdf.text(pct(num(r.area)), pctX, ry, { align: "right" });
+      pdf.setTextColor(r.muted ? 150 : 40); pdf.text(fmtArea(r.area) + " " + unitLabel(), x + w, ry, { align: "right" });
+      sum += num(r.area); ry += 5.7;
+    });
+    pdf.setDrawColor(170); pdf.line(x, ry - 2.6, x + w, ry - 2.6);
+    pdf.setFont("helvetica", "bold"); pdf.setTextColor(31, 41, 55);
+    pdf.text("Total", x, ry + 1.5); pdf.text(pct(sum), pctX, ry + 1.5, { align: "right" }); pdf.text(fmtArea(sum) + " " + unitLabel(), x + w, ry + 1.5, { align: "right" });
+  }
+  function reportDateStr() { var d = new Date(); return ("0" + d.getDate()).slice(-2) + "." + ("0" + (d.getMonth() + 1)).slice(-2) + "." + d.getFullYear(); }
+  function reportFooter(pdf, pageNum, totalPages) {
+    var M = 12, PW = 297;
+    pdf.setDrawColor(225); pdf.line(M, 408, PW - M, 408);
+    pdf.setFont("helvetica", "normal"); pdf.setFontSize(8); pdf.setTextColor(120);
+    pdf.text("Quellen: Amtliche Vermessung · geodienste.ch · swisstopo · BAFU      Stand " + reportDateStr(), M, 413);
+    pdf.text("Seite " + pageNum + " / " + totalPages, PW - M, 413, { align: "right" });
+  }
+  // Inhaltsverzeichnis / Übersicht as the first page(s).
+  function renderTocPages(pdf, rows, tocPages, totalPages) {
+    var M = 12, PW = 297, w = PW - 2 * M;
+    var cols = [{ t: "Rang", x: M, a: "left" }, { t: "SAP-ID", x: M + 16, a: "left" }, { t: "Ort", x: M + 58, a: "left" }, { t: "Kt", x: M + 120, a: "left" }, { t: "Fläche", x: M + 158, a: "right" }, { t: "Grün %", x: M + 192, a: "right" }, { t: "Score", x: M + 224, a: "right" }, { t: "Seite", x: M + w, a: "right" }];
+    for (var pg = 0; pg < tocPages; pg++) {
+      if (pg > 0) pdf.addPage();
+      pdf.setTextColor(31, 41, 55); pdf.setFont("helvetica", "bold"); pdf.setFontSize(17); pdf.text("Grundstücksbericht", M, 16);
+      pdf.setFont("helvetica", "normal"); pdf.setFontSize(9); pdf.setTextColor(120); pdf.text("Bundesamt für Bauten und Logistik BBL", PW - M, 16, { align: "right" });
+      pdf.setFontSize(11); pdf.setTextColor(70); pdf.text("Übersicht — " + rows.length + " priorisierte Grundstücke · Stand " + reportDateStr(), M, 24);
+      var hy = 34;
+      pdf.setFont("helvetica", "bold"); pdf.setFontSize(8.5); pdf.setTextColor(110);
+      cols.forEach(function (c) { pdf.text(c.t, c.x, hy, { align: c.a }); });
+      pdf.setDrawColor(180); pdf.line(M, hy + 2, PW - M, hy + 2);
+      var start = pg * ROWS_PER_TOC, ry = hy + 8;
+      rows.slice(start, start + ROWS_PER_TOC).forEach(function (p, j) {
+        var gi = start + j, area = num(p.parcel_area_m2), green = num(p.greenspace_m2), gp = area ? Math.round(green / area * 100) : 0;
+        pdf.setFont("helvetica", "normal"); pdf.setFontSize(9); pdf.setTextColor(40);
+        pdf.text(String(p.survey_rank || (gi + 1)), cols[0].x, ry);
+        pdf.text(String(p.id || "-"), cols[1].x, ry, { maxWidth: 40 });
+        pdf.text(((p.input_plz ? p.input_plz + " " : "") + (p.input_ort || "-")), cols[2].x, ry, { maxWidth: 58 });
+        pdf.text(String(p.input_rg || "-"), cols[3].x, ry);
+        pdf.text(fmtArea(area) + " " + unitLabel(), cols[4].x, ry, { align: "right" });
+        pdf.text(gp + "%", cols[5].x, ry, { align: "right" });
+        pdf.text(p.survey_score != null ? String(p.survey_score) : "-", cols[6].x, ry, { align: "right" });
+        pdf.text(String(tocPages + gi + 1), cols[7].x, ry, { align: "right" });
+        pdf.setDrawColor(236); pdf.line(M, ry + 2.6, PW - M, ry + 2.6); ry += 7;
+      });
+      reportFooter(pdf, pg + 1, totalPages);
+    }
+  }
+  // Mini-map: Swiss canton outlines + a red dot at (lon,lat) — drawn top-right of each report page.
+  function drawLocatorMap(pdf, x, y, w, h, lon, lat) {
+    var CM = window.CH_MAP; if (!CM) return;
+    var b = CM.bb, bw = b[2] - b[0], bh = b[3] - b[1], sc = Math.min(w / bw, h / bh);
+    var ox = x + (w - bw * sc) / 2, oy = y + (h - bh * sc) / 2;
+    function sx(X) { return ox + (X - b[0]) * sc; }
+    function sy(Y) { return oy + (Y - b[1]) * sc; }
+    pdf.setFillColor(232, 236, 239); pdf.setDrawColor(150); pdf.setLineWidth(0.12);
+    CM.polys.forEach(function (poly) {
+      if (poly.length < 6) return;
+      var x0 = sx(poly[0]), y0 = sy(poly[1]), cxp = x0, cyp = y0, deltas = [];
+      for (var i = 2; i < poly.length; i += 2) { var nx = sx(poly[i]), ny = sy(poly[i + 1]); deltas.push([nx - cxp, ny - cyp]); cxp = nx; cyp = ny; }
+      pdf.lines(deltas, x0, y0, [1, 1], "FD", true);
+    });
+    if (lon != null && lat != null) {
+      var dx = sx(CM.px[0] * lon + CM.px[1] * lat + CM.px[2]), dy = sy(CM.py[0] * lon + CM.py[1] * lat + CM.py[2]);
+      pdf.setFillColor(216, 35, 42); pdf.setDrawColor(255); pdf.setLineWidth(0.4); pdf.circle(dx, dy, 1.7, "FD");
+    }
+    pdf.setLineWidth(0.2);
+  }
+  function renderReportPage(pdf, p, idx, total, pageNum, totalPages, tick, checkAbort) {
+    var M = 12, PW = 297, w = PW - 2 * M;
+    pdf.setTextColor(31, 41, 55); pdf.setFont("helvetica", "bold"); pdf.setFontSize(15); pdf.text("Grundstücksbericht", M, 13);
+    pdf.setFont("helvetica", "normal"); pdf.setFontSize(9); pdf.setTextColor(120); pdf.text("Bundesamt für Bauten und Logistik BBL", PW - M, 13, { align: "right" });
+    pdf.setDrawColor(200); pdf.line(M, 16, PW - M, 16);
+    pdf.setTextColor(31, 41, 55); pdf.setFont("helvetica", "bold"); pdf.setFontSize(13); pdf.text("SAP-ID " + (p.id || "-"), M, 22);
+    pdf.setFontSize(10.5); pdf.text(p.survey_rank ? ("Rang " + p.survey_rank + " / " + total) : "", PW - M, 22, { align: "right" });
+    var bez = p["input_bez. grundstück"] || "";
+    pdf.setFont("helvetica", "normal"); pdf.setFontSize(9.5); pdf.setTextColor(90); if (bez) pdf.text(String(bez), M, 27, { maxWidth: w });
+    var pole = poleOfGeom(p._geom);
+    pdf.setDrawColor(225); pdf.line(M, 30, PW - M, 30);
+    pdf.setFont("helvetica", "normal"); pdf.setFontSize(7); pdf.setTextColor(135); pdf.text("Lage in der Schweiz", PW - M - 23.5, 33, { align: "center" });
+    drawLocatorMap(pdf, PW - M - 47, 34.5, 47, 28, pole ? pole[0] : null, pole ? pole[1] : null); // locator beside the attribute table
+    // clean 2-column key/value table (left block; locator map sits to its right)
+    var area = num(p.parcel_area_m2), green = num(p.greenspace_m2), gp = area ? Math.round(green / area * 100) : 0;
+    var L = [["Ort", (p.input_plz ? p.input_plz + " " : "") + (p.input_ort || "-")], ["Kanton", p.input_rg || "-"], ["E-GRID", p.egrid || "-"], ["Nummer", p.nummer || "-"], ["Segment", p.survey_segment || "-"]];
+    var R = [["Teilportfolio", tpfLabel(p.input_tpf)], ["Eigentumsart", eigentumLabel(p["input_eigent.art"])], ["Grundstücksfläche", fmtArea(area) + " " + unitLabel()], ["Grünfläche", fmtArea(green) + " " + unitLabel() + " (" + gp + "%)"], ["Score", p.survey_score != null ? String(p.survey_score) : "-"]];
+    var ty = 35, rowH = 4.8, colW = 108, labW = 30;
+    for (var i = 0; i < 5; i++) {
+      var yy = ty + i * rowH;
+      pdf.setFont("helvetica", "normal"); pdf.setFontSize(8.5); pdf.setTextColor(120);
+      pdf.text(L[i][0], M, yy); pdf.text(R[i][0], M + colW, yy);
+      pdf.setFont("helvetica", "bold"); pdf.setFontSize(9); pdf.setTextColor(40);
+      pdf.text(String(L[i][1]), M + labW, yy, { maxWidth: colW - labW - 4 }); pdf.text(String(R[i][1]), M + colW + labW, yy, { maxWidth: colW - labW - 4 });
+    }
+    var ly = ty + 5 * rowH + 0.5, lv = pole ? wgs84ToLv95(pole[0], pole[1]) : null;
+    pdf.setFont("helvetica", "normal"); pdf.setFontSize(8.5); pdf.setTextColor(120); pdf.text("Karte", M, ly);
+    if (lv) { var en = lv[0].toFixed(1) + "," + lv[1].toFixed(1); pdf.setFont("helvetica", "bold"); pdf.setTextColor(191, 31, 37); pdf.textWithLink("Auf map.geo.admin.ch ansehen", M + labW, ly, { url: "https://map.geo.admin.ch/#/map?lang=de&center=" + en + "&z=10&crosshair=marker," + en + "&layers=ch.kantone.cadastralwebmap-farbe&bgLayer=ch.swisstopo.pixelkarte-grau" }); }
+    pdf.setDrawColor(225); pdf.line(M, ty + 6 * rowH - 0.5, PW - M, ty + 6 * rowH - 0.5);
+    var secY = [73, 184, 295], imgW = 144, imgH = 96, tblX = 163, tblW = 122; // gap before section 1; slightly shorter maps; wider table for detailed labels
+    if (checkAbort) checkAbort();
+    return Promise.all(REPORT_SECTIONS.map(function (sec) {
+      return reportSectionImage(p._geom, sec.layers, 1000, 667, sec.fills, p.egrid, p.id, checkAbort); // 3 section tiles fetched concurrently
+    })).then(function (urls) {
+      if (checkAbort) checkAbort(); // cancelled during fetch → stop before drawing
+      REPORT_SECTIONS.forEach(function (sec, i) {
+        var yy = secY[i], dataUrl = urls[i];
+        pdf.setFont("helvetica", "bold"); pdf.setFontSize(11.5); pdf.setTextColor(191, 31, 37); pdf.text(sec.n + "   " + sec.title, M, yy);
+        pdf.setDrawColor(210);
+        if (dataUrl) { pdf.addImage(dataUrl, "JPEG", M, yy + 4, imgW, imgH); pdf.rect(M, yy + 4, imgW, imgH, "S"); }
+        else { pdf.setFillColor(245, 246, 247); pdf.rect(M, yy + 4, imgW, imgH, "FD"); pdf.setTextColor(140); pdf.setFontSize(9); pdf.setFont("helvetica", "normal"); pdf.text("Kartenbild nicht verfügbar (Internet?)", M + imgW / 2, yy + 4 + imgH / 2, { align: "center" }); }
+        reportTable(pdf, tblX, yy + 11, tblW, sec.tbl, sec.rows(p), num(p.parcel_area_m2));
+      });
+      if (tick) tick("Grundstück " + (idx + 1) + " / " + total);
+      reportFooter(pdf, pageNum, totalPages);
+    });
+  }
+  // Build the PDF (one A3 page per prioritised parcel) and trigger the download.
+  function generateParcelReport(filename, onProgress, token) {
+    var rows = prioRows();
+    if (!rows.length) return Promise.reject(new Error("Keine priorisierten Grundstücke vorhanden."));
+    var tocPages = Math.max(1, Math.ceil(rows.length / ROWS_PER_TOC)), totalPages = tocPages + rows.length;
+    var totalSteps = rows.length, done = 0; // one progress tick per parcel page (3 section tiles fetched in parallel)
+    function tick(label) { done++; if (onProgress) onProgress(done / totalSteps, label); }
+    function checkAbort() { if (token && token.aborted) throw new Error("__ABORT__"); } // thrown between steps → caught as cancellation
+    return loadJsPDF().then(function (JsPDF) {
+      checkAbort();
+      var pdf = new JsPDF({ orientation: "portrait", unit: "mm", format: "a3", compress: true });
+      renderTocPages(pdf, rows, tocPages, totalPages);
+      return rows.reduce(function (seq, p, i) {
+        return seq.then(function () { checkAbort(); pdf.addPage(); return renderReportPage(pdf, p, i, rows.length, tocPages + i + 1, totalPages, tick, checkAbort); });
+      }, Promise.resolve()).then(function () { checkAbort(); pdf.save(filename); return rows.length; });
+    });
+  }
+
   // ---- Download modal (header): offline HTML + GeoJSON/Excel per scope (Alle / Gefiltert / Priorisiert) ----
   (function () {
     var btn = document.getElementById("dl-btn"), modal = document.getElementById("dl-modal"), card = modal.querySelector(".modal-card");
@@ -1425,8 +1738,9 @@
       document.getElementById("dl-n-flt").textContent = "(" + fmt(state.rows.length) + ")";
       document.getElementById("dl-n-prio").textContent = "(" + fmt(prio.selected.length) + ")";
     }
-    function openModal() { lastFocus = document.activeElement; refreshCounts(); hint.textContent = defHint; modal.hidden = false; document.getElementById("dl-close").focus(); }
-    function closeModal() { modal.hidden = true; if (lastFocus && lastFocus.focus) lastFocus.focus(); }
+    function bgInert(on) { [document.querySelector("header"), document.getElementById("app"), document.querySelector("footer")].forEach(function (el) { if (!el) return; el.inert = on; if (on) el.setAttribute("aria-hidden", "true"); else el.removeAttribute("aria-hidden"); }); } // hide background from AT/Tab while the dialog is open
+    function openModal() { lastFocus = document.activeElement; refreshCounts(); hint.textContent = defHint; modal.hidden = false; bgInert(true); document.getElementById("dl-close").focus(); }
+    function closeModal() { modal.hidden = true; bgInert(false); if (lastFocus && lastFocus.focus) lastFocus.focus(); }
     btn.addEventListener("click", openModal);
     document.getElementById("dl-close").addEventListener("click", closeModal);
     modal.addEventListener("click", function (e) { if (e.target === modal) closeModal(); }); // click on the backdrop
@@ -1458,6 +1772,25 @@
     document.getElementById("dl-flt-xlsx").addEventListener("click", function () { busy("Excel wird erstellt…", function () { return exportXlsxRows(state.rows, base() + "-gefiltert.xlsx", "Grundstücke"); }); });
     document.getElementById("dl-prio-geo").addEventListener("click", function () { busy("GeoJSON wird erstellt…", function () { exportGeojsonRows(prioRows(), base() + "-priorisierung-top" + prio.topN + ".geojson"); }); });
     document.getElementById("dl-prio-xlsx").addEventListener("click", function () { busy("Excel wird erstellt…", function () { return exportXlsxRows(prioRows(), base() + "-priorisierung-top" + prio.topN + ".xlsx", "Priorisierung", PRIO_XLSX_COLS); }); });
+    // PDF-Bericht (A3, eine Seite je priorisiertes Grundstück) — Hintergrund-Verarbeitung mit Fortschrittsbalken.
+    document.getElementById("dl-pdf").addEventListener("click", function () {
+      var pbtn = this, prog = document.getElementById("dl-progress"), bar = document.getElementById("dl-progress-bar"), txt = document.getElementById("dl-progress-txt"), abortBtn = document.getElementById("dl-abort");
+      var token = { aborted: false };
+      pbtn.disabled = true; prog.hidden = false; bar.style.width = "0%"; txt.textContent = "Wird vorbereitet…"; hint.textContent = "PDF-Bericht wird erstellt — bitte warten.";
+      abortBtn.disabled = false; abortBtn.onclick = function () { token.aborted = true; abortBtn.disabled = true; txt.textContent = "Wird abgebrochen…"; };
+      generateParcelReport(base() + "-grundstuecksbericht.pdf", function (frac, label) {
+        bar.style.width = Math.round(frac * 100) + "%"; txt.textContent = Math.round(frac * 100) + "% · " + (label || "");
+      }, token).then(function (n) {
+        bar.style.width = "100%"; txt.textContent = "Fertig — " + n + " Seite(n)."; hint.textContent = defHint;
+        setTimeout(function () { prog.hidden = true; }, 2500); pbtn.disabled = false;
+      }).catch(function (err) {
+        var aborted = err && err.message === "__ABORT__";
+        txt.textContent = aborted ? "Abgebrochen." : ("Fehler: " + ((err && err.message) || err));
+        hint.textContent = aborted ? defHint : "PDF-Bericht fehlgeschlagen.";
+        if (aborted) setTimeout(function () { prog.hidden = true; }, 1800);
+        pbtn.disabled = false;
+      });
+    });
   })();
 
   // ---- "Neue Datei": reload to a clean URL → file picker (served builder) ----
@@ -1521,7 +1854,7 @@
     if (g.type === "Polygon") return poleOf(g.coordinates);
     if (g.type === "MultiPolygon") {
       var best = null, bestA = -1;
-      g.coordinates.forEach(function (poly) { var ring = poly[0]; if (!ring) return; var mnX = Infinity, mnY = Infinity, mxX = -Infinity, mxY = -Infinity; ring.forEach(function (pt) { if (pt[0] < mnX) mnX = pt[0]; if (pt[1] < mnY) mnY = pt[1]; if (pt[0] > mxX) mxX = pt[0]; if (pt[1] > mxY) mxY = pt[1]; }); var ar = (mxX - mnX) * (mxY - mnY); if (ar > bestA) { bestA = ar; best = poly; } });
+      g.coordinates.forEach(function (poly) { var ring = poly[0]; if (!ring) return; var a = 0; for (var i = 0, n = ring.length, j = n - 1; i < n; j = i++) { a += (ring[j][0] - ring[i][0]) * (ring[j][1] + ring[i][1]); } a = Math.abs(a); if (a > bestA) { bestA = a; best = poly; } }); // largest part by true (shoelace) area, not bbox
       return best ? poleOf(best) : null;
     }
     return null;
@@ -1757,7 +2090,7 @@
       addOverlayLayers(); // Bodenbedeckung / Bauzonen / Lebensräume — under the markers, hidden by default
       map.addSource("points", { type: "geojson", data: rowsToPointsFC(lastRows), cluster: true, clusterRadius: 48, clusterMaxZoom: 13 });
       map.addLayer({ id: "clusters", type: "circle", source: "points", filter: ["has", "point_count"],
-        paint: { "circle-color": ["step", ["get", "point_count"], "#9db4cc", 25, "#6f8aac", 100, "#3b5a7a"], "circle-radius": ["step", ["get", "point_count"], 14, 25, 18, 100, 24], "circle-stroke-color": "#fff", "circle-stroke-width": 1.5 } });
+        paint: { "circle-color": ["step", ["get", "point_count"], "#4f6f93", 25, "#3b5a7a", 100, "#2e4a68"], "circle-radius": ["step", ["get", "point_count"], 14, 25, 18, 100, 24], "circle-stroke-color": "#fff", "circle-stroke-width": 1.5 } });
       map.addLayer({ id: "cluster-count", type: "symbol", source: "points", filter: ["has", "point_count"],
         layout: { "text-field": ["get", "point_count_abbreviated"], "text-font": ["Open Sans Regular"], "text-size": 12 }, paint: { "text-color": "#fff" } });
       map.addLayer({ id: "point", type: "circle", source: "points", filter: ["!", ["has", "point_count"]],
