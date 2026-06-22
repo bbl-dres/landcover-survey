@@ -17,7 +17,7 @@
 <div id="builder-screen">
   <div class="builder-card">
     <h1>Daten laden</h1>
-    <p class="b-lead">Wählen Sie einen <code>landcover-parcels.geojson</code>-Export. Die Daten werden lokal im Browser ausgewertet — kein Server, keine Installation. Herunterladen (Offline-Dashboard / Excel) können Sie anschliessend oben rechts.</p>
+    <p class="b-lead">Wählen Sie einen <code>landcover-parcels.geojson</code>-Export. Die Daten werden lokal im Browser ausgewertet — kein Server, keine Installation. Herunterladen (Dashboard als HTML / Excel) können Sie anschliessend oben rechts.</p>
     <label class="b-field"><span>GeoJSON-Export <em>(erforderlich)</em></span><input id="b-geojson" type="file" accept=".geojson,.json"></label>
     <div class="b-actions">
       <button class="btn b-primary" id="b-show" disabled>Dashboard anzeigen</button>
@@ -45,7 +45,7 @@
       <button class="modal-x" id="dl-close" type="button" aria-label="Schliessen">&times;</button>
     </div>
     <label class="dl-title">Titel<input id="dl-title" type="text" value="Auswertung Bodenbedeckung"></label>
-    <button class="dl-item dl-html-item" id="dl-html" type="button">&#8595; Dashboard (HTML, offline)</button>
+    <button class="dl-item dl-html-item" id="dl-html" type="button">Dashboard (HTML)</button>
     <div class="dl-sect-label">Daten exportieren</div>
     <div class="dl-grid">
       <div class="dl-scope">
@@ -84,7 +84,7 @@
         <div class="checklist single" id="f-exclude"></div>
       </div>
       <div class="fgroup">
-        <div class="fgroup-head"><span class="ftitle">EGRID-Status<span class="ftip" data-tip="Standardmässig nur Grundstücke mit gefundenem EGRID. Ungültige/nicht gefundene haben keine Bodenbedeckungsdaten.">ⓘ</span></span></div>
+        <div class="fgroup-head"><span class="ftitle">E-GRID-Status<span class="ftip" data-tip="Standardmässig nur Grundstücke mit gefundenem E-GRID. Ungültige/nicht gefundene haben keine Bodenbedeckungsdaten.">ⓘ</span></span></div>
         <div class="checklist single" id="f-status"></div>
       </div>
       <div class="fgroup">
@@ -100,7 +100,7 @@
         <div class="checklist single" id="f-eigentum"></div>
       </div>
       <div class="fgroup">
-        <div class="fgroup-head"><span class="ftitle">Teilportfolio<span class="ftip" data-tip="Portfolio-Code (input_tpf) aus SAP. Klartext-Labels folgen.">ⓘ</span></span><button class="flink" id="tpf-clear">zurücksetzen</button></div>
+        <div class="fgroup-head"><span class="ftitle">Teilportfolio<span class="ftip" data-tip="Teilportfolio-Code aus SAP.">ⓘ</span></span><button class="flink" id="tpf-clear">zurücksetzen</button></div>
         <div class="checklist single" id="f-tpf"></div>
       </div>
       <div class="fgroup">
@@ -118,9 +118,11 @@
     </div>
   </aside>
   <button class="fp-expand" id="fp-expand" title="Filter anzeigen">Filter ›</button>
+  <div class="fp-scrim" id="fp-scrim" hidden></div>
 
   <main id="main">
     <div class="main-head">
+      <button class="hbtn hbtn-light fp-toggle" id="fp-toggle" type="button" aria-label="Filter ein-/ausblenden" aria-expanded="false">☰ Filter</button>
       <h1 class="dash-title" id="dash-title">Auswertung Bodenbedeckung</h1>
       <span class="spacer"></span>
       <span class="search-box">
@@ -144,7 +146,7 @@
       <div class="kpis" id="kpis"></div>
 
       <div class="section-title">Grundstücksfläche nach Teilportfolio &amp; Region</div>
-      <div class="chart-note">Grundstücksfläche der aktuellen Auswahl. Teilportfolio- und Regionscodes erhalten später Klartext-Labels.</div>
+      <div class="chart-note">Grundstücksfläche der aktuellen Auswahl. Region ist als Code dargestellt.</div>
       <div class="charts">
         <div class="panel"><h3>Teilportfolio</h3><div id="tbl-tpf"></div></div>
         <div class="panel"><h3>Region</h3><div id="tbl-rg"></div></div>
@@ -212,7 +214,7 @@
       <div class="chart-note">Bezieht sich auf die aktuelle Auswahl.</div>
       <div class="kpis" id="q-kpis"></div>
       <div class="summary-tables">
-        <div class="panel"><h3>EGRID-Status</h3><div id="q-egrid"></div></div>
+        <div class="panel"><h3>E-GRID-Status</h3><div id="q-egrid"></div></div>
         <div class="panel"><h3>Prüfregeln</h3><div id="q-rules"></div></div>
       </div>
       <div class="section-title">Auffällige Grundstücke <span class="count" id="q-count"></span></div>
@@ -256,7 +258,7 @@
           <h3>Auswahl <span class="ftip" data-tip="Anzahl der bestbewerteten Grundstücke — mit optionalen Obergrenzen zur Streuung über Kantone und Teilportfolios.">ⓘ</span></h3>
           <div class="prio-rng"><label for="pr-topn">Top-N: <strong id="pr-topn-val">100</strong> <span class="ftip" data-tip="Anzahl auszuwählender Grundstücke mit dem höchsten Score.">ⓘ</span></label><input type="range" id="pr-topn" min="10" max="300" step="10" value="100"></div>
           <label class="prio-chk"><input type="checkbox" id="pr-cap" checked> max <input type="number" id="pr-cap-n" value="20" min="1" max="100" aria-label="Maximale Anzahl pro Kanton"> pro Kanton <span class="ftip" data-tip="Obergrenze pro Kanton — verteilt die Auswahl, statt sie auf wenige Kantone zu konzentrieren.">ⓘ</span></label>
-          <label class="prio-chk"><input type="checkbox" id="pr-tcap" checked> max <input type="number" id="pr-tcap-n" value="30" min="1" max="200" aria-label="Maximale Anzahl pro Teilportfolio"> pro Teilportfolio <span class="ftip" data-tip="Obergrenze pro Teilportfolio (input_tpf) — verhindert Klumpung in einem einzelnen Portfolio.">ⓘ</span></label>
+          <label class="prio-chk"><input type="checkbox" id="pr-tcap" checked> max <input type="number" id="pr-tcap-n" value="30" min="1" max="200" aria-label="Maximale Anzahl pro Teilportfolio"> pro Teilportfolio <span class="ftip" data-tip="Obergrenze pro Teilportfolio — verhindert Klumpung in einem einzelnen Teilportfolio.">ⓘ</span></label>
         </div>
       </div>
       <div class="summary-tables">
@@ -265,11 +267,11 @@
       </div>
       <div class="section-title">Karte der Auswahl</div>
       <div class="panel map-panel" id="pr-map-panel"></div>
-      <div class="section-title">Rangliste <span class="count" id="pr-count"></span><span style="flex:1"></span><button class="hbtn hbtn-light" id="pr-export" type="button">⤓ Auswahl als GeoJSON</button></div>
+      <div class="section-title">Rangliste <span class="count" id="pr-count"></span><span style="flex:1"></span><button class="hbtn hbtn-light" id="pr-export" type="button">Bericht herunterladen</button></div>
       <div class="table-wrap">
         <div class="table-scroll">
           <table id="pr-table">
-            <thead><tr><th>Rang</th><th>ID</th><th>E-GRID</th><th>Ort</th><th>Kt</th><th>Segment</th><th class="num" data-tip="Umgebungsfläche = SIA 416 BUF + UUF (Grundstück ohne Gebäudegrundfläche).">UF</th><th class="num" data-tip="Grünanteil an der Umgebungsfläche UF (nicht an der Grundstücksfläche).">Grün&nbsp;%</th><th class="num" data-tip="Gewichteter Mittelwert von 6 Perzentil-Signalen (0–1); höher = höhere Begehungs-Priorität.">Score</th></tr></thead>
+            <thead><tr id="pr-thead-row"></tr></thead>
             <tbody id="pr-tbody"></tbody>
           </table>
         </div>
@@ -287,15 +289,16 @@
     <section class="tab-panel" id="panel-about" role="tabpanel" aria-labelledby="tab-about" hidden>
       <div class="about">
         <div class="section-title">Über diese Auswertung</div>
-        <p>Diese Offline-Auswertung zeigt pro Schweizer Grundstück (Liegenschaft / SDR), wie sich die Grundstücksfläche auf <strong>Bodenbedeckungsarten</strong>, <strong>Bauzonen</strong> und <strong>BAFU-Lebensräume</strong> verteilt. Die Daten sind in diese Datei eingebettet und laufen vollständig offline.</p>
+        <p>Diese Auswertung zeigt pro Schweizer Grundstück (Liegenschaft / SDR), wie sich die Grundstücksfläche auf <strong>Bodenbedeckungsarten</strong>, <strong>Bauzonen</strong> und <strong>BAFU-Lebensräume</strong> verteilt. Die Daten sind in diese Datei eingebettet; Auswertung, Tabellen, Diagramme und Filter laufen ohne Server direkt im Browser. Die interaktive Karte und der Excel-Export benötigen eine Internetverbindung.</p>
+        <p class="about-repo"><strong>Mehr erfahren:</strong> Methodik, Quellcode und vollständige Dokumentation auf <a href="https://github.com/bbl-dres/landcover-survey" target="_blank" rel="noopener">github.com/bbl-dres/landcover-survey</a></p>
         <h3>Datengrundlagen</h3>
         <ul>
-          <li><strong>Bodenbedeckung</strong> — Amtliche Vermessung (AV) · geodienste.ch (<code>ms:LCSF</code>)</li>
-          <li><strong>Grundstücke</strong> — swisstopo Cadastralwebmap · geo.admin.ch</li>
-          <li><strong>Bauzonen</strong> — ARE, harmonisiert (<code>ch.are.bauzonen</code>)</li>
-          <li><strong>Lebensräume</strong> — BAFU Lebensraumkarte (<code>ch.bafu.lebensraumkarte-schweiz</code>)</li>
+          <li><strong>Bodenbedeckung</strong> — Amtliche Vermessung (AV), DM.01-AV-CH · <a href="https://www.geodienste.ch/services/av" target="_blank" rel="noopener">geodienste.ch</a></li>
+          <li><strong>Grundstücke</strong> — Amtliche Vermessung, Liegenschaften (E-GRID) · <a href="https://map.geo.admin.ch/#/map?lang=de&amp;bgLayer=ch.swisstopo.pixelkarte-grau&amp;layers=ch.kantone.cadastralwebmap-farbe" target="_blank" rel="noopener">map.geo.admin.ch</a></li>
+          <li><strong>Bauzonen</strong> — ARE, harmonisiert · <code>ch.are.bauzonen</code> · <a href="https://map.geo.admin.ch/#/map?lang=de&amp;bgLayer=ch.swisstopo.pixelkarte-grau&amp;layers=ch.are.bauzonen" target="_blank" rel="noopener">map.geo.admin.ch</a></li>
+          <li><strong>Lebensräume</strong> — BAFU Lebensraumkarte · <code>ch.bafu.lebensraumkarte-schweiz</code> · <a href="https://map.geo.admin.ch/#/map?lang=de&amp;center=2622715,1205155.21&amp;z=1.921&amp;topic=ech&amp;layers=ch.bafu.lebensraumkarte-schweiz&amp;bgLayer=void" target="_blank" rel="noopener">map.geo.admin.ch</a></li>
         </ul>
-        <p class="muted">© swisstopo / Kantone (AV) / ARE / BAFU</p>
+        <p class="muted">Metadaten-Katalog: <a href="https://www.geocat.ch/geonetwork/srv/ger/catalog.search#/home" target="_blank" rel="noopener">geocat.ch</a> · © swisstopo / Kantone (AV) · ARE · BAFU</p>
         <h3>Klassifizierung</h3>
         <p>SIA 416 (GGF / BUF / UUF) · DIN 277 · Grünfläche · Versiegelung · VBS naturnahe Flächen.</p>
         <h3>Hinweise</h3>
@@ -305,10 +308,9 @@
         </ul>
         <h3>Weiterführende Informationen</h3>
         <ul class="about-links">
+          <li><a href="https://github.com/bbl-dres/landcover-survey" target="_blank" rel="noopener">Projekt auf GitHub (Quellcode &amp; Dokumentation)</a></li>
           <li><a href="https://github.com/bbl-dres/landcover-survey/blob/main/docs/MANUAL.md" target="_blank" rel="noopener">Anleitung (MANUAL)</a></li>
           <li><a href="https://github.com/bbl-dres/landcover-survey/blob/main/docs/CLASSIFICATION.md" target="_blank" rel="noopener">Klassifizierung (CLASSIFICATION)</a></li>
-          <li><a href="https://map.geo.admin.ch" target="_blank" rel="noopener">map.geo.admin.ch</a></li>
-          <li><a href="https://www.geodienste.ch/services/av" target="_blank" rel="noopener">geodienste.ch / AV</a></li>
         </ul>
       </div>
     </section>
@@ -316,7 +318,7 @@
 </div>
 
 <footer id="footer">
-  <div class="footer-info">Bundesamt für Bauten und Logistik BBL · Offline-Auswertung</div>
+  <div class="footer-info">Bundesamt für Bauten und Logistik BBL · Auswertung Bodenbedeckung</div>
   <div class="footer-links">
     <a href="https://github.com/bbl-dres/landcover-survey/blob/main/docs/MANUAL.md" target="_blank" rel="noopener">Anleitung</a>
     <a href="https://github.com/bbl-dres/landcover-survey" target="_blank" rel="noopener">Quellcode</a>

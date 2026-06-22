@@ -10,6 +10,10 @@
   --link: var(--primary-700);            /* darker red so link text meets WCAG AA (~4.8:1 on white) */
   --focus: #8655F6;                       /* CD focus ring (purple-500) */
   --radius: 3px; --radius-sm: 2px;
+  --radius-lg: 4px;                        /* Oblique card/surface radius (controls stay 2–3px) */
+  --ok: #137333; --ok-bg: #e6f4ea; --warn: #b45309;  /* semantic status — AA on white */
+  --bar-fill: #9db4cc;                    /* inline data-bar fill (slate-blue) */
+  --scrim: rgba(31,41,55,.45);            /* single overlay scrim (gray-800 @ 45%) */
   --shadow-sm: 0 1px 2px rgba(0,0,0,.06);
   --shadow-md: 0 2px 4px -1px rgba(0,0,0,.06), 0 4px 10px -1px rgba(0,0,0,.08);
   --font: "Noto Sans", "Helvetica Neue", Arial, system-ui, -apple-system, Segoe UI, sans-serif;

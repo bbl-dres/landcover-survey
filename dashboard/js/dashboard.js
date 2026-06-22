@@ -160,7 +160,7 @@
   // legend stay legible; each BBArt row's swatch uses its main-category colour.
   var MAIN_COLORS = {
     "Gebäude": "#c0392b", "Befestigt": "#8d99a6", "Humusiert": "#7cb342",
-    "Bestockt": "#1e8449", "Gewässer": "#3498db", "Vegetationslos": "#c9b27c"
+    "Bestockt": "#0d6e54", "Gewässer": "#3498db", "Vegetationslos": "#c9b27c"
   };
   var MAIN_ORDER = ["Gebäude", "Befestigt", "Humusiert", "Bestockt", "Gewässer", "Vegetationslos"];
   function mainColor(a) { return MAIN_COLORS[ART_MAIN[a]] || "#94a3b8"; }
@@ -183,9 +183,15 @@
   };
   function bzColor(z) { return BAUZONE_COLORS[z] || "#9e9e9e"; }
   var PARCEL_COLOR = "#6f8aac";
+  // SAP codes → Klartext labels (display only; the raw code stays the filter key + in exports).
+  var TPF_LABELS = { "1": "Allgemeine Bundesverwaltung", "2": "Ausland", "3": "Zoll", "4": "Gerichte", "5": "Forschungsanstalten", "6": "Kunst und Kultur", "7": "Sport", "8": "Repräsentation Inland", "9": "Infrastruktur" };
+  var EIGENTUM_LABELS = { "1": "Eigentum Bund", "3": "Anmiete", "5": "Spezialfall" };
+  function codeLabel(map, code) { if (code == null || code === "" || code === "—") return "—"; var k = String(code); return map[k] || map[String(parseInt(k, 10))] || k; }
+  function tpfLabel(code) { return codeLabel(TPF_LABELS, code); }
+  function eigentumLabel(code) { return codeLabel(EIGENTUM_LABELS, code); }
 
-  // EGRID resolution status (check_egrid). Default filter = only "found".
-  var STATUS_LABELS = { found:"Gefunden", merged:"Gefunden (zusammengeführt)", not_found:"Nicht gefunden", invalid:"Ungültige EGRID", error:"Fehler" };
+  // E-GRID resolution status (check_egrid). Default filter = only "found".
+  var STATUS_LABELS = { found:"Gefunden", merged:"Gefunden (zusammengeführt)", not_found:"Nicht gefunden", invalid:"Ungültige E-GRID", error:"Fehler" };
   var STATUS_ORDER = ["found", "merged", "not_found", "invalid", "error"];
   function statusKey(p) { var c = p.check_egrid || ""; return c.indexOf("error:") === 0 ? "error" : (c || "—"); }
 
@@ -286,7 +292,7 @@
     .concat(Object.keys(statusCounts).filter(function (s) { return STATUS_ORDER.indexOf(s) === -1; }));
 
   // ---- Filter state ----
-  // Defaults active on load: ABGA*/LÖVM*/PP* excluded, EGRID-Status "Gefunden",
+  // Defaults active on load: ABGA*/LÖVM*/PP* excluded, E-GRID-Status "Gefunden",
   // and Eigentumsart 1 (Bodenbedeckung defaults to "Alle"). The empty URL
   // represents exactly this default state; query params encode deviations from it.
   // Aggregate "Enthält" categories (clickable on the SIA 416 / Grün·Versiegelung·VBS
@@ -411,7 +417,7 @@
 
   // ---- Total parcel area grouped by an arbitrary field (Portfolio, Region) → bar items ----
   var BAR_COLOR = "#6f8aac"; // a single calm hue for the Portfolio/Region bars — color reserved for emphasis elsewhere
-  function groupBarItems(rows, field, selMap, topN) {
+  function groupBarItems(rows, field, selMap, topN, labelFn) {
     var map = {};
     rows.forEach(function (p) {
       var v = p[field]; var k = (v == null || v === "") ? "—" : String(v);
@@ -419,11 +425,11 @@
     });
     var keys = Object.keys(map).filter(function (k) { return map[k] > 0; }).sort(function (a, b) { return map[b] - map[a]; });
     var items = keys.slice(0, topN).map(function (k, i) {
-      return { name: k, value: map[k], color: BAR_COLOR, key: (k === "—" ? null : k), selected: !!(selMap && selMap[k]) };
+      return { name: labelFn ? labelFn(k) : k, value: map[k], color: BAR_COLOR, key: (k === "—" ? null : k), selected: !!(selMap && selMap[k]) };
     });
     if (keys.length > topN) {
       var rest = keys.slice(topN).reduce(function (s, k) { return s + map[k]; }, 0);
-      items.push({ name: "Übrige (" + (keys.length - topN) + ")", value: rest, color: "#cbd5e1" });
+      items.push({ name: "Übrige (" + (keys.length - topN) + ")", value: rest, swatch: "#cbd5e1" });
     }
     return items;
   }
@@ -463,7 +469,7 @@
     var artShown = artItems.slice(0, 12);
     if (artItems.length > 12) {
       var artRest = artItems.slice(12).reduce(function (s, it) { return s + it.value; }, 0);
-      artShown.push({ name: "Übrige (" + (artItems.length - 12) + ")", value: artRest, color: "#cbd5e1" });
+      artShown.push({ name: "Übrige (" + (artItems.length - 12) + ")", value: artRest, swatch: "#cbd5e1" });
     }
     var gsfHint = "Anteil an der gesamten Grundstücksfläche (GSF) der Auswahl.";
     var pa = a.totals.parcelArea;
@@ -503,20 +509,20 @@
       .map(function (z) { return { name: bzLabel(z), value: a.byBauzone[z] || 0, swatch: bzColor(z), key: z, selected: !!filters.bauzonen[z] }; })
       .filter(function (it) { return it.value > 0; }).sort(function (x, y) { return y.value - x.value; });
     var bzShown = bzItems.slice(0, 10);
-    if (bzItems.length > 10) { var bzRest = bzItems.slice(10).reduce(function (s, it) { return s + it.value; }, 0); bzShown.push({ name: "Übrige (" + (bzItems.length - 10) + ")", value: bzRest }); }
+    if (bzItems.length > 10) { var bzRest = bzItems.slice(10).reduce(function (s, it) { return s + it.value; }, 0); bzShown.push({ name: "Übrige (" + (bzItems.length - 10) + ")", value: bzRest, swatch: "#cbd5e1" }); }
     renderValTable("tbl-bauzonen", withMiss(bzShown, "Ohne Bauzone"), pa, fmtArea, true, unitLabel(), gsfHint);
     if (habitatListAll.length) {
       var hbItems = habitatListAll.map(function (h) { return { name: hbLabel(h), value: a.byHabitat[h] || 0, swatch: habColor(h) }; })
         .filter(function (it) { return it.value > 0; }).sort(function (x, y) { return y.value - x.value; });
       renderValTable("tbl-habitat", withMiss(hbItems, "Ohne Lebensraum-Daten"), pa, fmtArea, true, unitLabel(), gsfHint);
     }
-    renderValTable("tbl-tpf", groupBarItems(rows, "input_tpf", filters.tpf, 12), a.totals.parcelArea, fmtArea, true, unitLabel(), gsfHint);
+    renderValTable("tbl-tpf", groupBarItems(rows, "input_tpf", filters.tpf, 12, tpfLabel), a.totals.parcelArea, fmtArea, true, unitLabel(), gsfHint);
     renderValTable("tbl-rg", groupBarItems(rows, "input_rg", filters.cantons, 12), a.totals.parcelArea, fmtArea, true, unitLabel(), gsfHint);
 
     var qa = "";
     if (a.wfsIssues || a.geomIssues) {
       var parts = [];
-      if (a.wfsIssues) parts.push(fmt(a.wfsIssues) + " mit WFS-Hinweis");
+      if (a.wfsIssues) parts.push(fmt(a.wfsIssues) + " mit Datenabruf-Hinweis");
       if (a.geomIssues) parts.push(fmt(a.geomIssues) + " mit Geometrie-Hinweis");
       qa = "Datenqualität: " + parts.join(", ") + ". ";
     }
@@ -538,19 +544,19 @@
       var wfs = p.check_wfs && p.check_wfs !== "ok"; if (wfs) wfsIssue++;
       var geom = p.check_geom && p.check_geom !== "ok"; if (geom) geomIssue++;
       var hint = "";
-      if (sk === "not_found") hint = "EGRID nicht gefunden";
-      else if (sk === "invalid") hint = "Ungültige EGRID";
+      if (sk === "not_found") hint = "E-GRID nicht gefunden";
+      else if (sk === "invalid") hint = "Ungültige E-GRID";
       else if (sk === "error") hint = "Fehler";
-      else if (!cov) hint = "0 m² Bodenbedeckung (kein WFS)";
+      else if (!cov) hint = "0 m² Bodenbedeckung (kein Datenabruf)";
       else if (geom) hint = "Geometrie-Hinweis";
-      else if (wfs) hint = "WFS-Hinweis";
+      else if (wfs) hint = "Datenabruf-Hinweis";
       if (hint) problems.push({ p: p, hint: hint });
     });
     var total = rows.length || 1, foundAll = c.found + c.merged;
     var qk = [
-      { label:"EGRID aufgelöst", value:fmt(foundAll) + " / " + fmt(rows.length), sub:(c.merged ? fmt(c.merged) + " zusammengeführt" : "von der Auswahl") },
+      { label:"E-GRID aufgelöst", value:fmt(foundAll) + " / " + fmt(rows.length), sub:(c.merged ? fmt(c.merged) + " zusammengeführt" : "von der Auswahl") },
       { label:"Ohne Bodenbedeckung", value:fmt(woCov), sub:pct(woCov, total) + "% der Auswahl" },
-      { label:"Geometrie-Hinweise", value:fmt(geomIssue), sub:fmt(wfsIssue) + " WFS-Hinweise" }
+      { label:"Geometrie-Hinweise", value:fmt(geomIssue), sub:fmt(wfsIssue) + " Datenabruf-Hinweise" }
     ];
     document.getElementById("q-kpis").innerHTML = qk.map(function (k) {
       return '<div class="card"><div class="label">' + esc(k.label) + '</div><div class="value">' + k.value + '</div><div class="sub">' + esc(k.sub) + '</div></div>';
@@ -558,7 +564,7 @@
     renderValTable("q-egrid", [
       { name:"Gefunden", value:c.found + c.merged },
       { name:"Nicht gefunden", value:c.not_found + c.error },
-      { name:"Ungültige EGRID", value:c.invalid },
+      { name:"Ungültige E-GRID", value:c.invalid },
       { name:"Ohne Status", value:cOther }
     ].filter(function (it) { return it.value > 0; }), rows.length, fmt, true, "Anzahl", "Anteil an der Auswahl (Anzahl Grundstücke).");
     qAllProblems = problems;
@@ -591,12 +597,12 @@
 
   // ---- Datenqualität-Prüfregeln (per Grundstück geprüft, als Regel/Ergebnis/Status) ----
   var RULE_DEFS = [
-    { key: "bbCover", name: "Bodenbedeckung deckt Grundstück", tip: "Σ klassifizierte Bodenbedeckung = Grundstücksfläche (Grundstücke mit WFS-Daten)." },
+    { key: "bbCover", name: "Bodenbedeckung deckt Grundstück", tip: "Σ klassifizierte Bodenbedeckung = Grundstücksfläche (Grundstücke mit AV-Daten)." },
     { key: "bzCover", name: "Bauzonen decken Grundstück", tip: "Σ Bauzonen inkl. „Ohne Bauzone“ = Grundstücksfläche." },
     { key: "hbCover", name: "Lebensräume decken Grundstück", tip: "Σ Lebensräume = Grundstücksfläche." },
     { key: "sealgreen", name: "Versiegelt + Grünfläche ≤ Bodenbedeckung", tip: "Versiegelte und Grünflächen sind disjunkte Teilmengen der klassifizierten Bodenbedeckung — ihre Summe darf sie nicht überschreiten (sonst Doppelzählung)." },
     { key: "bounds", name: "Keine Fläche grösser als das Grundstück", tip: "Keine einzelne Bodenbedeckungs-/Zonen-/Lebensraum-Komponente überschreitet die Grundstücksfläche." },
-    { key: "egrid", name: "Alle EGRID aufgelöst", tip: "Keine nicht gefundenen, ungültigen oder fehlerhaften EGRID." },
+    { key: "egrid", name: "Alle E-GRID aufgelöst", tip: "Keine nicht gefundenen, ungültigen oder fehlerhaften E-GRID." },
     { key: "bzOk", name: "Bauzonen vollständig", tip: "Kein Grundstück mit gekappten/unsicheren Bauzonen-Daten (truncated/partial)." },
     { key: "hbOk", name: "Lebensräume vollständig", tip: "Kein Grundstück mit gekappten/unsicheren Lebensraum-Daten; geschätzte (gap-gefüllte) werden separat ausgewiesen." }
   ];
@@ -676,9 +682,9 @@
     { key:"input_plz", label:"PLZ", def:false, tip:"Postleitzahl." },
     { key:"input_rg", label:"Kanton", def:true, tip:"Kanton (Region)." },
     { key:"input_bez. grundstück", label:"Bezeichnung", def:true, tip:"Bezeichnung des Grundstücks aus SAP." },
-    { key:"input_eigent.art", label:"Eigentumsart", def:false, tip:"Eigentumsart-Code aus SAP (1/3/5)." },
-    { key:"input_tpf", label:"Portfolio", def:false, tip:"Portfolio-Code (input_tpf) aus SAP. Klartext-Labels folgen." },
-    { key:"check_egrid", label:"Status", def:false, tip:"EGRID-Status (gefunden / zusammengeführt / nicht gefunden)." },
+    { key:"input_eigent.art", label:"Eigentumsart", def:false, tip:"Eigentumsart aus SAP (1 = Eigentum Bund, 3 = Anmiete, 5 = Spezialfall).", render: function (v) { return v ? esc(eigentumLabel(v)) : '<span class="muted">–</span>'; } },
+    { key:"input_tpf", label:"Teilportfolio", def:false, tip:"Teilportfolio (GOM) aus SAP.", render: function (v) { return v ? esc(tpfLabel(v)) : '<span class="muted">–</span>'; } },
+    { key:"check_egrid", label:"Status", def:false, tip:"E-GRID-Status (gefunden / zusammengeführt / nicht gefunden)." },
     { key:"parcel_area_m2", label:"Grundstücksfläche m²", num:true, def:true, tip:"Berechnete Grundstücksfläche (GSF) — 2D-Planfläche auf LV95." },
     { key:"sia416_ggf_m2", label:"GGF m²", num:true, def:true, tip:"Gebäudegrundfläche nach SIA 416." },
     { key:"sia416_buf_m2", label:"BUF m²", num:true, def:false, tip:"Bearbeitete Umgebungsfläche nach SIA 416 (befestigt + humusiert)." },
@@ -759,7 +765,9 @@
   function selectParcel(id) {
     selectedParcelId = (id == null || id === "") ? null : String(id);
     if (map && mapReady && map.getLayer("parcels-hl")) {
-      map.setFilter("parcels-hl", ["==", ["get", "id"], selectedParcelId || " "]);
+      var hlFilter = ["==", ["get", "id"], selectedParcelId || " "];
+      map.setFilter("parcels-hl", hlFilter);
+      if (map.getLayer("parcels-hl-casing")) map.setFilter("parcels-hl-casing", hlFilter);
     }
     if (mapMode === "priority") { selectPrioRow(); return; }
     if (!selectedParcelId) { renderBody(); return; }
@@ -843,10 +851,10 @@
       pills.push({ label: "Enthält: " + HAS_METRICS[m].label, remove: function () { delete filters.has[m]; } });
     });
     Object.keys(filters.tpf).forEach(function (t) {
-      pills.push({ label: "Portfolio: " + t, remove: function () { delete filters.tpf[t]; } });
+      pills.push({ label: "Teilportfolio: " + tpfLabel(t), remove: function () { delete filters.tpf[t]; } });
     });
     Object.keys(filters.eigentum).forEach(function (e) {
-      pills.push({ label: "Eigentumsart " + e, remove: function () { delete filters.eigentum[e]; } });
+      pills.push({ label: "Eigentumsart: " + eigentumLabel(e), remove: function () { delete filters.eigentum[e]; } });
     });
     Object.keys(filters.status).forEach(function (s) {
       pills.push({ label: "Status: " + (STATUS_LABELS[s] || s), remove: function () { delete filters.status[s]; } });
@@ -1043,8 +1051,8 @@
   function renderCantons() { capList("f-cantons", cantonList.map(function (c) { return chk("c", c, c, cantonCounts[c], filters.cantons[c]); })); }
   function renderArts() { capList("f-arts", artListAll.map(function (a) { return chk("a", a, ART_LABELS[a] || a, artParcelCount[a], filters.arts[a]); })); }
   function renderBauzonen() { capList("f-bauzonen", bauzoneListAll.map(function (z) { return chk("z", z, bzLabel(z), bauzoneParcelCount[z], filters.bauzonen[z]); })); }
-  function renderTpf() { capList("f-tpf", tpfList.map(function (t) { return chk("t", t, t, tpfCounts[t], filters.tpf[t]); })); }
-  function renderEigentum() { capList("f-eigentum", eigentumList.map(function (e) { return chk("e", e, "Eigentumsart " + e, eigentumCounts[e], filters.eigentum[e]); })); }
+  function renderTpf() { capList("f-tpf", tpfList.map(function (t) { return chk("t", t, tpfLabel(t), tpfCounts[t], filters.tpf[t]); })); }
+  function renderEigentum() { capList("f-eigentum", eigentumList.map(function (e) { return chk("e", e, eigentumLabel(e), eigentumCounts[e], filters.eigentum[e]); })); }
   function renderStatus() { capList("f-status", statusList.map(function (s) { return chk("s", s, STATUS_LABELS[s] || s, statusCounts[s], filters.status[s]); })); }
   document.getElementById("cov-with").textContent = fmt(covWith);
   document.getElementById("cov-without").textContent = fmt(covWithout);
@@ -1122,12 +1130,12 @@
     { key: "urban", name: "Urbane Relevanz", def: 15, tip: "Eignung des dominierenden Bauzonentyps — zentrale und urbane Zonen werden höher gewichtet." },
     { key: "habitat", name: "Lebensräume", def: 10, tip: "Anteil naturnaher Lebensräume an der kartierten BAFU-Lebensraumfläche." },
     { key: "diversity", name: "Strukturvielfalt", def: 5, tip: "Anzahl verschiedener Bodenbedeckungs- bzw. Lebensraumtypen — vielfältigere Grundstücke werden höher bewertet." },
-    { key: "quality", name: "Datenqualität", def: 10, tip: "Verlässlichkeit der Daten: amtliche AV-Quelle, vollständige Abdeckung, bestandene Geometrie- und WFS-Prüfung." }
+    { key: "quality", name: "Datenqualität", def: 10, tip: "Verlässlichkeit der Daten: amtliche AV-Quelle, vollständige Abdeckung, bestandene Geometrie- und Datenabruf-Prüfung." }
   ];
   // Building-zone relevance for N&W (developed grounds): Arbeits/öffentlich highest.
   var PRIO_BZ_REL = { arbeitszonen: 1, zonen_fuer_oeffentliche_nutzungen: 1, zentrumszonen: 0.9, tourismus_und_freizeitzonen: 0.7, mischzonen: 0.75, wohnzonen: 0.6, eingeschraenkte_bauzonen: 0.5, weitere_bauzonen: 0.4, verkehrszonen_innerhalb_der_bauzonen: 0.3 };
   var PRIO_NAT_HAB = { gewaesser: 1, ufer_feuchtgebiete: 1, gletscher_fels_schutt_geroell: 1, gruenland: 1, krautsaeume_hochstauden_gebuesche: 1, waelder: 1, pionier_ruderalvegetation: 1 };
-  var prio = { federal: true, sap: true, ufMin: 1000, bauzone: true, bzMin: 50, topN: 100, cap: true, capN: 20, tpfCap: true, tpfCapN: 30, page: 1, pageSize: 25, weights: {}, selected: [], poolCount: 0 };
+  var prio = { federal: true, sap: true, ufMin: 1000, bauzone: true, bzMin: 50, topN: 100, cap: true, capN: 20, tpfCap: true, tpfCapN: 30, page: 1, pageSize: 25, weights: {}, selected: [], poolCount: 0, sort: "score", dir: -1 };
   WEIGHT_DEFS.forEach(function (w) { prio.weights[w.key] = w.def; });
   function prioUF(p) { return num(p.sia416_buf_m2) + num(p.sia416_uuf_m2); }
   function prioMetrics(p) {
@@ -1198,6 +1206,7 @@
       if (capT && (tp[t] || 0) >= capT) continue;
       kt[k] = (kt[k] || 0) + 1; tp[t] = (tp[t] || 0) + 1; out.push(scored[i]);
     }
+    out.forEach(function (s, i) { s.rank = i + 1; }); // score-rank, stable across table sorts
     prio.poolCount = pool.length; prio.selected = out;
   }
   function renderPrioWeights() {
@@ -1209,11 +1218,11 @@
   }
   var PRIO_SEGS = ["Grün-reich", "Gemischt", "Versiegelt"], PRIO_SEG_COL = { "Grün-reich": "#7cb342", "Gemischt": "#e0a23c", "Versiegelt": "#8d99a6" };
   // Count of selected parcels grouped by a field (Kanton / Teilportfolio) → renderValTable items, top-N + Übrige.
-  function prioCountItems(field, topN) {
+  function prioCountItems(field, topN, labelFn) {
     var map = {};
     prio.selected.forEach(function (s) { var v = s.p[field], key = (v == null || v === "") ? "—" : String(v); map[key] = (map[key] || 0) + 1; });
     var keys = Object.keys(map).sort(function (a, b) { return map[b] - map[a]; });
-    var items = keys.slice(0, topN).map(function (key) { return { name: key, value: map[key] }; });
+    var items = keys.slice(0, topN).map(function (key) { return { name: labelFn ? labelFn(key) : key, value: map[key] }; });
     if (keys.length > topN) { var rest = keys.slice(topN).reduce(function (s, key) { return s + map[key]; }, 0); items.push({ name: "Übrige (" + (keys.length - topN) + ")", value: rest }); }
     return items;
   }
@@ -1233,21 +1242,47 @@
       card("Grünfläche", fmtAreaU(sumGreen), (sumArea ? pct(sumGreen, sumArea) : 0) + "% der Fläche") +
       '<div class="card prio-seg-card"><div class="label">Segment-Mix der Auswahl</div>' + segMix + '</div>';
     renderValTable("pr-rg", prioCountItems("input_rg", 12), n, fmt, true, "Anzahl", "Anteil an der Auswahl (Anzahl Grundstücke).");
-    renderValTable("pr-tpf", prioCountItems("input_tpf", 12), n, fmt, true, "Anzahl", "Anteil an der Auswahl (Anzahl Grundstücke).");
+    renderValTable("pr-tpf", prioCountItems("input_tpf", 12, tpfLabel), n, fmt, true, "Anzahl", "Anteil an der Auswahl (Anzahl Grundstücke).");
     document.getElementById("pr-count").textContent = fmt(n) + " von " + fmt(prio.poolCount) + " Kandidaten";
-    prio.page = 1; renderPrioBody();
+    prio.page = 1; renderPrioHead(); renderPrioBody();
     if (mapMode === "priority") renderMap(prio.selected.map(function (s) { return s.p; })); // selected parcels on the map
+  }
+  // Rangliste columns — each maps a {p, m, score} row to a sort value (mirrors the Übersicht COLUMNS).
+  var PRIO_COLS = [
+    { key: "rang",  label: "Rang",        num: true,  val: function (s) { return s.rank; } },
+    { key: "id",    label: "ID",          num: false, val: function (s) { return s.p.id || ""; } },
+    { key: "egrid", label: "E-GRID",      num: false, val: function (s) { return s.p.egrid || ""; } },
+    { key: "ort",   label: "Ort",         num: false, val: function (s) { return s.p.input_ort || ""; } },
+    { key: "kt",    label: "Kt",          num: false, val: function (s) { return s.p.input_rg || ""; } },
+    { key: "seg",   label: "Segment",     num: true,  val: function (s) { return s.m.greenShare; } }, // by underlying Grün-Anteil
+    { key: "uf",    label: "UF",          num: true,  val: function (s) { return s.m.uf; }, tip: "Umgebungsfläche = SIA 416 BUF + UUF (Grundstück ohne Gebäudegrundfläche)." },
+    { key: "gruen", label: "Grün&nbsp;%", num: true,  val: function (s) { return s.m.greenShare; }, tip: "Grünanteil an der Umgebungsfläche UF (nicht an der Grundstücksfläche)." },
+    { key: "score", label: "Score",       num: true,  val: function (s) { return s.score; }, tip: "Gewichteter Mittelwert von 6 Perzentil-Signalen (0–1); höher = höhere Begehungs-Priorität." }
+  ];
+  var prioColByKey = {}; PRIO_COLS.forEach(function (c) { prioColByKey[c.key] = c; });
+  function renderPrioHead() {
+    var tr = document.getElementById("pr-thead-row"); if (!tr) return;
+    tr.innerHTML = PRIO_COLS.map(function (c) {
+      var sorted = prio.sort === c.key, arrow = sorted ? ' <span class="arrow">' + (prio.dir < 0 ? "▼" : "▲") + "</span>" : "";
+      var tip = c.tip ? ' data-tip="' + esc(c.tip) + '"' : "";
+      return '<th class="' + (c.num ? "num" : "") + (sorted ? " sorted" : "") + '" data-key="' + c.key + '"' + tip + ">" + c.label + arrow + "</th>";
+    }).join("");
   }
   function renderPrioBody() {
     var tb = document.getElementById("pr-tbody"); if (!tb) return;
-    var rows = prio.selected, pages = Math.max(1, Math.ceil(rows.length / prio.pageSize));
+    var rows = prio.selected.slice(), col = prioColByKey[prio.sort]; // sort a copy — prio.selected stays score-ranked
+    if (col) rows.sort(function (a, b) {
+      var x = col.val(a), y = col.val(b);
+      return col.num ? (num(x) - num(y)) * prio.dir : String(x == null ? "" : x).localeCompare(String(y == null ? "" : y), "de") * prio.dir;
+    });
+    var pages = Math.max(1, Math.ceil(rows.length / prio.pageSize));
     if (prio.page > pages) prio.page = pages; if (prio.page < 1) prio.page = 1;
     var start = (prio.page - 1) * prio.pageSize;
     tb.innerHTML = rows.length
-      ? rows.slice(start, start + prio.pageSize).map(function (s, i) {
+      ? rows.slice(start, start + prio.pageSize).map(function (s) {
           var p = s.p, m = s.m, pid = (p.id == null ? "" : String(p.id));
           var rs = (selectedParcelId && pid === selectedParcelId) ? ' class="row-selected"' : "";
-          return '<tr data-id="' + esc(pid) + '"' + rs + "><td>" + (start + i + 1) + "</td><td>" + esc(p.id || "") + "</td><td>" + (p.egrid ? esc(p.egrid) : '<span class="muted">–</span>') +
+          return '<tr data-id="' + esc(pid) + '"' + rs + "><td>" + s.rank + "</td><td>" + esc(p.id || "") + "</td><td>" + (p.egrid ? esc(p.egrid) : '<span class="muted">–</span>') +
                  "</td><td>" + esc(p.input_ort || "") + "</td><td>" + esc(p.input_rg || "") + "</td><td>" + esc(prioSeg(m)) +
                  "</td><td class='num'>" + fmtArea(m.uf) + "</td><td class='num'>" + Math.round(100 * m.greenShare) + "</td><td class='num'>" + s.score.toFixed(3) + "</td></tr>";
         }).join("")
@@ -1284,16 +1319,45 @@
     prBind("pr-prev", "click", function () { if (prio.page > 1) { prio.page--; renderPrioBody(); } });
     prBind("pr-next", "click", function () { if (prio.page < Math.ceil(prio.selected.length / prio.pageSize)) { prio.page++; renderPrioBody(); } });
     prBind("pr-page-size", "change", function (e) { prio.pageSize = parseInt(e.target.value, 10); prio.page = 1; renderPrioBody(); });
-    prBind("pr-export", "click", function () { exportGeojsonRows(prioRows(), "priorisierung-top" + prio.topN + ".geojson"); });
+    prBind("pr-export", "click", function () { var b = document.getElementById("dl-btn"); if (b) b.click(); }); // → öffnet das Download-Fenster (Priorisiert-Bereich)
+    var prTh = document.getElementById("pr-thead-row"); // sortable Rangliste columns (mirrors the Übersicht thead)
+    if (prTh) prTh.addEventListener("click", function (e) {
+      var th = e.target.closest && e.target.closest("th[data-key]"); if (!th) return;
+      var key = th.getAttribute("data-key");
+      if (prio.sort === key) prio.dir = -prio.dir;
+      else { prio.sort = key; prio.dir = prioColByKey[key] && prioColByKey[key].num ? -1 : 1; }
+      prio.page = 1; renderPrioHead(); renderPrioBody();
+    });
   }
 
   // ---- Filter panel collapse / expand ----
   var appEl = document.getElementById("app");
-  document.getElementById("fp-collapse").addEventListener("click", function () { appEl.classList.add("fp-collapsed"); });
+  // Mobile (≤900px): the filter panel is an off-canvas drawer toggled from the header (#fp-toggle) + scrim.
+  var fpScrim = document.getElementById("fp-scrim"), fpToggle = document.getElementById("fp-toggle");
+  function setFpOpen(open) {
+    appEl.classList.toggle("fp-open", open);
+    if (fpScrim) fpScrim.hidden = !open;
+    if (fpToggle) fpToggle.setAttribute("aria-expanded", open ? "true" : "false");
+  }
+  if (fpToggle) fpToggle.addEventListener("click", function () { setFpOpen(!appEl.classList.contains("fp-open")); });
+  if (fpScrim) fpScrim.addEventListener("click", function () { setFpOpen(false); });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") setFpOpen(false); });
+  document.getElementById("fp-collapse").addEventListener("click", function () { appEl.classList.add("fp-collapsed"); setFpOpen(false); });
   document.getElementById("fp-expand").addEventListener("click", function () { appEl.classList.remove("fp-collapsed"); });
   // Print: render the full filtered set, restore pagination afterwards
-  window.addEventListener("beforeprint", function () { printing = true; renderBody(); });
-  window.addEventListener("afterprint", function () { printing = false; renderBody(); });
+  // WebGL canvases don't appear in print output → snapshot the map to an <img> over it for print.
+  var _mapPrintImg = null;
+  function mapToPrintImage() {
+    if (!map || !mapReady) return;
+    try {
+      var url = map.getCanvas().toDataURL("image/png");
+      if (!_mapPrintImg) { _mapPrintImg = document.createElement("img"); _mapPrintImg.className = "map-print-img"; _mapPrintImg.alt = "Kartenausschnitt"; }
+      _mapPrintImg.src = url; map.getContainer().appendChild(_mapPrintImg);
+    } catch (e) { /* cross-origin tainted canvas — leave it (map prints blank) */ }
+  }
+  function removeMapPrintImage() { if (_mapPrintImg && _mapPrintImg.parentNode) _mapPrintImg.parentNode.removeChild(_mapPrintImg); }
+  window.addEventListener("beforeprint", function () { printing = true; renderBody(); mapToPrintImage(); });
+  window.addEventListener("afterprint", function () { printing = false; renderBody(); removeMapPrintImage(); });
 
   // ---- Hover info tooltips ----
   var tipEl = document.getElementById("tip");
@@ -1521,9 +1585,9 @@
   Object.keys(BAUZONE_LABELS).forEach(function (z) { _bauzonenColor.push(BAUZONE_LABELS[z], bzColor(z)); });
   _bauzonenColor.push("#9e9e9e");
   var OVERLAY_DEFS = [
-    { key: "landcover", label: "Bodenbedeckung", fill: _landcoverColor, line: "#6b7280", opacity: 0.55 },
+    { key: "landcover", label: "Bodenbedeckung", fill: _landcoverColor, line: "#6b7280", opacity: 0.62 },
     { key: "bauzonen", label: "Bauzonen", fill: _bauzonenColor, line: "#888", opacity: 0.5 },
-    { key: "habitat", label: "Lebensräume", fill: _habitatColor, line: "#674ea7", opacity: 0.4 }
+    { key: "habitat", label: "Lebensräume", fill: _habitatColor, line: "#674ea7", opacity: 0.55 }
   ];
   function addOverlayLayers() {
     OVERLAY_DEFS.forEach(function (d) {
@@ -1586,7 +1650,7 @@
   // Legend (bottom-right): swatches for the currently-visible layers only.
   var legendEl = null;
   function legendGroups() {
-    var g = [{ layer: "parcels-fill", title: null, items: [{ color: PARCEL_COLOR, label: "Grundstücke" }] }];
+    var g = [{ layer: "parcels-fill", title: null, items: [{ color: PARCEL_COLOR, label: "Grundstücke" }, { color: "#d8232a", label: "Ausgewählt", outline: true }] }];
     if (map.getLayer("landcover-fill")) g.push({ layer: "landcover-fill", title: "Bodenbedeckung", items: MAIN_ORDER.map(function (mc) { return { color: MAIN_COLORS[mc], label: mc }; }) });
     if (map.getLayer("bauzonen-fill")) g.push({ layer: "bauzonen-fill", title: "Bauzonen", items: Object.keys(BAUZONE_LABELS).map(function (z) { return { color: bzColor(z), label: BAUZONE_LABELS[z] }; }) });
     if (map.getLayer("habitat-fill")) g.push({ layer: "habitat-fill", title: "Lebensräume", items: Object.keys(HABITAT_LABELS).map(function (s) { return { color: habColor(s), label: HABITAT_LABELS[s] }; }) });
@@ -1598,7 +1662,7 @@
     legendGroups().forEach(function (g) {
       if (!map.getLayer(g.layer) || map.getLayoutProperty(g.layer, "visibility") === "none") return;
       if (g.title) html += '<div class="lg-title">' + esc(g.title) + '</div>';
-      g.items.forEach(function (it) { html += '<div class="lg-row"><span class="lg-sw" style="background:' + it.color + '"></span>' + esc(it.label) + '</div>'; });
+      g.items.forEach(function (it) { var sw = it.outline ? "background:#fff;border:2px solid " + it.color : "background:" + it.color; html += '<div class="lg-row"><span class="lg-sw" style="' + sw + '"></span>' + esc(it.label) + '</div>'; });
     });
     legendEl.innerHTML = html;
     legendEl.style.display = html ? "" : "none";
@@ -1672,7 +1736,7 @@
         else { copyText(url); flash(item); setTimeout(hide, 700); }
       } else if (act === "report") {
         hide();
-        var subject = encodeURIComponent("Problem melden – Landcover Dashboard");
+        var subject = encodeURIComponent("Problem melden – Auswertung Bodenbedeckung");
         var body = encodeURIComponent("Koordinaten: " + lat + ", " + lon + "\n\nBeschreibung:\n");
         window.location.href = "mailto:david.rasner@bbl.admin.ch?subject=" + subject + "&body=" + body;
       }
@@ -1680,7 +1744,7 @@
   }
 
   function initMap(el) {
-    map = new maplibregl.Map({ container: el, style: "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json", center: [8.23, 46.82], zoom: 6.4 });
+    map = new maplibregl.Map({ container: el, style: "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json", center: [8.23, 46.82], zoom: 6.4, preserveDrawingBuffer: true, cooperativeGestures: true });
     map.addControl(new maplibregl.NavigationControl({ showCompass: true }), "top-right"); // compass = north icon; click resets bearing to 0
     map.addControl(new HomeControl(), "top-right");
     map.addControl(new maplibregl.ScaleControl({ maxWidth: 120, unit: "metric" }), "bottom-left");
@@ -1688,6 +1752,7 @@
       map.addSource("parcels", { type: "geojson", data: rowsToFC(lastRows) });
       map.addLayer({ id: "parcels-fill", type: "fill", source: "parcels", minzoom: PARCEL_MINZOOM, paint: { "fill-color": PARCEL_COLOR, "fill-opacity": 0.4 } });
       map.addLayer({ id: "parcels-line", type: "line", source: "parcels", minzoom: PARCEL_MINZOOM, paint: { "line-color": "#3b5a7a", "line-width": 0.7 } });
+      map.addLayer({ id: "parcels-hl-casing", type: "line", source: "parcels", minzoom: PARCEL_MINZOOM, filter: ["==", ["get", "id"], selectedParcelId || " "], paint: { "line-color": "#fff", "line-width": 5, "line-opacity": 0.9 } });
       map.addLayer({ id: "parcels-hl", type: "line", source: "parcels", minzoom: PARCEL_MINZOOM, filter: ["==", ["get", "id"], selectedParcelId || " "], paint: { "line-color": "#d8232a", "line-width": 2.6 } });
       addOverlayLayers(); // Bodenbedeckung / Bauzonen / Lebensräume — under the markers, hidden by default
       map.addSource("points", { type: "geojson", data: rowsToPointsFC(lastRows), cluster: true, clusterRadius: 48, clusterMaxZoom: 13 });
