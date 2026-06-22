@@ -186,19 +186,7 @@ footer#footer {
 footer#footer .footer-links { display: inline-flex; gap: 18px; flex-wrap: wrap; }
 footer#footer .footer-links a { color: var(--link); text-decoration: none; font-weight: 500; }
 footer#footer .footer-links a:hover { text-decoration: underline; }
-/* Filter drawer */
-#backdrop { position: fixed; inset: 0; background: var(--scrim); opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 90; }
-#backdrop.open { opacity: 1; pointer-events: auto; }
-#drawer {
-  position: fixed; top: 0; right: 0; height: 100vh; width: 344px; max-width: 88vw; background: #fff;
-  box-shadow: -4px 0 16px rgba(0,0,0,.15); transform: translateX(100%); transition: transform .22s ease;
-  z-index: 100; display: flex; flex-direction: column;
-}
-#drawer.open { transform: translateX(0); }
-.drawer-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 18px; border-bottom: 1px solid var(--gray-200); }
-.drawer-head h2 { margin: 0; font-size: 17px; font-weight: 600; }
-.drawer-close { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--gray-500); line-height: 1; }
-.drawer-body { flex: 1; overflow: auto; padding: 4px 18px 18px; }
+/* Filter panel groups (used by #filter-panel / .fp-body) */
 .fgroup { padding: 16px 0; border-bottom: 1px solid var(--gray-100); }
 .fgroup:last-child { border-bottom: none; }
 .fgroup-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
@@ -216,8 +204,6 @@ footer#footer .footer-links a:hover { text-decoration: underline; }
 .checklist .cnt { color: var(--gray-500); font-size: 12px; margin-left: auto; padding-left: 6px; }
 .radiolist { display: grid; gap: 2px; }
 .radiolist label { gap: 8px; }
-.drawer-foot { padding: 14px 18px; border-top: 1px solid var(--gray-200); display: flex; align-items: center; justify-content: space-between; }
-.drawer-foot .fcount { font-size: 14px; font-weight: 600; color: var(--gray-700); }
 @media (max-width: 1000px) {
   .kpis { grid-template-columns: repeat(2, 1fr); }
   .charts { grid-template-columns: 1fr; }
@@ -228,7 +214,7 @@ footer#footer .footer-links a:hover { text-decoration: underline; }
   @page { margin: 12mm; }
   body { background: #fff; }
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  #filter-panel, .fp-expand, .tabs, #backdrop, #tip, .dl-wrap, #dl-modal, .table-bar .dropdown, .pager, .chart-note,
+  #filter-panel, .fp-expand, .tabs, #tip, .dl-wrap, #dl-modal, .table-bar .dropdown, .pager, .chart-note,
   .main-head .search-box, .main-head .unit-toggle { display: none !important; }
   .main-head { position: static; height: auto; padding: 8px 0 0; }
   header { border-bottom: 2px solid var(--primary-600); padding: 0 0 10px; }
@@ -249,7 +235,7 @@ footer#footer .footer-links a:hover { text-decoration: underline; }
 
 /* ── Builder mode (no embedded data): file picker to embed a GeoJSON ── */
 .builder-mode header, .builder-mode #app, .builder-mode footer,
-.builder-mode #drawer, .builder-mode #backdrop, .builder-mode #tip { display: none !important; }
+.builder-mode #tip { display: none !important; }
 /* Visibility is driven solely by .builder-mode on <body> — hidden otherwise, so a
    data-embedded deliverable never shows the picker over the dashboard. */
 #builder-screen { display: none; min-height: 100vh; align-items: flex-start; justify-content: center; padding: 48px 16px; background: var(--secondary-50); }
@@ -439,8 +425,14 @@ table.sumtbl .sumbar > i { display: block; height: 100%; background: var(--bar-f
 .q-filter-x:hover { text-decoration: underline; }
 /* Priorisierung tab */
 .prio-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; align-items: start; margin-bottom: 16px; }
-.prio-chk { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--gray-700); margin: 9px 0; flex-wrap: wrap; }
-.prio-chk input[type=number] { width: 52px; padding: 3px 5px; border: 1px solid var(--gray-300); border-radius: var(--radius-sm); font: inherit; font-size: 13px; }
+/* Checkbox + a single wrapping body: the label text and inline ⓘ/number-inputs live in
+   .prio-chk-body (one flex item), so a long label wraps WITHIN it instead of orphaning the
+   checkbox onto its own line. align-items:baseline keeps the box on the first text line and
+   keeps the inline number inputs visually aligned with the text. */
+.prio-chk { display: flex; align-items: baseline; gap: 7px; font-size: 13px; line-height: 1.4; color: var(--gray-700); margin: 9px 0; }
+.prio-chk > input[type=checkbox] { flex: none; margin: 0; }
+.prio-chk-body { min-width: 0; }
+.prio-chk input[type=number] { width: 52px; padding: 3px 5px; border: 1px solid var(--gray-300); border-radius: var(--radius-sm); font: inherit; font-size: 13px; vertical-align: middle; margin: 0 2px; }
 .prio-rng { margin: 10px 0 4px; }
 .prio-rng > label { font-size: 13px; color: var(--gray-700); display: block; margin-bottom: 4px; }
 .prio-rng input[type=range], .prio-w input[type=range] { width: 100%; accent-color: var(--secondary-500); margin: 0; }

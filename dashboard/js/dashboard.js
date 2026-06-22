@@ -7,7 +7,10 @@
   // PII allowlist (mirrors the old build_dashboard.py): keep every non-input_
   // column; of input_ keep only these six. The rest never reach a saved file.
   var KEEP_INPUT = { "input_ort":1, "input_plz":1, "input_rg":1, "input_bez. grundstück":1, "input_eigent.art":1, "input_tpf":1 };
-  var keepKey = function (k) { return k.indexOf("input_") === 0 ? !!KEEP_INPUT[k] : true; };
+  // Anything that looks like personal data is dropped even outside the input_ namespace
+  // (defence-in-depth: an alternate/future export schema could carry PII without the prefix).
+  var PII_RE = /(^|_)(name|mieter|tenant|e?mail|telefon|phone|adresse|kontakt|person|eigent[uü]mer|owner)(_|$)/i;
+  var keepKey = function (k) { return k.indexOf("input_") === 0 ? !!KEEP_INPUT[k] : !PII_RE.test(k); };
   var DATA_MARKERS = /<!-- PARCEL-DATA:START[\s\S]*?PARCEL-DATA:END -->/;
   // Escape `<` (→ no </script> breakout) and U+2028/U+2029 (legal in JSON, but
   // terminate a JS string literal inside an inline <script> → silent corruption).
@@ -65,9 +68,8 @@
       for (var k in p) { if (!Object.prototype.hasOwnProperty.call(p, k)) continue; if (keepKey(k)) o[k] = p[k]; else droppedSet[k] = 1; }
       return o;
     });
-    // Defence-in-depth: keepKey only filters input_* keys; warn if a non-input_ column
-    // looks like PII — it would otherwise ship unfiltered into the deliverable.
-    if (cleaned[0]) { var piiRe = /(^|_)(name|mieter|tenant|e?mail|telefon|phone|adresse|kontakt|person)(_|$)/i; Object.keys(cleaned[0]).forEach(function (k) { if (k.indexOf("input_") !== 0 && piiRe.test(k)) console.warn("[allowlist] mögliche PII-Spalte ohne input_-Präfix wird eingebettet:", k); }); }
+    // keepKey now hard-drops PII-looking columns (input_ and non-input_ alike); the dropped
+    // set is surfaced to the operator in the picker so nothing leaves silently.
     return { cleaned: cleaned, dropped: Object.keys(droppedSet).sort() };
   };
   // Self-contained deliverable: clean template + embedded (allowlisted) parcels.
@@ -84,7 +86,10 @@
     var lre = /<link\b[^>]*rel=["']stylesheet["'][^>]*href=["'](?!https?:)([^"']+)["'][^>]*>/g;
     while ((m = lre.exec(html))) add(m[0], m[1], function (css) { return "<style>\n" + css + "\n</style>"; });
     var sre = /<script\b[^>]*src=["'](?!https?:)([^"']+)["'][^>]*><\/script>/g;
-    while ((m = sre.exec(html))) add(m[0], m[1], function (js) { return "<script>\n" + js + "\n<\/script>"; });
+    // Neutralize any script-closing sequence the source carries (e.g. inside a comment or string)
+    // so the HTML parser can't terminate the inlined module early — backslash-escaped, it stays
+    // identical JS (\/ === /) but is no longer a tag the parser recognises.
+    while ((m = sre.exec(html))) add(m[0], m[1], function (js) { return "<script>\n" + js.replace(/<(\/script)/gi, function (_m, t) { return "<" + String.fromCharCode(92) + t; }) + "\n<\/script>"; });
     return Promise.all(jobs).then(function (pairs) {
       pairs.forEach(function (pr) { html = html.replace(pr[0], function () { return pr[1]; }); });
       return html;
@@ -291,6 +296,11 @@
   var artListAll = Object.keys(artTotal).sort(function (a, b) { return artTotal[b] - artTotal[a]; });
   var bauzoneListAll = Object.keys(bauzoneTotal).sort(function (a, b) { return bauzoneTotal[b] - bauzoneTotal[a]; });
   var habitatListAll = Object.keys(habitatTotal).sort(function (a, b) { return habitatTotal[b] - habitatTotal[a]; });
+  // Precomputed column-name arrays — built once so the per-parcel aggregate loop
+  // doesn't rebuild "av_<a>_m2" / "bauzonen_<z>_m2" / "habitat_<h>_m2" strings every render.
+  var artCols = ART_KEYS.map(artCol);
+  var bzCols = bauzoneListAll.map(function (z) { return "bauzonen_" + z + "_m2"; });
+  var hbCols = habitatListAll.map(function (h) { return "habitat_" + h + "_m2"; });
   var tpfList = Object.keys(tpfCounts).sort(function (a, b) { return tpfCounts[b] - tpfCounts[a]; });
   var eigentumList = Object.keys(eigentumCounts).sort();
   var statusList = STATUS_ORDER.filter(function (s) { return statusCounts[s]; })
@@ -389,9 +399,9 @@
       if (isCovered(p)) withData++;
       if (p.check_wfs && p.check_wfs !== "ok") wfsIssues++;
       if (p.check_geom && p.check_geom !== "ok") geomIssues++;
-      ART_KEYS.forEach(function (a) { var v = num(p[artCol(a)]); if (v) byArt[a] = (byArt[a] || 0) + v; });
-      for (var zi = 0; zi < bauzoneListAll.length; zi++) { var zk = bauzoneListAll[zi], zv = num(p["bauzonen_" + zk + "_m2"]); if (zv) byBauzone[zk] = (byBauzone[zk] || 0) + zv; }
-      for (var hi = 0; hi < habitatListAll.length; hi++) { var hk = habitatListAll[hi], hv2 = num(p["habitat_" + hk + "_m2"]); if (hv2) byHabitat[hk] = (byHabitat[hk] || 0) + hv2; }
+      for (var ai = 0; ai < ART_KEYS.length; ai++) { var av = num(p[artCols[ai]]); if (av) byArt[ART_KEYS[ai]] = (byArt[ART_KEYS[ai]] || 0) + av; }
+      for (var zi = 0; zi < bauzoneListAll.length; zi++) { var zv = num(p[bzCols[zi]]); if (zv) byBauzone[bauzoneListAll[zi]] = (byBauzone[bauzoneListAll[zi]] || 0) + zv; }
+      for (var hi = 0; hi < habitatListAll.length; hi++) { var hv2 = num(p[hbCols[hi]]); if (hv2) byHabitat[habitatListAll[hi]] = (byHabitat[habitatListAll[hi]] || 0) + hv2; }
     });
     return { len:rows.length, withData:withData, totals:t, byArt:byArt, byBauzone:byBauzone, byHabitat:byHabitat, classified:t.GGF + t.BUF + t.UUF,
              wfsIssues:wfsIssues, geomIssues:geomIssues };
@@ -611,6 +621,31 @@
     { key: "bzOk", name: "Bauzonen vollständig", tip: "Kein Grundstück mit gekappten/unsicheren Bauzonen-Daten (truncated/partial)." },
     { key: "hbOk", name: "Lebensräume vollständig", tip: "Kein Grundstück mit gekappten/unsicheren Lebensraum-Daten; geschätzte (gap-gefüllte) werden separat ausgewiesen." }
   ];
+  // Per-parcel derived scalars for the quality rules and prioritisation. Parcels are
+  // immutable, so the wide-column scan runs once per parcel and is cached in a WeakMap
+  // (not on the object — keeps it out of exports/the embedded deliverable). This turns
+  // the repeated per-render O(columns) scans in computeRules/prioMetrics/prioGate into
+  // O(1) lookups. Field semantics mirror the original inline loops exactly:
+  //   bzSum    — Σ bauzonen_<slug> EXCLUDING ohne_bauzone (the actual building-zone share)
+  //   bzSumAll — Σ bauzonen_<slug> INCLUDING ohne_bauzone (the full parcel partition)
+  //   maxComp  — largest single av_/bauzonen_(incl. ohne)/habitat_ piece (NOT the SIA/DIN/
+  //              VBS/sealed/green aggregates, which legitimately approach the parcel area)
+  var _statsCache = new WeakMap();
+  function parcelStats(p) {
+    var s = _statsCache.get(p); if (s) return s;
+    var bzSum = 0, bzSumAll = 0, hbSum = 0, hbNat = 0, maxComp = 0, nLc = 0, nHb = 0, bzDom = 0, bzDomSlug = "";
+    for (var k in p) {
+      if (!Object.prototype.hasOwnProperty.call(p, k) || k.slice(-3) !== "_m2") continue;
+      var v = num(p[k]);
+      var bm = BAUZONE_RE.exec(k);
+      if (bm) { bzSumAll += v; if (v > maxComp) maxComp = v; if (bm[1] !== "ohne_bauzone") { bzSum += v; if (v > bzDom) { bzDom = v; bzDomSlug = bm[1]; } } continue; }
+      var hm = HABITAT_RE.exec(k);
+      if (hm) { hbSum += v; if (v > 0) nHb++; if (v > maxComp) maxComp = v; if (PRIO_NAT_HAB[hm[1]]) hbNat += v; continue; }
+      if (k.indexOf("av_") === 0) { if (v > 0) nLc++; if (v > maxComp) maxComp = v; }
+    }
+    s = { bzSum: bzSum, bzSumAll: bzSumAll, hbSum: hbSum, hbNat: hbNat, maxComp: maxComp, nLc: nLc, nHb: nHb, bzDom: bzDom, bzDomSlug: bzDomSlug };
+    _statsCache.set(p, s); return s;
+  }
   function computeRules(rows) {
     var R = {}; RULE_DEFS.forEach(function (d) { R[d.key] = { name: d.name, pass: 0, fail: 0, est: 0, fails: [] }; });
     rows.forEach(function (p) {
@@ -619,17 +654,7 @@
       // pass → count; fail → count + remember the parcel so a click can list them.
       var rec = function (key, ok) { if (ok) R[key].pass++; else { R[key].fail++; R[key].fails.push({ p: p, hint: R[key].name }); } };
       var classified = num(p.sia416_ggf_m2) + num(p.sia416_buf_m2) + num(p.sia416_uuf_m2);
-      var sumBz = 0, sumHb = 0, maxComp = 0;
-      // maxComp = largest single land-cover / zone / habitat piece (av_*, bauzonen_<slug>,
-      // habitat_<slug>) — NOT the SIA/DIN/VBS/sealed/green aggregates, which legitimately
-      // approach the parcel area and would make the bounds check spurious.
-      for (var k in p) {
-        if (k.slice(-3) !== "_m2" || k === "parcel_area_m2") continue;
-        var v = num(p[k]), bz = BAUZONE_RE.test(k), hb = HABITAT_RE.test(k);
-        if (bz) sumBz += v;
-        else if (hb) sumHb += v;
-        if ((bz || hb || k.indexOf("av_") === 0) && v > maxComp) maxComp = v;
-      }
+      var st = parcelStats(p), sumBz = st.bzSumAll, sumHb = st.hbSum, maxComp = st.maxComp;
       var cov = isCovered(p);
       if (cov) rec("bbCover", nearOK(classified, area));
       if (sumBz > 0 || (!!p.check_bauzonen && p.check_bauzonen !== "error")) rec("bzCover", nearOK(sumBz, area));
@@ -702,13 +727,13 @@
   var colByKey = {};
   COLUMNS.forEach(function (c) { colByKey[c.key] = c; c.visible = c.def; });
 
+  var deCollator = new Intl.Collator("de"); // reused — constructing a collator per comparison is costly at 260k rows
   function sortRows() {
     var key = state.sort, dir = state.dir, isNum = colByKey[key] && colByKey[key].num;
     state.rows.sort(function (a, b) {
       var x = a[key], y = b[key];
       if (isNum) { return (num(x) - num(y)) * dir; }
-      x = String(x == null ? "" : x); y = String(y == null ? "" : y);
-      return x.localeCompare(y, "de") * dir;
+      return deCollator.compare(String(x == null ? "" : x), String(y == null ? "" : y)) * dir;
     });
   }
   function renderHead() {
@@ -811,13 +836,14 @@
   }
 
   // ---- Central update: filter → recompute everything ----
+  var currentTab = "overview"; // active tab — gates the costly Datenqualität render out of update()
   function update() {
     var rows = getFiltered();
     state.rows = rows;
     sortRows();
     state.page = 1;
     renderDashboard(rows);
-    renderQuality(rows);
+    if (currentTab === "quality") renderQuality(rows); // skip the costly rule scan unless the Datenqualität tab is open
     renderTable();
     if (mapMode !== "priority") renderMap(rows); // the priority tab owns the map while active
     var n = activeGroups(), b = document.getElementById("filter-badge");
@@ -962,7 +988,7 @@
     head.addEventListener("click", function (e) {
       var b = e.target.closest(".ctab"); if (!b) return;
       var key = b.getAttribute("data-ctab");
-      Array.prototype.forEach.call(head.querySelectorAll(".ctab"), function (t) { var on = t === b; t.classList.toggle("is-active", on); t.setAttribute("aria-selected", on ? "true" : "false"); });
+      Array.prototype.forEach.call(head.querySelectorAll(".ctab"), function (t) { var on = t === b; t.classList.toggle("is-active", on); t.setAttribute("aria-pressed", on ? "true" : "false"); });
       Array.prototype.forEach.call(card.querySelectorAll(".ctab-pane"), function (pane) { pane.hidden = pane.getAttribute("data-pane") !== key; });
     });
   });
@@ -1109,6 +1135,7 @@
   var tabBtns = Array.prototype.slice.call(document.querySelectorAll(".tab"));
   var mapMode = "overview"; // which tab owns the single shared map widget
   function showTab(name) {
+    currentTab = name;
     tabBtns.forEach(function (t) {
       var on = t.getAttribute("data-tab") === name;
       t.classList.toggle("is-active", on);
@@ -1119,6 +1146,7 @@
       var panel = document.getElementById("panel-" + n);
       if (panel) panel.hidden = (n !== name);
     });
+    if (name === "quality") renderQuality(state.rows); // gated out of update(); render it on demand with the current filtered set
     var mapEl = document.getElementById("map"), resize = function () { if (map && mapReady) setTimeout(function () { map.resize(); }, 30); };
     if (name === "priority") {
       mapMode = "priority";
@@ -1157,15 +1185,7 @@
   function prioUF(p) { return num(p.sia416_buf_m2) + num(p.sia416_uuf_m2); }
   function prioMetrics(p) {
     var area = num(p.parcel_area_m2), uf = prioUF(p), green = num(p.greenspace_m2);
-    var bzSum = 0, bzDom = 0, bzDomSlug = "", hbNat = 0, hbAll = 0, nLc = 0, nHb = 0;
-    for (var k in p) {
-      if (!Object.prototype.hasOwnProperty.call(p, k)) continue;
-      var bm = BAUZONE_RE.exec(k);
-      if (bm) { if (bm[1] !== "ohne_bauzone") { var bv = num(p[k]); bzSum += bv; if (bv > bzDom) { bzDom = bv; bzDomSlug = bm[1]; } } continue; }
-      var hm = HABITAT_RE.exec(k);
-      if (hm) { var hv = num(p[k]); if (hv > 0) nHb++; hbAll += hv; if (PRIO_NAT_HAB[hm[1]]) hbNat += hv; continue; }
-      if (k.indexOf("av_") === 0 && k.slice(-3) === "_m2" && num(p[k]) > 0) nLc++;
-    }
+    var st = parcelStats(p), bzDomSlug = st.bzDomSlug, hbNat = st.hbNat, hbAll = st.hbSum, nLc = st.nLc, nHb = st.nHb;
     // Feasibility: authoritative AV cover is best; no land cover at all = little to survey.
     var q = (p.lc_source === "AV" ? 1 : 0.6);
     if (!isCovered(p)) q -= 0.3;
@@ -1187,8 +1207,7 @@
     if (prio.sap && EXCLUDE_RULES.some(function (r) { return nameMatches(p, r); })) return false;
     if (prioUF(p) < prio.ufMin) return false;
     if (prio.bauzone) {
-      var area = num(p.parcel_area_m2), bz = 0;
-      for (var k in p) { var bm = BAUZONE_RE.exec(k); if (bm && bm[1] !== "ohne_bauzone") bz += num(p[k]); }
+      var area = num(p.parcel_area_m2), bz = parcelStats(p).bzSum;
       if (!area || bz / area < prio.bzMin / 100) return false;
     }
     return true;
@@ -1214,7 +1233,14 @@
     return r;
   }
   function prioBlend(a, b, wa) { return a.map(function (v, i) { return wa * v + (1 - wa) * b[i]; }); }
-  function computePrio() {
+  // The pool + per-parcel metrics + percentile arrays depend only on the selection-funnel
+  // gate (federal/SAP/UF/Bauzone), NOT on the weights or Top-N/caps. Cache them on a gate
+  // signature so dragging a weight/Top-N/cap slider only recombines + re-sorts (cheap),
+  // instead of re-filtering the full dataset and re-ranking 6 signals every input event.
+  var _prioBase = null, _prioSig = null;
+  function prioBase() {
+    var sig = [prio.federal, prio.sap, prio.ufMin, prio.bauzone, prio.bzMin].join("|");
+    if (_prioBase && _prioSig === sig) return _prioBase;
     var pool = PARCELS.filter(prioGate);
     var M = pool.map(prioMetrics);
     var sc = {
@@ -1225,6 +1251,11 @@
       diversity: pctRanks(M.map(function (m) { return m.diversity; })),
       quality: pctRanks(M.map(function (m) { return m.quality; }))
     };
+    _prioSig = sig; _prioBase = { pool: pool, M: M, sc: sc };
+    return _prioBase;
+  }
+  function computePrio() {
+    var base = prioBase(), pool = base.pool, M = base.M, sc = base.sc;
     var W = prio.weights, Wsum = WEIGHT_DEFS.reduce(function (s, w) { return s + (W[w.key] || 0); }, 0) || 1;
     var scored = pool.map(function (p, i) {
       return { p: p, m: M[i], score: (W.green * sc.green[i] + W.scale * sc.scale[i] + W.urban * sc.urban[i] + W.habitat * sc.habitat[i] + W.diversity * sc.diversity[i] + W.quality * sc.quality[i]) / Wsum };
@@ -1304,7 +1335,7 @@
     var rows = prio.selected.slice(), col = prioColByKey[prio.sort]; // sort a copy — prio.selected stays score-ranked
     if (col) rows.sort(function (a, b) {
       var x = col.val(a), y = col.val(b);
-      return col.num ? (num(x) - num(y)) * prio.dir : String(x == null ? "" : x).localeCompare(String(y == null ? "" : y), "de") * prio.dir;
+      return col.num ? (num(x) - num(y)) * prio.dir : deCollator.compare(String(x == null ? "" : x), String(y == null ? "" : y)) * prio.dir;
     });
     var pages = Math.max(1, Math.ceil(rows.length / prio.pageSize));
     if (prio.page > pages) prio.page = pages; if (prio.page < 1) prio.page = 1;
@@ -1326,22 +1357,23 @@
   if (document.getElementById("pr-uf")) {
     renderPrioWeights();
     var prBind = function (id, ev, fn) { var el = document.getElementById(id); if (el) el.addEventListener(ev, fn); };
+    var _prT; var renderPriorityD = function () { clearTimeout(_prT); _prT = setTimeout(renderPriority, 110); }; // coalesce continuous slider drags (the value label updates immediately)
     prBind("pr-federal", "change", function (e) { prio.federal = e.target.checked; renderPriority(); });
     prBind("pr-sap", "change", function (e) { prio.sap = e.target.checked; renderPriority(); });
-    prBind("pr-uf", "input", function (e) { prio.ufMin = +e.target.value; document.getElementById("pr-uf-val").textContent = fmt(prio.ufMin); renderPriority(); });
+    prBind("pr-uf", "input", function (e) { prio.ufMin = +e.target.value; document.getElementById("pr-uf-val").textContent = fmt(prio.ufMin); renderPriorityD(); });
     prBind("pr-bauzone", "change", function (e) { prio.bauzone = e.target.checked; renderPriority(); });
-    prBind("pr-bz", "input", function (e) { prio.bzMin = +e.target.value; document.getElementById("pr-bz-val").textContent = prio.bzMin; renderPriority(); });
-    prBind("pr-topn", "input", function (e) { prio.topN = +e.target.value; document.getElementById("pr-topn-val").textContent = prio.topN; renderPriority(); });
+    prBind("pr-bz", "input", function (e) { prio.bzMin = +e.target.value; document.getElementById("pr-bz-val").textContent = prio.bzMin; renderPriorityD(); });
+    prBind("pr-topn", "input", function (e) { prio.topN = +e.target.value; document.getElementById("pr-topn-val").textContent = prio.topN; renderPriorityD(); });
     prBind("pr-cap", "change", function (e) { prio.cap = e.target.checked; renderPriority(); });
-    prBind("pr-cap-n", "input", function (e) { prio.capN = Math.max(1, +e.target.value || 1); renderPriority(); });
+    prBind("pr-cap-n", "input", function (e) { prio.capN = Math.max(1, +e.target.value || 1); renderPriorityD(); });
     prBind("pr-tcap", "change", function (e) { prio.tpfCap = e.target.checked; renderPriority(); });
-    prBind("pr-tcap-n", "input", function (e) { prio.tpfCapN = Math.max(1, +e.target.value || 1); renderPriority(); });
+    prBind("pr-tcap-n", "input", function (e) { prio.tpfCapN = Math.max(1, +e.target.value || 1); renderPriorityD(); });
     prBind("pr-reset-w", "click", function () { WEIGHT_DEFS.forEach(function (w) { prio.weights[w.key] = w.def; }); renderPrioWeights(); renderPriority(); });
     document.getElementById("pr-weights").addEventListener("input", function (e) {
       var wk = e.target.getAttribute && e.target.getAttribute("data-wk"); if (!wk) return;
       prio.weights[wk] = +e.target.value;
       var st = e.target.previousElementSibling && e.target.previousElementSibling.querySelector("strong"); if (st) st.textContent = prio.weights[wk];
-      renderPriority();
+      renderPriorityD();
     });
     var prRowAct = function (e) { // click or Enter/Space a row → select on map + zoom (Priorisierung)
       if (e.type === "keydown" && e.key !== "Enter" && e.key !== " ") return;
@@ -1379,7 +1411,11 @@
   if (fpToggle) fpToggle.addEventListener("click", function () { setFpOpen(!appEl.classList.contains("fp-open")); });
   if (fpScrim) fpScrim.addEventListener("click", function () { setFpOpen(false); });
   document.addEventListener("keydown", function (e) { if (e.key === "Escape") setFpOpen(false); });
-  document.getElementById("fp-collapse").addEventListener("click", function () { appEl.classList.add("fp-collapsed"); setFpOpen(false); });
+  document.getElementById("fp-collapse").addEventListener("click", function () {
+    // Mobile: "‹" just closes the off-canvas drawer. Desktop: collapse to the vertical rail.
+    if (window.matchMedia && window.matchMedia("(max-width: 900px)").matches) setFpOpen(false);
+    else { appEl.classList.add("fp-collapsed"); setFpOpen(false); }
+  });
   document.getElementById("fp-expand").addEventListener("click", function () { appEl.classList.remove("fp-collapsed"); });
   // Print: render the full filtered set, restore pagination afterwards
   // WebGL canvases don't appear in print output → snapshot the map to an <img> over it for print.
@@ -1550,6 +1586,20 @@
     var out = []; for (var k in p) { if (Object.prototype.hasOwnProperty.call(p, k)) { var hm = HABITAT_RE.exec(k); if (hm) { var v = num(p[k]); if (v > 0) out.push({ label: hbLabel(hm[1]), area: v, color: habColor(hm[1]) }); } } }
     return out.sort(function (a, b) { return b.area - a.area; });
   }
+  // Bauzonen overview (ARE-harmonised Hauptnutzung) for one parcel, mirroring the
+  // on-screen Bauzonen table: zones by area; "Ohne Bauzone" is added by reportTable
+  // as the remainder (remainderLabel) so the Total reads 100 % of the GSF.
+  function reportBauzonen(p) {
+    var rows = [];
+    for (var k in p) {
+      if (!Object.prototype.hasOwnProperty.call(p, k)) continue;
+      var bm = BAUZONE_RE.exec(k); if (!bm || bm[1] === "ohne_bauzone") continue;
+      var v = num(p[k]); if (v > 0) rows.push({ label: bzLabel(bm[1]), area: v, color: bzColor(bm[1]) });
+    }
+    rows.sort(function (a, b) { return b.area - a.area; });
+    if (rows.length > 4) { var rest = rows.slice(4).reduce(function (s, r) { return s + r.area; }, 0); rows = rows.slice(0, 4); rows.push({ label: "Übrige Bauzonen", area: rest, color: "#cbd5e1" }); }
+    return rows;
+  }
   var ROWS_PER_TOC = 40;
   // Embedded overlay polygons bucketed by SAP-id → { id: [{geometry, color, bb}] }.
   // Built once (cached); the per-id bucket makes fills lookup O(features-on-parcel),
@@ -1579,7 +1629,8 @@
     { n: "2", title: "Bodenbedeckung (AV)", layers: "ch.swisstopo.pixelkarte-grau", tbl: "Bodenbedeckung", rows: reportLandcover, fills: landcoverFills },
     { n: "3", title: "BAFU Lebensräume", layers: "ch.swisstopo.pixelkarte-grau", tbl: "Lebensräume (TypoCH)", rows: reportHabitat, fills: habitatFills }
   ];
-  function reportTable(pdf, x, y, w, title, rows, totalArea) {
+  function reportTable(pdf, x, y, w, title, rows, totalArea, opts) {
+    var remLabel = (opts && opts.remainderLabel) || "Ohne Bodenbedeckung";
     var pctX = x + w - 26; // % column right edge; area at x+w
     pdf.setTextColor(31, 41, 55); pdf.setFont("helvetica", "bold"); pdf.setFontSize(11); pdf.text(title, x, y);
     var hy = y + 6.5; // column header row
@@ -1589,7 +1640,7 @@
     var ry = hy + 6, sum = 0; pdf.setFontSize(9.5);
     function pct(a) { return totalArea ? Math.round(a / totalArea * 100) + "%" : "–"; }
     var rowsSum = rows.reduce(function (s, r) { return s + num(r.area); }, 0), draw = rows.slice();
-    if (totalArea > 0 && totalArea - rowsSum > totalArea * 0.005) draw.push({ label: "Ohne Bodenbedeckung", area: totalArea - rowsSum, muted: true }); // mirror the on-screen remainder → Total reads 100 %
+    if (totalArea > 0 && totalArea - rowsSum > totalArea * 0.005) draw.push({ label: remLabel, area: totalArea - rowsSum, muted: true }); // mirror the on-screen remainder → Total reads 100 %
     draw.forEach(function (r) {
       pdf.setFont("helvetica", "normal");
       if (r.color) { var c = _hexRgb(r.color); pdf.setFillColor(c[0], c[1], c[2]); pdf.setDrawColor(140); pdf.rect(x, ry - 2.9, 3.2, 3.2, "FD"); }
@@ -1601,6 +1652,7 @@
     pdf.setDrawColor(170); pdf.line(x, ry - 2.6, x + w, ry - 2.6);
     pdf.setFont("helvetica", "bold"); pdf.setTextColor(31, 41, 55);
     pdf.text("Total", x, ry + 1.5); pdf.text(pct(sum), pctX, ry + 1.5, { align: "right" }); pdf.text(fmtArea(sum) + " " + unitLabel(), x + w, ry + 1.5, { align: "right" });
+    return ry + 1.5; // bottom baseline — lets a caller stack another table beneath
   }
   function reportDateStr() { var d = new Date(); return ("0" + d.getDate()).slice(-2) + "." + ("0" + (d.getMonth() + 1)).slice(-2) + "." + d.getFullYear(); }
   function reportFooter(pdf, pageNum, totalPages) {
@@ -1613,7 +1665,7 @@
   // Inhaltsverzeichnis / Übersicht as the first page(s).
   function renderTocPages(pdf, rows, tocPages, totalPages) {
     var M = 12, PW = 297, w = PW - 2 * M;
-    var cols = [{ t: "Rang", x: M, a: "left" }, { t: "SAP-ID", x: M + 16, a: "left" }, { t: "Ort", x: M + 58, a: "left" }, { t: "Kt", x: M + 120, a: "left" }, { t: "Fläche", x: M + 158, a: "right" }, { t: "Grün %", x: M + 192, a: "right" }, { t: "Score", x: M + 224, a: "right" }, { t: "Seite", x: M + w, a: "right" }];
+    var cols = [{ t: "Rang", x: M, a: "left" }, { t: "System ID", x: M + 16, a: "left" }, { t: "Ort", x: M + 58, a: "left" }, { t: "Kt", x: M + 120, a: "left" }, { t: "Fläche", x: M + 158, a: "right" }, { t: "Grün %", x: M + 192, a: "right" }, { t: "Score", x: M + 224, a: "right" }, { t: "Seite", x: M + w, a: "right" }];
     for (var pg = 0; pg < tocPages; pg++) {
       if (pg > 0) pdf.addPage();
       pdf.setTextColor(31, 41, 55); pdf.setFont("helvetica", "bold"); pdf.setFontSize(17); pdf.text("Grundstücksbericht", M, 16);
@@ -1660,12 +1712,21 @@
     }
     pdf.setLineWidth(0.2);
   }
-  function renderReportPage(pdf, p, idx, total, pageNum, totalPages, tick, checkAbort) {
+  // Fetch the 3 section tiles for one page (the slow, network-bound part — kept separate
+  // from drawing so pages can be prefetched with bounded concurrency, see generateParcelReport).
+  function fetchPageImages(p, checkAbort) {
+    return Promise.all(REPORT_SECTIONS.map(function (sec) {
+      return reportSectionImage(p._geom, sec.layers, 1000, 667, sec.fills, p.egrid, p.id, checkAbort);
+    }));
+  }
+  // Draw one already-fetched page (synchronous — jsPDF is single-document/stateful, so pages
+  // must be drawn one at a time in order; only the image fetching above runs concurrently).
+  function drawReportPage(pdf, p, urls, total, pageNum, totalPages) {
     var M = 12, PW = 297, w = PW - 2 * M;
     pdf.setTextColor(31, 41, 55); pdf.setFont("helvetica", "bold"); pdf.setFontSize(15); pdf.text("Grundstücksbericht", M, 13);
     pdf.setFont("helvetica", "normal"); pdf.setFontSize(9); pdf.setTextColor(120); pdf.text("Bundesamt für Bauten und Logistik BBL", PW - M, 13, { align: "right" });
     pdf.setDrawColor(200); pdf.line(M, 16, PW - M, 16);
-    pdf.setTextColor(31, 41, 55); pdf.setFont("helvetica", "bold"); pdf.setFontSize(13); pdf.text("SAP-ID " + (p.id || "-"), M, 22);
+    pdf.setTextColor(31, 41, 55); pdf.setFont("helvetica", "bold"); pdf.setFontSize(13); pdf.text("System ID " + (p.id || "-"), M, 22);
     pdf.setFontSize(10.5); pdf.text(p.survey_rank ? ("Rang " + p.survey_rank + " / " + total) : "", PW - M, 22, { align: "right" });
     var bez = p["input_bez. grundstück"] || "";
     pdf.setFont("helvetica", "normal"); pdf.setFontSize(9.5); pdf.setTextColor(90); if (bez) pdf.text(String(bez), M, 27, { maxWidth: w });
@@ -1690,22 +1751,17 @@
     if (lv) { var en = lv[0].toFixed(1) + "," + lv[1].toFixed(1); pdf.setFont("helvetica", "bold"); pdf.setTextColor(191, 31, 37); pdf.textWithLink("Auf map.geo.admin.ch ansehen", M + labW, ly, { url: "https://map.geo.admin.ch/#/map?lang=de&center=" + en + "&z=10&crosshair=marker," + en + "&layers=ch.kantone.cadastralwebmap-farbe&bgLayer=ch.swisstopo.pixelkarte-grau" }); }
     pdf.setDrawColor(225); pdf.line(M, ty + 6 * rowH - 0.5, PW - M, ty + 6 * rowH - 0.5);
     var secY = [73, 184, 295], imgW = 144, imgH = 96, tblX = 163, tblW = 122; // gap before section 1; slightly shorter maps; wider table for detailed labels
-    if (checkAbort) checkAbort();
-    return Promise.all(REPORT_SECTIONS.map(function (sec) {
-      return reportSectionImage(p._geom, sec.layers, 1000, 667, sec.fills, p.egrid, p.id, checkAbort); // 3 section tiles fetched concurrently
-    })).then(function (urls) {
-      if (checkAbort) checkAbort(); // cancelled during fetch → stop before drawing
-      REPORT_SECTIONS.forEach(function (sec, i) {
-        var yy = secY[i], dataUrl = urls[i];
-        pdf.setFont("helvetica", "bold"); pdf.setFontSize(11.5); pdf.setTextColor(191, 31, 37); pdf.text(sec.n + "   " + sec.title, M, yy);
-        pdf.setDrawColor(210);
-        if (dataUrl) { pdf.addImage(dataUrl, "JPEG", M, yy + 4, imgW, imgH); pdf.rect(M, yy + 4, imgW, imgH, "S"); }
-        else { pdf.setFillColor(245, 246, 247); pdf.rect(M, yy + 4, imgW, imgH, "FD"); pdf.setTextColor(140); pdf.setFontSize(9); pdf.setFont("helvetica", "normal"); pdf.text("Kartenbild nicht verfügbar (Internet?)", M + imgW / 2, yy + 4 + imgH / 2, { align: "center" }); }
-        reportTable(pdf, tblX, yy + 11, tblW, sec.tbl, sec.rows(p), num(p.parcel_area_m2));
-      });
-      if (tick) tick("Grundstück " + (idx + 1) + " / " + total);
-      reportFooter(pdf, pageNum, totalPages);
+    REPORT_SECTIONS.forEach(function (sec, i) {
+      var yy = secY[i], dataUrl = urls[i];
+      pdf.setFont("helvetica", "bold"); pdf.setFontSize(11.5); pdf.setTextColor(191, 31, 37); pdf.text(sec.n + "   " + sec.title, M, yy);
+      pdf.setDrawColor(210);
+      if (dataUrl) { pdf.addImage(dataUrl, "JPEG", M, yy + 4, imgW, imgH); pdf.rect(M, yy + 4, imgW, imgH, "S"); }
+      else { pdf.setFillColor(245, 246, 247); pdf.rect(M, yy + 4, imgW, imgH, "FD"); pdf.setTextColor(140); pdf.setFontSize(9); pdf.setFont("helvetica", "normal"); pdf.text("Kartenbild nicht verfügbar (Internet?)", M + imgW / 2, yy + 4 + imgH / 2, { align: "center" }); }
+      var tblEnd = reportTable(pdf, tblX, yy + 11, tblW, sec.tbl, sec.rows(p), num(p.parcel_area_m2));
+      // Section 1: a Bauzonen overview fills the space under the SIA 416 table (no extra map).
+      if (i === 0 && bauzoneListAll.length) reportTable(pdf, tblX, tblEnd + 11, tblW, "Bauzonen (ARE)", reportBauzonen(p), num(p.parcel_area_m2), { remainderLabel: "Ohne Bauzone" });
     });
+    reportFooter(pdf, pageNum, totalPages);
   }
   // Build the PDF (one A3 page per prioritised parcel) and trigger the download.
   function generateParcelReport(filename, onProgress, token) {
@@ -1719,8 +1775,24 @@
       checkAbort();
       var pdf = new JsPDF({ orientation: "portrait", unit: "mm", format: "a3", compress: true });
       renderTocPages(pdf, rows, tocPages, totalPages);
+      // Prefetch section tiles with a sliding window of CONC pages in flight while drawing
+      // strictly in order — turns N sequential page-fetches into ~N/CONC wall-clock.
+      var CONC = 3, imgP = new Array(rows.length);
+      function ensureFetched(i) { if (i < rows.length && !imgP[i]) imgP[i] = fetchPageImages(rows[i], checkAbort); }
+      for (var w = 0; w < CONC; w++) ensureFetched(w); // prime the window
       return rows.reduce(function (seq, p, i) {
-        return seq.then(function () { checkAbort(); pdf.addPage(); return renderReportPage(pdf, p, i, rows.length, tocPages + i + 1, totalPages, tick, checkAbort); });
+        return seq.then(function () {
+          checkAbort();
+          ensureFetched(i);
+          return imgP[i].then(function (urls) {
+            checkAbort(); // cancelled during fetch → stop before drawing this page
+            pdf.addPage();
+            drawReportPage(pdf, p, urls, rows.length, tocPages + i + 1, totalPages);
+            imgP[i] = null;            // release this page's data URLs
+            ensureFetched(i + CONC);   // start the next fetch as this slot frees
+            tick("Grundstück " + (i + 1) + " / " + rows.length);
+          });
+        });
       }, Promise.resolve()).then(function () { checkAbort(); pdf.save(filename); return rows.length; });
     });
   }
@@ -1747,7 +1819,11 @@
     document.addEventListener("keydown", function (e) { if (e.key === "Escape" && !modal.hidden) closeModal(); });
     card.addEventListener("keydown", function (e) { // simple focus trap so Tab stays inside the dialog
       if (e.key !== "Tab") return;
-      var f = card.querySelectorAll("button, input, [tabindex]"); if (!f.length) return;
+      // Only truly focusable controls: skip hidden/disabled ones (e.g. the #dl-progress/#dl-abort
+      // block is hidden until a download runs — including it would dead-end the trap).
+      var f = Array.prototype.filter.call(card.querySelectorAll("button, input, [tabindex]"),
+        function (el) { return !el.disabled && el.offsetParent !== null; });
+      if (!f.length) return;
       var first = f[0], last = f[f.length - 1];
       if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
       else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }

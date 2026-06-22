@@ -148,46 +148,46 @@
       <button class="tab" id="tab-about" data-tab="about" role="tab" aria-controls="panel-about" aria-selected="false" tabindex="-1">Über</button>
     </div>
 
-    <section class="tab-panel" id="panel-overview" role="tabpanel" aria-labelledby="tab-overview">
-      <div class="section-title">Kennzahlen</div>
+    <section class="tab-panel" id="panel-overview" aria-labelledby="tab-overview">
+      <h2 class="section-title">Kennzahlen</h2>
       <div class="kpis" id="kpis"></div>
 
-      <div class="section-title">Grundstücksfläche nach Teilportfolio &amp; Region</div>
+      <h2 class="section-title">Grundstücksfläche nach Teilportfolio &amp; Region</h2>
       <div class="chart-note">Grundstücksfläche der aktuellen Auswahl. Region ist als Code dargestellt.</div>
       <div class="charts">
         <div class="panel"><h3>Teilportfolio</h3><div id="tbl-tpf"></div></div>
         <div class="panel"><h3>Region</h3><div id="tbl-rg"></div></div>
       </div>
 
-      <div class="section-title">Karte</div>
+      <h2 class="section-title">Karte</h2>
       <div class="chart-note">Parzellen der aktuellen Auswahl auf der Grundkarte (CARTO / OpenStreetMap, benötigt eine Internetverbindung). Herauszoomen gruppiert die Punkte; Polygon oder Cluster anklicken.</div>
       <div class="panel map-panel" id="ov-map-panel"><div id="map"></div></div>
 
-      <div class="section-title">Auswertungen</div>
+      <h2 class="section-title">Auswertungen</h2>
       <div class="summary-tables">
         <div class="panel card-tabs">
-          <div class="ctab-head" role="tablist">
-            <button type="button" class="ctab is-active" data-ctab="vbskat" role="tab" aria-selected="true">VBS Kategorien</button>
-            <button type="button" class="ctab" data-ctab="vbsprod" role="tab" aria-selected="false">VBS Produktiv</button>
+          <div class="ctab-head" role="group" aria-label="Tabellenansicht wählen">
+            <button type="button" class="ctab is-active" data-ctab="vbskat" aria-pressed="true">VBS Kategorien</button>
+            <button type="button" class="ctab" data-ctab="vbsprod" aria-pressed="false">VBS Produktiv</button>
           </div>
-          <div class="ctab-pane" data-pane="vbskat" role="tabpanel"><div id="tbl-vbs"></div></div>
-          <div class="ctab-pane" data-pane="vbsprod" role="tabpanel" hidden><div id="tbl-vbsprod"></div></div>
+          <div class="ctab-pane" data-pane="vbskat"><div id="tbl-vbs"></div></div>
+          <div class="ctab-pane" data-pane="vbsprod" hidden><div id="tbl-vbsprod"></div></div>
         </div>
         <div class="panel card-tabs">
-          <div class="ctab-head" role="tablist">
-            <button type="button" class="ctab is-active" data-ctab="bauzonen" role="tab" aria-selected="true">Bauzonen</button>
-            <button type="button" class="ctab" data-ctab="sia" role="tab" aria-selected="false">SIA 416</button>
-            <button type="button" class="ctab" data-ctab="vers" role="tab" aria-selected="false">Versiegelung</button>
+          <div class="ctab-head" role="group" aria-label="Tabellenansicht wählen">
+            <button type="button" class="ctab is-active" data-ctab="bauzonen" aria-pressed="true">Bauzonen</button>
+            <button type="button" class="ctab" data-ctab="sia" aria-pressed="false">SIA 416</button>
+            <button type="button" class="ctab" data-ctab="vers" aria-pressed="false">Versiegelung</button>
           </div>
-          <div class="ctab-pane" data-pane="bauzonen" role="tabpanel"><div id="tbl-bauzonen"></div></div>
-          <div class="ctab-pane" data-pane="sia" role="tabpanel" hidden><div id="tbl-sia"></div></div>
-          <div class="ctab-pane" data-pane="vers" role="tabpanel" hidden><div id="tbl-gsv"></div></div>
+          <div class="ctab-pane" data-pane="bauzonen"><div id="tbl-bauzonen"></div></div>
+          <div class="ctab-pane" data-pane="sia" hidden><div id="tbl-sia"></div></div>
+          <div class="ctab-pane" data-pane="vers" hidden><div id="tbl-gsv"></div></div>
         </div>
         <div class="panel"><h3>Bodenbedeckung nach Art</h3><div id="tbl-art"></div></div>
         <div class="panel"><h3>BAFU Lebensräume</h3><div id="tbl-habitat"></div></div>
       </div>
 
-      <div class="section-title">Grundstücke</div>
+      <h2 class="section-title">Grundstücke</h2>
       <div class="table-bar">
         <span class="count" id="row-count"></span>
         <span class="spacer"></span>
@@ -216,15 +216,15 @@
       <div id="footer-note"></div>
     </section>
 
-    <section class="tab-panel" id="panel-quality" role="tabpanel" aria-labelledby="tab-quality" hidden>
-      <div class="section-title">Datenqualität</div>
+    <section class="tab-panel" id="panel-quality" aria-labelledby="tab-quality" hidden>
+      <h2 class="section-title">Datenqualität</h2>
       <div class="chart-note">Bezieht sich auf die aktuelle Auswahl.</div>
       <div class="kpis" id="q-kpis"></div>
       <div class="summary-tables">
         <div class="panel"><h3>E-GRID-Status</h3><div id="q-egrid"></div></div>
         <div class="panel"><h3>Prüfregeln</h3><div id="q-rules"></div></div>
       </div>
-      <div class="section-title">Auffällige Grundstücke <span class="count" id="q-count"></span></div>
+      <h2 class="section-title">Auffällige Grundstücke <span class="count" id="q-count"></span></h2>
       <div class="table-wrap">
         <div class="table-scroll">
           <table id="q-table">
@@ -243,17 +243,17 @@
       </div>
     </section>
 
-    <section class="tab-panel" id="panel-priority" role="tabpanel" aria-labelledby="tab-priority" hidden>
-      <div class="section-title">Priorisierung — Begehungs-Kandidaten</div>
+    <section class="tab-panel" id="panel-priority" aria-labelledby="tab-priority" hidden>
+      <h2 class="section-title">Priorisierung — Begehungs-Kandidaten</h2>
       <div class="chart-note">Triage des Bundes-Portfolios: welche Grundstücke zuerst vor Ort begehen (Natur &amp; Wirtschaft)? Eingrenzen, Signale gewichten, Top-N wählen. Eigene Eingrenzung — die Filter links wirken hier nicht.</div>
       <div class="kpis" id="pr-kpis"></div>
       <div class="prio-grid">
         <div class="panel">
           <h3>Auswahl-Trichter <span class="ftip" data-tip="Harte Vorfilter — nur Grundstücke, die alle aktiven Kriterien erfüllen, gelangen in die Bewertung.">ⓘ</span></h3>
-          <label class="prio-chk"><input type="checkbox" id="pr-federal" checked> Nur Bund (Eigentumsart 1) <span class="ftip" data-tip="Behält nur Grundstücke im Bundeseigentum (Eigentumsart = 1).">ⓘ</span></label>
-          <label class="prio-chk"><input type="checkbox" id="pr-sap" checked> Reale Grundstücke (ohne Parkplätze, Löschvermerke, Abgänge) <span class="ftip" data-tip="Schliesst per Bezeichnung ausgeschlossene Objekte aus: Abgänge (ABGA), Löschvermerke (LÖVM) und Parkplätze (PP) — gleiche Regeln wie der Bezeichnungs-Filter.">ⓘ</span></label>
+          <label class="prio-chk"><input type="checkbox" id="pr-federal" checked> <span class="prio-chk-body">Nur Bund (Eigentumsart 1) <span class="ftip" data-tip="Behält nur Grundstücke im Bundeseigentum (Eigentumsart = 1).">ⓘ</span></span></label>
+          <label class="prio-chk"><input type="checkbox" id="pr-sap" checked> <span class="prio-chk-body">Reale Grundstücke (ohne Parkplätze, Löschvermerke, Abgänge) <span class="ftip" data-tip="Schliesst per Bezeichnung ausgeschlossene Objekte aus: Abgänge (ABGA), Löschvermerke (LÖVM) und Parkplätze (PP) — gleiche Regeln wie der Bezeichnungs-Filter.">ⓘ</span></span></label>
           <div class="prio-rng"><label for="pr-uf">Umgebungsfläche UF ≥ <strong id="pr-uf-val">1000</strong> m² <span class="ftip" data-tip="Mindest-Umgebungsfläche (SIA 416 BUF + UUF = Grundstück ohne Gebäudegrundfläche). Schliesst kleine Restflächen aus.">ⓘ</span></label><input type="range" id="pr-uf" min="0" max="5000" step="100" value="1000"></div>
-          <label class="prio-chk"><input type="checkbox" id="pr-bauzone" checked> In Bauzone (Anteil ≥ <strong id="pr-bz-val">50</strong> %) <span class="ftip" data-tip="Mindestanteil der Grundstücksfläche, der in einer Bauzone (ARE-harmonisiert) liegt.">ⓘ</span></label>
+          <label class="prio-chk"><input type="checkbox" id="pr-bauzone" checked> <span class="prio-chk-body">In Bauzone (Anteil ≥ <strong id="pr-bz-val">50</strong> %) <span class="ftip" data-tip="Mindestanteil der Grundstücksfläche, der in einer Bauzone (ARE-harmonisiert) liegt.">ⓘ</span></span></label>
           <div class="prio-rng"><input type="range" id="pr-bz" min="0" max="100" step="5" value="50" aria-label="Mindest-Bauzonenanteil in Prozent"></div>
         </div>
         <div class="panel">
@@ -264,17 +264,17 @@
         <div class="panel">
           <h3>Auswahl <span class="ftip" data-tip="Anzahl der bestbewerteten Grundstücke — mit optionalen Obergrenzen zur Streuung über Kantone und Teilportfolios.">ⓘ</span></h3>
           <div class="prio-rng"><label for="pr-topn">Top-N: <strong id="pr-topn-val">100</strong> <span class="ftip" data-tip="Anzahl auszuwählender Grundstücke mit dem höchsten Score.">ⓘ</span></label><input type="range" id="pr-topn" min="10" max="300" step="10" value="100"></div>
-          <label class="prio-chk"><input type="checkbox" id="pr-cap" checked> max <input type="number" id="pr-cap-n" value="20" min="1" max="100" aria-label="Maximale Anzahl pro Kanton"> pro Kanton <span class="ftip" data-tip="Obergrenze pro Kanton — verteilt die Auswahl, statt sie auf wenige Kantone zu konzentrieren.">ⓘ</span></label>
-          <label class="prio-chk"><input type="checkbox" id="pr-tcap" checked> max <input type="number" id="pr-tcap-n" value="30" min="1" max="200" aria-label="Maximale Anzahl pro Teilportfolio"> pro Teilportfolio <span class="ftip" data-tip="Obergrenze pro Teilportfolio — verhindert Klumpung in einem einzelnen Teilportfolio.">ⓘ</span></label>
+          <label class="prio-chk"><input type="checkbox" id="pr-cap" checked> <span class="prio-chk-body">max <input type="number" id="pr-cap-n" value="20" min="1" max="100" aria-label="Maximale Anzahl pro Kanton"> pro Kanton <span class="ftip" data-tip="Obergrenze pro Kanton — verteilt die Auswahl, statt sie auf wenige Kantone zu konzentrieren.">ⓘ</span></span></label>
+          <label class="prio-chk"><input type="checkbox" id="pr-tcap" checked> <span class="prio-chk-body">max <input type="number" id="pr-tcap-n" value="30" min="1" max="200" aria-label="Maximale Anzahl pro Teilportfolio"> pro Teilportfolio <span class="ftip" data-tip="Obergrenze pro Teilportfolio — verhindert Klumpung in einem einzelnen Teilportfolio.">ⓘ</span></span></label>
         </div>
       </div>
       <div class="summary-tables">
         <div class="panel"><h3>Kantone der Auswahl</h3><div id="pr-rg"></div></div>
         <div class="panel"><h3>Teilportfolio der Auswahl</h3><div id="pr-tpf"></div></div>
       </div>
-      <div class="section-title">Karte der Auswahl</div>
+      <h2 class="section-title">Karte der Auswahl</h2>
       <div class="panel map-panel" id="pr-map-panel"></div>
-      <div class="section-title">Rangliste <span class="count" id="pr-count"></span><span style="flex:1"></span><button class="hbtn hbtn-light" id="pr-export" type="button">Bericht herunterladen</button></div>
+      <h2 class="section-title">Rangliste <span class="count" id="pr-count"></span><span style="flex:1"></span><button class="hbtn hbtn-light" id="pr-export" type="button">Bericht herunterladen</button></h2>
       <div class="table-wrap">
         <div class="table-scroll">
           <table id="pr-table">
@@ -293,11 +293,11 @@
       </div>
     </section>
 
-    <section class="tab-panel" id="panel-about" role="tabpanel" aria-labelledby="tab-about" hidden>
+    <section class="tab-panel" id="panel-about" aria-labelledby="tab-about" hidden>
       <div class="about">
-        <div class="section-title">Über diese Auswertung</div>
+        <h2 class="section-title">Über diese Auswertung</h2>
         <p>Diese Auswertung zeigt pro Schweizer Grundstück (Liegenschaft / SDR), wie sich die Grundstücksfläche auf <strong>Bodenbedeckungsarten</strong>, <strong>Bauzonen</strong> und <strong>BAFU-Lebensräume</strong> verteilt. Die Daten sind in diese Datei eingebettet; Auswertung, Tabellen, Diagramme und Filter laufen ohne Server direkt im Browser. Die interaktive Karte und der Excel-Export benötigen eine Internetverbindung.</p>
-        <div class="section-title">Datengrundlagen</div>
+        <h2 class="section-title">Datengrundlagen</h2>
         <ul>
           <li><strong>Bodenbedeckung</strong> — Amtliche Vermessung (AV), DM.01-AV-CH · <a href="https://www.geodienste.ch/services/av" target="_blank" rel="noopener">geodienste.ch</a></li>
           <li><strong>Grundstücke</strong> — Amtliche Vermessung, Liegenschaften (E-GRID) · <a href="https://map.geo.admin.ch/#/map?lang=de&amp;bgLayer=ch.swisstopo.pixelkarte-grau&amp;layers=ch.kantone.cadastralwebmap-farbe" target="_blank" rel="noopener">map.geo.admin.ch</a></li>
@@ -305,12 +305,12 @@
           <li><strong>Lebensräume</strong> — BAFU Lebensraumkarte · <code>ch.bafu.lebensraumkarte-schweiz</code> · <a href="https://map.geo.admin.ch/#/map?lang=de&amp;center=2622715,1205155.21&amp;z=1.921&amp;topic=ech&amp;layers=ch.bafu.lebensraumkarte-schweiz&amp;bgLayer=void" target="_blank" rel="noopener">map.geo.admin.ch</a></li>
         </ul>
         <p class="muted">Metadaten-Katalog: <a href="https://www.geocat.ch/geonetwork/srv/ger/catalog.search#/home" target="_blank" rel="noopener">geocat.ch</a> · © swisstopo / Kantone (AV) · ARE · BAFU</p>
-        <div class="section-title">Hinweise</div>
+        <h2 class="section-title">Hinweise</h2>
         <ul>
           <li>Die berechnete Grundstücksfläche entspricht <em>nicht</em> dem amtlichen Flächenmass.</li>
           <li>Persönliche Felder werden beim Erstellen der Datei automatisch entfernt.</li>
         </ul>
-        <div class="section-title">Weiterführende Informationen</div>
+        <h2 class="section-title">Weiterführende Informationen</h2>
         <ul class="about-links">
           <li><a href="https://github.com/bbl-dres/landcover-survey" target="_blank" rel="noopener">Projekt auf GitHub (Quellcode &amp; Dokumentation)</a></li>
           <li><a href="https://github.com/bbl-dres/landcover-survey/blob/main/docs/MANUAL.md" target="_blank" rel="noopener">Anleitung (MANUAL)</a></li>
