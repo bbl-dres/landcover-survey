@@ -11,6 +11,7 @@ official Amtliche Vermessung (AV) data.
 | **Know what a land cover type maps to** (SIA 416, green space, sealed, VBS) | **[CLASSIFICATION.md](CLASSIFICATION.md)** — mappings + decision trees ★ |
 | **Understand the input/output columns** | **[DATAMODEL.md](DATAMODEL.md)** — inputs, outputs, modes |
 | **Understand how it works / extend it** | **[ARCHITECTURE.md](ARCHITECTURE.md)** — pipeline, implementation, limits |
+| **Find other land cover / land use / habitat data sources** | **[DATA-SOURCES.md](DATA-SOURCES.md)** — screening reference (global → EU → DACH → CH) |
 
 > ★ Most people are here for the **AV layer mappings** — start with
 > [CLASSIFICATION.md](CLASSIFICATION.md).
