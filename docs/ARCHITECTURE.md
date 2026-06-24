@@ -26,6 +26,7 @@ square meters directly.
 | **Geometry engine** | Shapely / GeoPandas | Turf.js |
 | **Scale** | Up to ~3.5M parcels (batched by municipality) | Interactive, a few parcels at a time |
 | **Bauzonen / BAFU habitat** | Optional (`--bauzonen` / `--habitat`) | Always analysed, as separate overlay layers |
+| **Missing-AV fallback** | None — gaps stay empty | Synthetic AV land cover from BAFU, flagged `lc_synthetic` |
 | **Output** | Parcels CSV + Land Cover CSV | CSV · Excel · GeoJSON · HTML report |
 
 The rest of this document describes the **shared core** once, then the
@@ -276,10 +277,15 @@ for the contrast with the CLI.
 1. **Resolve the parcel** — EGRID → geometry via the geo.admin.ch `find` endpoint
    (driven by the map picker, search box, or an uploaded CSV row).
 2. **Fetch land cover** — `ms:LCSF` surfaces overlapping the parcel **bbox** from the
-   geodienste.ch AV WFS (GetFeature, GeoJSON, capped at 1000 features).
+   geodienste.ch AV WFS (GetFeature, GeoJSON), **paged with `STARTINDEX`** (1000/page)
+   past the per-request cap so dense bboxes aren't truncated.
 3. **Clip & area** — Turf.js intersects each surface with the exact parcel boundary
    and sums `area_m2`; classification is identical to the CLI ([Shared core](#shared-core)).
-4. **Overlays** — Bauzonen + BAFU habitat are fetched and analysed in parallel (below).
+4. **Fill AV gaps** — if the parcel has essentially no AV cover, synthesize land cover
+   from the BAFU habitat polygons (see
+   [Synthetic AV land cover](#synthetic-av-land-cover-fallback-where-av-is-missing)).
+5. **Overlays** — Bauzonen + BAFU habitat are fetched and analysed in parallel (below);
+   the BAFU fetch is paged (Identify `offset`, 200/page) and shared with step 4.
 
 Calls are fired per parcel with an `AbortController` timeout and retries; a failed
 WFS fetch flags the parcel as "land cover unavailable" rather than silently zero.
@@ -300,10 +306,41 @@ geo.admin.ch Identify endpoint, clipped to the parcel and exported as its own Ge
   ([web/js/config.js](../web/js/config.js)); rules and caveats are in
   [CLASSIFICATION.md](CLASSIFICATION.md) §BAFU Lebensraumkarte.
 
-> **BAFU is not a fallback.** Earlier the web app substituted BAFU where AV was
-> missing; it no longer does. AV land cover stays pure AV, so parcels in no-coverage
-> cantons show empty (0 m²) land cover and BAFU is a separate, parallel layer. The
-> Python CLI has neither behaviour — it reads a full local GeoPackage.
+The habitat **overlay** above stays a parallel layer (TypoCH level-1, green + VBS
+only). Separately, BAFU also feeds the AV-gap fallback described next, where the same
+habitat polygons are re-used to synthesize land cover in the BBArt schema.
+
+### Synthetic AV land cover (fallback where AV is missing)
+
+Where a parcel returns essentially no AV land cover — its real AV cover is below
+**5 %** of the parcel area (`MIN_AV_COVER_FRAC`) — the web app **synthesizes** AV-schema
+land cover from the BAFU habitat polygons, so the parcel's KPIs stay backed by real
+geometry instead of being left blank:
+
+1. **Reuse the BAFU clip** — the same habitat polygons fetched + clipped for the
+   BAFU overlay (fetched once per parcel, shared between this step and the overlay).
+2. **Relabel to BBArt** — each clipped piece maps to the AV BBArt that best matches it
+   via `TYPOCH_BBART` (keyed by TypoCH code, most-specific first; the class-9
+   refinements recover the building-vs-road / sealed split that level-1 can't).
+3. **Classify + aggregate identically** — the synthetic features run through the
+   **same** `classify()` → `aggregateLandCover()` path as real AV, producing
+   SIA 416 / sealed / green / VBS and the `av_<art>_m2` columns consistently.
+
+The **geometry is real** (the clipped habitat polygon); only the **BBArt label is
+inferred** — and because BAFU is wall-to-wall, the synthetic cover tiles the parcel and
+reconciles to its area, exactly as AV would. It replaces AV only when it fills more
+than the sparse AV it supersedes.
+
+Synthetic cover is **flagged, never silently substituted**: `lc_source = BAFU` and
+`lc_synthetic = yes` at parcel level, and each synthetic feature keeps its source
+TypoCH in a `typoch` column for traceability. The crosswalk and its ⚠ judgment calls
+live in `TYPOCH_BBART` ([web/js/config.js](../web/js/config.js)); rationale and the full
+table are in [CLASSIFICATION.md](CLASSIFICATION.md) §Synthetic AV land cover.
+
+> This re-introduces a fallback the web app had previously dropped (AV stayed pure AV;
+> gaps showed 0 m²) — now schema-mapped to BBArt and geometry-backed, not a
+> numbers-only substitution. The **Python CLI does not mirror it** (it reads a full
+> local GeoPackage, so AV gaps are rarer there).
 
 ### External APIs & data sources
 
@@ -330,7 +367,7 @@ geoportal; AV land cover comes from geodienste.ch.
 | `wmts.geo.admin.ch/1.0.0/{layerId}/default/{time}/3857/{z}/{x}/{y}.{fmt}` | [docs.geo.admin.ch](https://docs.geo.admin.ch) | WMTS | Render user-added overlays that `layersConfig` reports as `wmts` | any |
 | `wms.geo.admin.ch/?…REQUEST=GetMap&LAYERS=ch.kantone.cadastralwebmap-farbe&CRS=EPSG:3857&BBOX={bbox-epsg-3857}…` | [docs.geo.admin.ch](https://docs.geo.admin.ch) | WMS | Cadastral parcel overlay on the picker map | `ch.kantone.cadastralwebmap-farbe` |
 | `wms.geo.admin.ch/?…REQUEST=GetMap&LAYERS={layers}…` | [docs.geo.admin.ch](https://docs.geo.admin.ch) | WMS | Render user-added overlays that `layersConfig` reports as `wms`/aggregate | any |
-| `geodienste.ch/db/av_0/{deu\|fra\|ita\|eng}?…REQUEST=GetFeature&TYPENAMES=ms:LCSF&COUNT=1000` | [geodienste.ch](https://geodienste.ch) | WFS | Fetch official AV land-cover surfaces in the parcel bbox, then clip client-side with Turf.js | `ms:LCSF` |
+| `geodienste.ch/db/av_0/{deu\|fra\|ita\|eng}?…REQUEST=GetFeature&TYPENAMES=ms:LCSF&COUNT=1000&STARTINDEX=…` | [geodienste.ch](https://geodienste.ch) | WFS | Fetch official AV land-cover surfaces in the parcel bbox (paged via `STARTINDEX`), then clip client-side with Turf.js | `ms:LCSF` |
 
 **Third-party CDN assets** (loaded directly in the browser):
 
@@ -363,9 +400,12 @@ geoportal; AV land cover comes from geodienste.ch.
 
 The geodienste.ch WFS requires cantonal approval; in **6 cantons (JU, LU, NE, NW, OW,
 VD)** parcels are found by EGRID but return **0 m² AV land cover** (coverage is also
-incomplete in TI, VS, NE). The BAFU overlay still renders there but does **not** fill
-the AV gap (see above). The Python CLI has full coverage from the local GeoPackage.
-See [MANUAL.md](MANUAL.md).
+incomplete in TI, VS, NE) — as does high-alpine "übriges Gebiet" the survey never
+classified. The web app **fills these gaps with synthetic AV land cover derived from
+the BAFU habitat map** (`lc_source = BAFU`, `lc_synthetic = yes`; see
+[Synthetic AV land cover](#synthetic-av-land-cover-fallback-where-av-is-missing)), so
+the KPIs stay geometry-backed rather than empty. The Python CLI has full coverage from
+the local GeoPackage and does not synthesize. See [MANUAL.md](MANUAL.md).
 
 ---
 
