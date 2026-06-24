@@ -2057,6 +2057,164 @@
     return "<strong>" + esc(label || "—") + "</strong><br><span class='pop-sub'>" + esc(OVERLAY_NAME[key] || "") + "</span>" +
            (area ? "<br>" + fmtAreaU(num(area)) : "");
   }
+
+  // ── Parcel detail page (opened in a new tab from the map popup) ────────────
+  // Renders every available attribute of one parcel, grouped by topic, into a
+  // self-contained HTML document opened via a blob URL — so it works offline from
+  // the distributed single-file deliverable (no server, no data fetch). Empty
+  // topic sections are omitted; a collapsible "Alle Felder" dumps the raw columns.
+  var DETAIL_CSS =
+    "*{box-sizing:border-box}" +
+    "body{margin:0;font-family:'Noto Sans','Helvetica Neue',Arial,sans-serif;color:#1f2937;background:#eef0f2;font-size:14px;line-height:1.45}" +
+    ".head{background:#fff;border-bottom:3px solid #d8232a;padding:16px 24px;overflow:hidden}" +
+    ".head .brand{color:#46596b;font-size:12px;letter-spacing:.02em}" +
+    ".head h1{margin:.25em 0 .1em;font-size:20px;color:#2f4356}" +
+    ".head .sub{color:#5b6b7a;font-size:13px}" +
+    ".head .actions{float:right}" +
+    ".btn{border:1px solid #cbd5e1;background:#f8fafc;border-radius:4px;padding:6px 12px;cursor:pointer;font:inherit;color:#2f4356}" +
+    ".wrap{max-width:980px;margin:20px auto;padding:0 16px;display:flex;flex-direction:column;gap:14px}" +
+    ".grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}" +
+    "@media(max-width:760px){.grid2{grid-template-columns:1fr}}" +
+    ".card{background:#fff;border:1px solid #e3e7eb;border-radius:6px;padding:14px 16px}" +
+    ".card h2{margin:0 0 10px;font-size:13px;color:#d8232a;text-transform:uppercase;letter-spacing:.03em;border-bottom:1px solid #eef0f2;padding-bottom:6px}" +
+    "table{width:100%;border-collapse:collapse}" +
+    ".kv th{text-align:left;font-weight:500;color:#64748b;padding:3px 8px 3px 0;vertical-align:top;width:44%}" +
+    ".kv td{padding:3px 0;color:#1f2937;word-break:break-word}" +
+    ".at th{font-size:12px;color:#64748b;text-align:left;border-bottom:1px solid #e3e7eb;padding:4px 6px}" +
+    ".at td{padding:4px 6px;border-bottom:1px solid #f1f4f6}" +
+    ".at .num{text-align:right;white-space:nowrap}" +
+    ".at .tot td{font-weight:600;border-top:1px solid #cbd5e1;border-bottom:none}" +
+    ".sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:7px;vertical-align:middle}" +
+    ".raw summary{cursor:pointer;color:#2f4356;font-weight:600}" +
+    ".raw table{margin-top:8px}" +
+    ".foot{max-width:980px;margin:6px auto 28px;padding:0 16px;color:#8a97a3;font-size:12px}" +
+    "a{color:#d8232a}" +
+    "@media print{body{background:#fff}.actions{display:none}.card{break-inside:avoid;border-color:#ccc}}";
+
+  function buildParcelDetailHTML(p) {
+    function detailKV(rows) {
+      var b = "";
+      rows.forEach(function (r) { if (!r) return; b += '<tr><th>' + esc(r[0]) + '</th><td>' + (r[2] ? r[1] : esc(r[1])) + '</td></tr>'; });
+      return '<table class="kv">' + b + '</table>';
+    }
+    function detailAreaTable(items, total) {
+      var b = "", sum = 0;
+      items.forEach(function (it) {
+        sum += it.value;
+        var sw = it.swatch ? '<span class="sw" style="background:' + it.swatch + '"></span>' : '';
+        var an = total ? pct(it.value, total) + ' %' : '';
+        b += '<tr><td>' + sw + esc(it.name) + '</td><td class="num">' + fmtAreaU(it.value) + '</td><td class="num">' + an + '</td></tr>';
+      });
+      b += '<tr class="tot"><td>Total</td><td class="num">' + fmtAreaU(sum) + '</td><td class="num">' + (total ? pct(sum, total) + ' %' : '') + '</td></tr>';
+      return '<table class="at"><thead><tr><th>Kategorie</th><th class="num">Fläche</th><th class="num">Anteil GSF</th></tr></thead><tbody>' + b + '</tbody></table>';
+    }
+    function card(title, inner) { return inner ? '<div class="card"><h2>' + esc(title) + '</h2>' + inner + '</div>' : ''; }
+    function grid2(a, b) { return (a && b) ? '<section class="grid2">' + a + b + '</section>' : ((a || '') + (b || '')); }
+
+    var parcelArea = num(p.parcel_area_m2);
+    var ggf = num(p.sia416_ggf_m2), buf = num(p.sia416_buf_m2), uuf = num(p.sia416_uuf_m2), classified = ggf + buf + uuf;
+    var green = num(p.greenspace_m2), sealed = num(p.sealed_m2);
+    var dbf = num(p.din277_bf_m2), duf = num(p.din277_uf_m2);
+    var vbsP = num(p.vbs_produktiv_m2), vbsU = num(p.vbs_unproduktiv_m2);
+    var va = num(p.vbs_kat_a_m2), vb = num(p.vbs_kat_b_m2), vc = num(p.vbs_kat_c_m2), vd = num(p.vbs_kat_d_m2);
+    var vt1 = num(p.vbs_typ1_m2), vt2 = num(p.vbs_typ2_m2);
+
+    var artItems = ART_KEYS.map(function (a) {
+      var label = ART_LABELS[a] || a, main = ART_MAIN[a] || "";
+      return { name: (main && main !== label ? main + " · " + label : label), value: num(p[artCol(a)]), swatch: mainColor(a) };
+    }).filter(function (it) { return it.value > 0; }).sort(function (x, y) { return y.value - x.value; });
+    var bzItems = [], hbItems = [];
+    for (var k in p) {
+      if (!Object.prototype.hasOwnProperty.call(p, k)) continue;
+      var bm = BAUZONE_RE.exec(k); if (bm) { var bv = num(p[k]); if (bv > 0) bzItems.push({ name: bzLabel(bm[1]), value: bv, swatch: bzColor(bm[1]) }); continue; }
+      var hm = HABITAT_RE.exec(k); if (hm) { var hv = num(p[k]); if (hv > 0) hbItems.push({ name: hbLabel(hm[1]), value: hv, swatch: habColor(hm[1]) }); }
+    }
+    bzItems.sort(function (x, y) { return y.value - x.value; });
+    hbItems.sort(function (x, y) { return y.value - x.value; });
+    var stKey = statusKey(p), stLabel = (STATUS_LABELS[stKey] || stKey);
+
+    var idCard = card("Identifikation", detailKV([
+      ["System-ID", p.id || "—"], ["E-GRID", p.egrid || "—"], ["Grundstück-Nr.", p.nummer || "—"],
+      ["Bezeichnung", p["input_bez. grundstück"] || "—"], (p.bfsnr ? ["BFS-Nr.", p.bfsnr] : null)
+    ]));
+    var lageCard = card("Lage & Eigentum", detailKV([
+      ["Ort", p.input_ort || "—"], ["PLZ", p.input_plz || "—"], ["Kanton", p.input_rg || "—"],
+      ["Teilportfolio", p.input_tpf ? tpfLabel(p.input_tpf) : "—"],
+      ["Eigentumsart", p["input_eigent.art"] ? eigentumLabel(p["input_eigent.art"]) : "—"]
+    ]));
+    var flaechen = card("Flächen (Übersicht)", detailKV([
+      ["Grundstücksfläche (GSF)", fmtAreaU(parcelArea)],
+      ["Klassifizierte Bodenbedeckung (AV)", fmtAreaU(classified) + " (" + pct(classified, parcelArea) + " % der GSF)"],
+      ["Grünfläche", fmtAreaU(green) + " (" + pct(green, classified) + " % der Bodenbedeckung)"],
+      ["Versiegelte Fläche", fmtAreaU(sealed) + " (" + pct(sealed, classified) + " % der Bodenbedeckung)"]
+    ]));
+    var siaCard = classified > 0 ? card("SIA 416", detailKV([
+      ["GGF · Gebäudegrundfläche", fmtAreaU(ggf)], ["BUF · Bearbeitete Umgebung", fmtAreaU(buf)], ["UUF · Unbearbeitete Umgebung", fmtAreaU(uuf)]
+    ])) : "";
+    var dinCard = (dbf || duf) ? card("DIN 277", detailKV([
+      ["BF · Bebaute Fläche", fmtAreaU(dbf)], ["UF · Unbebaute Fläche", fmtAreaU(duf)]
+    ])) : "";
+    var artCard = artItems.length ? card("Bodenbedeckung nach Art (AV)", detailAreaTable(artItems, parcelArea)) : "";
+    var vbsCard = (vbsP || vbsU || va || vb || vc || vd) ? card("VBS-Klassierung", detailKV([
+      ["Produktiv", fmtAreaU(vbsP)], ["Unproduktiv", fmtAreaU(vbsU)],
+      ((vt1 || vt2) ? ["Typ 1 / Typ 2", fmtAreaU(vt1) + " / " + fmtAreaU(vt2)] : null),
+      ["A · Siedlungsfläche", fmtAreaU(va)], ["B · Landwirtschaftsfläche", fmtAreaU(vb)],
+      ["C · Bestockte Fläche", fmtAreaU(vc)], ["D · Unproduktive Fläche", fmtAreaU(vd)]
+    ])) : "";
+    var bzCard = bzItems.length ? card("Bauzonen (ARE)", detailAreaTable(bzItems, parcelArea)) : "";
+    var hbCard = hbItems.length ? card("Lebensräume (BAFU · TypoCH L1)", detailAreaTable(hbItems, parcelArea)) : "";
+    var qCard = card("Datenqualität", detailKV([
+      ["E-GRID-Status", stLabel], ["Bodenbedeckung-WFS", p.check_wfs || "—"], ["Geometrie", p.check_geom || "—"],
+      (("check_bauzonen" in p) && p.check_bauzonen ? ["Bauzonen", p.check_bauzonen] : null),
+      (("check_habitat" in p) && p.check_habitat ? ["Lebensräume", p.check_habitat] : null),
+      ["Datenquelle (LC)", p.lc_source || "—"]
+    ]));
+    var linkCard = "";
+    if (p.egrid) {
+      var egridUrl = "https://map.geo.admin.ch/#/map?lang=de&topic=ech&bgLayer=ch.swisstopo.pixelkarte-farbe&layers=ch.swisstopo-vd.stand-oerebkataster&swisssearch=" + encodeURIComponent(p.egrid);
+      linkCard = card("Verknüpfungen", '<a href="' + esc(egridUrl) + '" target="_blank" rel="noopener">↗ Auf map.geo.admin.ch öffnen (ÖREB-Kataster)</a>');
+    }
+    var rawKeys = Object.keys(p).filter(function (k) { return k.charAt(0) !== "_"; }).sort();
+    var rawBody = "";
+    rawKeys.forEach(function (k) { var v = p[k]; rawBody += '<tr><th>' + esc(k) + '</th><td>' + esc(v == null ? "" : String(v)) + '</td></tr>'; });
+    var rawCard = '<div class="card"><details class="raw"><summary>Alle Felder (Rohdaten · ' + rawKeys.length + ')</summary><table class="kv">' + rawBody + '</table></details></div>';
+
+    var ort = p.input_ort || "", plz = p.input_plz || "", subParts = [];
+    if (p.egrid) subParts.push(esc(p.egrid));
+    if (ort || plz) subParts.push(esc((plz ? plz + " " : "") + ort));
+    if (p.input_rg) subParts.push("Kanton " + esc(p.input_rg));
+    if (p.input_tpf) subParts.push("Teilportfolio " + esc(tpfLabel(p.input_tpf)));
+    var dashTitle = window.DASHBOARD_TITLE || "Auswertung Bodenbedeckung";
+
+    var body =
+      '<div class="head">' +
+        '<div class="actions"><button class="btn" onclick="window.print()">⎙ Drucken</button></div>' +
+        '<div class="brand">Schweizerische Eidgenossenschaft · Grundstück-Details</div>' +
+        '<h1>System-ID ' + esc(p.id || "—") + '</h1>' +
+        '<div class="sub">' + subParts.join(" · ") + '</div>' +
+      '</div>' +
+      '<div class="wrap">' +
+        grid2(idCard, lageCard) + flaechen + grid2(siaCard, dinCard) +
+        artCard + vbsCard + bzCard + hbCard + qCard + linkCard + rawCard +
+      '</div>' +
+      '<div class="foot">Quelle: Amtliche Vermessung · geodienste.ch · swisstopo · BAFU · ARE · ' + esc(dashTitle) + '</div>';
+
+    return '<!doctype html><html lang="de"><head><meta charset="utf-8">' +
+      '<meta name="viewport" content="width=device-width, initial-scale=1">' +
+      '<title>Grundstück ' + esc(p.id || "") + ' — Details</title><style>' + DETAIL_CSS + '</style></head><body>' + body + '</body></html>';
+  }
+
+  function openParcelDetails(id) {
+    var p = parcelById(id); if (!p) return;
+    var url = URL.createObjectURL(new Blob([buildParcelDetailHTML(p)], { type: "text/html;charset=utf-8" }));
+    window.open(url, "_blank");
+    setTimeout(function () { URL.revokeObjectURL(url); }, 60000); // keep alive long enough for the new tab to load
+  }
+  // Delegated: the popup's "Alle Details anzeigen" link (the popup DOM is recreated on each open).
+  document.addEventListener("click", function (e) {
+    var a = e.target.closest && e.target.closest(".popup-details-link"); if (!a) return;
+    e.preventDefault(); openParcelDetails(a.getAttribute("data-id"));
+  });
   // Layer control (top-left). Widget order mirrors the map z-order, top → bottom:
   // labels + markers/clusters first, then overlays (habitat on top … landcover
   // bottom), then the parcel polygons. "Beschriftung" owns the point/cluster layers
@@ -2226,7 +2384,9 @@
           if (order[i][1] === "parcel") {
             var pr = f.properties;
             selectParcel(pr.id); // highlight polygon + select the table row (no scroll)
-            showPopup(e.lngLat, "<strong>" + esc(pr.ort || "—") + "</strong><br>" + esc(pr.id || "") + (pr.egrid ? "<br>" + esc(pr.egrid) : "") + "<br>" + fmtAreaU(pr.area));
+            var pInfo = "<strong>" + esc(pr.ort || "—") + "</strong><br>" + esc(pr.id || "") + (pr.egrid ? "<br>" + esc(pr.egrid) : "") + "<br>" + fmtAreaU(pr.area);
+            if (pr.id) pInfo += '<a href="#" class="popup-details-link" data-id="' + esc(pr.id) + '" style="display:inline-block;margin-top:7px;color:#d8232a;font-weight:600;text-decoration:none">Alle Details anzeigen ↗</a>';
+            showPopup(e.lngLat, pInfo);
           } else {
             highlightOverlay("ov-" + order[i][1], f.id);
             showPopup(e.lngLat, overlayPopupHTML(order[i][1], f.properties.art, f.properties.area_m2));

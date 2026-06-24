@@ -56,7 +56,8 @@ Or deploy the repo to any static hosting (GitHub Pages, Cloudflare Pages, etc.);
 | **Data source** | Live API queries per parcel | Local GeoPackage (all cantons at once) |
 | **Throughput** | ~8 parcels in parallel, rate-limited | Bulk vectorised processing |
 | **Invalid geometries** | Skipped (no repair; flagged as `check_geom`) | Repaired with `make_valid()` |
-| **Land cover per parcel** | Capped at 1000 features/bbox (flagged as `check_wfs = truncated`) | Unbounded |
+| **Land cover per parcel** | Paged (WFS `STARTINDEX`, 1000/page) up to a 10'000-feature safety cap; only then `check_wfs = truncated` | Unbounded |
+| **Habitat per parcel** | Paged (Identify `offset`, 200/page) up to a 5'000-feature safety cap; only then `check_habitat = truncated` | Unbounded |
 | **Bauzonen analysis** | Layer overlay only | `--bauzonen` flag |
 | **Habitat analysis** | Layer overlay only | `--habitat` flag with area intersection |
 | **Offline** | Requires internet | Fully offline with local GeoPackage |
@@ -65,7 +66,7 @@ The Parcels output carries QA columns so you can spot where web results may diff
 from the authoritative Python run:
 
 - `check_egrid` — `found`, `merged` (one EGRID matched several features, geometries unioned), `not_found`, `invalid`, or an error message
-- `check_wfs` — `ok`, `truncated` (hit the 1000-feature cap — totals may be incomplete), or `wfs_error`
+- `check_wfs` — `ok`, `truncated` (still more features past the 10'000-feature paging safety cap — totals may be incomplete), or `wfs_error`
 - `check_geom` — `ok` or `<n>_skipped` (land-cover features whose clip failed on invalid geometry and were dropped)
 
 > **Data coverage note:** The geodienste.ch WFS requires cantonal approval in 6 cantons (JU, LU, NE, NW, OW, VD). Parcels in these cantons are found by EGRID but return 0 m² land cover. Coverage is also incomplete in TI, VS, and NE. See the [User Guide](../docs/MANUAL.md) for details.

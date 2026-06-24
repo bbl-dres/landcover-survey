@@ -19,8 +19,10 @@ import { API, SLIVER_THRESHOLD, STATUS, classify, classifyBafu, isFound, fetchWi
 // moderate bump over the old value of 5 improves throughput. The 429/5xx
 // exponential backoff below absorbs the occasional rate-limit response.
 const CONCURRENCY = 8;
-/** Max land-cover features requested per parcel bbox (WFS GetFeature COUNT). */
-const WFS_MAX_FEATURES = 1000;
+/** Land-cover WFS page size (GetFeature COUNT) and the total safety cap across all
+ *  pages — we page with STARTINDEX until a short page, so the cap is just a backstop. */
+const WFS_PAGE = 1000;
+const WFS_MAX_FEATURES = 10000;
 const FETCH_TIMEOUT_MS = 15000;
 const MAX_RETRIES = 3;
 const BASE_DELAY_MS = 500;
@@ -458,25 +460,33 @@ async function fetchParcelGeometry(egrid) {
  */
 async function fetchLandCover(bbox) {
   const [minLon, minLat, maxLon, maxLat] = bbox;
-
-  const params = new URLSearchParams({
-    SERVICE: "WFS",
-    REQUEST: "GetFeature",
-    VERSION: "2.0.0",
-    TYPENAMES: "ms:LCSF",
-    BBOX: `${minLat},${minLon},${maxLat},${maxLon},urn:ogc:def:crs:EPSG::4326`,
-    SRSNAME: "urn:ogc:def:crs:EPSG::4326",
-    OUTPUTFORMAT: "geojson",
-    COUNT: String(WFS_MAX_FEATURES),
-  });
+  const maxPages = Math.max(1, Math.ceil(WFS_MAX_FEATURES / WFS_PAGE));
+  const features = [];
+  let truncated = false;
 
   try {
-    const resp = await fetchWithRetry(`${API.WFS_AV}?${params}`);
-    const data = await resp.json();
-    const features = data.features || [];
-    // If we hit the cap exactly, the bbox likely held more features than were
-    // returned — the result may be truncated, so flag it for the caller.
-    return { features, error: false, truncated: features.length >= WFS_MAX_FEATURES };
+    for (let page = 0; page < maxPages; page++) {
+      const params = new URLSearchParams({
+        SERVICE: "WFS",
+        REQUEST: "GetFeature",
+        VERSION: "2.0.0",
+        TYPENAMES: "ms:LCSF",
+        BBOX: `${minLat},${minLon},${maxLat},${maxLon},urn:ogc:def:crs:EPSG::4326`,
+        SRSNAME: "urn:ogc:def:crs:EPSG::4326",
+        OUTPUTFORMAT: "geojson",
+        COUNT: String(WFS_PAGE),
+        STARTINDEX: String(page * WFS_PAGE),
+      });
+      const resp = await fetchWithRetry(`${API.WFS_AV}?${params}`);
+      const data = await resp.json();
+      const batch = data.features || [];
+      features.push(...batch);
+      // A short page means the bbox is drained; a full page means more may follow.
+      if (batch.length < WFS_PAGE) break;
+      // Still a full page at the safety cap → genuinely more features remain.
+      if (page === maxPages - 1) truncated = true;
+    }
+    return { features, error: false, truncated };
   } catch (err) {
     console.warn("WFS fetch failed after retries:", err.message);
     return { features: [], error: true, truncated: false };
@@ -485,41 +495,65 @@ async function fetchLandCover(bbox) {
 
 /* ── geo.admin.ch Identify (shared by the BAFU fallback + Bauzonen) ── */
 
-/** Fetch features of `layerId` intersecting a parcel's bbox via the Identify
- *  endpoint. Returns an array of { geometry, properties, id }. May throw. */
-async function fetchIdentify(layerId, parcelGeom, limit) {
+/** Identify per-request page size — the server's documented hard max is 200
+ *  (default 50, max 200); we page past it with `offset`. */
+const IDENTIFY_PAGE = 200;
+
+/** Fetch ALL features of `layerId` intersecting a parcel's bbox via the Identify
+ *  endpoint. Pages with `offset` past the 200-per-request cap until a short page (or
+ *  the `maxFeatures` safety cap) is reached — so a per-parcel bbox is fetched whole
+ *  instead of truncated at the first 200. Returns { features, dropped, total,
+ *  truncated }. Features are deduped by featureId because a layer backed by several
+ *  underlying tables can return overlapping pages. May throw. */
+async function fetchIdentify(layerId, parcelGeom, maxFeatures) {
   const [minLon, minLat, maxLon, maxLat] = turf.bbox(parcelGeom);
   const envelope = `${minLon},${minLat},${maxLon},${maxLat}`;
-  const params = new URLSearchParams({
-    geometry: envelope,
-    geometryType: "esriGeometryEnvelope",
-    geometryFormat: "geojson",
-    layers: `all:${layerId}`,
-    sr: "4326",
-    tolerance: "0",
-    mapExtent: envelope,
-    imageDisplay: "100,100,96",
-    returnGeometry: "true",
-    limit: String(limit),
-    lang: "de",
-  });
-  const resp = await fetchWithRetry(`${API.IDENTIFY}?${params}`);
-  const data = await resp.json();
-  const results = data.results || [];
+  const maxPages = Math.max(1, Math.ceil((maxFeatures || IDENTIFY_PAGE) / IDENTIFY_PAGE));
+  const seen = new Set();
   // geo.admin.ch returns `geometry: null` for features whose geometry exceeds a
   // server-side size cap (e.g. city-scale "Asphalt- und Betonstrasse"). Keep those
   // aside (type only) so callers can account for them instead of silently losing them.
   const features = [], dropped = [];
-  for (const r of results) {
-    const properties = r.properties || r.attributes || {};
-    if (r.geometry) features.push({ geometry: r.geometry, properties, id: r.featureId ?? r.id });
-    else dropped.push({ properties, id: r.featureId ?? r.id });
+  let total = 0, truncated = false;
+  for (let page = 0; page < maxPages; page++) {
+    const params = new URLSearchParams({
+      geometry: envelope,
+      geometryType: "esriGeometryEnvelope",
+      geometryFormat: "geojson",
+      layers: `all:${layerId}`,
+      sr: "4326",
+      tolerance: "0",
+      mapExtent: envelope,
+      imageDisplay: "100,100,96",
+      returnGeometry: "true",
+      limit: String(IDENTIFY_PAGE),
+      offset: String(page * IDENTIFY_PAGE),
+      lang: "de",
+    });
+    const resp = await fetchWithRetry(`${API.IDENTIFY}?${params}`);
+    const data = await resp.json();
+    const results = data.results || [];
+    let fresh = 0;
+    for (const r of results) {
+      const id = r.featureId ?? r.id;
+      if (seen.has(String(id))) continue; // overlap across pages (multi-table layers)
+      seen.add(String(id)); fresh++;
+      const properties = r.properties || r.attributes || {};
+      if (r.geometry) features.push({ geometry: r.geometry, properties, id });
+      else dropped.push({ properties, id });
+    }
+    total += fresh;
+    // A short page (or a page with nothing new) means the bbox is drained.
+    if (results.length < IDENTIFY_PAGE || fresh === 0) break;
+    // Still a full page at the safety cap → genuinely more features remain.
+    if (page === maxPages - 1) truncated = true;
   }
-  return { features, dropped, total: results.length };
+  return { features, dropped, total, truncated };
 }
 
-/** Max BAFU habitat features requested per parcel bbox (Identify limit cap). */
-const BAFU_MAX_FEATURES = 200;
+/** Safety cap on total BAFU habitat features fetched per parcel across Identify
+ *  pages (paged 200 at a time). A backstop, not the page size. */
+const BAFU_MAX_FEATURES = 5000;
 
 /** Min share of the parcel a dropped (null-geometry) habitat feature must cover
  *  before we gap-fill it — below this it's sliver noise, not a missing big feature. */
@@ -531,8 +565,8 @@ const HABITAT_GAP_MIN_FRAC = 0.01;
  */
 async function fetchLandCoverBAFU(parcelGeom) {
   try {
-    const { features, dropped, total } = await fetchIdentify(BAFU_LAYER_ID, parcelGeom, BAFU_MAX_FEATURES);
-    return { features, dropped, error: false, truncated: total >= BAFU_MAX_FEATURES };
+    const { features, dropped, truncated } = await fetchIdentify(BAFU_LAYER_ID, parcelGeom, BAFU_MAX_FEATURES);
+    return { features, dropped, error: false, truncated };
   } catch (err) {
     console.warn("BAFU identify failed after retries:", err.message);
     return { features: [], dropped: [], error: true, truncated: false };
@@ -542,7 +576,7 @@ async function fetchLandCoverBAFU(parcelGeom) {
 /* ── Bauzonen (building zones) — optional per-parcel intersection ── */
 
 const BAUZONEN_LAYER_ID = "ch.are.bauzonen";
-const BAUZONEN_MAX_FEATURES = 200; // identify honours up to 200; matches BAFU cap
+const BAUZONEN_MAX_FEATURES = 2000; // safety cap across paged identify requests
 
 /** Min zone-free area (m²) before we emit an "Ohne Bauzone" remainder row — keeps
  *  the zones summing to the parcel area without adding sub-m² sliver rows. */
@@ -552,8 +586,8 @@ const OHNE_BAUZONE_MIN_AREA = 1;
 async function fetchBauzonen(parcelGeom) {
   // A dropped (null-geometry) zone would inflate the "Ohne Bauzone" remainder, so the
   // caller flags those parcels rather than trusting the computed zone-free area.
-  const { features, dropped, total } = await fetchIdentify(BAUZONEN_LAYER_ID, parcelGeom, BAUZONEN_MAX_FEATURES);
-  return { features, dropped, truncated: total >= BAUZONEN_MAX_FEATURES };
+  const { features, dropped, truncated } = await fetchIdentify(BAUZONEN_LAYER_ID, parcelGeom, BAUZONEN_MAX_FEATURES);
+  return { features, dropped, truncated };
 }
 
 /** Clip each `features` item to `parcelGeom` and call `onPiece(feature, geometry,
