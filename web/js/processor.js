@@ -9,7 +9,7 @@
  * - EGRID dedup cache avoids redundant API calls
  * - AbortController timeout on all fetch calls
  */
-import { API, SLIVER_THRESHOLD, STATUS, classify, classifyBafu, isFound, fetchWithTimeout,
+import { API, SLIVER_THRESHOLD, STATUS, classify, classifyBafu, typochToBBArt, isFound, fetchWithTimeout,
          BAFU_LAYER_ID, VBS_KATEGORIE_LABELS, VBS_PRODUKTIV_LABELS, VBS_TYP_LABELS,
          ERR_MSG, ERR_RUNTIME_PREFIX, bauzoneAreaKey, isBauzoneAreaKey,
          habitatL1Label, habitatAreaKey, isHabitatAreaKey } from "./config.js";
@@ -26,6 +26,9 @@ const WFS_MAX_FEATURES = 10000;
 const FETCH_TIMEOUT_MS = 15000;
 const MAX_RETRIES = 3;
 const BASE_DELAY_MS = 500;
+/** Below this fraction of AV land-cover coverage a parcel counts as "no AV", and
+ *  (if BAFU data exists) its land cover is synthesized from BAFU — see TYPOCH_BBART. */
+const MIN_AV_COVER_FRAC = 0.05;
 
 let cancelled = false;
 
@@ -80,18 +83,51 @@ export async function processRows(rows, onProgress, options = {}) {
       const parcelGeom = parcelResult.geometry;
       const bbox = turf.bbox(parcelGeom);
       const lcResult = await fetchLandCover(bbox);
-
-      // Step 3: Clip AV land cover to the parcel. BAFU habitat is no longer a
-      // fallback here — it is its own overlay layer (see below), so Bodenbedeckung
-      // stays pure AV (parcels in no-coverage cantons get an empty land cover).
-      const lcSource = "AV";
-      const { results: clipped, skipped } = clipLandCover(parcelGeom, lcResult.features, id, egrid);
-
-      // Step 4: Calculate parcel area
       const parcelArea = turf.area(parcelGeom);
 
-      // Step 5: Aggregate
-      const agg = aggregateLandCover(clipped);
+      // Step 3: Clip AV land cover to the parcel + aggregate.
+      let { results: clipped, skipped } = clipLandCover(parcelGeom, lcResult.features, id, egrid);
+      let agg = aggregateLandCover(clipped);
+      let lcSource = "AV", lcSynthetic = false;
+
+      // BAFU habitat is fetched at most once per parcel and shared by the synthetic
+      // land-cover fallback (Step 3b) and the optional habitat overlay layer (below).
+      let _bafu;
+      const getBafu = async () => {
+        if (_bafu !== undefined) return _bafu;
+        try {
+          const fr = await fetchLandCoverBAFU(parcelGeom);
+          _bafu = { ...fr, clip: clipHabitat(parcelGeom, fr.features, id, egrid) };
+        } catch (err) {
+          console.warn(`BAFU fetch failed for ${egrid}:`, err.message);
+          _bafu = null;
+        }
+        return _bafu;
+      };
+
+      // Step 3b: Synthetic AV land cover where AV is (essentially) absent. Build real
+      // BBArt features from the BAFU habitat polygons — geometry is real, the BBArt
+      // label is inferred via TYPOCH_BBART — so the KPIs stay geometry-backed and run
+      // through the same classify/aggregate path as AV. Marked lc_source=BAFU +
+      // lc_synthetic so it is never mistaken for authoritative cadastral land cover.
+      const avClassified = agg.sia416_ggf_m2 + agg.sia416_buf_m2 + agg.sia416_uuf_m2;
+      if (options.synthLandcover !== false && parcelArea > 0 && avClassified < parcelArea * MIN_AV_COVER_FRAC) {
+        const bafu = await getBafu();
+        if (bafu && bafu.clip.results.length) {
+          const synth = [];
+          for (const piece of bafu.clip.results) {
+            const art = typochToBBArt(piece.art); // piece.art holds the TypoCH label
+            if (art) synth.push(makeSynthLandcoverRow(id, egrid, art, piece.art, piece._rawArea, piece._geometry));
+          }
+          const synthArea = synth.reduce((s, r) => s + r._rawArea, 0);
+          if (synth.length && synthArea > avClassified) { // only adopt if it fills more than the sparse AV
+            clipped = synth;
+            agg = aggregateLandCover(clipped);
+            lcSource = "BAFU";
+            lcSynthetic = true;
+          }
+        }
+      }
 
       // Genuine errors (status stays "found"; QA notes like merged/truncated/
       // skipped remain in the check_* columns).
@@ -110,6 +146,7 @@ export async function processRows(rows, onProgress, options = {}) {
         check_geom: skipped > 0 ? `${skipped}_skipped` : "ok",
         errors: lcErrors,
         lc_source: lcSource,
+        lc_synthetic: lcSynthetic ? "yes" : "",
         flaeche: parcelResult.properties.area || "",
         parcel_area_m2: round2(parcelArea),
         ...agg,
@@ -166,8 +203,9 @@ export async function processRows(rows, onProgress, options = {}) {
 
       if (options.habitat && parcelGeom) {
         try {
-          const bafu = await fetchLandCoverBAFU(parcelGeom);
-          const clip = clipHabitat(parcelGeom, bafu.features, id, egrid);
+          const bafu = await getBafu();
+          if (!bafu) throw new Error("BAFU unavailable");
+          const clip = bafu.clip;
           habitatRows = clip.results;
           // BAFU Lebensraumkarte is wall-to-wall, but geo.admin.ch returns `null`
           // geometry for oversized features (e.g. city-scale "Asphalt- und
@@ -324,6 +362,7 @@ function makeErrorParcel(id, egrid, row, message) {
     check_geom: "",
     errors: [egridErrorMessage(message)],
     lc_source: "",
+    lc_synthetic: "",
     flaeche: "",
     parcel_area_m2: "",
     _geometry: null,
@@ -772,6 +811,38 @@ function clipHabitat(parcelGeom, bafuFeatures, id, egrid) {
     results.push(makeHabitatRow(id, egrid, lc.properties?.typoch_de || "", lc.properties?.prob_de || "", lc.id || lc.properties?.polyid || "", area, geometry));
   });
   return { results, skipped };
+}
+
+/** Build one SYNTHETIC AV land-cover row from a BAFU habitat piece. Same shape as a
+ *  clipLandCover() row (so aggregateLandCover treats it identically), but lc_source
+ *  is "BAFU", `art` is the inferred BBArt, and `typoch` keeps the source TypoCH for
+ *  traceability. Geometry is the real (clipped) habitat polygon. */
+function makeSynthLandcoverRow(id, egrid, art, typoch, area, geometry) {
+  const cls = classify(art);
+  return {
+    id,
+    egrid,
+    fid: "",
+    art,
+    typoch, // provenance: the BAFU TypoCH this BBArt was derived from
+    bfsnr: "",
+    gwr_egid: "",
+    check_greenspace: cls.greenSpace,
+    vbs_kategorie: VBS_KATEGORIE_LABELS[cls.vbsKategorie] || "",
+    vbs_produktiv: VBS_PRODUKTIV_LABELS[cls.vbsProduktiv] || "",
+    vbs_typ: cls.vbsTyp ? (VBS_TYP_LABELS[cls.vbsTyp] || "") : "",
+    lc_source: "BAFU",
+    prob: "",
+    area_m2: round2(area),
+    _rawArea: area,
+    _geometry: geometry,
+    _sia416: cls.sia416,
+    _din277: cls.din277,
+    _sealed: cls.sealed,
+    _vbsKategorie: cls.vbsKategorie,
+    _vbsProduktiv: cls.vbsProduktiv,
+    _vbsTyp: cls.vbsTyp,
+  };
 }
 
 /** Aggregate clipped land cover into summary columns */

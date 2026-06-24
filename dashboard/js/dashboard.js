@@ -2167,7 +2167,8 @@
       ["E-GRID-Status", stLabel], ["Bodenbedeckung-WFS", p.check_wfs || "—"], ["Geometrie", p.check_geom || "—"],
       (("check_bauzonen" in p) && p.check_bauzonen ? ["Bauzonen", p.check_bauzonen] : null),
       (("check_habitat" in p) && p.check_habitat ? ["Lebensräume", p.check_habitat] : null),
-      ["Datenquelle (LC)", p.lc_source || "—"]
+      ["Datenquelle (LC)", p.lc_source || "—"],
+      (p.lc_synthetic === "yes" ? ["Bodenbedeckung", "⚠ Synthetisch aus BAFU-Lebensräumen abgeleitet (keine AV-Daten)"] : null)
     ]));
     var linkCard = "";
     if (p.egrid) {

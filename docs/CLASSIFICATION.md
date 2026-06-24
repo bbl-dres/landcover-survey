@@ -260,6 +260,56 @@ Mapping is by **TypoCH level-1** class (the leading digit of `typoch_de`, e.g.
 
 ---
 
+## Synthetic AV land cover (fallback where AV is missing)
+
+Some regions return **no AV land cover** (no-access cantons, and high-alpine
+"übriges Gebiet" the official survey never classified) — leaving the Bodenbedeckung
+KPIs blank. To improve completeness and traceability, where AV is essentially
+absent we **synthesize AV-schema land-cover features from the BAFU Lebensraumkarte**:
+each clipped BAFU habitat polygon is relabelled to the AV BBArt that best matches it
+and then run through the **same** `classify()` → `aggregate()` path as real AV. The
+**geometry is real** (the clipped habitat polygon); only the **BBArt label is
+inferred**. So the KPIs stay backed by actual feature geometry and reconcile to the
+parcel area (BAFU is wall-to-wall).
+
+**Trigger & marking.** A parcel synthesizes only when its real AV cover is below
+**5 %** of the parcel area (`MIN_AV_COVER_FRAC` in [processor.js](../web/js/processor.js)).
+Synthesized parcels are marked **`lc_source = BAFU`** and **`lc_synthetic = yes`**, and
+each synthetic feature keeps its source TypoCH in a `typoch` column — so synthetic
+cover is never mistaken for authoritative cadastral data and every value is traceable
+back to the habitat type it came from.
+
+**Crosswalk** (`TYPOCH_BBART` in [web/js/config.js](../web/js/config.js)) — keyed by
+TypoCH code, most-specific first, so a fine code overrides its level-1 default. The
+refinements matter most for **class 9**, where level-1 can't tell a building from a
+road (the cadastral-critical sealed / GGF split):
+
+| TypoCH code | → BBArt | SIA 416 | Sealed | Green |
+|---|---|---|---|---|
+| `1` Gewässer | `Gewaesser_stehendes` | UUF | — | — |
+| `2` Ufer & Feuchtgebiete | `Hoch_Flachmoor` | BUF | — | soil |
+| `3` Gletscher, Fels, Schutt | `Geroell_Sand` | UUF | — | — |
+| `4` Grünland | `Acker_Wiese_Weide` | BUF | — | soil |
+| `5` Krautsäume, Gebüsche | `uebrige_bestockte` | UUF | — | wooded |
+| `6` Wälder | `geschlossener_Wald` | UUF | — | wooded |
+| `7` Pionier-/Ruderalveg. | `uebrige_vegetationslose` | UUF | — | — |
+| `8` Pflanzungen, Äcker, Kulturen | `Acker_Wiese_Weide` | BUF | — | soil |
+| `9` Gebäude/Anlagen *(default)* | `uebrige_befestigte` ⚠ | BUF | yes | — |
+| `9.2` Bauten | `Gebaeude` | **GGF** | yes | — |
+| `9.3.2` Asphalt-/Betonstrasse | `Strasse_Weg` | BUF | yes | — |
+| `9.0.2` Versiegelte vegetationslose Fläche | `uebrige_befestigte` | BUF | yes | — |
+| `9.3.3` Naturstrasse/Weg *(unbefestigt)* | `uebrige_vegetationslose` ⚠ | UUF | — | — |
+
+> ⚠ = judgment call. **Starting-point** mapping pending validation against real AV
+> on dual-coverage parcels (where both AV and BAFU exist, the synthetic classification
+> can be compared to ground truth per BBArt / sealed / green). The TypoCH typology is
+> [Delarze et al. (TypoCH)](https://www.infoflora.ch/en/habitats/typoch-(delarze-et-al.).html);
+> unmapped TypoCH codes fall through `classify()`'s neutral defaults (UUF / not sealed /
+> not green). Building footprints from a ~10 m modeled map are the weakest field — treat
+> synthetic `GGF` with the most caution.
+
+---
+
 ## Legal basis & references
 
 - [TVAV (SR 211.432.21)](https://www.fedlex.admin.ch/eli/cc/2023/530/de) —

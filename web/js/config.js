@@ -218,6 +218,54 @@ export function classifyBafu(typochDe) {
   };
 }
 
+/**
+ * TypoCH → AV BBArt crosswalk for the SYNTHETIC land-cover fallback, used only
+ * where AV land cover is missing. Each habitat type maps to the BBArt whose
+ * classification (SIA 416 / sealed / green / VBS, via classify()) best matches it,
+ * so synthesized features run through the exact same pipeline as real AV — the
+ * geometry is real (the clipped BAFU polygon), only the BBArt label is inferred.
+ *
+ * Keyed by TypoCH code, most-specific-first: a fine code (e.g. "9.2") overrides its
+ * level-1 default ("9"). The single-digit keys are the level-1 defaults; the dotted
+ * keys refine what level-1 can't resolve — above all class 9, where the cadastral-
+ * critical building-vs-road / sealed-vs-unsealed split lives.
+ *
+ * ⚠ Starting-point mapping, pending validation against real AV on dual-coverage
+ * parcels (see docs/CLASSIFICATION.md §Synthetic AV). ⚠ marks the judgment calls.
+ */
+export const TYPOCH_BBART = {
+  // ── level-1 defaults ──
+  "1": "Gewaesser_stehendes",       // Gewässer → Wasser (UUF, not green, kat_d)
+  "2": "Hoch_Flachmoor",            // Ufer & Feuchtgebiete → Moor/humusiert (BUF, green, kat_d)
+  "3": "Geroell_Sand",              // Gletscher, Fels, Schutt → vegetationslos (UUF, kat_d, unprod.)
+  "4": "Acker_Wiese_Weide",         // Grünland → humusiert (BUF, green, kat_b)
+  "5": "uebrige_bestockte",         // Krautsäume/Hochstauden/Gebüsche → bestockt (UUF, green-wooded, kat_c)
+  "6": "geschlossener_Wald",        // Wälder → Wald (UUF, green-wooded, kat_c)
+  "7": "uebrige_vegetationslose",   // Pionier-/Ruderalvegetation → vegetationslos (UUF, not green, kat_d)
+  "8": "Acker_Wiese_Weide",         // Pflanzungen, Äcker, Kulturen → humusiert (BUF, green, kat_b)
+  "9": "uebrige_befestigte",        // ⚠ Gebäude/Anlagen (unspecified) → befestigt, sealed but not a building (BUF)
+  // ── class 9 refinements (the cadastral-critical ones) ──
+  "9.2": "Gebaeude",                // Bauten → Gebäude (GGF, sealed)
+  "9.3.2": "Strasse_Weg",           // Asphalt-/Betonstrasse → Strasse (BUF, sealed)
+  "9.0.2": "uebrige_befestigte",    // Versiegelte vegetationslose Fläche → befestigt (BUF, sealed)
+  "9.3.3": "uebrige_vegetationslose", // ⚠ Naturstrasse/Weg (unbefestigt) → not sealed
+};
+
+/** Resolve a TypoCH label (e.g. "9.3.2 Asphalt- und Betonstrasse") to a synthetic
+ *  BBArt via TYPOCH_BBART, trying the most specific code first and falling back to
+ *  the level-1 default. Returns null when nothing matches (caller skips the piece). */
+export function typochToBBArt(typochDe) {
+  const code = String(typochDe || "").trim().split(/\s+/)[0]; // "9.3.2"
+  if (!code) return null;
+  const parts = code.split(".");
+  while (parts.length) {
+    const key = parts.join(".");
+    if (TYPOCH_BBART[key]) return TYPOCH_BBART[key];
+    parts.pop();
+  }
+  return null;
+}
+
 /** Harmonised Bauzonen main-use category (ch.are.bauzonen `ch_code_hn`) → colour,
  *  loosely following Swiss zoning-plan conventions. Keyed by the harmonised code
  *  so a category gets the same colour in every municipality. */

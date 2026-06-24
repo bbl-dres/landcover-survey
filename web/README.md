@@ -68,8 +68,10 @@ from the authoritative Python run:
 - `check_egrid` — `found`, `merged` (one EGRID matched several features, geometries unioned), `not_found`, `invalid`, or an error message
 - `check_wfs` — `ok`, `truncated` (still more features past the 10'000-feature paging safety cap — totals may be incomplete), or `wfs_error`
 - `check_geom` — `ok` or `<n>_skipped` (land-cover features whose clip failed on invalid geometry and were dropped)
+- `lc_source` — `AV` (authoritative cadastral land cover) or `BAFU` (synthetic, derived from the habitat map where AV is missing)
+- `lc_synthetic` — `yes` when the land cover was synthesized from BAFU Lebensräume (see [CLASSIFICATION.md §Synthetic AV](../docs/CLASSIFICATION.md)); blank otherwise
 
-> **Data coverage note:** The geodienste.ch WFS requires cantonal approval in 6 cantons (JU, LU, NE, NW, OW, VD). Parcels in these cantons are found by EGRID but return 0 m² land cover. Coverage is also incomplete in TI, VS, and NE. See the [User Guide](../docs/MANUAL.md) for details.
+> **Data coverage note:** The geodienste.ch WFS requires cantonal approval in 6 cantons (JU, LU, NE, NW, OW, VD); coverage is also incomplete in TI, VS, and NE. Parcels with no AV land cover are filled with a **synthetic** AV land cover derived from the BAFU Lebensraumkarte (`lc_source = BAFU`, `lc_synthetic = yes`) so the KPIs stay geometry-backed — flagged, not silently substituted. See the [User Guide](../docs/MANUAL.md) for details.
 
 ## APIs used
 

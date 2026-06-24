@@ -99,6 +99,7 @@ The original FME Form workspace (`.fmw`) that the other two solutions reproduce.
 - [DIN 277:2021](https://www.beuth.de/de/norm/din-277/343199925) — floor areas and building volumes (BF / UF)
 - [TVAV (SR 211.432.21)](https://www.fedlex.admin.ch/eli/cc/2023/530/de) — Technical Ordinance on the Official Cadastral Survey (Art. 14–19: land cover categories)
 - [GeoIG (SR 510.62)](https://www.fedlex.admin.ch/eli/cc/2008/388/de) — Federal Act on Geoinformation
+- [TypoCH (Delarze et al.)](https://www.infoflora.ch/en/habitats/typoch-(delarze-et-al.).html) — Swiss habitat typology behind the BAFU Lebensraumkarte (used for the synthetic land-cover fallback)
 
 ## License
 
