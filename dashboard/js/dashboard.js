@@ -1956,12 +1956,42 @@
     fc.features.forEach(function (f) { if (f.geometry && f.geometry.coordinates) walk(f.geometry.coordinates); });
     if (any && map) map.fitBounds([[minX, minY], [maxX, maxY]], { padding: 30, animate: !!animate, duration: 600, maxZoom: 16 });
   }
+  // Overlay features (Bodenbedeckung / Bauzonen / Lebensräume) bucketed by the SAP
+  // parcel id they belong to. Built once per overlay key so clipping the overlays to
+  // the filtered parcels on each render is a cheap per-parcel lookup, not a full
+  // rescan of all ~16k–20k overlay features on every filter change / slider drag.
+  var _ovById = {};
+  function overlayById(key) {
+    if (_ovById[key]) return _ovById[key];
+    var byId = {}, fc = OVERLAYS[key];
+    ((fc && fc.features) || []).forEach(function (f) {
+      var id = String((f.properties && f.properties.id) == null ? "" : f.properties.id);
+      (byId[id] || (byId[id] = [])).push(f);
+    });
+    return (_ovById[key] = byId);
+  }
   function renderMap(rows) {
     lastRows = rows;
     if (!mapReady || !map) return;
     var polyFC = rowsToFC(rows);
     var ps = map.getSource("parcels"); if (ps) ps.setData(polyFC);
     var pts = map.getSource("points"); if (pts) pts.setData(rowsToPointsFC(rows));
+    // Clip the data overlays to the visible parcels (join on SAP id) so filtering hides
+    // the land cover / Bauzonen / Lebensräume of filtered-out parcels too — not just the
+    // parcel polygons. Covers both the Übersicht (filtered set) and Priorisierung (Top-N).
+    OVERLAY_DEFS.forEach(function (d) {
+      var src = map.getSource("ov-" + d.key); if (!src) return;
+      var byId = overlayById(d.key), feats = [];
+      rows.forEach(function (p) {
+        var bucket = byId[String(p.id == null ? "" : p.id)];
+        if (bucket) feats.push.apply(feats, bucket);
+      });
+      src.setData({ type: "FeatureCollection", features: feats });
+    });
+    // A selected overlay feature may have just been clipped away (and setData regenerates
+    // ids anyway), so drop the stale highlight bookkeeping.
+    if (_selOv && map.getSource(_selOv.source)) map.setFeatureState(_selOv, { selected: false });
+    _selOv = null;
     // Zoom to the (filtered) results: instant on first load, animated on later filter changes.
     if (polyFC.features.length && (refitMap || !mapFitted)) { fitMap(polyFC, mapFitted); mapFitted = true; }
     refitMap = false;
