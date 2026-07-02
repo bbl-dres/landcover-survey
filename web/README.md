@@ -78,7 +78,7 @@ from the authoritative Python run:
 | API | Purpose | Auth |
 |-----|---------|------|
 | `api3.geo.admin.ch/MapServer/find` | Parcel geometry by EGRID | None (CORS) |
-| `geodienste.ch/db/av_0/{lang}` WFS | Land cover polygons (ms:LCSF) | None (CORS) |
+| `geodienste.ch/db/av_0/deu` WFS | Land cover polygons (ms:LCSF); pinned to German — the classifier keys on the German BBArt values | None (CORS) |
 | `api3.geo.admin.ch/SearchServer` | Location + layer search | None (CORS) |
 | `api3.geo.admin.ch/MapServer/layersConfig` | Layer render config (wmts/wms) | None (CORS) |
 | `api3.geo.admin.ch/MapServer/{id}/legend` | Layer legend + metadata | None (CORS) |

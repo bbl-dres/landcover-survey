@@ -98,7 +98,7 @@ def _build_csv(rows: list, headers: list) -> str:
     lines = [";".join(headers)]
     for row in rows:
         lines.append(";".join(_csv_cell(row.get(h, "")) for h in headers))
-    return "﻿" + "\n".join(lines)
+    return chr(0xFEFF) + "\n".join(lines)  # UTF-8 BOM, as in the web export
 
 
 def write_parcels_csv(parcels: list, path: str | Path) -> None:
@@ -152,8 +152,11 @@ def write_xlsx(results: dict, path: str | Path) -> None:
         return
     wb = Workbook()
 
+    # Sheet names match the web app's German export (the web translates its tab
+    # names per UI language; German is the reference since the data endpoint is
+    # pinned to deu) — so web and Python workbooks diff cleanly sheet-for-sheet.
     ws = wb.active
-    ws.title = _safe_sheet_name("Parcels")
+    ws.title = _safe_sheet_name("Grundstücke")
     p_headers = _union_headers(parcels)
     ws.append(p_headers)
     for p in parcels:
@@ -167,7 +170,7 @@ def write_xlsx(results: dict, path: str | Path) -> None:
         for row in rows:
             sheet.append([_cell_value(row.get(h, "")) for h in headers])
 
-    add_sheet(results.get("landcover", []), LANDCOVER_HEADERS, "Land Cover")
+    add_sheet(results.get("landcover", []), LANDCOVER_HEADERS, "Bodenbedeckung")
     add_sheet(results.get("bauzonen", []), BAUZONEN_HEADERS, "Bauzonen")
     add_sheet(results.get("habitat", []), HABITAT_HEADERS, "Lebensräume")
 

@@ -1,6 +1,7 @@
 """Constants, classification mappings, and default paths."""
 
 import re
+from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
@@ -234,11 +235,13 @@ COL_VBS_PRODUKTIV = "vbs_produktiv"
 COL_VBS_TYP = "vbs_typ"
 
 # ---------------------------------------------------------------------------
-# Check_EGRID messages
+# check_egrid status codes — language-independent, shared with the web app and
+# the api path (web/js/config.js STATUS). Translated at display time; merge
+# counts are logged, not encoded in the value.
 # ---------------------------------------------------------------------------
-MSG_EGRID_FOUND = "EGRID found in AV"
-MSG_EGRID_MERGED = "EGRID found in AV ({n} entries merged)"
-MSG_EGRID_NOT_FOUND = "EGRID missing or not in AV"
+MSG_EGRID_FOUND = "found"
+MSG_EGRID_MERGED = "merged"
+MSG_EGRID_NOT_FOUND = "not_found"
 
 # ---------------------------------------------------------------------------
 # Field-id helpers — keep the lowercase snake_case schema in sync with the web
@@ -253,22 +256,44 @@ def slugify(s: str) -> str:
     return s.strip("_")
 
 
-# BAFU Lebensraumkarte TypoCH level-1 group names (leading digit → German name).
-# Habitat is aggregated to parcels by this group (mirrors the web app).
-BAFU_TYPOCH_L1: dict[str, str] = {
-    "1": "Gewässer",
-    "2": "Ufer & Feuchtgebiete",
-    "3": "Gletscher, Fels, Schutt, Geröll",
-    "4": "Grünland",
-    "5": "Krautsäume, Hochstauden, Gebüsche",
-    "6": "Wälder",
-    "7": "Pionier-/Ruderalvegetation",
-    "8": "Pflanzungen, Äcker, Kulturen",
-    "9": "Gebäude / Anlagen",
+def to_fixed_1(x: float) -> str:
+    """Format with 1 decimal, matching JS ``Number.prototype.toFixed(1)``.
+
+    JS quantizes the *exact* binary double and rounds ties toward the larger
+    value; Python's ``f"{x:.1f}"`` rounds ties to even, so exact halves diverge
+    (0.25 → JS "0.3", f-string "0.2"). ``Decimal(x)`` (from float) is the exact
+    double, so quantizing it with ROUND_HALF_UP reproduces toFixed for the
+    non-negative areas used here.
+    """
+    return str(Decimal(x).quantize(Decimal("0.1"), rounding=ROUND_HALF_UP))
+
+
+# ---------------------------------------------------------------------------
+# BAFU Lebensraumkarte (TypoCH) level-1 groups — the single source of truth,
+# shared by the api path (classify_web.classify_bafu) and the gpkg pipeline
+# (habitat aggregation). Port of `BAFU_TYPOCH_L1` in web/js/config.js; the
+# web-only `color` field (map rendering) is intentionally omitted.
+# ---------------------------------------------------------------------------
+BAFU_TYPOCH_L1: dict[str, dict] = {
+    "1": {"name": "Gewässer", "green": "Not green space", "vbsKategorie": "kat_d", "vbsProduktiv": "produktiv", "vbsTyp": "typ2"},
+    "2": {"name": "Ufer & Feuchtgebiete", "green": "Green space (soil-covered)", "vbsKategorie": "kat_d", "vbsProduktiv": "produktiv", "vbsTyp": "typ2"},
+    "3": {"name": "Gletscher, Fels, Schutt, Geröll", "green": "Not green space", "vbsKategorie": "kat_d", "vbsProduktiv": "unproduktiv", "vbsTyp": None},
+    "4": {"name": "Grünland", "green": "Green space (soil-covered)", "vbsKategorie": "kat_b", "vbsProduktiv": "produktiv", "vbsTyp": "typ2"},
+    "5": {"name": "Krautsäume, Hochstauden, Gebüsche", "green": "Green space (wooded)", "vbsKategorie": "kat_c", "vbsProduktiv": "produktiv", "vbsTyp": "typ2"},
+    "6": {"name": "Wälder", "green": "Green space (wooded)", "vbsKategorie": "kat_c", "vbsProduktiv": "produktiv", "vbsTyp": "typ2"},
+    "7": {"name": "Pionier-/Ruderalvegetation", "green": "Not green space", "vbsKategorie": "kat_d", "vbsProduktiv": "produktiv", "vbsTyp": "typ2"},
+    "8": {"name": "Pflanzungen, Äcker, Kulturen", "green": "Green space (soil-covered)", "vbsKategorie": "kat_b", "vbsProduktiv": "produktiv", "vbsTyp": "typ2"},
+    "9": {"name": "Gebäude / Anlagen", "green": "Not green space", "vbsKategorie": "kat_a", "vbsProduktiv": "unproduktiv", "vbsTyp": None},
 }
 
 
-def habitat_l1_name(typoch: str) -> str:
-    """TypoCH level-1 group name ('6.3.1 Buchenwald' → 'Wälder'); raw label if unknown."""
-    digit = str(typoch or "").strip()[:1]
-    return BAFU_TYPOCH_L1.get(digit, str(typoch or "–"))
+def typoch_l1(typoch_de: str | None) -> str:
+    """TypoCH level-1 digit of a habitat label ('6.3.1 Buchenwald' → '6'; '' → '')."""
+    return str(typoch_de or "").strip()[:1]
+
+
+def habitat_l1_label(typoch_de: str | None) -> str:
+    """TypoCH level-1 group name ('6.3.1 Buchenwald' → 'Wälder'); raw label if
+    unknown. Mirrors the web's ``habitatL1Label``."""
+    m = BAFU_TYPOCH_L1.get(typoch_l1(typoch_de))
+    return m["name"] if m else (typoch_de or "–")

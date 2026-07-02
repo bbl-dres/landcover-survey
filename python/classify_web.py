@@ -17,6 +17,7 @@ Keep this in lock-step with ``web/js/config.js`` — the cross-check depends on 
 from __future__ import annotations
 
 from config import (
+    BAFU_TYPOCH_L1,
     DEFAULT_GREEN_SPACE,
     DIN277,
     GREEN_SPACE,
@@ -25,7 +26,9 @@ from config import (
     VBS_PRODUKTIV,
     VBS_TYP,
     VERSIEGELT_ARTS,
+    habitat_l1_label,
     slugify,
+    typoch_l1,
 )
 
 __all__ = [
@@ -56,38 +59,14 @@ def classify(art: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# BAFU Lebensraumkarte (TypoCH) — habitat overlay classification
-#
-# Keyed by TypoCH level-1 code (leading digit of `typoch_de`). Only green space +
-# VBS are derived; SIA 416 / DIN 277 / sealed are None (a modeled habitat map
-# can't resolve building footprints). Port of `BAFU_TYPOCH_L1` in config.js —
-# the `color` field is web-only (map rendering) and intentionally omitted here.
+# BAFU Lebensraumkarte (TypoCH) — habitat overlay classification.
+# The level-1 table (`BAFU_TYPOCH_L1`) and label helpers live in :mod:`config`
+# (single source of truth, shared with the gpkg pipeline) and are re-exported
+# here so this module keeps mirroring web/js/config.js one-to-one.
 # ---------------------------------------------------------------------------
-BAFU_TYPOCH_L1: dict[str, dict] = {
-    "1": {"name": "Gewässer", "green": "Not green space", "vbsKategorie": "kat_d", "vbsProduktiv": "produktiv", "vbsTyp": "typ2"},
-    "2": {"name": "Ufer & Feuchtgebiete", "green": "Green space (soil-covered)", "vbsKategorie": "kat_d", "vbsProduktiv": "produktiv", "vbsTyp": "typ2"},
-    "3": {"name": "Gletscher, Fels, Schutt, Geröll", "green": "Not green space", "vbsKategorie": "kat_d", "vbsProduktiv": "unproduktiv", "vbsTyp": None},
-    "4": {"name": "Grünland", "green": "Green space (soil-covered)", "vbsKategorie": "kat_b", "vbsProduktiv": "produktiv", "vbsTyp": "typ2"},
-    "5": {"name": "Krautsäume, Hochstauden, Gebüsche", "green": "Green space (wooded)", "vbsKategorie": "kat_c", "vbsProduktiv": "produktiv", "vbsTyp": "typ2"},
-    "6": {"name": "Wälder", "green": "Green space (wooded)", "vbsKategorie": "kat_c", "vbsProduktiv": "produktiv", "vbsTyp": "typ2"},
-    "7": {"name": "Pionier-/Ruderalvegetation", "green": "Not green space", "vbsKategorie": "kat_d", "vbsProduktiv": "produktiv", "vbsTyp": "typ2"},
-    "8": {"name": "Pflanzungen, Äcker, Kulturen", "green": "Green space (soil-covered)", "vbsKategorie": "kat_b", "vbsProduktiv": "produktiv", "vbsTyp": "typ2"},
-    "9": {"name": "Gebäude / Anlagen", "green": "Not green space", "vbsKategorie": "kat_a", "vbsProduktiv": "unproduktiv", "vbsTyp": None},
-}
 
 # Fallback classification for an unknown level-1 code — matches classifyBafu().
 _BAFU_DEFAULT = {"green": "Not green space", "vbsKategorie": "kat_d", "vbsProduktiv": "unproduktiv", "vbsTyp": None}
-
-
-def typoch_l1(typoch_de: str | None) -> str:
-    """TypoCH level-1 digit of a habitat label ('6.3.1 Buchenwald' → '6'; '' → '')."""
-    return str(typoch_de or "").strip()[:1]
-
-
-def habitat_l1_label(typoch_de: str | None) -> str:
-    """Display name for a TypoCH level-1 code, falling back to the raw label."""
-    m = BAFU_TYPOCH_L1.get(typoch_l1(typoch_de))
-    return m["name"] if m else (typoch_de or "–")
 
 
 def classify_bafu(typoch_de: str | None) -> dict:

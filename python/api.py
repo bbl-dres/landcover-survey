@@ -32,7 +32,7 @@ PARCEL_FIND = "https://api3.geo.admin.ch/rest/services/all/MapServer/find"
 IDENTIFY = "https://api3.geo.admin.ch/rest/services/all/MapServer/identify"
 # Fixed to the German (deu) WFS endpoint: the ms:LCSF `Art` values are the German
 # BBArt enumeration codes the classifier keys on (Gebaeude, Strasse_Weg, …). The
-# web app defaults to this endpoint too.
+# web app pins this endpoint too (web/js/config.js API.WFS_AV).
 WFS_AV = "https://geodienste.ch/db/av_0/deu"
 
 # --- Tunables (mirror web/js/processor.js) ---

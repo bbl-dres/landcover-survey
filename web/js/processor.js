@@ -388,38 +388,30 @@ async function fetchWithRetry(url, opts = {}) {
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     if (cancelled) throw new Error("Cancelled");
 
+    let resp;
     try {
-      const resp = await fetchWithTimeout(url, { ...opts, timeoutMs: FETCH_TIMEOUT_MS });
-
-      if (resp.ok) return resp;
-
-      // Retry on rate-limit or server errors
-      if (resp.status === 429 || resp.status >= 500) {
-        const retryAfter = resp.headers.get("Retry-After");
-        const delay = retryAfter
-          ? Math.min(parseInt(retryAfter, 10) * 1000, 10000)
-          : BASE_DELAY_MS * Math.pow(2, attempt);
-        lastError = new Error(`HTTP ${resp.status}`);
-        if (attempt < MAX_RETRIES) {
-          await sleep(delay);
-          continue;
-        }
-      }
-
-      throw new Error(`HTTP ${resp.status}`);
+      resp = await fetchWithTimeout(url, { ...opts, timeoutMs: FETCH_TIMEOUT_MS });
     } catch (err) {
-      if (err.name === "AbortError") {
-        lastError = new Error("Request timeout");
-      } else {
-        lastError = err;
-      }
-
+      lastError = err.name === "AbortError" ? new Error("Request timeout") : err;
       // Retry on network errors and timeouts
       if (attempt < MAX_RETRIES) {
         await sleep(BASE_DELAY_MS * Math.pow(2, attempt));
         continue;
       }
+      break;
     }
+
+    if (resp.ok) return resp;
+    lastError = new Error(`HTTP ${resp.status}`);
+
+    // Retry only on rate-limit or server errors; other statuses fail fast.
+    if (resp.status !== 429 && resp.status < 500) break;
+    if (attempt >= MAX_RETRIES) break;
+    const retryAfter = parseInt(resp.headers.get("Retry-After"), 10);
+    const delay = Number.isFinite(retryAfter)
+      ? Math.min(retryAfter * 1000, 10000)
+      : BASE_DELAY_MS * Math.pow(2, attempt);
+    await sleep(delay);
   }
 
   throw lastError;

@@ -30,6 +30,7 @@ from config import (
     VBS_KATEGORIE_LABELS,
     VBS_PRODUKTIV_LABELS,
     VBS_TYP_LABELS,
+    to_fixed_1,
 )
 
 logger = logging.getLogger(__name__)
@@ -333,7 +334,7 @@ def _aggregate_bauzonen(rows):
     zones = {n: round2(a) for n, a in ordered}
     return {
         "bauzonen": "; ".join(n for n, _ in ordered),
-        "bauzonen_m2": "; ".join(f"{a:.1f}" for _, a in ordered),
+        "bauzonen_m2": "; ".join(to_fixed_1(a) for _, a in ordered),
         "zones": zones,
     }
 
@@ -349,7 +350,7 @@ def _aggregate_habitat(rows):
     types = {n: round2(a) for n, a in ordered}
     return {
         "habitat": "; ".join(n for n, _ in ordered),
-        "habitat_m2": "; ".join(f"{a:.1f}" for _, a in ordered),
+        "habitat_m2": "; ".join(to_fixed_1(a) for _, a in ordered),
         "types": types,
     }
 

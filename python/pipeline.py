@@ -41,8 +41,9 @@ from config import (
     VBS_TYP,
     VBS_TYP_BY_ART,
     VERSIEGELT_ARTS,
-    habitat_l1_name,
+    habitat_l1_label,
     slugify,
+    to_fixed_1,
 )
 from geometry import clean_geometries, filter_clip_results
 from swisstopo import LayerConfig, intersect_with_features
@@ -177,7 +178,7 @@ def run(
                 parcels_out, lc_out = _run_layer_analysis(
                     HABITAT_CONFIG, "habitat",
                     parcels_gdf, parcels_out, lc_out,
-                    name_fn=habitat_l1_name,  # group TypoCH labels to level-1 (names + per-type)
+                    name_fn=habitat_l1_label,  # group TypoCH labels to level-1 (names + per-type)
                 )
         else:
             logger.warning("No parcel geometries available — skipping layer analyses")
@@ -253,6 +254,19 @@ def _run_mode1(
     parcels_merged = pd.concat(all_parcels, ignore_index=True)
     lc_merged = pd.concat(all_lc, ignore_index=True)
     gdf_merged = pd.concat(all_gdf, ignore_index=True) if all_gdf else GeoDataFrame()
+
+    # An EGRID appearing in more than one chunk (duplicate user rows straddling a
+    # chunk boundary) is looked up and clipped once per chunk — drop the repeated
+    # land-cover rows and parcel geometries so the per-EGRID aggregation and the
+    # overlay analyses don't double-count.
+    if not lc_merged.empty and {"EGRID", "fid"} <= set(lc_merged.columns):
+        n_before = len(lc_merged)
+        lc_merged = lc_merged.drop_duplicates(subset=["EGRID", "fid"], ignore_index=True)
+        if len(lc_merged) < n_before:
+            logger.info("Dropped %d duplicate land cover rows from cross-chunk EGRIDs",
+                        n_before - len(lc_merged))
+    if not gdf_merged.empty and "EGRIS_EGRID" in gdf_merged.columns:
+        gdf_merged = gdf_merged.drop_duplicates(subset="EGRIS_EGRID", ignore_index=True)
 
     return parcels_merged, lc_merged, gdf_merged
 
@@ -417,9 +431,7 @@ def _dissolve_duplicate_egrids(gdf: GeoDataFrame) -> GeoDataFrame:
     agg = {c: "first" for c in non_geom}
     dissolved = multis.dissolve(by="EGRIS_EGRID", aggfunc=agg).reset_index()
 
-    dissolved["Check_EGRID"] = dissolved["EGRIS_EGRID"].map(
-        lambda e: MSG_EGRID_MERGED.format(n=counts[e])
-    )
+    dissolved["Check_EGRID"] = MSG_EGRID_MERGED
 
     result = pd.concat([singles, dissolved], ignore_index=True)
     result = GeoDataFrame(result, geometry=gdf.geometry.name, crs=gdf.crs)
@@ -563,8 +575,22 @@ def _clip_single_parcel(
     if not parcel_geom.is_valid:
         parcel_geom = shapely.make_valid(parcel_geom)
 
-    # Vectorised intersection (replaces gpd.overlay for single-parcel case)
-    clipped_geoms = shapely.intersection(lcsf.geometry.values, parcel_geom)
+    # Vectorised intersection (replaces gpd.overlay for single-parcel case).
+    # Fail-soft: a GEOS error on one invalid land-cover feature must drop only
+    # that feature, not abort the run — retry per feature on failure.
+    try:
+        clipped_geoms = shapely.intersection(lcsf.geometry.values, parcel_geom)
+    except Exception:  # noqa: BLE001 — GEOSException on degenerate input
+        clipped_geoms = []
+        n_failed = 0
+        for g in lcsf.geometry.values:
+            try:
+                clipped_geoms.append(shapely.intersection(g, parcel_geom))
+            except Exception:  # noqa: BLE001
+                clipped_geoms.append(None)  # dropped by filter_clip_results
+                n_failed += 1
+        logger.warning("  Clip failed for %d land cover feature(s) of parcel %s — dropped",
+                       n_failed, parcel.get("EGRID", parcel.get("EGRIS_EGRID", "?")))
 
     result = lcsf.copy()
     result[result.geometry.name] = clipped_geoms
@@ -786,8 +812,13 @@ def _aggregate_landcover(
     result = result.merge(vbs_typ_pivot, on="EGRID", how="left")
     result = result.merge(art_pivot, on="EGRID", how="left")
 
-    # Fill NaN for parcels with no LC data
-    fill = {col: 0.0 for col in result.columns if col.endswith("_m2")}
+    # Fill NaN for parcels with no LC data — aggregate columns only. parcel_area_m2
+    # must stay null for unfound EGRIDs ("not found" ≠ "0 m²"), and user passthrough
+    # columns (input_*) are never ours to fill.
+    fill = {
+        col: 0.0 for col in result.columns
+        if col.endswith("_m2") and col != "parcel_area_m2" and not col.startswith("input_")
+    }
     result = result.fillna(fill)
 
     logger.info("Aggregated land cover areas onto %d parcels", len(result))
@@ -1082,7 +1113,7 @@ def _aggregate_layer_results(
         return "; ".join(str(v) for v in s)
 
     def _join_areas(s):
-        return "; ".join(f"{v:.1f}" for v in s)
+        return "; ".join(to_fixed_1(v) for v in s)
 
     grouped = by.groupby(group_key, sort=False).agg(
         **{

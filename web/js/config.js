@@ -1,7 +1,7 @@
 /**
  * BBArt classification mappings — ported from python/config.py
  */
-import { t, localeFmtNum, getLang } from "./i18n.js";
+import { t, localeFmtNum } from "./i18n.js";
 
 /** Land cover type → SIA 416 classification */
 export const SIA416 = {
@@ -523,12 +523,17 @@ export function fmtArea(m2, unit = _areaUnit) {
 }
 
 /** API endpoints */
-const WFS_LANG = { de: "deu", fr: "fra", it: "ita", en: "eng" };
 export const API = {
   PARCEL_FIND: "https://api3.geo.admin.ch/rest/services/all/MapServer/find",
   IDENTIFY: "https://api3.geo.admin.ch/rest/services/all/MapServer/identify",
   SEARCH: "https://api3.geo.admin.ch/rest/services/ech/SearchServer",
-  get WFS_AV() { return `https://geodienste.ch/db/av_0/${WFS_LANG[getLang()] || "deu"}`; },
+  // Pinned to the German (deu) WFS endpoint regardless of the UI language: the
+  // per-language endpoints translate the ms:LCSF *property names and values*
+  // (deu `Art: "Gebaeude"` → fra `Genre: "batiment"`, ita `Genere: "edificio"`;
+  // eng is not supported and returns a ServiceException). classify() keys on the
+  // German BBArt codes, so only deu yields correct results. The UI translates
+  // for display; the Python API path pins deu for the same reason.
+  WFS_AV: "https://geodienste.ch/db/av_0/deu",
 };
 
 /** Basemap styles with thumbnails */

@@ -1,8 +1,9 @@
-"""Generic Swisstopo REST API client with caching and intersection logic.
+"""Generic Swisstopo REST API client with intersection logic (GeoPackage path).
 
 Provides reusable building blocks for fetching features from any
 geo.admin.ch MapServer layer and intersecting them locally with
-parcel / green-space geometries.
+parcel / green-space geometries. Works in LV95 (EPSG:2056) and returns
+GeoDataFrames; the EPSG:4326 web-parity client lives in :mod:`api`.
 """
 
 from __future__ import annotations
@@ -13,11 +14,9 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
-import geopandas as gpd
-import pandas as pd
 import shapely
 from geopandas import GeoDataFrame
 from pandas import DataFrame
@@ -30,7 +29,11 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # API constants
 # ---------------------------------------------------------------------------
-IDENTIFY_URL = "https://api3.geo.admin.ch/rest/services/ech/MapServer/identify"
+# Same endpoint as the web app and the api-path client (api.py). This client
+# differs from api.py deliberately: it works in LV95 (EPSG:2056) and returns
+# GeoDataFrames for the GeoPackage pipeline, and uses a longer timeout suited
+# to unattended bulk runs.
+IDENTIFY_URL = "https://api3.geo.admin.ch/rest/services/all/MapServer/identify"
 API_LIMIT = 200   # max features per request
 API_PAUSE = 0.2   # seconds between paginated / grouped requests
 API_MAX_RETRIES = 3   # retries on transient HTTP errors
@@ -60,12 +63,6 @@ class LayerConfig:
 
     id_column: str = "feature_id"
     """Output column name for the feature id."""
-
-    cache: dict[str, GeoDataFrame] = field(default_factory=dict, repr=False)
-    """Per-BFSNr fetch cache (populated at runtime)."""
-
-    def clear_cache(self) -> None:
-        self.cache.clear()
 
 
 # ---------------------------------------------------------------------------
@@ -227,6 +224,7 @@ def _fetch_and_parse(
 
 
 MAX_URL_COORDS = 200  # simplify polygons with more vertices than this
+SIMPLIFY_TOLERANCE_M = 5.0  # simplify tolerance + outward buffer (m, LV95)
 
 
 def fetch_features_for_polygon(
@@ -240,10 +238,15 @@ def fetch_features_for_polygon(
     bounding box, reducing false positives and pagination pressure.
     Simplifies complex geometries to stay within URL length limits.
     """
-    # Simplify complex polygons to stay within URL length limits
+    # Simplify complex polygons to stay within URL length limits. Simplification
+    # can pull the boundary inward and silently miss features that only touch the
+    # parcel edge, so buffer by the same tolerance to keep the filter a strict
+    # superset of the real parcel (false positives are dropped by the local
+    # intersection afterwards; false negatives would be unrecoverable).
     n_coords = shapely.get_num_coordinates(geom)
     if n_coords > MAX_URL_COORDS:
-        geom = geom.simplify(5.0, preserve_topology=True)
+        geom = geom.simplify(SIMPLIFY_TOLERANCE_M, preserve_topology=True).buffer(
+            SIMPLIFY_TOLERANCE_M, join_style="mitre")
         n_simplified = shapely.get_num_coordinates(geom)
         if n_simplified > MAX_URL_COORDS:
             logger.debug("Geometry still has %d coords after simplify — using bbox", n_simplified)
@@ -266,49 +269,6 @@ def fetch_features_for_bbox(
     minx, miny, maxx, maxy = bbox
     geom_json = f"{minx},{miny},{maxx},{maxy}"
     return _fetch_and_parse(geom_json, "esriGeometryEnvelope", bbox, cfg, context=context)
-
-
-def fetch_features_cached(
-    parcels_gdf: GeoDataFrame,
-    cfg: LayerConfig,
-) -> GeoDataFrame:
-    """Fetch features for all parcels, cached by BFSNr.
-
-    One API call per municipality using the convex hull of all parcels
-    in that group (tighter than a bounding box, reduces false positives).
-    """
-    if parcels_gdf.empty:
-        return _empty_gdf(cfg)
-
-    if "BFSNr" in parcels_gdf.columns:
-        groups = parcels_gdf.groupby("BFSNr")
-    else:
-        groups = [("all", parcels_gdf)]
-
-    frames: list[GeoDataFrame] = []
-    for bfsnr, group in groups:
-        cache_key = str(bfsnr)
-        if cache_key in cfg.cache:
-            logger.debug("  Cache hit for BFSNr %s (%s)", bfsnr, cfg.layer_id)
-            frames.append(cfg.cache[cache_key])
-            continue
-
-        hull = group.union_all().convex_hull
-        bounds = hull.bounds
-        logger.debug("  Fetching %s for BFSNr %s (polygon, bbox: %.0f,%.0f,%.0f,%.0f)",
-                      cfg.layer_id, bfsnr, *bounds)
-        gdf = fetch_features_for_polygon(hull, cfg)
-        cfg.cache[cache_key] = gdf
-        frames.append(gdf)
-        time.sleep(API_PAUSE)
-
-    if not frames:
-        return _empty_gdf(cfg)
-
-    all_gdf = pd.concat(frames, ignore_index=True)
-    all_gdf = GeoDataFrame(all_gdf, geometry="geometry", crs=CRS_STRING)
-    all_gdf = all_gdf.drop_duplicates(subset=cfg.id_column).reset_index(drop=True)
-    return all_gdf
 
 
 # ---------------------------------------------------------------------------

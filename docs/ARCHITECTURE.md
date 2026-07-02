@@ -245,7 +245,7 @@ not halt processing. Only systemic errors abort.
 | Situation | Behaviour |
 |-----------|-----------|
 | EGRID not found in AV | Row kept; `Check_EGRID` = error, `parcel_area_m2` = null |
-| Duplicate EGRIDs | Geometries dissolved; `Check_EGRID` = "... (n entries merged)" |
+| Duplicate EGRIDs | Geometries dissolved; `check_egrid` = `merged` (count in the log) |
 | `make_valid()` returns empty | Feature kept with zero area; logged WARNING |
 | Clip produces only lines/points | Feature dropped; logged DEBUG |
 | Clip produces sliver < 0.001 m² | Feature dropped; logged DEBUG |
@@ -367,7 +367,7 @@ geoportal; AV land cover comes from geodienste.ch.
 | `wmts.geo.admin.ch/1.0.0/{layerId}/default/{time}/3857/{z}/{x}/{y}.{fmt}` | [docs.geo.admin.ch](https://docs.geo.admin.ch) | WMTS | Render user-added overlays that `layersConfig` reports as `wmts` | any |
 | `wms.geo.admin.ch/?…REQUEST=GetMap&LAYERS=ch.kantone.cadastralwebmap-farbe&CRS=EPSG:3857&BBOX={bbox-epsg-3857}…` | [docs.geo.admin.ch](https://docs.geo.admin.ch) | WMS | Cadastral parcel overlay on the picker map | `ch.kantone.cadastralwebmap-farbe` |
 | `wms.geo.admin.ch/?…REQUEST=GetMap&LAYERS={layers}…` | [docs.geo.admin.ch](https://docs.geo.admin.ch) | WMS | Render user-added overlays that `layersConfig` reports as `wms`/aggregate | any |
-| `geodienste.ch/db/av_0/{deu\|fra\|ita\|eng}?…REQUEST=GetFeature&TYPENAMES=ms:LCSF&COUNT=1000&STARTINDEX=…` | [geodienste.ch](https://geodienste.ch) | WFS | Fetch official AV land-cover surfaces in the parcel bbox (paged via `STARTINDEX`), then clip client-side with Turf.js | `ms:LCSF` |
+| `geodienste.ch/db/av_0/deu?…REQUEST=GetFeature&TYPENAMES=ms:LCSF&COUNT=1000&STARTINDEX=…` | [geodienste.ch](https://geodienste.ch) | WFS | Fetch official AV land-cover surfaces in the parcel bbox (paged via `STARTINDEX`), then clip client-side with Turf.js. Pinned to the German endpoint regardless of UI language — the per-language endpoints translate the `Art` attribute values the classifier keys on | `ms:LCSF` |
 
 **Third-party CDN assets** (loaded directly in the browser):
 

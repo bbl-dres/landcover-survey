@@ -178,8 +178,12 @@ function parseCSV(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => {
-      const text = e.target.result;
-      const delimiter = detectDelimiter(text);
+      let text = e.target.result;
+      // Honour a leading Excel "sep=<d>" hint line (written by some locales'
+      // CSV exports), mirroring the Python readers; otherwise auto-detect.
+      const sepHint = /^sep=(.)\r?\n/i.exec(text);
+      const delimiter = sepHint ? sepHint[1] : detectDelimiter(text);
+      if (sepHint) text = text.slice(sepHint[0].length);
 
       const matrix = tokenizeDelimited(text, delimiter)
         .map((cells) => cells.map((c) => c.trim()))

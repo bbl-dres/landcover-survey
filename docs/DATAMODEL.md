@@ -203,8 +203,8 @@ Aggregation columns are included by default (Python: `--no-aggregate` to omit).
 > `vbs_`) or source layer (`av_` AV land cover, `bauzonen_` ARE zones, `habitat_`
 > BAFU). Coded *values* keep their domain casing (e.g. `lc_source` = `AV`, the `art`
 > value = `Gebaeude`). The web app's `status` / `errors` / `check_wfs` / `check_geom`
-> / `lc_source` columns are web-only; the Python `check_egrid` carries a message
-> (`EGRID found in AV`) rather than the web app's short code.
+> / `lc_source` columns are web-only; `check_egrid` carries the same short codes
+> (`found` / `merged` / `not_found`) in every implementation.
 
 | Attribute | Format | Description |
 |-----------|--------|-------------|
@@ -331,9 +331,9 @@ to the output; **EN** / **DE** = the labels the web app shows for it.
 
 | Code | EN | DE | Description |
 |------|----|----|-------------|
-| `found` | Found | Gefunden | Single matching parcel found. The Python CLI writes the message `EGRID found in AV`. |
-| `merged` | Found (merged) | Gefunden (zusammengeführt) | Multiple `fid` entries dissolved into one. Python: `EGRID found in AV (N entries merged)`. |
-| `not_found` | Not found | Nicht gefunden | EGRID not found in the AV data. Python: `EGRID missing or not in AV`. |
+| `found` | Found | Gefunden | Single matching parcel found. |
+| `merged` | Found (merged) | Gefunden (zusammengeführt) | Multiple `fid` entries dissolved into one (merge count in the log). |
+| `not_found` | Not found | Nicht gefunden | EGRID not found in the AV data. |
 | `invalid` | Invalid EGRID | EGRID ungültig | Malformed EGRID (does not start with `CH`). Web app only. |
 | `error:<msg>` | Error: \<msg\> | Fehler: \<msg\> | Unexpected processing error, message appended. Web app only. |
 

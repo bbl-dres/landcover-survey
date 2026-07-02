@@ -155,50 +155,13 @@ def _build_rows(args, logger) -> list[dict]:
 
 
 def _read_input_rows(path: str) -> list[dict]:
-    """Read an ID/EGRID list from CSV/Excel — mirrors the web upload contract
-    (`web/js/upload.js`): **both `id` and `egrid` are required** (matched
-    case-insensitively); every other column is optional and passed through
-    (prefixed `input_` downstream).
+    """Read an ID/EGRID list via the shared reader (:mod:`user_input`) — the same
+    contract as the web upload and the gpkg pipeline: delimiter auto-detection +
+    ``sep=`` hint, UTF-8 BOM, case-insensitive required ``id``/``egrid`` columns,
+    headers lowercased so the ``input_<col>`` ids line up with the web."""
+    from user_input import read_rows
 
-    All headers are lowercased + trimmed exactly as the web does, so the
-    `input_<col>` ids line up. Auto-detects the delimiter (``;`` / ``,``), honours
-    a leading Excel ``sep=`` hint, and strips a UTF-8 BOM. Raises ``ValueError``
-    listing the missing column(s) when ``id`` / ``egrid`` are absent.
-    """
-    import pandas as pd
-
-    p = Path(path)
-    if p.suffix.lower() in (".xlsx", ".xls"):
-        df = pd.read_excel(p, dtype=str)
-    else:
-        with open(p, encoding="utf-8-sig") as fh:
-            first = fh.readline()
-        if first.lower().startswith("sep="):
-            delim, skip = (first.strip()[4:5] or ";"), 1
-        else:
-            delim, skip = (";" if first.count(";") >= first.count(",") else ","), 0
-        df = pd.read_csv(p, dtype=str, sep=delim, skiprows=skip, encoding="utf-8-sig")
-
-    raw_cols = list(df.columns)
-    trimmed = [str(c).strip() for c in raw_cols]
-    lower = [c.lower() for c in trimmed]
-
-    missing = [c for c in ("id", "egrid") if c not in lower]
-    if missing:
-        raise ValueError(
-            "Input file is missing required column(s): "
-            f"{', '.join(missing)}. Found: {', '.join(trimmed)}"
-        )
-
-    def s(v):
-        return "" if pd.isna(v) else str(v).strip()
-
-    rows: list[dict] = []
-    for _, r in df.iterrows():
-        # lowercased header → trimmed value; a duplicate lowercased header lets the
-        # last column win, matching the web's row-object normalisation.
-        rows.append({low: s(r[raw]) for raw, low in zip(raw_cols, lower)})
-    return rows
+    return read_rows(path)
 
 
 def _run_api(args, output_dir: Path, ts: str, prefix: str, logger) -> None:

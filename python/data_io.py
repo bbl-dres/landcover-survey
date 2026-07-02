@@ -31,26 +31,16 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 def read_user_input(path: str | Path) -> DataFrame:
-    """Read a CSV or Excel file.  Validate that ``ID`` and ``EGRID`` columns exist."""
+    """Read a CSV/Excel parcel list via the shared reader (:mod:`user_input`) —
+    the same contract as the web upload and the api path: delimiter
+    auto-detection + ``sep=`` hint, UTF-8 BOM, case-insensitive required
+    ``id``/``egrid`` columns. Returns a DataFrame with canonical ``ID``/``EGRID``
+    columns; every other column keeps its lowercased id (so the ``input_<col>``
+    output columns match the web's)."""
+    from user_input import read_dataframe
+
     path = Path(path)
-    suffix = path.suffix.lower()
-    if suffix == ".csv":
-        df = pd.read_csv(path, dtype=str)
-    elif suffix in (".xlsx", ".xls"):
-        df = pd.read_excel(path, dtype=str)
-    else:
-        raise ValueError(f"Unsupported file format: {suffix}  (expected .csv or .xlsx)")
-
-    # Strip whitespace from column names and string values (common in SAP/ERP exports)
-    df.columns = df.columns.str.strip()
-    for col in df.columns:
-        if df[col].dtype == object:
-            df[col] = df[col].str.strip()
-
-    missing = {"ID", "EGRID"} - set(df.columns)
-    if missing:
-        raise ValueError(f"Input file is missing required columns: {missing}")
-
+    df = read_dataframe(path)
     logger.info("Read %d rows from %s", len(df), path.name)
     return df
 
