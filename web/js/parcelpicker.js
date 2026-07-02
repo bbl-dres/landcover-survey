@@ -11,7 +11,7 @@
  * wired to the single results map through a shared global `mapRef`. Driving a
  * second map through that global would corrupt the results view's layer state.
  */
-import { API, MAP_STYLES, MAP_DEFAULT, esc, fetchWithTimeout, BRAND } from "./config.js";
+import { API, MAP_STYLES, esc, fetchWithTimeout, BRAND } from "./config.js";
 import { showToast } from "./toast.js";
 import { t, getLang } from "./i18n.js";
 import { poleOfInaccessibility } from "./polylabel.js";
@@ -32,6 +32,12 @@ const BUILDING_ZOOM = 17;
  *  office). Gives the user a real, recognizable parcel to start from instead of
  *  an empty country-level map where nothing is clickable. */
 const DEFAULT_EGRID = "CH373589574684";
+/** The camera for DEFAULT_EGRID, baked in so the map can be CREATED already
+ *  zoomed in on the default parcel instead of easing in from country level once
+ *  the geometry arrives. Center = the parcel's pole of inaccessibility (where
+ *  the pin lands), zoom = its zoomToParcel fit (capped at BUILDING_ZOOM).
+ *  ⚠ Keep in sync with DEFAULT_EGRID — recompute when the parcel changes. */
+const DEFAULT_CAMERA = { center: [7.3874, 46.946205], zoom: BUILDING_ZOOM };
 
 let map = null;
 let marker = null;       // single reusable selection pin
@@ -83,11 +89,14 @@ function createMap() {
   // would pan the map and trap the page scroll. cooperativeGestures lets one
   // finger scroll the page (two fingers pan the map); it's unneeded on desktop.
   const touchMap = typeof window.matchMedia === "function" && window.matchMedia("(max-width: 767px)").matches;
+  // Start directly at the default parcel's camera — the geometry fetch in
+  // selectDefaultParcel only adds the highlight + pin, so page load shows the
+  // parcel immediately instead of zooming in from MAP_DEFAULT (country level).
   map = new maplibregl.Map({
     container,
     style: MAP_STYLES.positron.url,
-    center: MAP_DEFAULT.center,
-    zoom: MAP_DEFAULT.zoom,
+    center: DEFAULT_CAMERA.center,
+    zoom: DEFAULT_CAMERA.zoom,
     attributionControl: false,
     cooperativeGestures: touchMap,
     locale: { "CooperativeGesturesHandler.MobileText": t("map.twoFinger") },
@@ -115,18 +124,30 @@ function createMap() {
     map.addLayer({ id: "pick-line", type: "line", source: "pick-highlight", paint: { "line-color": BRAND.red, "line-width": 2.5 } });
 
     map.resize();
-    selectDefaultParcel(); // open on a real, ready-to-analyse example parcel
+    // The camera is already on the default parcel (DEFAULT_CAMERA) — just add
+    // the highlight + pin, without a redundant fly-in animation.
+    selectDefaultParcel({ fly: false });
   });
 
   map.on("click", (e) => onMapClick(e.lngLat));
 }
 
 /** Pre-select the default landing parcel (cached after the first fetch so resets
- *  are instant). select() clears any prior selection as it sets the new one. */
-async function selectDefaultParcel() {
+ *  are instant). select() clears any prior selection as it sets the new one.
+ *  `fly: false` is used on the initial load, where the map is created directly
+ *  at DEFAULT_CAMERA; resets keep the fly so the map visibly returns home. */
+async function selectDefaultParcel({ fly = true } = {}) {
   try {
     if (!defaultParcel) defaultParcel = await findByEgrid(DEFAULT_EGRID);
-    if (defaultParcel) select(defaultParcel, { fly: true });
+    if (!defaultParcel) return;
+    select(defaultParcel, { fly });
+    // Safety net: if DEFAULT_CAMERA has drifted from DEFAULT_EGRID (they must
+    // change together), a no-fly load would leave the parcel off-screen — then
+    // fly after all rather than showing an empty viewport.
+    if (!fly && map) {
+      const pt = markerPointOf(defaultParcel.geometry);
+      if (pt && !map.getBounds().contains(pt)) zoomToParcel(defaultParcel.geometry, pt);
+    }
   } catch (err) {
     console.warn("Default parcel load failed:", err.message);
   }
