@@ -127,6 +127,10 @@ def main(argv=None):
     ap.add_argument("--atol", type=float, default=0.02, help="Absolute tolerance in m² (default 0.02)")
     args = ap.parse_args(argv)
 
+    # Diff lines contain Δ and umlauts; don't die on a cp1252 Windows console.
+    if sys.stdout.encoding and sys.stdout.encoding.lower() not in ("utf-8", "utf8"):
+        sys.stdout.reconfigure(errors="replace")
+
     web_feats, py_feats = _load(args.web), _load(args.python)
     web_p, py_p = _parcels(web_feats), _parcels(py_feats)
 
