@@ -1,10 +1,18 @@
 # Python pipeline — TODO
 
-Bring the Python CLI to parity with the web app's overlay data-quality handling.
-The web app (`web/js/processor.js`) is the reference implementation. Goal: **web
-and Python produce matching per-parcel results**, with every wall-to-wall layer
-summing to the parcel area — the QS invariant **Σ AV land cover ≈ Σ BAFU habitat
-≈ Σ Bauzonen ≈ parcel area**.
+> **Update:** the new **`--source api`** path (`processor_web.py` + `api.py` +
+> `geom_wgs84.py` + `export_web.py`) already achieves web parity — it ports
+> `web/js/processor.js` step-for-step (synthetic-AV fallback, "Ohne Bauzone"
+> remainder, habitat gap-fill, all `check_*` flags) and exports GeoJSON + Excel.
+> `compare.py` cross-checks it against a web export. **The tasks below remain only
+> for the offline `--source gpkg` path**, which still reads a local GeoPackage and
+> has not been brought to parity.
+
+Bring the Python **GeoPackage** pipeline to parity with the web app's overlay
+data-quality handling. The web app (`web/js/processor.js`) is the reference
+implementation. Goal: **web and Python produce matching per-parcel results**, with
+every wall-to-wall layer summing to the parcel area — the QS invariant **Σ AV land
+cover ≈ Σ BAFU habitat ≈ Σ Bauzonen ≈ parcel area**.
 
 ## Background
 

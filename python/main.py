@@ -1,25 +1,27 @@
 """
 Landcover Survey
 ================
-Aggregate land cover usage (m²) per Swiss cadastral parcel
-from official survey data (Amtliche Vermessung).
+Aggregate land cover usage (m²) per Swiss cadastral parcel.
+
+Two sources (``--source``):
+
+- ``api`` (default) — **web parity**: fetches parcels + land cover + overlays live
+  from the same geo.admin.ch / geodienste.ch services the web app uses, in
+  EPSG:4326 with the Turf area port, and exports GeoJSON + Excel (+ CSV). Input is
+  one or more EGRIDs (``--egrid``) or an optional CSV/Excel list (``--input``).
+- ``gpkg`` — offline batch from a local AV GeoPackage (Shapely / exact planar
+  areas, full cantonal coverage). CSV output. The original CLI behaviour.
 
 Usage
 -----
-    python main.py --input parcels.csv
-    python main.py --input parcels.csv --bauzonen --habitat
-    python main.py --input parcels.csv --bauzonen --habitat --limit 10 -v
-    python main.py --mode 2 --limit 5
+    # API path (default): single parcel or a list
+    python main.py --egrid CH427760110057
+    python main.py --egrid CH427760110057,CH690292570744 --output-dir ./out
+    python main.py --input parcels.csv                    # CSV/Excel with ID, EGRID
 
-Required input columns: ID, EGRID.  All other columns are passed through.
-
-Outputs (written next to the input file):
-    {input}_parcels_{timestamp}.csv   — per-parcel breakdown (SIA 416, DIN 277)
-    {input}_landcover_{timestamp}.csv — per land-cover-clip detail rows
-
-Optional analyses (require internet):
-    --bauzonen   Intersect with building zones (ch.are.bauzonen)
-    --habitat    Intersect with BAFU habitat map (ch.bafu.lebensraumkarte-schweiz)
+    # GeoPackage path (offline)
+    python main.py --source gpkg --input parcels.csv
+    python main.py --source gpkg --mode 2 --limit 5
 
 Run  python main.py --help  for all options.
 """
@@ -40,54 +42,67 @@ def main(argv: list[str] | None = None) -> None:
         description="Aggregate land cover usage (m²) per Swiss cadastral parcel.",
     )
 
-    # --- Input / output ---
     parser.add_argument(
-        "--input", dest="input_path",
-        help="Path to user CSV or Excel file (required for Mode 1)",
+        "--source", choices=["api", "gpkg"], default="api",
+        help="Data source: 'api' (default, web-parity live services) or 'gpkg' (local GeoPackage)",
+    )
+
+    # --- Input ---
+    parser.add_argument(
+        "--egrid", dest="egrid",
+        help="(api) One or more EGRIDs, comma-separated (e.g. CH427760110057,CH690292570744)",
     )
     parser.add_argument(
-        "--gpkg", default=str(DEFAULT_GPKG_PATH),
-        help=f"Path to the AV GeoPackage (default: {DEFAULT_GPKG_PATH})",
+        "--input", dest="input_path",
+        help="Path to a CSV/Excel with ID + EGRID columns (api: optional list; gpkg Mode 1: required)",
     )
     parser.add_argument(
         "--output-dir", default=None,
-        help="Output directory (default: same as input file, or ./data for Mode 2)",
-    )
-
-    # --- Processing options ---
-    parser.add_argument(
-        "--mode", type=int, choices=[1, 2], default=1,
-        help="1 = user-provided parcel list, 2 = all parcels from GeoPackage (default: 1)",
+        help="Output directory (default: input file's dir, else ./data)",
     )
     parser.add_argument(
         "--limit", type=int, default=None,
-        help="Process only first N rows (Mode 1) or N municipalities (Mode 2)",
+        help="Process only the first N rows (api / gpkg Mode 1) or N municipalities (gpkg Mode 2)",
+    )
+
+    # --- GeoPackage source options ---
+    parser.add_argument(
+        "--gpkg", default=str(DEFAULT_GPKG_PATH),
+        help=f"(gpkg) Path to the AV GeoPackage (default: {DEFAULT_GPKG_PATH})",
+    )
+    parser.add_argument(
+        "--mode", type=int, choices=[1, 2], default=1,
+        help="(gpkg) 1 = user parcel list, 2 = all parcels (default: 1)",
     )
     parser.add_argument(
         "--chunk-size", type=int, default=10000,
-        help="Mode 1: rows per processing chunk (default: 10000)",
+        help="(gpkg) Mode 1: rows per processing chunk (default: 10000)",
     )
+    parser.add_argument("--bauzonen", action="store_true", help="(gpkg) Intersect with Bauzonen")
+    parser.add_argument("--habitat", action="store_true", help="(gpkg) Intersect with BAFU Lebensraumkarte")
+    parser.add_argument("--no-aggregate", action="store_true", help="(gpkg) Skip area aggregation on parcels")
+    parser.add_argument("--no-parcels", action="store_true", help="(gpkg) Skip parcels CSV export")
+    parser.add_argument("--no-landcover", action="store_true", help="(gpkg) Skip land cover CSV export")
 
-    # --- Optional analyses ---
-    parser.add_argument(
-        "--bauzonen", action="store_true",
-        help="Intersect with Swisstopo Bauzonen (requires internet)",
-    )
-    parser.add_argument(
-        "--habitat", action="store_true",
-        help="Intersect with BAFU Lebensraumkarte (requires internet)",
-    )
+    # --- API source options (overlays default ON, matching the web app) ---
+    parser.add_argument("--no-bauzonen", action="store_true", help="(api) Disable the Bauzonen overlay")
+    parser.add_argument("--no-habitat", action="store_true", help="(api) Disable the BAFU habitat overlay")
+    parser.add_argument("--no-synthetic", action="store_true", help="(api) Disable the synthetic-AV fallback")
+    parser.add_argument("--no-geojson", action="store_true", help="(api) Skip the GeoJSON export")
+    parser.add_argument("--no-xlsx", action="store_true", help="(api) Skip the Excel export")
+    parser.add_argument("--no-csv", action="store_true", help="(api) Skip the parcels/land-cover CSV export")
 
-    # --- Output control ---
-    parser.add_argument("--no-aggregate", action="store_true", help="Skip area aggregation on parcels")
-    parser.add_argument("--no-parcels", action="store_true", help="Skip parcels CSV export")
-    parser.add_argument("--no-landcover", action="store_true", help="Skip land cover CSV export")
     parser.add_argument("--verbose", "-v", action="store_true", help="Enable DEBUG logging")
 
     args = parser.parse_args(argv)
 
-    if args.mode == 1 and args.input_path is None:
-        parser.error("Mode 1 requires --input <path to CSV or Excel file>")
+    # --- Validate input per source ---
+    if args.source == "api":
+        if not args.egrid and not args.input_path:
+            parser.error("--source api requires --egrid <EGRID[,EGRID…]> or --input <file>")
+    else:  # gpkg
+        if args.mode == 1 and args.input_path is None:
+            parser.error("--source gpkg --mode 1 requires --input <path to CSV or Excel file>")
 
     # --- Resolve output directory ---
     if args.output_dir is not None:
@@ -112,13 +127,128 @@ def main(argv: list[str] | None = None) -> None:
         ],
     )
     logger = logging.getLogger(__name__)
-    logger.info(
-        "Landcover Survey started — mode=%d, output=%s%s",
-        args.mode, output_dir,
-        f", limit={args.limit}" if args.limit else "",
-    )
+    logger.info("Landcover Survey started — source=%s, output=%s%s",
+                args.source, output_dir, f", limit={args.limit}" if args.limit else "")
 
-    # --- Run pipeline ---
+    if args.source == "api":
+        _run_api(args, output_dir, ts, prefix, logger)
+    else:
+        _run_gpkg(args, output_dir, ts)
+
+
+# ---------------------------------------------------------------------------
+# API path
+# ---------------------------------------------------------------------------
+
+def _build_rows(args, logger) -> list[dict]:
+    """Build ``[{"id","egrid", …extras}]`` rows from --egrid or --input."""
+    if args.input_path:
+        rows = _read_input_rows(args.input_path)
+        if args.limit is not None:
+            rows = rows[:args.limit]
+        return rows
+
+    egrids = [e.strip() for e in args.egrid.split(",") if e.strip()]
+    if args.limit is not None:
+        egrids = egrids[:args.limit]
+    return [{"id": e, "egrid": e} for e in egrids]
+
+
+def _read_input_rows(path: str) -> list[dict]:
+    """Read an ID/EGRID list from CSV/Excel — mirrors the web upload contract
+    (`web/js/upload.js`): **both `id` and `egrid` are required** (matched
+    case-insensitively); every other column is optional and passed through
+    (prefixed `input_` downstream).
+
+    All headers are lowercased + trimmed exactly as the web does, so the
+    `input_<col>` ids line up. Auto-detects the delimiter (``;`` / ``,``), honours
+    a leading Excel ``sep=`` hint, and strips a UTF-8 BOM. Raises ``ValueError``
+    listing the missing column(s) when ``id`` / ``egrid`` are absent.
+    """
+    import pandas as pd
+
+    p = Path(path)
+    if p.suffix.lower() in (".xlsx", ".xls"):
+        df = pd.read_excel(p, dtype=str)
+    else:
+        with open(p, encoding="utf-8-sig") as fh:
+            first = fh.readline()
+        if first.lower().startswith("sep="):
+            delim, skip = (first.strip()[4:5] or ";"), 1
+        else:
+            delim, skip = (";" if first.count(";") >= first.count(",") else ","), 0
+        df = pd.read_csv(p, dtype=str, sep=delim, skiprows=skip, encoding="utf-8-sig")
+
+    raw_cols = list(df.columns)
+    trimmed = [str(c).strip() for c in raw_cols]
+    lower = [c.lower() for c in trimmed]
+
+    missing = [c for c in ("id", "egrid") if c not in lower]
+    if missing:
+        raise ValueError(
+            "Input file is missing required column(s): "
+            f"{', '.join(missing)}. Found: {', '.join(trimmed)}"
+        )
+
+    def s(v):
+        return "" if pd.isna(v) else str(v).strip()
+
+    rows: list[dict] = []
+    for _, r in df.iterrows():
+        # lowercased header → trimmed value; a duplicate lowercased header lets the
+        # last column win, matching the web's row-object normalisation.
+        rows.append({low: s(r[raw]) for raw, low in zip(raw_cols, lower)})
+    return rows
+
+
+def _run_api(args, output_dir: Path, ts: str, prefix: str, logger) -> None:
+    import processor_web
+    import export_web
+
+    try:
+        rows = _build_rows(args, logger)
+    except ValueError as e:
+        logger.error(str(e))
+        raise SystemExit(1)
+    if not rows:
+        logger.error("No EGRIDs to process.")
+        raise SystemExit(1)
+
+    options = {
+        "bauzonen": not args.no_bauzonen,
+        "habitat": not args.no_habitat,
+        "synthLandcover": not args.no_synthetic,
+    }
+    logger.info("Processing %d parcel(s) via live services (bauzonen=%s, habitat=%s, synthetic=%s)",
+                len(rows), options["bauzonen"], options["habitat"], options["synthLandcover"])
+
+    def on_progress(p):
+        if p["processed"] % 25 == 0 or p["processed"] == p["total"]:
+            logger.info("  %d/%d processed (%d found)", p["processed"], p["total"], p["succeeded"])
+
+    results = processor_web.process_rows(rows, options, on_progress=on_progress)
+
+    n_found = sum(1 for p in results["parcels"] if processor_web.is_found(p["check_egrid"]))
+    logger.info("Processed %d parcels (%d found); %d land-cover, %d bauzonen, %d habitat rows",
+                len(results["parcels"]), n_found, len(results["landcover"]),
+                len(results["bauzonen"]), len(results["habitat"]))
+
+    if not args.no_geojson:
+        export_web.write_geojson(results, output_dir / f"{prefix}{ts}.geojson")
+    if not args.no_xlsx:
+        export_web.write_xlsx(results, output_dir / f"{prefix}{ts}.xlsx")
+    if not args.no_csv:
+        export_web.write_parcels_csv(results["parcels"], output_dir / f"{prefix}parcels_{ts}.csv")
+        export_web.write_landcover_csv(results["landcover"], output_dir / f"{prefix}landcover_{ts}.csv")
+
+    logger.info("Done → %s", output_dir)
+
+
+# ---------------------------------------------------------------------------
+# GeoPackage path (original CLI)
+# ---------------------------------------------------------------------------
+
+def _run_gpkg(args, output_dir: Path, ts: str) -> None:
     from pipeline import run
 
     run(
