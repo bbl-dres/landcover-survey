@@ -189,6 +189,7 @@
   // level-1 name-slugs ("waelder") map via HABITAT_SLUG_DIGIT.
   function habDigit(slug) { return /^[1-9]/.test(slug) ? String(slug).charAt(0) : (HABITAT_SLUG_DIGIT[slug] || ""); }
   function habColor(slug) { return HABITAT_L1_COLORS[habDigit(slug)] || "#8e7cc3"; }
+  // (TypoCH class/group names come from the embedded TYPOCH_NAMES via typochLabel — see above.)
   // Harmonised Bauzonen use (ch.are.bauzonen ch_code_hn) → colour, keyed by slug.
   // Mirrors web/js/config.js BAUZONEN_HN_COLORS so a use gets the same colour in
   // the web app, this map, the table swatches and the legend.
@@ -250,6 +251,66 @@
     "YT":"Mayotte", "ZA":"Südafrika", "ZM":"Sambia", "ZW":"Simbabwe"
   };
   function countryLabel(c) { if (c == null || c === "") return "—"; var k = String(c).toUpperCase(); return COUNTRY_LABELS[k] || String(c); }
+  // TypoCH code -> German name (levels 1-4), embedded from data/typoch.json so the
+  // self-contained dashboard needs no fetch. Consistent habitat labels for the pivot.
+  var TYPOCH_NAMES = {
+    "1":"Gewässer", "1.1":"Stehende Gewässer", "1.1.0":"Stehendes Gewässer ohne Vegetation", "1.1.0.1":"Tiefgründiges Gewässer (Freiwasserzone)", "1.1.0.2":"Seichtes Gewässer (Litoral, inkl. Tümpel)", "1.1.1":"Armleuchteralgengesellschaft",
+    "1.1.2":"Laichkrautgesellschaften", "1.1.3":"Wasserlinsengesellschaften", "1.1.3.1":"Froschbissgesellschaften", "1.1.3.2":"Wasserschlauchgesellschaften", "1.1.4":"Schwimmblattgesellschaft", "1.1.4.1":"Wasserhahnenfussgesellschaft",
+    "1.1.4.2":"Wasserfedergesellschaft", "1.2":"Fliessgewässer", "1.2.1":"Brachsmen- und Barbenregion (Epipotamon)", "1.2.1.1":"Breites Fliessgewässer des Flachlands", "1.2.1.2":"Langsam fliessender Bach im Flachland", "1.2.2":"Äschenregion (Hyporhithron)",
+    "1.2.2.0":"Äschenregion ohne Vegetation", "1.2.2.1":"Äschenregion mit Vegetation", "1.2.3":"Untere Forellenregion (Metarhithron)", "1.2.4":"Obere Forellenregion (Epirhithron)", "1.2.5":"Temporärer Wasserlauf", "1.2.6":"Zone der Gletscherbäche (Kryal)",
+    "1.3":"Quellen und Quellfluren", "1.3.0":"Überrieselte Fläche, Quelle ohne Vegetation", "1.3.0.1":"Auenquelle, Giesse", "1.3.1":"Wärmeliebende Quellflur", "1.3.2":"Kalkreiche Quellflur", "1.3.3":"Kalkarme Quellflur",
+    "1.4":"Unterirdische Gewässer", "1.4.1":"Porengrundwasser", "1.4.2":"Kluftgrundwasser", "1.4.3":"Höhlenbach", "1.4.4":"Höhlensee", "2":"Ufer und Feuchtgebiete",
+    "2.0":"Künstliche Ufer", "2.0.0":"Künstliche Ufer ohne Vegetation", "2.0.1":"Künstliche Ufer mit Vegetation", "2.1":"Ufer mit Vegetation", "2.1.1":"Moortümpelgesellschaft", "2.1.2":"Röhricht",
+    "2.1.2.1":"Stillwasser-Röhricht", "2.1.2.2":"Flussufer- und Landröhricht", "2.1.3":"Strandlingsgesellschaften", "2.1.4":"Bachröhricht", "2.2":"Flachmoore", "2.2.1":"Grossseggenried",
+    "2.2.1.1":"Grossseggenried", "2.2.1.2":"Schneidbinsenried", "2.2.2":"Kalkarmes Kleinseggenried (Braunseggenried)", "2.2.3":"Kalkreiches Kleinseggenried (Davallseggenried)", "2.2.4":"Übergangsmoor", "2.2.5":"Schwemmufervegetation alpiner Wildbäche",
+    "2.3":"Feuchtwiesen", "2.3.1":"Pfeifengraswiese", "2.3.2":"Nährstoffreiche Feuchtwiesen (Sumpfdotterblumenwiese)", "2.3.3":"Feuchte Hochstaudenflur (Spierstaudenflur)", "2.4":"Hochmoore", "2.4.1":"Offene Hochmoore",
+    "2.5":"Wechselfeuchte Pionierfluren", "2.5.0":"Wechselfeuchte Pionierfluren ohne Vegetation", "2.5.1":"Einjährige Schlammflur (Zwergbinsenflur)", "2.5.1.1":"Zwergbinsen-Annuellenflur mit Sumpfbinsen", "2.5.1.2":"Zwergbinsen-Annuellenflur mit Zypergräsern", "2.5.1.3":"Annuellenflur feuchter Böden mit Zwergkräutern",
+    "2.5.2":"Mehrjährige Schlammflur (Zweizahnflur)", "3":"Gletscher, Fels, Schutt und Geröll", "3.1":"Gletscher, Firn- und Schneefleder", "3.1.1":"Gletscher", "3.1.2":"Blockgletscher", "3.1.3":"Firnfeld (Sommer)",
+    "3.1.4":"Schneefeld (Frühling)", "3.2":"Alluvionen und Moränen", "3.2.1":"Alluvionen (Schwemmland)", "3.2.1.0":"Alluvionen ohne Vegetation", "3.2.1.1":"Alluvionen mit krautiger Pioniervegetation", "3.2.2":"Moräne",
+    "3.2.2.0":"Moräne ohne Vegetation", "3.2.2.1":"Moräne mit Pioniervegetation", "3.3":"Steinschutt- und Geröllfluren", "3.3.1":"Kalkschutt", "3.3.1.1":"Kalkschutthalde ohne Gefässpflanzen", "3.3.1.2":"Alpine Kalkblockflur",
+    "3.3.1.3":"Alpine Kalkschieferflur", "3.3.1.4":"Feinerdereiche Kalkschuttflur", "3.3.1.5":"Trockenwarme Kalkschuttflur", "3.3.2":"Silikatschutt", "3.3.2.1":"Silikatschutthalde ohne Gefässpflanzen", "3.3.2.2":"Alpine Silikatschuttflur",
+    "3.3.2.3":"Trockenwarme Silikatschuttflur", "3.4":"Felsen", "3.4.1":"Kalkfelsen", "3.4.1.1":"Kalkfels ohne Gefässpflanzen", "3.4.1.2":"Trockene Kalkfelsflur", "3.4.1.3":"Schattige Kalkfelsflur",
+    "3.4.2":"Silikat- oder Serpentinfelsen", "3.4.2.1":"Silikatfels ohne Gefässpflanzen", "3.4.2.2":"Silikatfelsflur", "3.4.2.3":"Serpentingesteinsflur", "3.5":"Höhlen", "3.5.1":"Kleine Felsspalten, Halbhöhlen: endogäische Fauna (\"Fauna der Steinunterseite\")",
+    "3.5.2":"Bau von Tieren", "3.5.3":"Höhleneingang", "3.5.4":"Guanohaufen", "3.5.5":"Künstliche Höhlung (Minen, Tunnel, etc.)", "3.5.6":"Unterirdische Lehmablagerung", "3.5.7":"Unterirdische Felswand",
+    "4":"Grünland (Naturrasen, Wiesen und Weiden)", "4.0":"Kunstrasen", "4.0.1":"Kunstwiese auf Fruchtfolgefläche", "4.0.2":"Kunstrasen auf Sportplätzen, im Siedlungsraum, etc.", "4.0.3":"Begrünung in Tieflagen (Strassenböchungen, etc.)", "4.0.4":"Begrünung in Hochlagen (Skipisten, etc.)",
+    "4.1":"Pionierfluren auf Felsböden (Felsgrusfluren)", "4.1.1":"Wärmeliebende Kalkfels-Pionierflur", "4.1.2":"Kalkfels-Pionierflur des Gebirges (Karstfluren)", "4.1.3":"Wärmeliebende Silikatfels-Pionierflur", "4.1.4":"Silikatfelsgrusflur des Gebirges", "4.2":"Wärmeliebende Trockenrasen",
+    "4.2.1":"Wärmeliebende Trockenrasen (Kontinentaler Trockenrasen; Innerwallis, Graubünden)", "4.2.1.1":"Inneralpine Felsensteppe", "4.2.1.1":"Inneralpine Felsensteppe der Westalpen", "4.2.1.1":"Inneralpine Felsensteppe der Ostalpen", "4.2.1.2":"Kontinentaler Halbtrockenrasen", "4.2.2":"Mitteleuropäischer Trockenrasen",
+    "4.2.3":"Insubrischer Trockenrasen", "4.2.4":"Mitteleuropäischer Halbtrockenrasen", "4.3":"Gebirgs-Magerrasen", "4.3.1":"Blaugrashalde", "4.3.1.1":"Blaugrashalde s.str.", "4.3.1.2":"Blaugrashalde der südlichen Kalkalpen",
+    "4.3.2":"Polsterseggenrasen", "4.3.3":"Rostseggenhalde", "4.3.4":"Windkantenrasen (Nacktriedrasen)", "4.3.5":"Borstgrasrasen", "4.3.6":"Buntschwingelhalde", "4.3.6.1":"Buntschwingelhalde s.str.",
+    "4.3.6.2":"Violettschwingelrasen", "4.3.6.3":"Goldschwingelrasen", "4.3.7":"Krummseggenrasen", "4.4":"Schneetälchen", "4.4.1":"Kalkreiches Schneetälchen", "4.4.2":"Kalkarmes Schneetälchen",
+    "4.5":"Fettwiesen und -weiden", "4.5.1":"Talfettwiesen (Fromentalwiese)", "4.5.1.1":"Knaulgraswiesen", "4.5.1.2":"Typische Fromentalwiese", "4.5.1.3":"Trockene Fromentalwiese", "4.5.1.4":"Feuchte Fuchschwanzwiese",
+    "4.5.2":"Bergfettwiese (Goldhaferwiese)", "4.5.3":"Talfettweide (Kammgrasweide)", "4.5.4":"Bergfettweide (Milchkrautweide)", "4.6":"Grasbrachen", "4.6.1":"Queckenbrache", "4.6.2":"Fiederzwenckenbrache",
+    "4.6.3":"Fromentalbrache", "4.6.4":"Pfeifengrasbrache", "4.6.5":"Reitgrasbrache", "5":"Krautsäume, Hochstaudenfluren und Gebüsche", "5.1":"Krautsäume", "5.1.0":"Atypische Saumgesellschaft",
+    "5.1.1":"Trockenwarmer Krautsaum", "5.1.2":"Mesophiler Krautsaum", "5.1.3":"Feuchter Krautsaum (Tieflagen)", "5.1.4":"Feuchter Krautsaum (höheren Lagen)", "5.1.5":"Nährstoffreicher Krautsaum", "5.2":"Hochstauden- und Schlagfluren",
+    "5.2.1":"Kalkreiche Schlagflur", "5.2.2":"Kalkarme Schlagflur", "5.2.3":"Hochgrasflur des Gebirges", "5.2.4":"Hochstaudenflur des Gebirges", "5.2.5":"Adlerfarnflur", "5.3":"Gebüsche",
+    "5.3.0":"Naturferne Pflanzung", "5.3.0.1":"Naturferne Pflanzung mit sommergrünen Arten", "5.3.0.2":"Naturferne Pflanzung mit immergrünen Arten", "5.3.1":"Besenginster-Gebüsche", "5.3.2":"Trockenwarmes Gebüsch", "5.3.3":"Mesophiles Gebüsch",
+    "5.3.4":"Brombeergestrüpp", "5.3.5":"Gebüschreiche Vorwaldgesellschaften", "5.3.6":"Auen-Weidengebüsch", "5.3.7":"Moor-Weidengebüsch", "5.3.8":"Gebirgs-Weidengebüsch", "5.3.9":"Grünerlengebüsche",
+    "5.4":"Zwergstrauchheiden", "5.4.1":"Subatlantische Zwergstrauchheide (Ginsterheide)", "5.4.1.1":"Subatlantische Heide auf Torf", "5.4.1.2":"Subatlantsiche Heide, nicht auf Torf", "5.4.2":"Kontinentale Zwergstrauchheide (Sefistrauchheide)", "5.4.3":"Subalpine Kalkheide (Erikaheide)",
+    "5.4.4":"Trockene subalpine Zwergstrauchheide (Zwergwacholderheide)", "5.4.5":"Mesophile subalpine Zwergstrauchheide (Alpenrosenheide)", "5.4.6":"Alpine Windheide", "6":"Wälder", "6.0":"Forstpflanzungen", "6.0.1":"Aufforstung mit Laubgehölzen",
+    "6.0.2":"Aufforstung mit Nadelgehölzen", "6.0.3":"Einzelbaum", "6.1":"Bruch- und Auenwälder", "6.1.1":"Erlen-Bruchwald", "6.1.2":"Weichholz-Auenwald", "6.1.3":"Grauerlen-Auenwald",
+    "6.1.3.1":"Alpen-Weidenauenwald", "6.1.4":"Hartholz-Auenwald", "6.2":"Buchenwälder", "6.2.1":"Orchideen-Buchenwald", "6.2.2":"Hainsimsen-Buchenwald", "6.2.3":"Waldmeister-Buchenwald",
+    "6.2.3.1":"Atlantischer Buchenwald", "6.2.4":"Zahnwurz-Buchenwald", "6.2.5":"Tannen-Buchenwald", "6.3":"Andere Laubwälder", "6.3.1":"Ahorn-Schluchtwald", "6.3.2":"Linden-Mischwald",
+    "6.3.3":"Eichen- Hainbuchenwald", "6.3.4":"Flaumeichenwald", "6.3.5":"Hopfenbuchenwald", "6.3.6":"Saurer Eichenmischwald", "6.3.7":"Kastanienwald", "6.3.8":"Laubwald mit immergrünen Sträuchern",
+    "6.3.9":"Robinienwald", "6.4":"Wärmeliebende Föhrenwälder", "6.4.1":"Pfeifengras-Föhrenwald", "6.4.2":"Subkontinentaler kalkreicher Föhrenwald", "6.4.2.1":"Mitteleuropäischer subkontinentaler kalkreicher Föhrenwald (Geissklee-Föhrenwald)", "6.4.3":"Kontinentaler Steppen-Föhrenwald",
+    "6.4.3.1":"Kalkreicher Steppen-Föhrenwald", "6.4.3.2":"Kalkarmer Steppen-Föhrenwald", "6.4.4":"Kalkarmer Föhrenwald", "6.5":"Hochmoorwälder", "6.5.1":"Hochmoor-Birkenwald", "6.5.2":"Hochmoor-Bergföhrenwald",
+    "6.5.3":"Hochmoor-Fichtenwald", "6.6":"Gebirgsnadelwälder", "6.6.1":"Tannen-Fichtenwald", "6.6.2":"Heidelbeer-Fichtenwald", "6.6.3":"Lärchen-Arvenwald", "6.6.4":"Lärchenwald",
+    "6.6.5":"Bergföhrenwald", "6.6.5.1":"Kalkarmer Bergföhrenwald", "6.6.5.2":"Kalkreicher Bergföhrenwald", "7":"Pioniervegetation gestörter Plätze (Ruderalstandorte)", "7.1":"Trittrasen und Ruderalfluren", "7.1.0":"Tritt- und Trümmerflächen ohne Vegetation",
+    "7.1.1":"Feuchte Trittflur", "7.1.2":"Trockene Trittflur", "7.1.3":"Subalpin-alpine Trittflur", "7.1.4":"Einjährige Ruderalflur", "7.1.5":"Trockenwarme Ruderalflur", "7.1.6":"Mesophile Ruderalflur (Steinkleeflur)",
+    "7.1.7":"Alpine Lägerflur (Alpenblackenflur)", "7.1.8":"Lägerflur der Tieflagen", "7.2":"Anthropogene Steinfluren", "7.2.0":"Mauer oder Steinpflästerung ohne Vegetation", "7.2.1":"Trockenwarme Mauerflur", "7.2.2":"Steinpflaster-Trittflur",
+    "8":"Pflanzungen, Äcker und Kulturen", "8.1":"Baumschulen, Obstgärten, Rebberge", "8.1.1":"Baumschule aus Laubgehölzen", "8.1.2":"Baumschule aus Nadelgehölzen", "8.1.3":"Kastanienhain (ohne Unterholz)", "8.1.4":"Hochstammobstgarten",
+    "8.1.5":"Niederstammobstgarten", "8.1.6":"Rebberg", "8.1.7":"Beerenkultur", "8.2":"Feldkulturen (Äcker)", "8.2.0":"Feldkulturen (Äcker) ohne Vegetation", "8.2.1":"Getreidefeld (vorwiegend Winterkultur)",
+    "8.2.1.0":"Getreide ohne Begleitvegetation", "8.2.1.1":"Kalkarme Getreideäcker", "8.2.1.2":"Kalkreiche Getreideäcker", "8.2.2":"Mais-, Tabak- und andere Ackerkulturen (vorwiegend Sommerkultur)", "8.2.3":"Hackfruchtacker (Sommerkultur), Garten", "8.2.3.0":"Hackfrucht ohne Begleitflora",
+    "8.2.3.1":"Kalkarmer, lehmiger Hackfruchtacker", "8.2.3.2":"Kalkreicher, lehmiger Hackfruchtacker", "8.2.3.3":"Kalkarmer, trockener Hackfruchtacker", "8.2.3.4":"Kalkreicher, trockener Hackfruchtacker", "9":"Bauten, Anlagen", "9.1":"Lagerplätze, Deponien",
+    "9.1.1":"Deponie (Sperrgut)", "9.1.2":"Deponie (organische Abfälle)", "9.2":"Bauten", "9.2.1":"Bewohntes Gebäude", "9.2.1.1":"Bauernhaus", "9.2.1.2":"Sennhütte, Chalet",
+    "9.2.1.3":"Einfamilienhaus", "9.2.1.4":"Mietgebäude, Gewerbegebäude", "9.2.2":"Tierstallungen, Gewächshäuser", "9.2.2.1":"Kuh- und Pferdestall", "9.2.2.2":"Schweinestall", "9.2.2.3":"Hühnerstall",
+    "9.2.2.4":"Treibhaus", "9.2.3":"Nebengebäude, Halle, Garage", "9.2.3.1":"Scheune, Schopf", "9.2.3.2":"Garage", "9.2.3.3":"Bootshaus", "9.2.3.4":"Bunker",
+    "9.2.3.5":"Berghütte, Forsthaus", "9.2.4":"Fabrik, Halle, Lagerhaus", "9.2.4.1":"Fabrik", "9.2.4.2":"Lagerhaus", "9.2.4.3":"Elektrisches Kraftwerk", "9.2.4.4":"Atomkraftwerk",
+    "9.2.4.5":"Raffinerie", "9.2.4.6":"Sägerei, Schreinerei", "9.2.5":"Öffentliches Gebäude, Denkmal", "9.2.5.1":"Schloss", "9.2.5.2":"Kriche", "9.2.5.3":"Bahnhof",
+    "9.2.5.4":"Spital", "9.3":"Verkehrswege", "9.3.2":"Asphalt- und Betonstrasse", "9.3.2.1":"Strasse", "9.3.2.2":"Autobahn", "9.3.2.3":"Weg ohne Vegetation (Beton, Kies)",
+    "9.3.3":"Naturstrasse, Weg", "9.3.3.1":"Naturweg (Dreckweg)", "9.3.3.2":"Holzerweg", "9.3.3.3":"Pfad", "9.3.4":"Bahngleis", "9.4":"Versiegeleter Sportplatz, Parkplatz etc."
+  };
+  function typochName(code) { return TYPOCH_NAMES[code] || ""; }
+  function typochLabel(code) { var n = typochName(code); return n ? code + " " + n : String(code); }
   function codeLabel(map, code) { if (code == null || code === "" || code === "—") return "—"; var k = String(code); return map[k] || map[String(parseInt(k, 10))] || k; }
   function tpfLabel(code) { return codeLabel(TPF_LABELS, code); }
   function eigentumLabel(code) { return codeLabel(EIGENTUM_LABELS, code); }
@@ -326,18 +387,19 @@
     pionier_ruderalvegetation: "Pionier-/Ruderalvegetation", pflanzungen_aecker_kulturen: "Pflanzungen, Äcker, Kulturen",
     gebaeude_anlagen: "Gebäude / Anlagen"
   };
-  // Habitat column slug → display label. Level-1 name-slugs use HABITAT_LABELS; level-2/3
-  // code-slugs ("6_3_andere_laubwaelder") are reconstructed as "6.3 Andere Laubwaelder"
-  // (slugify dropped the umlauts, so the name part is best-effort); else prettified.
+  // Habitat column slug → TypoCH code ("6_3_andere_laubwaelder" → "6.3"; the level-1
+  // catch-all "2_ufer_und_feuchtgebiete" → "2"). "" when the slug carries no leading code.
+  function habCode(h) {
+    var parts = String(h).split("_"), code = [], i = 0;
+    while (i < parts.length && /^[0-9]+$/.test(parts[i])) { code.push(parts[i]); i++; }
+    return code.join(".");
+  }
+  // Habitat column slug → "<code> <name>" from the embedded TypoCH reference (consistent
+  // with the level-1 group labels). Legacy name-slugs use HABITAT_LABELS; unknown → prettified.
   function hbLabel(h) {
     if (HABITAT_LABELS[h]) return HABITAT_LABELS[h];
-    if (/^[1-9]/.test(h)) {
-      var parts = String(h).split("_"), code = [], i = 0;
-      while (i < parts.length && /^[0-9]+$/.test(parts[i])) { code.push(parts[i]); i++; }
-      var name = parts.slice(i).map(function (w) { return w ? w.charAt(0).toUpperCase() + w.slice(1) : w; }).join(" ");
-      return code.join(".") + (name ? " " + name : "");
-    }
-    return String(h).replace(/_/g, " ");
+    var code = habCode(h);
+    return code ? typochLabel(code) : String(h).replace(/_/g, " ");
   }
   EXCLUDE_RULES.forEach(function (r) { excludeCounts[r.key] = 0; });
   PARCELS.forEach(function (p) {
@@ -487,40 +549,57 @@
   // Default order = the caller's (preserves fixed orders like SIA GGF/BUF/UUF and VBS A–D);
   // clicking the "Kategorie" or value header sets a per-table sort. The user's choice
   // survives filter re-renders; the muted "remainder" row always stays pinned last.
-  var _valCtx = {}, _valSort = {};
-  // Habitat mixes TypoCH levels (BAFU classifies polygons to different depths), so default
-  // it to category order — clusters each class (6, 6.1, 6.2 …) instead of scattering by area.
+  var _valCtx = {}, _valSort = {}, _treeOpen = {}; // per-table render context / sort / expand-state
+  // Habitat mixes TypoCH levels, so default it to category order — clusters each class (1,2,…9).
   _valSort["tbl-habitat"] = { by: "name", dir: 1 };
   function renderValTable(elId, items, total, fmtVal, showTotal, valHeader, anteilHint) {
     _valCtx[elId] = { items: items, total: total, fmtVal: fmtVal, showTotal: showTotal, valHeader: valHeader, anteilHint: anteilHint };
     _paintValTable(elId);
   }
+  // Renders a flat summary table, or — when any item carries `children` — a two-level pivot
+  // (parent groups expand/collapse via a chevron). The muted remainder stays pinned last;
+  // bars scale to the largest top-level value; sort is hierarchy-aware (groups + their kids).
   function _paintValTable(elId) {
     var el = document.getElementById(elId), ctx = _valCtx[elId]; if (!el || !ctx) return;
     var items = ctx.items, total = ctx.total, fmtVal = ctx.fmtVal, s = _valSort[elId];
     if (!items.length) { el.innerHTML = '<div class="empty-note">Keine Daten</div>'; return; }
-    if (s) { // user-chosen sort — split off the remainder so it stays last
-      var main = [], tail = [];
-      items.forEach(function (it) { (it.muted ? tail : main).push(it); });
-      main.sort(function (a, b) {
-        var r = s.by === "name" ? deCollator.compare(String(a.name), String(b.name)) : (a.value - b.value);
-        return r * s.dir;
-      });
-      items = main.concat(tail);
-    }
-    var sum = items.reduce(function (a, it) { return a + it.value; }, 0);
-    var maxVal = items.reduce(function (m, it) { return it.muted ? m : Math.max(m, it.value); }, 0) || 1;
-    var body = items.map(function (it) {
-      var cls = ((it.muted ? "muted-row " : "") + (it.key ? "clickable" : "") + (it.selected ? " selected" : "")).trim();
-      var attr = it.key ? ' data-key="' + esc(it.key) + '" tabindex="0" role="button"' : "";
-      var tip = it.key ? ' data-tip="' + esc(it.name + " — anklicken zum Filtern") + '"' : "";
-      var anteil = total ? pct(it.value, total) + " %" : "";
+    var isTree = false; for (var ii = 0; ii < items.length; ii++) { if (items[ii].children) { isTree = true; break; } }
+    var main = [], tail = [];
+    items.forEach(function (it) { (it.muted ? tail : main).push(it); });
+    var cmp = s ? function (a, b) {
+      var r = s.by === "name" ? deCollator.compare(String(a.name), String(b.name)) : (a.value - b.value);
+      return r * s.dir;
+    } : null;
+    if (cmp) main = main.slice().sort(cmp);
+    var maxVal = main.reduce(function (m, it) { return Math.max(m, it.value); }, 0) || 1;
+    var sum = 0; items.forEach(function (it) { sum += it.value; });
+    var open = _treeOpen[elId] || {};
+    function row(it, kind, groupKey) { // kind: flat | open | closed | child | muted
+      var chev = kind === "open" ? '<span class="tree-icon">−</span>'
+               : kind === "closed" ? '<span class="tree-icon">+</span>'
+               : kind === "child" ? '<span class="tree-icon tree-spacer"></span>' : "";
+      var sw = it.swatch ? '<span class="cat-sw" style="background:' + it.swatch + '"></span>' : "";
       var bar = it.muted ? "" : '<span class="sumbar"><i style="width:' + (it.value / maxVal * 100).toFixed(1) + '%"></i></span>';
-      var sw = it.swatch ? '<span class="cat-sw" style="background:' + it.swatch + '"></span>' : '';
-      return '<tr class="' + cls + '"' + attr + tip + '><td>' + sw + esc(it.name) + '</td>' +
+      var anteil = total ? pct(it.value, total) + " %" : "";
+      var cls = ((it.muted ? "muted-row " : "") + (it.key ? "clickable " : "") + (it.selected ? "selected " : "")
+               + (kind === "child" ? "tree-child " : "") + (kind === "open" || kind === "closed" ? "tree-parent " : "")).trim();
+      var attr = it.key ? ' data-key="' + esc(it.key) + '" tabindex="0" role="button" data-tip="' + esc(it.name + " — anklicken zum Filtern") + '"'
+               : (groupKey != null ? ' data-tree-group="' + esc(groupKey) + '" tabindex="0" role="button"' : "");
+      return '<tr class="' + cls + '"' + attr + '><td><span class="cat-cell">' + chev + sw + esc(it.name) + '</span></td>' +
              '<td class="bar-col">' + bar + '</td>' +
              '<td class="num">' + fmtVal(it.value) + '</td><td class="num">' + anteil + '</td></tr>';
-    }).join("");
+    }
+    var body = "";
+    main.forEach(function (g) {
+      if (isTree && g.children && g.children.length) {
+        var isOpen = !!open[g.group];
+        body += row(g, isOpen ? "open" : "closed", g.group);
+        if (isOpen) (cmp ? g.children.slice().sort(cmp) : g.children).forEach(function (ch) { body += row(ch, "child"); });
+      } else {
+        body += row(g, "flat");
+      }
+    });
+    tail.forEach(function (it) { body += row(it, "muted"); });
     var totalRow = ctx.showTotal ? '<tr class="total"><td>Total</td><td class="bar-col"></td><td class="num">' + fmtVal(sum) + '</td><td class="num">' + (total ? pct(sum, total) + " %" : "") + '</td></tr>' : "";
     var hint = ctx.anteilHint ? ' <span class="ftip" tabindex="0" role="img" aria-label="' + esc(ctx.anteilHint) + '" data-tip="' + esc(ctx.anteilHint) + '">ⓘ</span>' : "";
     function th(by, numCls, label) {
@@ -528,10 +607,10 @@
       return '<th class="' + (numCls ? numCls + " " : "") + "sortable" + (on ? " sorted" : "") + '" data-vs="' + by +
              '" tabindex="0" role="button" aria-sort="' + (on ? (s.dir < 0 ? "descending" : "ascending") : "none") + '">' + label + arr + '</th>';
     }
-    el.innerHTML = '<table class="sumtbl"><thead><tr>' + th("name", "", "Kategorie") + '<th class="bar-col"></th>' +
+    el.innerHTML = '<table class="sumtbl' + (isTree ? " tree-tbl" : "") + '"><thead><tr>' + th("name", "", "Kategorie") + '<th class="bar-col"></th>' +
       th("value", "num", (ctx.valHeader || "")) + '<th class="num">Anteil' + hint + '</th></tr></thead><tbody>' + body + totalRow + '</tbody></table>';
   }
-  // Click / Enter / Space on a summary-table header → sort that one table (toggle direction).
+  // Header click → sort that table (toggle direction), hierarchy-aware.
   function _valSortAct(e) {
     if (e.type === "keydown" && e.key !== "Enter" && e.key !== " ") return;
     var th = e.target.closest && e.target.closest(".sumtbl th.sortable[data-vs]"); if (!th) return;
@@ -544,6 +623,26 @@
   }
   document.addEventListener("click", _valSortAct);
   document.addEventListener("keydown", _valSortAct);
+  // Pivot group row → expand/collapse; header buttons ([data-tree-all]) → expand/collapse all.
+  function _treeToggleAct(e) {
+    if (e.type === "keydown" && e.key !== "Enter" && e.key !== " ") return;
+    var tr = e.target.closest && e.target.closest("tr[data-tree-group]"); if (!tr) return;
+    if (e.type === "keydown") e.preventDefault();
+    var tbl = tr.closest("table"), host = tbl && tbl.parentNode, elId = host && host.id;
+    if (!elId || !_valCtx[elId]) return;
+    var g = tr.getAttribute("data-tree-group"), o = _treeOpen[elId] || (_treeOpen[elId] = {});
+    if (o[g]) delete o[g]; else o[g] = true;
+    _paintValTable(elId);
+  }
+  document.addEventListener("click", _treeToggleAct);
+  document.addEventListener("keydown", _treeToggleAct);
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest && e.target.closest("[data-tree-all]"); if (!b) return;
+    var elId = b.getAttribute("data-tree-all"), ctx = _valCtx[elId]; if (!ctx) return;
+    var o = _treeOpen[elId] = {};
+    if (b.getAttribute("data-open") === "1") ctx.items.forEach(function (it) { if (it.children && it.children.length) o[it.group] = true; });
+    _paintValTable(elId);
+  });
 
   // ---- Total parcel area grouped by an arbitrary field (Portfolio, Region) → bar items ----
   var BAR_COLOR = "#6f8aac"; // a single calm hue for the Portfolio/Region bars — color reserved for emphasis elsewhere
@@ -588,19 +687,18 @@
              '<div class="value">' + k.value + '</div><div class="sub">' + k.sub + '</div></div>';
     }).join("");
 
-    // Bodenbedeckung nach Art (top 12 + Übrige) as a summary table.
-    var artItems = Object.keys(a.byArt).filter(function (k) { return a.byArt[k] > 0; }).map(function (k) {
-      var label = ART_LABELS[k] || k, main = ART_MAIN[k] || "";
-      return {
-        name: (main && main !== label) ? main + " · " + label : label,
-        value: a.byArt[k], swatch: mainColor(k), key: k, selected: !!filters.arts[k]
-      };
-    }).sort(function (x, y) { return y.value - x.value; });
-    var artShown = artItems.slice(0, 12);
-    if (artItems.length > 12) {
-      var artRest = artItems.slice(12).reduce(function (s, it) { return s + it.value; }, 0);
-      artShown.push({ name: "Übrige (" + (artItems.length - 12) + ")", value: artRest, swatch: "#cbd5e1" });
-    }
+    // Bodenbedeckung nach Art — pivot: Hauptgruppe (L1) → BBArt (L2). L2 keeps `key` so a
+    // BBArt row still toggles the Art filter; the L1 group row expands/collapses.
+    var artByMain = {};
+    Object.keys(a.byArt).forEach(function (k) {
+      if (!(a.byArt[k] > 0)) return;
+      var main = ART_MAIN[k] || "—";
+      var g = artByMain[main] || (artByMain[main] = { name: main, value: 0, swatch: MAIN_COLORS[main] || "#94a3b8", group: main, children: [] });
+      g.value += a.byArt[k];
+      g.children.push({ name: ART_LABELS[k] || k, value: a.byArt[k], swatch: mainColor(k), key: k, selected: !!filters.arts[k] });
+    });
+    var artGroups = Object.keys(artByMain).map(function (m) { return artByMain[m]; }).sort(function (x, y) { return y.value - x.value; });
+    artGroups.forEach(function (g) { g.children.sort(function (x, y) { return y.value - x.value; }); });
     var gsfHint = "Anteil an der gesamten Grundstücksfläche (GSF) der Auswahl.";
     var pa = a.totals.parcelArea;
     // Append a muted "remainder" row so each table sums to 100 % of the Grundstücksfläche;
@@ -610,7 +708,7 @@
       var m = pa - s;
       return m > 0 ? items.concat([{ name: label || "Ohne Bodenbedeckung", value: m, muted: true }]) : items;
     }
-    renderValTable("tbl-art", withMiss(artShown), pa, fmtArea, true, unitLabel(), gsfHint);
+    renderValTable("tbl-art", withMiss(artGroups), pa, fmtArea, true, unitLabel(), gsfHint);
     renderValTable("tbl-sia", withMiss([
       { name:"GGF · Gebäudegrundfläche", value:a.totals.GGF, key:"GGF", selected:!!filters.has.GGF },
       { name:"BUF · bearbeitete Umgebung", value:a.totals.BUF, key:"BUF", selected:!!filters.has.BUF },
@@ -642,9 +740,18 @@
     if (bzItems.length > 10) { var bzRest = bzItems.slice(10).reduce(function (s, it) { return s + it.value; }, 0); bzShown.push({ name: "Übrige (" + (bzItems.length - 10) + ")", value: bzRest, swatch: "#cbd5e1" }); }
     renderValTable("tbl-bauzonen", withMiss(bzShown, "Ohne Bauzone"), pa, fmtArea, true, unitLabel(), gsfHint);
     if (habitatListAll.length) {
-      var hbItems = habitatListAll.map(function (h) { return { name: hbLabel(h), value: a.byHabitat[h] || 0, swatch: habColor(h) }; })
-        .filter(function (it) { return it.value > 0; }).sort(function (x, y) { return y.value - x.value; });
-      renderValTable("tbl-habitat", withMiss(hbItems, "Ohne Lebensraum-Daten"), pa, fmtArea, true, unitLabel(), gsfHint);
+      // BAFU Lebensräume — pivot: TypoCH class (L1, by leading digit) → group (L2). Both
+      // levels get consistent "<code> <name>" labels from the embedded TypoCH reference.
+      var hbByDigit = {};
+      habitatListAll.forEach(function (h) {
+        var v = a.byHabitat[h] || 0; if (!(v > 0)) return;
+        var d = habDigit(h) || "?";
+        var g = hbByDigit[d] || (hbByDigit[d] = { name: typochLabel(d), value: 0, swatch: HABITAT_L1_COLORS[d] || "#8e7cc3", group: d, children: [] });
+        g.value += v;
+        g.children.push({ name: hbLabel(h), value: v, swatch: habColor(h) });
+      });
+      var hbGroups = Object.keys(hbByDigit).map(function (d) { return hbByDigit[d]; });
+      renderValTable("tbl-habitat", withMiss(hbGroups, "Ohne Lebensraum-Daten"), pa, fmtArea, true, unitLabel(), gsfHint);
     }
     renderValTable("tbl-tpf", groupBarItems(rows, "input_tpf", filters.tpf, 12, tpfLabel), a.totals.parcelArea, fmtArea, true, unitLabel(), gsfHint);
     renderValTable("tbl-rg", groupBarItems(rows, "input_rg", filters.cantons, 12), a.totals.parcelArea, fmtArea, true, unitLabel(), gsfHint);
@@ -677,19 +784,22 @@
       });
     });
     qAllProblems = [];
-    var c = { found:0, merged:0, not_found:0, invalid:0, error:0 }, cOther = 0, noCover = 0, noHabitat = 0;
+    var c = { found:0, merged:0, not_found:0, invalid:0, error:0 }, cOther = 0;
     rows.forEach(function (p) {
       var names = failNames.get(p); if (names) qAllProblems.push({ p: p, hint: names.join(", ") });
       var sk = statusKey(p); if (c[sk] != null) c[sk]++; else cOther++;
-      if (!isCovered(p)) noCover++;
-      if (parcelStats(p).hbSum === 0) noHabitat++;
     });
     var denom = rows.length || 1;
+    // KPIs = headline of the most important Prüfregeln; each count equals its rule's
+    // "abweichend" count in the Prüfregeln table below.
+    var kpiFail = function (label, key) {
+      return { label: label, value: fmt(qRules[key].fail), sub: pct(qRules[key].fail, denom) + "% der Auswahl" };
+    };
     var qk = [
       { label:"Grundstücke", value:fmt(rows.length) + " / " + fmt(PARCELS.length), sub:"Auswahl / Alle" },
-      { label:"E-GRID nicht gefunden", value:fmt(qRules.egrid.fail), sub:pct(qRules.egrid.fail, denom) + "% der Auswahl" },
-      { label:"Ohne Bodenbedeckung", value:fmt(noCover), sub:pct(noCover, denom) + "% der Auswahl" },
-      { label:"Ohne Lebensräume", value:fmt(noHabitat), sub:pct(noHabitat, denom) + "% der Auswahl" }
+      kpiFail("E-GRID nicht gefunden", "egrid"),
+      kpiFail("Bodenbedeckung unvollständig", "bbCover"),
+      kpiFail("Lebensräume unvollständig", "hbCover")
     ];
     document.getElementById("q-kpis").innerHTML = qk.map(function (k) {
       return '<div class="card"><div class="label">' + esc(k.label) + '</div><div class="value">' + k.value + '</div><div class="sub">' + esc(k.sub) + '</div></div>';
@@ -730,15 +840,13 @@
   // subset it applies to (e.g. Bodenbedeckungs-Regeln nur auf Grundstücke mit Bodenbedeckung),
   // so the tips state the scope — the table shows how many wurden übersprungen.
   var RULE_DEFS = [
-    { key: "egrid", name: "Grundstück im Kataster gefunden", tip: "Die E-GRID wurde in der amtlichen Vermessung gefunden und die Geometrie geladen. Geprüft: alle Grundstücke der Auswahl." },
+    { key: "egrid", name: "Grundstück E-GRID im Kataster gefunden", tip: "Die E-GRID wurde in der amtlichen Vermessung gefunden und die Geometrie geladen. Geprüft: alle Grundstücke der Auswahl." },
     { key: "geom", name: "Geometrie vorhanden", tip: "Der Grundstück-Eintrag enthält eine Polygon-Geometrie (nicht NULL). Geprüft: alle Grundstücke der Auswahl." },
     { key: "area", name: "Fläche vorhanden", tip: "Die Grundstücksfläche ist eine gültige, positive Zahl (nicht NULL, grösser 0). Geprüft: alle Grundstücke der Auswahl." },
     { key: "egridUnique", name: "E-GRID eindeutig", tip: "Jede E-GRID kommt in der aktuellen Auswahl nur einmal vor (keine doppelten Einträge). Geprüft: Grundstücke mit E-GRID." },
-    { key: "bbCover", name: "Bodenbedeckung vollständig (Fläche)", tip: "Die klassifizierte Bodenbedeckung (Gebäude + Umgebung) summiert sich zur Grundstücksfläche (±1 %). Nur Grundstücke mit Bodenbedeckungsdaten." },
-    { key: "bzCover", name: "Bauzonen vollständig (Fläche)", tip: "Die Bauzonen inkl. „Ohne Bauzone“ summieren sich zur Grundstücksfläche (±1 %). Nur Grundstücke mit Bauzonen-Daten." },
-    { key: "hbCover", name: "Lebensräume vollständig (Fläche)", tip: "Die BAFU-Lebensräume summieren sich zur Grundstücksfläche (±1 %). Nur Grundstücke mit Lebensraum-Daten." },
-    { key: "bzOk", name: "Bauzonen-Abruf vollständig", tip: "Der Bauzonen-Abruf lieferte vollständige Daten (nicht gekappt/unsicher). Nur Grundstücke mit Bauzonen-Prüfung." },
-    { key: "hbOk", name: "Lebensraum-Abruf vollständig", tip: "Der Lebensraum-Abruf lieferte vollständige Daten (nicht gekappt/unsicher; geschätzte/lückengefüllte gelten als bestanden). Nur Grundstücke mit Lebensraum-Prüfung." }
+    { key: "bbCover", name: "Summe Bodenbedeckung = Grundstücksfläche", tip: "Die Summe der einzelnen Bodenbedeckungsflächen (Gebäude + Umgebung) entspricht der Grundstücksfläche (±1 %). Nur Grundstücke mit Bodenbedeckungsdaten." },
+    { key: "bzCover", name: "Summe Bauzonen = Grundstücksfläche", tip: "Die Summe der einzelnen Bauzonenflächen inkl. „Ohne Bauzone“ entspricht der Grundstücksfläche (±1 %). Nur Grundstücke mit Bauzonen-Daten." },
+    { key: "hbCover", name: "Summe Lebensräume = Grundstücksfläche", tip: "Die Summe der einzelnen BAFU-Lebensraumflächen entspricht der Grundstücksfläche (±1 %). Nur Grundstücke mit Lebensraum-Daten." }
   ];
   // Per-parcel derived scalars for the quality rules and prioritisation. Parcels are
   // immutable, so the wide-column scan runs once per parcel and is cached in a WeakMap
@@ -787,12 +895,6 @@
       if (cov) rec("bbCover", nearOK(classified, area));
       if (sumBz > 0 || (!!p.check_bauzonen && p.check_bauzonen !== "error")) rec("bzCover", nearOK(sumBz, area));
       if (sumHb > 0 || (!!p.check_habitat && p.check_habitat !== "error")) rec("hbCover", nearOK(sumHb, area));
-      // Datenabruf der Overlay-Layer.
-      if (p.check_bauzonen) rec("bzOk", p.check_bauzonen === "ok");
-      if (p.check_habitat) {
-        if (p.check_habitat === "estimated") { R.hbOk.pass++; R.hbOk.est++; }
-        else rec("hbOk", p.check_habitat === "ok");
-      }
     });
     return R;
   }

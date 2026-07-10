@@ -19,15 +19,13 @@ check name(s) it did not pass.
 
 | Rule (UI) | Category | Checks | Evaluated on | Passes when |
 |-----------|----------|--------|--------------|-------------|
-| **Grundstück im Kataster gefunden** | Completeness | E-GRID resolved to a geometry during processing | **all** parcels | `check_egrid` ∈ {`found`, `merged`} |
+| **Grundstück E-GRID im Kataster gefunden** | Completeness | E-GRID resolved to a geometry during processing | **all** parcels | `check_egrid` ∈ {`found`, `merged`} |
 | **Geometrie vorhanden** | Completeness | The entry carries a non-null polygon geometry | **all** parcels | `geometry` ≠ null |
 | **Fläche vorhanden** | Completeness | `parcel_area_m2` is a real positive number | **all** parcels | area is finite and > 0 |
 | **E-GRID eindeutig** *(Hinweis)* | Integrity | No E-GRID appears on more than one entry | parcels with a non-empty E-GRID | E-GRID occurs once **in the selection** |
-| **Bodenbedeckung vollständig (Fläche)** | Area balance | Σ classified land cover (GGF + BUF + UUF) equals the parcel area | parcels **with** land cover | \|Σ − area\| ≤ tol |
-| **Bauzonen vollständig (Fläche)** | Area balance | Σ Bauzonen incl. „Ohne Bauzone" equals the parcel area | parcels with Bauzonen data | \|Σ − area\| ≤ tol |
-| **Lebensräume vollständig (Fläche)** | Area balance | Σ BAFU-Lebensräume equals the parcel area | parcels with Lebensraum data | \|Σ − area\| ≤ tol |
-| **Bauzonen-Abruf vollständig** | Fetch | Bauzonen fetch returned complete data (not truncated/partial) | parcels with a Bauzonen check | `check_bauzonen` = `ok` |
-| **Lebensraum-Abruf vollständig** | Fetch | Lebensraum fetch returned complete data; estimated (gap-filled) reported separately | parcels with a Lebensraum check | `check_habitat` = `ok` (`estimated` → pass, counted apart) |
+| **Summe Bodenbedeckung = Grundstücksfläche** | Area balance | Σ classified land cover (GGF + BUF + UUF) equals the parcel area | parcels **with** land cover | \|Σ − area\| ≤ tol |
+| **Summe Bauzonen = Grundstücksfläche** | Area balance | Σ Bauzonen incl. „Ohne Bauzone" equals the parcel area | parcels with Bauzonen data | \|Σ − area\| ≤ tol |
+| **Summe Lebensräume = Grundstücksfläche** | Area balance | Σ BAFU-Lebensräume equals the parcel area | parcels with Lebensraum data | \|Σ − area\| ≤ tol |
 
 > The three **Area-balance** rules are the "land cover / BAFU polygons sum to the parcel
 > area" check — they validate the export's per-parcel area sums (`sia416_*`, `bauzonen_*`,
@@ -48,11 +46,14 @@ check name(s) it did not pass.
 
 ## Reading the numbers
 
-`⚠ 1 von 1102 abweichend` on **Bodenbedeckung vollständig (Fläche)** with 1102 filtered
-parcels means: **1** parcel has land cover that doesn't balance to its area. The parcels
-with *no* land cover (not-found, cantons without WFS coverage, high-alpine "übriges
-Gebiet") aren't deviations — they simply don't apply to this rule — and the top KPI
-**Ohne Bodenbedeckung** counts them separately.
+`⚠ 52 von 1114 abweichend` on **Summe Bodenbedeckung = Grundstücksfläche** with 1114 filtered
+parcels means: **52** parcels have land cover that doesn't balance to their area (they
+*have* cover — it just doesn't sum to the parcel area). Parcels with *no* land cover
+(not-found, cantons without WFS coverage) aren't deviations — they simply don't apply to
+this rule.
 
-**KPIs** (top of the tab): *Grundstücke* (Auswahl / Alle), *E-GRID nicht gefunden*,
-*Ohne Bodenbedeckung*, *Ohne Lebensräume* — all over the current filtered selection.
+**KPIs** (top of the tab) are the headline of the three most important rules — each count
+equals that rule's *abweichend* count: *Grundstücke* (Auswahl / Alle), *E-GRID nicht
+gefunden* (= "Grundstück E-GRID im Kataster gefunden"), *Bodenbedeckung unvollständig*
+(= "Summe Bodenbedeckung = Grundstücksfläche"), *Lebensräume unvollständig*
+(= "Summe Lebensräume = Grundstücksfläche").

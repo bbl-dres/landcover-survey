@@ -339,6 +339,20 @@ table.sumtbl th.sortable:hover { color: var(--gray-700); }
 table.sumtbl th.sortable.sorted { color: var(--gray-700); }
 table.sumtbl th.sortable:not(.sorted)::after { content: "↕"; color: var(--gray-500); font-size: 11px; margin-left: 4px; opacity: 0; }
 table.sumtbl th.sortable:hover:not(.sorted)::after { opacity: 1; }
+/* Pivot / tree tables (Bodenbedeckung nach Art · BAFU Lebensräume) */
+.panel-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 14px; }
+.panel-head h3 { margin: 0; }
+.tree-all-ctrl { display: inline-flex; gap: 12px; white-space: nowrap; flex: none; }
+.tree-icon { display: inline-flex; align-items: center; justify-content: center; width: 15px; height: 15px; margin-right: 7px; border: 1px solid var(--gray-300); border-radius: 3px; color: var(--gray-600); font-size: 12px; line-height: 1; }
+.tree-icon.tree-spacer { border-color: transparent; }
+/* First column: keep the +/− icon and swatch vertically centred with the (possibly wrapping) label */
+table.sumtbl td { vertical-align: middle; }
+.cat-cell { display: flex; align-items: center; min-width: 0; }
+.cat-cell .tree-icon, .cat-cell .cat-sw { flex: none; }
+table.sumtbl tr.tree-parent { cursor: pointer; }
+table.sumtbl tr.tree-parent:hover { background: var(--secondary-50); }
+table.sumtbl tr.tree-parent:hover .tree-icon { border-color: var(--gray-400); background: #fff; }
+table.sumtbl tr.tree-child td:first-child { padding-left: 22px; color: var(--gray-600); }
 table.sumtbl tr.clickable { cursor: pointer; }
 table.sumtbl tr.clickable:hover { background: var(--secondary-50); }
 table.sumtbl tr.selected { background: var(--secondary-50); }
