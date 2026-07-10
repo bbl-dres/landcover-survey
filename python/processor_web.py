@@ -134,6 +134,11 @@ def _make_habitat_row(id_, egrid, typoch, prob, fid, area, geometry):
     vbs = _vbs_labels(cls)
     return {
         "id": id_, "egrid": egrid, "fid": fid, "art": typoch,
+        # Full TypoCH hierarchy split into its three levels ("<code> <name>"); typoch_l3
+        # is "" where the layer only resolved to level-2. Names via data/typoch.json.
+        "typoch_l1": C.typoch_l1_label(typoch),
+        "typoch_l2": C.typoch_l2_label(typoch),
+        "typoch_l3": C.typoch_l3_label(typoch),
         "bfsnr": "", "gwr_egid": "",
         "check_greenspace": cls["greenSpace"],
         "vbs_kategorie": vbs["vbs_kategorie"], "vbs_produktiv": vbs["vbs_produktiv"], "vbs_typ": vbs["vbs_typ"],
@@ -340,18 +345,31 @@ def _aggregate_bauzonen(rows):
 
 
 def _aggregate_habitat(rows):
-    by_typ: dict[str, float] = {}
+    """Aggregate habitat detail rows into parcel columns, by TypoCH **code** at level 1
+    and level 2 (level-2 falls back to the level-1 code for L1-only features). Returns the
+    readable level-2 label summary + ``typesL1`` / ``typesL2`` (code → area). Mirror of
+    the web's aggregateHabitat()."""
+    by_l1: dict[str, float] = {}
+    by_l2: dict[str, float] = {}
+    l2_label: dict[str, str] = {}
     for r in rows:
-        name = C.habitat_l1_label(r["art"])
-        by_typ[name] = by_typ.get(name, 0.0) + r.get("_rawArea", r["area_m2"])
-    if not by_typ:
-        return {"habitat": "", "habitat_m2": "", "types": {}}
-    ordered = sorted(by_typ.items(), key=lambda kv: kv[1], reverse=True)
-    types = {n: round2(a) for n, a in ordered}
+        area = r.get("_rawArea", r["area_m2"])
+        c1 = C.typoch_code_at_level(r["art"], 1)
+        c2 = C.typoch_code_at_level(r["art"], 2) or c1  # L1-only features fall back to their L1 code
+        if c1:
+            by_l1[c1] = by_l1.get(c1, 0.0) + area
+        if c2:
+            by_l2[c2] = by_l2.get(c2, 0.0) + area
+            if c2 not in l2_label:
+                l2_label[c2] = r.get("typoch_l2") or C.typoch_l2_label(r["art"]) or C.typoch_l1_label(r["art"])
+    if not by_l2:
+        return {"habitat": "", "habitat_m2": "", "typesL1": {}, "typesL2": {}}
+    ordered_l2 = sorted(by_l2.items(), key=lambda kv: kv[1], reverse=True)
     return {
-        "habitat": "; ".join(n for n, _ in ordered),
-        "habitat_m2": "; ".join(to_fixed_1(a) for _, a in ordered),
-        "types": types,
+        "habitat": "; ".join(l2_label[c] for c, _ in ordered_l2),
+        "habitat_m2": "; ".join(to_fixed_1(a) for _, a in ordered_l2),
+        "typesL1": {c: round2(a) for c, a in by_l1.items()},
+        "typesL2": {c: round2(a) for c, a in ordered_l2},
     }
 
 
@@ -497,8 +515,10 @@ def _process_one(row, options):
                     else "partial" if (len(bafu["dropped"]) > 0 and significant_gap)
                     else "ok"
                 )
-                for name, area in hb_agg["types"].items():
-                    parcel[C.habitat_area_key(name)] = area
+                for code, area in hb_agg["typesL1"].items():
+                    parcel[C.habitat_area_key_l1(code)] = area
+                for code, area in hb_agg["typesL2"].items():
+                    parcel[C.habitat_area_key_l2(code)] = area
             except Exception as e:  # noqa: BLE001
                 logger.warning("Habitat analysis failed for %s: %s", egrid, e)
                 parcel["habitat"] = ""

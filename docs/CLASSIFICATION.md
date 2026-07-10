@@ -69,6 +69,13 @@ BBArt = (
     Abbau_Deponie, uebrige_vegetationslose));
 ```
 
+> The 26 BBArt types, their main-group / subgroup hierarchy, and DE/FR/IT names live
+> in the shared [`data/landcover.json`](../data/landcover.json) reference (keyed on the
+> `Art` enum value the classifier uses) — reused by the web app and the Python CLI so
+> the names aren't hardcoded twice. The **classification** below (SIA 416 / DIN 277 /
+> green / sealed / VBS) stays in code, keyed on that same `key`. This mirrors
+> [`data/typoch.json`](../data/typoch.json) for the BAFU habitat layer.
+
 ---
 
 ## SIA 416 — building & surrounding areas
@@ -237,8 +244,21 @@ map. It maps well to **green space and VBS** (naturalness), but **cannot resolve
 building footprints or sealed surfaces** — so for BAFU rows only green space + VBS
 are derived; **SIA 416 / DIN 277 / sealed are left blank**.
 
-Mapping is by **TypoCH level-1** class (the leading digit of `typoch_de`, e.g.
-`6.3.1 Buchenwald` → class 6). TypoCH has 9 level-1 classes (→ 32 groups → 84 types).
+Each habitat feature keeps its **full TypoCH hierarchy**: the served label (`art` —
+the deepest level the layer resolved) plus `typoch_l1` / `typoch_l2` / `typoch_l3`
+(each `«code» «name»`, e.g. `6 Wälder` / `6.3 Andere Laubwälder` / `6.3.1 Buchenwald`;
+`typoch_l3` is empty where only level-2 exists). Parcel-level aggregation groups by
+**TypoCH level-2** (Lebensraumgruppe, ~34 groups) — the categories are no longer
+collapsed to level-1. Category **names** come from the shared
+[`data/typoch.json`](../data/typoch.json) reference (official TypoCH 2015 list,
+DE/FR/IT), reused by the web app and the Python CLI so they are not hardcoded twice.
+TypoCH has 9 level-1 classes → ~41 level-2 groups → ~84 types; the map layer resolves
+to level-2 at minimum, level-3 where possible.
+
+**Green space + VBS classification is refined per category**, resolved from a feature's
+code **most-specific-first**: a level-2/level-3 override (`BAFU_TYPOCH_REFINE`) wins over
+its level-1 class default (`BAFU_TYPOCH_L1`), which wins over a neutral fallback. The
+9 level-1 class defaults:
 
 | # | TypoCH level-1 (Hauptkategorie) | Green space | VBS Kategorie | VBS Prod. | VBS Typ |
 |---|---|---|---|---|---|
@@ -252,11 +272,40 @@ Mapping is by **TypoCH level-1** class (the leading digit of `typoch_de`, e.g.
 | 8 | Pflanzungen, Äcker, Kulturen | soil-covered | B | 1 | Typ 2 |
 | 9 | Gebäude / Anlagen | — | A | 2 | — |
 
-> ⚠ = judgment call (rows 2, 5, 7). This is a **starting-point** mapping pending
-> validation by the sustainability department — it lives in one place,
-> `BAFU_TYPOCH_L1` in [web/js/config.js](../web/js/config.js), so corrections are a
-> one-line edit. BAFU areas are **not** directly comparable to authoritative AV
-> areas; treat them as an approximation where AV is unavailable.
+Level-2 refinements — only groups that depart from their class default are listed
+(⚠ starting-point):
+
+| Code | Level-2 group | Green space | VBS Kat. | Rationale |
+|---|---|---|---|---|
+| `1.3` | Quellen und Quellfluren | soil-covered | C | spring flora, near-natural |
+| `2.0` | Künstliche Ufer | — | A | constructed banks |
+| `4.0` | Kunstrasen | soil-covered | A | amenity / artificial lawn |
+| `5.1` | Krautsäume | soil-covered | C | herbaceous, not wooded |
+| `5.2` | Hochstauden-/Schlagfluren | soil-covered | C | tall-herb, not wooded |
+| `6.0` | Forstpflanzungen | wooded | B | planted, managed |
+| `7.2` | Anthropogene Steinfluren | — | A | walls, paving |
+| `8.1` | Baumschulen, Obstgärten, Rebberge | wooded | B | woody crops |
+
+> ⚠ = judgment call. **Starting-point** mapping pending validation by the
+> sustainability department — the level-1 defaults live in `BAFU_TYPOCH_L1` and the
+> refinements in `BAFU_TYPOCH_REFINE`, kept in lock-step between
+> [web/js/config.js](../web/js/config.js) and [python/config.py](../python/config.py),
+> so corrections are a one-line edit in both. BAFU areas are **not** directly comparable
+> to authoritative AV areas; treat them as an approximation where AV is unavailable.
+>
+> **Codes outside the botanical typology.** The BAFU layer serves some codes the
+> official InfoFlora TypoCH list doesn't carry — notably the anthropogenic `9.0.x`
+> (e.g. `9.0.2 Versiegelte vegetationslose Fläche…`) and deep subdivisions like
+> `4.0.0.0.3`. Their names aren't in [`data/typoch.json`](../data/typoch.json), so the
+> level-2 label falls back to the **bare code** (e.g. group `9.0`). Classification still
+> resolves correctly (walk-up to the level-1 class default), and web and Python agree
+> byte-for-byte. To give these groups names, add BAFU's extended codes to
+> `data/typoch.json` (needs an authoritative BAFU codelist).
+>
+> **Web ↔ Python parity: aligned.** Both the web app and the Python `--source api` path
+> group at level-2, emit `typoch_l1/l2/l3`, and apply `BAFU_TYPOCH_REFINE` — verified
+> identical across all 324 TypoCH labels (plus the out-of-typology codes above). The
+> `--habitat` GeoPackage path also aggregates at level-2.
 
 ---
 

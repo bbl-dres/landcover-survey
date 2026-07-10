@@ -130,7 +130,10 @@ export const SEALED = new Set([
   "uebrige_befestigte",
 ]);
 
-/** German display names for BBArt types */
+/** German display names for BBArt types. Canonical source of record (with the
+ *  main-group hierarchy + FR/IT names) is the shared [data/landcover.json]; keep the
+ *  `de` values here in sync with it. Kept inline (not fetched) so it stays available
+ *  synchronously, including in the offline self-contained report. */
 export const ART_LABELS = {
   Gebaeude: "Gebäude",
   Strasse_Weg: "Strasse/Weg",
@@ -190,32 +193,105 @@ export function typochL1(typochDe) {
   return String(typochDe || "").trim().charAt(0);
 }
 
-/** Display name for a TypoCH level-1 code, falling back to the raw label. */
-export function habitatL1Label(typochDe) {
-  const m = BAFU_TYPOCH_L1[typochL1(typochDe)];
-  return m ? m.name : (typochDe || "–");
+/** Leading TypoCH code token of a habitat label ("6.3.1 Buchenwald" → "6.3.1"). */
+export function typochCode(typochDe) {
+  return String(typochDe || "").trim().split(/\s+/)[0] || "";
 }
 
-/** Map/legend color for a habitat label, by its TypoCH level-1 code. */
+/* ── Shared TypoCH name reference (data/typoch.json) ───────────────────────────
+ * The official TypoCH code→name list (levels 1–4, DE/FR/IT) lives in one JSON that
+ * both this app and the Python CLI read, so habitat category names aren't hardcoded
+ * twice. Loaded once, lazily, before processing (processRows awaits ensureTypoch()).
+ * Only the *names* come from here; colours + green/VBS classification are app
+ * decisions and stay in code (below). Fetched relative to this module so it resolves
+ * whether the app is served from /web/ or the repo root. */
+let _typoch = null;            // code → { code, de, fr, it, level }
+let _typochPromise = null;
+export function ensureTypoch() {
+  if (_typoch) return Promise.resolve(_typoch);
+  if (!_typochPromise) {
+    _typochPromise = fetch(new URL("../../data/typoch.json", import.meta.url))
+      .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+      .then((doc) => {
+        _typoch = {};
+        for (const t of doc.types || []) _typoch[t.code] = t;
+        return _typoch;
+      })
+      .catch((err) => { console.warn("TypoCH reference load failed:", err.message); _typoch = {}; return _typoch; });
+  }
+  return _typochPromise;
+}
+
+/** German name for a TypoCH code prefix from the loaded reference ("" if unknown). */
+function typochName(code) { return _typoch?.[code]?.de || ""; }
+
+/** Habitat label at TypoCH level n as "<code> <name>" (e.g. level 2 of
+ *  "6.3.1 Buchenwald" → "6.3 Andere Laubwälder"). Returns "" when the label has
+ *  fewer than n code parts (the layer resolves to level-2 at minimum, level-3 where
+ *  possible). Requires ensureTypoch() to have resolved; falls back to the bare code
+ *  (or the raw label at its deepest level) when the reference isn't loaded. */
+export function typochLabelAtLevel(typochDe, n) {
+  const parts = typochCode(typochDe).split(".").filter(Boolean);
+  if (parts.length < n) return "";
+  const code = parts.slice(0, n).join(".");
+  const name = typochName(code);
+  return name ? `${code} ${name}` : (n === parts.length ? String(typochDe || "").trim() : code);
+}
+export const typochL1Label = (typochDe) => typochLabelAtLevel(typochDe, 1);
+export const typochL2Label = (typochDe) => typochLabelAtLevel(typochDe, 2);
+export const typochL3Label = (typochDe) => typochLabelAtLevel(typochDe, 3);
+
+/** TypoCH code at level n ("6.3.1 Buchenwald" → level 2 = "6.3"); "" if fewer than n parts. */
+export function typochCodeAtLevel(typochDe, n) {
+  const parts = typochCode(typochDe).split(".").filter(Boolean);
+  return parts.length < n ? "" : parts.slice(0, n).join(".");
+}
+
+/** Lighten (amt>0) or darken (amt<0) a #rrggbb colour toward white/black. */
+function shadeHex(hex, amt) {
+  const m = String(hex).replace("#", "");
+  const to = amt < 0 ? 0 : 255, p = Math.min(1, Math.abs(amt));
+  const ch = (i) => { const c = parseInt(m.slice(i, i + 2), 16); return Math.round(c + (to - c) * p).toString(16).padStart(2, "0"); };
+  return `#${ch(0)}${ch(2)}${ch(4)}`;
+}
+
+/** Map/legend colour for a habitat label: the TypoCH level-1 base hue, shaded by the
+ *  level-2 digit so groups within a class read as related but distinguishable. */
 export function habitatColor(typochDe) {
-  return BAFU_TYPOCH_L1[typochL1(typochDe)]?.color || "#888";
+  const parts = typochCode(typochDe).split(".");
+  const base = BAFU_TYPOCH_L1[parts[0]]?.color || "#888";
+  const l2 = parseInt(parts[1], 10);
+  return Number.isFinite(l2) ? shadeHex(base, (l2 - 3) * 0.06) : base;
 }
 
-/** Classify a BAFU TypoCH habitat label (e.g. "6.3.1 Buchenwald") by its
- *  level-1 code. Returns the same shape as classify() for the fields BAFU can
- *  supply (greenSpace + VBS); SIA 416 / DIN 277 / sealed are intentionally null. */
+/**
+ * TypoCH level-2 / level-3 green-space + VBS refinements, keyed by code and applied
+ * most-specific-first (a finer code overrides its class default in BAFU_TYPOCH_L1).
+ * Only groups whose naturalness differs from their level-1 class default are listed.
+ * ⚠ Starting-point mapping pending sustainability-dept validation — same status as
+ * BAFU_TYPOCH_L1; edit here (and python/config.py) to correct.
+ */
+export const BAFU_TYPOCH_REFINE = {
+  "1.3": { green: "Green space (soil-covered)", vbsKategorie: "kat_c", vbsProduktiv: "produktiv", vbsTyp: "typ2" }, // Quellen und Quellfluren (spring flora)
+  "2.0": { green: "Not green space", vbsKategorie: "kat_a", vbsProduktiv: "unproduktiv", vbsTyp: null },            // Künstliche Ufer (constructed banks)
+  "4.0": { green: "Green space (soil-covered)", vbsKategorie: "kat_a", vbsProduktiv: "produktiv", vbsTyp: "typ2" }, // Kunstrasen (amenity/artificial lawn)
+  "5.1": { green: "Green space (soil-covered)", vbsKategorie: "kat_c", vbsProduktiv: "produktiv", vbsTyp: "typ2" }, // Krautsäume (herbaceous, not wooded)
+  "5.2": { green: "Green space (soil-covered)", vbsKategorie: "kat_c", vbsProduktiv: "produktiv", vbsTyp: "typ2" }, // Hochstauden-/Schlagfluren (tall-herb)
+  "6.0": { green: "Green space (wooded)", vbsKategorie: "kat_b", vbsProduktiv: "produktiv", vbsTyp: "typ2" },       // Forstpflanzungen (planted, managed)
+  "7.2": { green: "Not green space", vbsKategorie: "kat_a", vbsProduktiv: "unproduktiv", vbsTyp: null },            // Anthropogene Steinfluren (walls, paving)
+  "8.1": { green: "Green space (wooded)", vbsKategorie: "kat_b", vbsProduktiv: "produktiv", vbsTyp: "typ2" },       // Baumschulen, Obstgärten, Rebberge (woody crops)
+};
+
+/** Classify a BAFU TypoCH habitat label (e.g. "6.3.1 Buchenwald") for the fields BAFU
+ *  can supply (greenSpace + VBS); SIA 416 / DIN 277 / sealed stay null. Tries the code
+ *  most-specific-first against BAFU_TYPOCH_REFINE, then the level-1 class default in
+ *  BAFU_TYPOCH_L1, then a neutral fallback. */
 export function classifyBafu(typochDe) {
-  const code = typochL1(typochDe); // TypoCH level-1 digit
-  const m = BAFU_TYPOCH_L1[code] || { green: "Not green space", vbsKategorie: "kat_d", vbsProduktiv: "unproduktiv", vbsTyp: null };
-  return {
-    sia416: null,
-    din277: null,
-    sealed: null,
-    greenSpace: m.green,
-    vbsKategorie: m.vbsKategorie,
-    vbsProduktiv: m.vbsProduktiv,
-    vbsTyp: m.vbsTyp,
-  };
+  const parts = typochCode(typochDe).split(".").filter(Boolean);
+  let m = null;
+  for (let i = parts.length; i >= 1 && !m; i--) m = BAFU_TYPOCH_REFINE[parts.slice(0, i).join(".")];
+  m = m || BAFU_TYPOCH_L1[parts[0]] || { green: "Not green space", vbsKategorie: "kat_d", vbsProduktiv: "unproduktiv", vbsTyp: null };
+  return { sia416: null, din277: null, sealed: null, greenSpace: m.green, vbsKategorie: m.vbsKategorie, vbsProduktiv: m.vbsProduktiv, vbsTyp: m.vbsTyp };
 }
 
 /**
@@ -428,22 +504,22 @@ export function bauzoneNameFromKey(k) {
   return BAUZONE_LABELS[slug] || slug.replace(/_/g, " ");
 }
 
-/** Habitat per-type area columns: `habitat_<slug>_m2` (slug = slugified TypoCH
- *  level-1 group name). Mirrors the Bauzonen helpers. */
-const HABITAT_PREFIX = "habitat_";
-const HABITAT_SUFFIX = "_m2";
-/** Display label per habitat slug — derived from the TypoCH level-1 groups. */
-export const HABITAT_LABELS = Object.fromEntries(
-  Object.values(BAFU_TYPOCH_L1).map((m) => [slugify(m.name), m.name])
-);
-export function habitatAreaKey(name) { return `${HABITAT_PREFIX}${slugify(name)}${HABITAT_SUFFIX}`; }
-export function isHabitatAreaKey(k) {
-  return k.startsWith(HABITAT_PREFIX) && k.endsWith(HABITAT_SUFFIX) && k !== "habitat_m2";
-}
-export function habitatSlugFromKey(k) { return k.slice(HABITAT_PREFIX.length, -HABITAT_SUFFIX.length); }
+/** Habitat per-type area columns, one per TypoCH **code** at each level:
+ *  `habitat_l1_<code>_m2` (level 1) and `habitat_l2_<code>_m2` (level 2), where the
+ *  dotted code has dots → underscores ("6.3" → "6_3"). The name is NOT baked into the
+ *  key — it's looked up from the shared TypoCH reference (ensureTypoch) at display time. */
+const HABITAT_KEY_RE = /^habitat_l([12])_(.+)_m2$/;
+export function habitatAreaKeyL1(code) { return `habitat_l1_${String(code).replace(/\./g, "_")}_m2`; }
+export function habitatAreaKeyL2(code) { return `habitat_l2_${String(code).replace(/\./g, "_")}_m2`; }
+export function isHabitatAreaKey(k) { return HABITAT_KEY_RE.test(k); }
+export function habitatKeyLevel(k) { const m = HABITAT_KEY_RE.exec(k); return m ? +m[1] : 0; }
+export function habitatCodeFromKey(k) { const m = HABITAT_KEY_RE.exec(k); return m ? m[2].replace(/_/g, ".") : ""; }
+/** Display label for a habitat column key: "<code> <name>" from the TypoCH reference,
+ *  falling back to the bare code when the name isn't loaded/known. */
 export function habitatNameFromKey(k) {
-  const slug = habitatSlugFromKey(k);
-  return HABITAT_LABELS[slug] || slug.replace(/_/g, " ");
+  const code = habitatCodeFromKey(k);
+  const name = typochName(code);
+  return name ? `${code} ${name}` : code;
 }
 
 /** Shared HTML escape utility */

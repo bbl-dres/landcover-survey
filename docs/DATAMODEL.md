@@ -186,7 +186,7 @@ classDiagram
 - **Placeholder column families** on `Parcel` (each is *many* real columns, named at runtime):
   - `av_TYP_m2` → `av_<bbart>_m2` — **26**, one per AV land-cover type (e.g. `av_gebaeude_m2`).
   - `bauzonen_ZONE_m2` → `bauzonen_<slug>_m2` — one per ARE zone present (opt-in).
-  - `habitat_GRP_m2` → `habitat_<slug>_m2` — **9** TypoCH level-1 groups (opt-in).
+  - `habitat_GRP_m2` → `habitat_<slug>_m2` — one per TypoCH **level-2** group present (~34) (opt-in).
   - `input_COL` → `input_<name>` — passthrough user columns.
 - **Bauzone** and **Habitat** layers are **opt-in** (on by default in the web app).
 - Full per-column detail is in the per-layer tables below.
@@ -233,8 +233,8 @@ Aggregation columns are included by default (Python: `--no-aggregate` to omit).
 | `av_{art}_m2` | `float` | Area per AV land-cover type: `av_` + the lowercased BBArt value + `_m2` (e.g. `av_gebaeude_m2`, `av_strasse_weg_m2`, `av_acker_wiese_weide_m2`). The CSV has all 26 types as columns (0 where absent); the **GeoJSON is sparse** — each parcel carries only the types it contains (area > 0). AV parcels only |
 | `bauzonen`, `bauzonen_m2` | `varchar` | Building-zone names + areas intersecting the parcel, semicolon-joined (opt-in) |
 | `bauzonen_{slug}_m2` | `float` | One column per building-zone type: `bauzonen_` + the slugified (lowercase) zone name (e.g. `bauzonen_wohnzonen_m2`, `bauzonen_zonen_fuer_oeffentliche_nutzungen_m2`); 0 where the zone is absent. A parcel can span several zones (opt-in) |
-| `habitat`, `habitat_m2` | `varchar` | BAFU habitat group names + areas intersecting the parcel, semicolon-joined, grouped by **TypoCH level-1** (opt-in) |
-| `habitat_{slug}_m2` | `float` | One column per TypoCH level-1 habitat group: `habitat_` + the slugified (lowercase) group name (e.g. `habitat_waelder_m2`, `habitat_gruenland_m2`, `habitat_gebaeude_anlagen_m2`); 0 where absent. 9 groups (opt-in) |
+| `habitat`, `habitat_m2` | `varchar` | BAFU habitat group labels + areas intersecting the parcel, semicolon-joined, grouped by **TypoCH level-2** (Lebensraumgruppe, `«code» «name»`) (opt-in) |
+| `habitat_{slug}_m2` | `float` | One column per TypoCH level-2 habitat group: `habitat_` + the slugified (lowercase) group label (e.g. `habitat_6_3_andere_laubwaelder_m2`, `habitat_4_5_fettwiesen_und_weiden_m2`); 0 where absent. Up to ~34 groups (opt-in) |
 | `input_*` | *(varies)* | User-provided columns, prefixed `input_` (Mode 1) |
 
 > The sum of `sia416_ggf_m2 + sia416_buf_m2 + sia416_uuf_m2` (= the classified
@@ -254,7 +254,7 @@ disable with `--no-landcover`).
 | `id` | `varchar` | Parcel identifier (same as Parcels output) |
 | `egrid` | `varchar(14)` | Parcel identifier (links to Parcels output) |
 | `fid` | `integer` | Land cover feature ID from AV |
-| `art` | `varchar` | Land cover type — BBArt value ([CLASSIFICATION.md](CLASSIFICATION.md)) |
+| `art` | `varchar` | Land cover type — BBArt `Art` enum value (e.g. `geschlossener_Wald`); domain + main-group hierarchy + DE/FR/IT names in [`data/landcover.json`](../data/landcover.json), rules in [CLASSIFICATION.md](CLASSIFICATION.md) |
 | `bfsnr` | `integer` | Federal municipality number |
 | `gwr_egid` | `integer` | Federal building register ID (may be empty) |
 | `check_greenspace` | `varchar` | `Green space (soil-covered)` / `Green space (wooded)` / `Not green space` |
@@ -302,7 +302,8 @@ space + VBS are classified (provisional).
 |-----------|--------|-------------|
 | `id`, `egrid` | `varchar` | Parcel identifier (links to Parcels) |
 | `fid` | `integer` | Habitat feature id |
-| `art` | `varchar` | TypoCH habitat label (e.g. `6.3.1 Buchenwald`) |
+| `art` | `varchar` | TypoCH habitat label **as served** — the deepest level the layer resolved (e.g. `6.3.1 Buchenwald`, or `3.4 Felsen` where only level-2 exists) |
+| `typoch_l1`, `typoch_l2`, `typoch_l3` | `varchar` | The full TypoCH hierarchy split into its three levels, each `«code» «name»` (e.g. `6 Wälder` / `6.3 Andere Laubwälder` / `6.3.1 Buchenwald`). `typoch_l3` is empty where the layer only resolved to level-2. Names come from the shared [`data/typoch.json`](../data/typoch.json) reference |
 | `check_greenspace` | `varchar` | Green-space class (derived) |
 | `vbs_kategorie`, `vbs_produktiv`, `vbs_typ` | `varchar` | VBS classification (provisional for a modeled map) |
 | `area_m2` | `float` | Clipped habitat area within the parcel |

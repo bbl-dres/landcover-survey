@@ -11,8 +11,9 @@ const LANDCOVER_HEADERS = ["id", "egrid", "fid", "art", "bfsnr", "gwr_egid", "ch
 /** Bauzonen detail export columns. */
 const BAUZONEN_HEADERS = ["id", "egrid", "fid", "art", "bauzone_code", "area_m2", "lc_source"];
 
-/** BAFU habitat detail export columns. */
-const HABITAT_HEADERS = ["id", "egrid", "fid", "art", "check_greenspace",
+/** BAFU habitat detail export columns. `art` is the TypoCH label as served (deepest
+ *  level); typoch_l1/l2/l3 split it into the three hierarchy levels ("<code> <name>"). */
+const HABITAT_HEADERS = ["id", "egrid", "fid", "art", "typoch_l1", "typoch_l2", "typoch_l3", "check_greenspace",
   "vbs_kategorie", "vbs_produktiv", "vbs_typ", "area_m2", "prob", "lc_source"];
 
 /** Escape a CSV cell value (semicolon-delimited) */

@@ -1,5 +1,6 @@
 """Constants, classification mappings, and default paths."""
 
+import json
 import re
 from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
@@ -294,6 +295,95 @@ def typoch_l1(typoch_de: str | None) -> str:
 
 def habitat_l1_label(typoch_de: str | None) -> str:
     """TypoCH level-1 group name ('6.3.1 Buchenwald' → 'Wälder'); raw label if
-    unknown. Mirrors the web's ``habitatL1Label``."""
+    unknown. Retained for the level-1 group name; the habitat overlay now groups by
+    level-2 via :func:`typoch_l2_label`."""
     m = BAFU_TYPOCH_L1.get(typoch_l1(typoch_de))
     return m["name"] if m else (typoch_de or "–")
+
+
+# ---------------------------------------------------------------------------
+# Shared TypoCH name reference (data/typoch.json) — the official code→name list
+# (levels 1–4, DE/FR/IT), reused by the web app and this CLI so habitat category
+# names aren't hardcoded twice. Loaded once at import (fail-soft). Only the *names*
+# come from here; green/VBS classification stays in code (BAFU_TYPOCH_L1 +
+# BAFU_TYPOCH_REFINE). Mirrors ensureTypoch() / typochLabelAtLevel() in config.js.
+# ---------------------------------------------------------------------------
+TYPOCH_JSON_PATH = Path(__file__).resolve().parent.parent / "data" / "typoch.json"
+
+
+def _load_typoch(path: Path = TYPOCH_JSON_PATH) -> dict[str, dict]:
+    try:
+        with open(path, encoding="utf-8") as f:
+            doc = json.load(f)
+        return {t["code"]: t for t in doc.get("types", [])}
+    except Exception as e:  # fail-soft — matches the web's fetch().catch()
+        import logging
+        logging.getLogger(__name__).warning("TypoCH reference load failed: %s", e)
+        return {}
+
+
+_TYPOCH: dict[str, dict] = _load_typoch()
+
+
+def typoch_code(typoch_de: str | None) -> str:
+    """Leading TypoCH code token ('6.3.1 Buchenwald' → '6.3.1'). Mirrors typochCode()."""
+    parts = str(typoch_de or "").strip().split()
+    return parts[0] if parts else ""
+
+
+def typoch_label_at_level(typoch_de: str | None, n: int) -> str:
+    """Habitat label at TypoCH level *n* as '<code> <name>' (level 2 of
+    '6.3.1 Buchenwald' → '6.3 Andere Laubwälder'). '' when the code has fewer than *n*
+    parts. Mirror of typochLabelAtLevel(); names come from the shared reference
+    (:data:`_TYPOCH`), with the same code / raw-label fallback when unknown."""
+    parts = [p for p in typoch_code(typoch_de).split(".") if p]
+    if len(parts) < n:
+        return ""
+    code = ".".join(parts[:n])
+    entry = _TYPOCH.get(code)
+    name = entry["de"] if entry else ""
+    if name:
+        return f"{code} {name}"
+    return str(typoch_de or "").strip() if n == len(parts) else code
+
+
+def typoch_l1_label(typoch_de: str | None) -> str:
+    return typoch_label_at_level(typoch_de, 1)
+
+
+def typoch_l2_label(typoch_de: str | None) -> str:
+    return typoch_label_at_level(typoch_de, 2)
+
+
+def typoch_l3_label(typoch_de: str | None) -> str:
+    return typoch_label_at_level(typoch_de, 3)
+
+
+def typoch_code_at_level(typoch_de: str | None, n: int) -> str:
+    """TypoCH code at level *n* ('6.3.1 Buchenwald' → level 2 = '6.3'); '' if fewer than *n* parts.
+    Mirror of typochCodeAtLevel()."""
+    parts = [p for p in typoch_code(typoch_de).split(".") if p]
+    return "" if len(parts) < n else ".".join(parts[:n])
+
+
+def typoch_name(code: str | None) -> str:
+    """German name for a TypoCH code from the loaded reference ('' if unknown)."""
+    entry = _TYPOCH.get(str(code or ""))
+    return entry["de"] if entry else ""
+
+
+# TypoCH level-2 / level-3 green-space + VBS refinements, keyed by code and applied
+# most-specific-first (a finer code overrides its class default in BAFU_TYPOCH_L1).
+# Only groups whose naturalness differs from their level-1 class default are listed.
+# ⚠ Starting-point mapping pending sustainability-dept validation. Port of
+# BAFU_TYPOCH_REFINE in web/js/config.js — keep in lock-step.
+BAFU_TYPOCH_REFINE: dict[str, dict] = {
+    "1.3": {"green": "Green space (soil-covered)", "vbsKategorie": "kat_c", "vbsProduktiv": "produktiv", "vbsTyp": "typ2"},  # Quellen und Quellfluren
+    "2.0": {"green": "Not green space", "vbsKategorie": "kat_a", "vbsProduktiv": "unproduktiv", "vbsTyp": None},              # Künstliche Ufer
+    "4.0": {"green": "Green space (soil-covered)", "vbsKategorie": "kat_a", "vbsProduktiv": "produktiv", "vbsTyp": "typ2"},  # Kunstrasen
+    "5.1": {"green": "Green space (soil-covered)", "vbsKategorie": "kat_c", "vbsProduktiv": "produktiv", "vbsTyp": "typ2"},  # Krautsäume
+    "5.2": {"green": "Green space (soil-covered)", "vbsKategorie": "kat_c", "vbsProduktiv": "produktiv", "vbsTyp": "typ2"},  # Hochstauden-/Schlagfluren
+    "6.0": {"green": "Green space (wooded)", "vbsKategorie": "kat_b", "vbsProduktiv": "produktiv", "vbsTyp": "typ2"},        # Forstpflanzungen
+    "7.2": {"green": "Not green space", "vbsKategorie": "kat_a", "vbsProduktiv": "unproduktiv", "vbsTyp": None},              # Anthropogene Steinfluren
+    "8.1": {"green": "Green space (wooded)", "vbsKategorie": "kat_b", "vbsProduktiv": "produktiv", "vbsTyp": "typ2"},        # Baumschulen, Obstgärten, Rebberge
+}

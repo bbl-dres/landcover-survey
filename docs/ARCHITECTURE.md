@@ -298,15 +298,17 @@ geo.admin.ch Identify endpoint, clipped to the parcel and exported as its own Ge
 
 - **Bauzonen** (`ch.are.bauzonen`) — harmonised building-zone main-use category
   (`ch_code_hn`), aggregated per parcel.
-- **BAFU Lebensraumkarte** (`ch.bafu.lebensraumkarte-schweiz`) — habitats classified
-  by **TypoCH level-1** (the leading digit of `typoch_de`), `lc_source = BAFU`. BAFU
-  rows derive only green space + VBS; SIA 416 / DIN 277 / sealed are left blank
-  because a modeled habitat map can't resolve building footprints. The
-  TypoCH→classification mapping lives in `BAFU_TYPOCH_L1`
-  ([web/js/config.js](../web/js/config.js)); rules and caveats are in
-  [CLASSIFICATION.md](CLASSIFICATION.md) §BAFU Lebensraumkarte.
+- **BAFU Lebensraumkarte** (`ch.bafu.lebensraumkarte-schweiz`) — each habitat feature
+  keeps its full **TypoCH hierarchy** (`typoch_l1/l2/l3` from `typoch_de`) and is
+  aggregated per parcel at **TypoCH level-2** (Lebensraumgruppe); `lc_source = BAFU`.
+  BAFU rows derive only green space + VBS; SIA 416 / DIN 277 / sealed are left blank
+  because a modeled habitat map can't resolve building footprints. Category names come
+  from the shared [`data/typoch.json`](../data/typoch.json); the green/VBS mapping lives
+  in `BAFU_TYPOCH_L1` (level-1 defaults) + `BAFU_TYPOCH_REFINE` (level-2/3 overrides,
+  most-specific-first) in [web/js/config.js](../web/js/config.js); rules and caveats are
+  in [CLASSIFICATION.md](CLASSIFICATION.md) §BAFU Lebensraumkarte.
 
-The habitat **overlay** above stays a parallel layer (TypoCH level-1, green + VBS
+The habitat **overlay** above stays a parallel layer (TypoCH categories, green + VBS
 only). Separately, BAFU also feeds the AV-gap fallback described next, where the same
 habitat polygons are re-used to synthesize land cover in the BBArt schema.
 

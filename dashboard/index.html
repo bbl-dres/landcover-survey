@@ -111,6 +111,10 @@
         <div class="checklist single" id="f-tpf"></div>
       </div>
       <div class="fgroup">
+        <div class="fgroup-head"><span class="ftitle">Land<span class="ftip" data-tip="Land des Grundstücks (ISO-Ländercode aus SAP). Standardmässig nur die Schweiz (CH); ausländische Objekte sind Vertretungen im Ausland.">ⓘ</span></span><button class="flink" id="country-toggle">alle / keine</button></div>
+        <div class="checklist single" id="f-countries"></div>
+      </div>
+      <div class="fgroup">
         <div class="fgroup-head"><span class="ftitle">Region (Kanton)</span><button class="flink" id="cant-toggle">alle / keine</button></div>
         <div class="checklist single" id="f-cantons"></div>
       </div>
@@ -217,8 +221,8 @@
     </section>
 
     <section class="tab-panel" id="panel-quality" aria-labelledby="tab-quality" hidden>
-      <h2 class="section-title">Datenqualität</h2>
-      <div class="chart-note">Bezieht sich auf die aktuelle Auswahl.</div>
+      <h2 class="section-title">Datenqualität <span id="flag-q" class="filtered-flag">Gefilterte Auswahl</span></h2>
+      <div class="chart-note">Bezieht sich auf die aktuelle Auswahl (dieselbe wie in der Übersicht).</div>
       <div class="kpis" id="q-kpis"></div>
       <div class="summary-tables">
         <div class="panel"><h3>E-GRID-Status</h3><div id="q-egrid"></div></div>
@@ -228,7 +232,7 @@
       <div class="table-wrap">
         <div class="table-scroll">
           <table id="q-table">
-            <thead><tr><th scope="col">ID</th><th scope="col">E-GRID</th><th scope="col">Ort</th><th scope="col">Hinweis</th></tr></thead>
+            <thead><tr><th scope="col">ID</th><th scope="col">E-GRID</th><th scope="col">Ort</th><th scope="col">Nicht bestanden</th></tr></thead>
             <tbody id="q-tbody"></tbody>
           </table>
         </div>
@@ -299,16 +303,16 @@
         <p>Diese Auswertung zeigt pro Schweizer Grundstück (Liegenschaft / SDR), wie sich die Grundstücksfläche auf <strong>Bodenbedeckungsarten</strong>, <strong>Bauzonen</strong> und <strong>BAFU-Lebensräume</strong> verteilt. Die Daten sind in diese Datei eingebettet; Auswertung, Tabellen, Diagramme und Filter laufen ohne Server direkt im Browser. Die interaktive Karte und der Excel-Export benötigen eine Internetverbindung.</p>
         <h2 class="section-title">Datengrundlagen</h2>
         <ul>
-          <li><strong>Bodenbedeckung</strong> — Amtliche Vermessung (AV), DM.01-AV-CH · <a href="https://www.geodienste.ch/services/av" target="_blank" rel="noopener">geodienste.ch</a></li>
+          <li><strong>Bodenbedeckung</strong> — Amtliche Vermessung (AV), DM.01-AV-CH · <a href="https://www.geodienste.ch/services/av" target="_blank" rel="noopener">geodienste.ch</a> · <a href="https://www.cadastre-manual.admin.ch/de/informationsebene-bodenbedeckung-and-einzelobjekte" target="_blank" rel="noopener">Informationsebene «Bodenbedeckung» &amp; «Einzelobjekte»</a></li>
           <li><strong>Grundstücke</strong> — Amtliche Vermessung, Liegenschaften (E-GRID) · <a href="https://map.geo.admin.ch/#/map?lang=de&amp;bgLayer=ch.swisstopo.pixelkarte-grau&amp;layers=ch.kantone.cadastralwebmap-farbe" target="_blank" rel="noopener">map.geo.admin.ch</a></li>
           <li><strong>Bauzonen</strong> — ARE, harmonisiert · <code>ch.are.bauzonen</code> · <a href="https://map.geo.admin.ch/#/map?lang=de&amp;bgLayer=ch.swisstopo.pixelkarte-grau&amp;layers=ch.are.bauzonen" target="_blank" rel="noopener">map.geo.admin.ch</a></li>
-          <li><strong>Lebensräume</strong> — BAFU Lebensraumkarte · <code>ch.bafu.lebensraumkarte-schweiz</code> · <a href="https://map.geo.admin.ch/#/map?lang=de&amp;center=2622715,1205155.21&amp;z=1.921&amp;topic=ech&amp;layers=ch.bafu.lebensraumkarte-schweiz&amp;bgLayer=void" target="_blank" rel="noopener">map.geo.admin.ch</a></li>
+          <li><strong>Lebensräume</strong> — BAFU Lebensraumkarte · <code>ch.bafu.lebensraumkarte-schweiz</code> · <a href="https://map.geo.admin.ch/#/map?lang=de&amp;center=2622715,1205155.21&amp;z=1.921&amp;topic=ech&amp;layers=ch.bafu.lebensraumkarte-schweiz&amp;bgLayer=void" target="_blank" rel="noopener">map.geo.admin.ch</a> · <a href="https://www.infoflora.ch/en/habitats/typoch-(delarze-et-al.).html" target="_blank" rel="noopener">Lebensraumtypologie TypoCH</a></li>
         </ul>
         <p class="muted">Metadaten-Katalog: <a href="https://www.geocat.ch/geonetwork/srv/ger/catalog.search#/home" target="_blank" rel="noopener">geocat.ch</a> · © swisstopo / Kantone (AV) · ARE · BAFU</p>
         <h2 class="section-title">Hinweise</h2>
         <ul>
           <li>Die berechnete Grundstücksfläche entspricht <em>nicht</em> dem amtlichen Flächenmass.</li>
-          <li>Persönliche Felder werden beim Erstellen der Datei automatisch entfernt.</li>
+          <li>Benutzerdefinierte Felder werden beim Erstellen der Datei automatisch entfernt.</li>
         </ul>
         <h2 class="section-title">Weiterführende Informationen</h2>
         <ul class="about-links">

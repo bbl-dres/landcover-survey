@@ -8,7 +8,7 @@ body {
 .skip-link { position: absolute; left: 8px; top: -48px; z-index: 3000; background: var(--primary-700); color: #fff; padding: 10px 16px; border-radius: 4px; text-decoration: none; font-weight: 600; }
 .skip-link:focus { top: 8px; }
 a { color: var(--link); }
-.fp-toggle, .map-print-img { display: none; }   /* shown only on mobile / in print, respectively */
+.main-head .fp-toggle, .map-print-img { display: none; }   /* toggle: mobile only (beats .hbtn); print img: print only */
 /* Hover info (light secondary-50 box, no underline affordance) */
 .tip-term { cursor: help; }
 .tip-term:hover { color: var(--primary-600); }
@@ -334,6 +334,11 @@ table.sumtbl { width: 100%; border-collapse: collapse; font-size: 13px; }
 table.sumtbl th, table.sumtbl td { padding: 6px 8px; border-bottom: 1px solid var(--gray-100); }
 table.sumtbl th { text-align: left; font-size: 12px; color: var(--gray-500); font-weight: 500; }
 table.sumtbl td.num, table.sumtbl th.num { text-align: right; font-variant-numeric: tabular-nums; }
+table.sumtbl th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+table.sumtbl th.sortable:hover { color: var(--gray-700); }
+table.sumtbl th.sortable.sorted { color: var(--gray-700); }
+table.sumtbl th.sortable:not(.sorted)::after { content: "↕"; color: var(--gray-500); font-size: 11px; margin-left: 4px; opacity: 0; }
+table.sumtbl th.sortable:hover:not(.sorted)::after { opacity: 1; }
 table.sumtbl tr.clickable { cursor: pointer; }
 table.sumtbl tr.clickable:hover { background: var(--secondary-50); }
 table.sumtbl tr.selected { background: var(--secondary-50); }
@@ -355,7 +360,7 @@ table.sumtbl .sumbar > i { display: block; height: 100%; background: var(--bar-f
 .about-links a { font-weight: 600; }
 
 @media (max-width: 900px) {
-  .fp-toggle { display: inline-flex; }
+  .main-head .fp-toggle { display: inline-flex; }
   #filter-panel {
     position: fixed; z-index: 110; top: 0; bottom: 0; left: 0; height: auto;
     width: 300px; max-width: 86vw; box-shadow: var(--shadow-md);

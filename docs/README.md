@@ -11,7 +11,8 @@ official Amtliche Vermessung (AV) data.
 | **Know what a land cover type maps to** (SIA 416, green space, sealed, VBS) | **[CLASSIFICATION.md](CLASSIFICATION.md)** — mappings + decision trees ★ |
 | **Understand the input/output columns** | **[DATAMODEL.md](DATAMODEL.md)** — inputs, outputs, modes |
 | **Understand how it works / extend it** | **[ARCHITECTURE.md](ARCHITECTURE.md)** — pipeline, implementation, limits |
-| **Find other land cover / land use / habitat data sources** | **[DATA-SOURCES.md](DATA-SOURCES.md)** — screening reference (global → EU → DACH → CH) |
+| **Understand the dashboard's data-quality checks** | **[CHECKING-RULES.md](CHECKING-RULES.md)** — Datenqualität rules, scope + tolerances |
+| **Find other land cover / land use / habitat data sources** | **[RESEARCH-LANDCOVER.md](RESEARCH-LANDCOVER.md)** — screening reference (global → EU → DACH → CH); **[RESEARCH-NEAR-NATURAL.md](RESEARCH-NEAR-NATURAL.md)** for near-natural / VBS |
 
 > ★ Most people are here for the **AV layer mappings** — start with
 > [CLASSIFICATION.md](CLASSIFICATION.md).
@@ -32,7 +33,7 @@ official Amtliche Vermessung (AV) data.
 | Term | EN | DE | Description |
 |------|----|----|-------------|
 | AV | Official Cadastral Survey | Amtliche Vermessung | Official cadastral survey of Switzerland |
-| BBArt | Land Cover Type | Bodenabdeckungsart | Land cover type domain (26 values) in DM.01-AV-CH |
+| BBArt | Land Cover Type | Bodenbedeckungsart | Land cover type domain (26 values) in DM.01-AV-CH; reference in [`data/landcover.json`](../data/landcover.json) |
 | BFSNr | BFS Municipality Number | BFS-Nummer | Federal municipality number (Swiss Federal Statistical Office) |
 | BUF | Developed Surrounding Area | Bearbeitete Umgebungsfläche | Sealed + soil-covered surfaces around buildings (SIA 416) |
 | CRS | Coordinate Reference System | Koordinatenreferenzsystem | This project uses EPSG:2056 (LV95) |
@@ -45,7 +46,7 @@ official Amtliche Vermessung (AV) data.
 | GGF | Building Footprint Area | Gebäudegrundfläche | Building footprint area (SIA 416) |
 | GWR_EGID | Federal Building ID | GWR-EGID | Federal building register ID (GWR) |
 | INTERLIS | INTERLIS | — | Swiss standard for geodata description and transfer (SN 612030) |
-| lcsf | Land Cover Surfaces | — | GeoPackage table for land cover surfaces (Bodenabdeckungsflächen) |
+| lcsf | Land Cover Surfaces | — | GeoPackage table for land cover surfaces (Bodenbedeckungsflächen) |
 | LV95 | National Survey 1995 | Landesvermessung 1995 | Swiss national coordinate system (EPSG:2056, CH1903+) |
 | Nummer | Parcel Number | Grundstücknummer | Official parcel number within a municipality |
 | resf | Real Estate Surfaces | — | GeoPackage table for parcels (Liegenschaften and SDR) |

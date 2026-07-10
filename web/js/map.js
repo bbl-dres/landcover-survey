@@ -2,7 +2,7 @@
  * MapLibre GL JS map with parcel polygons, land cover overlay,
  * Home/3D controls, and thumbnail basemap selector
  */
-import { API, ART_COLORS, CATEGORY_COLORS, ART_LABELS, MAP_STYLES, MAP_DEFAULT, greenSpaceLabel, esc, fmtNum, habitatColor, habitatL1Label, bauzoneColor, BRAND, fmtArea } from "./config.js";
+import { API, ART_COLORS, CATEGORY_COLORS, ART_LABELS, MAP_STYLES, MAP_DEFAULT, greenSpaceLabel, esc, fmtNum, habitatColor, typochL2Label, bauzoneColor, BRAND, fmtArea } from "./config.js";
 import { setMap, readdSwisstopoLayers, loadGeokatalog, addSwisstopoLayer, removeSwisstopoLayer, activeSwisstopoLayers } from "./swisstopo.js";
 import { t, getLang } from "./i18n.js";
 import { poleOfInaccessibility } from "./polylabel.js";
@@ -682,7 +682,7 @@ export function plotResults(results) {
       const idx = hbIdx++;
       if (!h._geometry) continue;
       habitatFeatures.push({ type: "Feature", geometry: h._geometry,
-        properties: { hb_index: idx, art: h.art, art_label: habitatL1Label(h.art), area_m2: h.area_m2, prob: h.prob || "", color: habitatColor(h.art), parcel_id: p.id } });
+        properties: { hb_index: idx, art: h.art, art_label: h.typoch_l2 || typochL2Label(h.art), area_m2: h.area_m2, prob: h.prob || "", color: habitatColor(h.art), parcel_id: p.id } });
     }
   });
 

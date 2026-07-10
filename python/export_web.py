@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 LANDCOVER_HEADERS = ["id", "egrid", "fid", "art", "bfsnr", "gwr_egid", "check_greenspace",
                      "vbs_kategorie", "vbs_produktiv", "vbs_typ", "area_m2", "lc_source", "prob"]
 BAUZONEN_HEADERS = ["id", "egrid", "fid", "art", "bauzone_code", "area_m2", "lc_source"]
-HABITAT_HEADERS = ["id", "egrid", "fid", "art", "check_greenspace",
+HABITAT_HEADERS = ["id", "egrid", "fid", "art", "typoch_l1", "typoch_l2", "typoch_l3", "check_greenspace",
                    "vbs_kategorie", "vbs_produktiv", "vbs_typ", "area_m2", "prob", "lc_source"]
 
 

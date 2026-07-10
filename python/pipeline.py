@@ -41,9 +41,9 @@ from config import (
     VBS_TYP,
     VBS_TYP_BY_ART,
     VERSIEGELT_ARTS,
-    habitat_l1_label,
     slugify,
     to_fixed_1,
+    typoch_l2_label,
 )
 from geometry import clean_geometries, filter_clip_results
 from swisstopo import LayerConfig, intersect_with_features
@@ -178,7 +178,7 @@ def run(
                 parcels_out, lc_out = _run_layer_analysis(
                     HABITAT_CONFIG, "habitat",
                     parcels_gdf, parcels_out, lc_out,
-                    name_fn=habitat_l1_label,  # group TypoCH labels to level-1 (names + per-type)
+                    name_fn=typoch_l2_label,  # group TypoCH labels to level-2 (names + per-type)
                 )
         else:
             logger.warning("No parcel geometries available — skipping layer analyses")

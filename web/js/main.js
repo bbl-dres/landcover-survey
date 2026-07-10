@@ -10,7 +10,7 @@ import { downloadParcelCSV, downloadLandcoverCSV, downloadXLSX, downloadGeoJSON 
 import { downloadReportHTML } from "./report.js";
 import { initSearch, setSearchData } from "./search.js";
 import { ART_LABELS, ART_COLORS, CATEGORY_COLORS, isFound, esc, fmtNum,
-         bauzoneColor, habitatColor, habitatL1Label, BRAND,
+         bauzoneColor, habitatColor, typochL2Label, BRAND,
          getAreaUnit, setAreaUnit, onAreaUnitChange, areaUnitLabel, stripAreaUnit, fmtArea, fmtAreaValue } from "./config.js";
 import { t, applyI18nDOM, setLang, getLang, getLocale, onLangChange } from "./i18n.js";
 
@@ -499,7 +499,7 @@ const AGGREGATION_MODES = {
     getEntries(rows) {
       const map = {};
       for (const f of rows) {
-        const key = habitatL1Label(f.art);
+        const key = f.typoch_l2 || typochL2Label(f.art);
         if (!map[key]) map[key] = { area: 0, color: habitatColor(f.art) };
         map[key].area += f.area_m2;
       }

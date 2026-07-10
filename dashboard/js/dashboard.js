@@ -6,7 +6,7 @@
   var TEMPLATE_HTML = "<!doctype html>\n" + document.documentElement.outerHTML;
   // PII allowlist (mirrors the old build_dashboard.py): keep every non-input_
   // column; of input_ keep only these six. The rest never reach a saved file.
-  var KEEP_INPUT = { "input_ort":1, "input_plz":1, "input_rg":1, "input_bez. grundstück":1, "input_eigent.art":1, "input_tpf":1 };
+  var KEEP_INPUT = { "input_ort":1, "input_plz":1, "input_rg":1, "input_bez. grundstück":1, "input_eigent.art":1, "input_tpf":1, "input_l/r":1 };
   // Anything that looks like personal data is dropped even outside the input_ namespace
   // (defence-in-depth: an alternate/future export schema could carry PII without the prefix).
   var PII_RE = /(^|_)(name|mieter|tenant|e?mail|telefon|phone|adresse|kontakt|person|eigent[uü]mer|owner)(_|$)/i;
@@ -176,12 +176,19 @@
   function mainColor(a) { return MAIN_COLORS[ART_MAIN[a]] || "#94a3b8"; }
   // Habitat by TypoCH level-1 (digit → colour; mirrors web/js/config.js BAFU_TYPOCH_L1).
   var HABITAT_L1_COLORS = { "1":"#2980b9", "2":"#16a085", "3":"#aab7b8", "4":"#2ecc71", "5":"#82c341", "6":"#1e8449", "7":"#d4ac0d", "8":"#a3d977", "9":"#c0392b" };
+  // TypoCH level-1 classes 1–7 are naturnah; 8 (Kulturen) & 9 (Bauten/Anlagen) are not.
+  var HABITAT_NAT_DIGIT = { "1":1, "2":1, "3":1, "4":1, "5":1, "6":1, "7":1 };
+  // Legacy level-1 name-slugs (older exports collapsed habitat to level-1).
   var HABITAT_SLUG_DIGIT = {
     gewaesser:"1", ufer_feuchtgebiete:"2", gletscher_fels_schutt_geroell:"3", gruenland:"4",
     krautsaeume_hochstauden_gebuesche:"5", waelder:"6", pionier_ruderalvegetation:"7",
     pflanzungen_aecker_kulturen:"8", gebaeude_anlagen:"9"
   };
-  function habColor(slug) { return HABITAT_L1_COLORS[HABITAT_SLUG_DIGIT[slug]] || "#8e7cc3"; }
+  // TypoCH level-1 digit of a habitat column slug — robust to export granularity:
+  // level-2/3 code-slugs ("6_3_andere_laubwaelder") take their leading digit; legacy
+  // level-1 name-slugs ("waelder") map via HABITAT_SLUG_DIGIT.
+  function habDigit(slug) { return /^[1-9]/.test(slug) ? String(slug).charAt(0) : (HABITAT_SLUG_DIGIT[slug] || ""); }
+  function habColor(slug) { return HABITAT_L1_COLORS[habDigit(slug)] || "#8e7cc3"; }
   // Harmonised Bauzonen use (ch.are.bauzonen ch_code_hn) → colour, keyed by slug.
   // Mirrors web/js/config.js BAUZONEN_HN_COLORS so a use gets the same colour in
   // the web app, this map, the table swatches and the legend.
@@ -196,6 +203,53 @@
   // SAP codes → Klartext labels (display only; the raw code stays the filter key + in exports).
   var TPF_LABELS = { "1": "Allgemeine Bundesverwaltung", "2": "Ausland", "3": "Zoll", "4": "Gerichte", "5": "Forschungsanstalten", "6": "Kunst und Kultur", "7": "Sport", "8": "Repräsentation Inland", "9": "Infrastruktur" };
   var EIGENTUM_LABELS = { "1": "Eigentum Bund", "3": "Anmiete", "5": "Spezialfall" };
+  // ISO 3166-1 alpha-2 → German country name (input_l/r). Derived from data/countries.json;
+  // inlined so the self-contained offline file needs no fetch. Unknown codes fall back to the code.
+  var COUNTRY_LABELS = {
+    "AD":"Andorra", "AE":"Vereinigte Arabische Emirate", "AF":"Afghanistan", "AG":"Antigua und Barbuda", "AI":"Anguilla", "AL":"Albanien",
+    "AM":"Armenien", "AO":"Angola", "AQ":"Antarktis", "AR":"Argentinien", "AS":"Amerikanisch-Samoa", "AT":"Österreich",
+    "AU":"Australien", "AW":"Aruba", "AX":"Åland", "AZ":"Aserbaidschan", "BA":"Bosnien und Herzegowina", "BB":"Barbados",
+    "BD":"Bangladesch", "BE":"Belgien", "BF":"Burkina Faso", "BG":"Bulgarien", "BH":"Bahrain", "BI":"Burundi",
+    "BJ":"Benin", "BL":"Saint-Barthélemy", "BM":"Bermuda", "BN":"Brunei", "BO":"Bolivien", "BQ":"Bonaire",
+    "BR":"Brasilien", "BS":"Bahamas", "BT":"Bhutan", "BV":"Bouvetinsel", "BW":"Botswana", "BY":"Belarus",
+    "BZ":"Belize", "CA":"Kanada", "CC":"Kokosinseln", "CD":"Kongo (Dem. Rep.)", "CF":"Zentralafrikanische Republik", "CG":"Kongo (Rep.)",
+    "CH":"Schweiz", "CI":"Côte d’Ivoire", "CK":"Cookinseln", "CL":"Chile", "CM":"Kamerun", "CN":"China",
+    "CO":"Kolumbien", "CR":"Costa Rica", "CU":"Kuba", "CV":"Cabo Verde", "CW":"Curaçao", "CX":"Weihnachtsinsel",
+    "CY":"Zypern", "CZ":"Tschechien", "DE":"Deutschland", "DJ":"Dschibuti", "DK":"Dänemark", "DM":"Dominica",
+    "DO":"Dominikanische Republik", "DZ":"Algerien", "EC":"Ecuador", "EE":"Estland", "EG":"Ägypten", "EH":"Westsahara",
+    "ER":"Eritrea", "ES":"Spanien", "ET":"Äthiopien", "FI":"Finnland", "FJ":"Fidschi", "FK":"Falklandinseln",
+    "FM":"Mikronesien", "FO":"Färöer", "FR":"Frankreich", "GA":"Gabun", "GB":"Vereinigtes Königreich", "GD":"Grenada",
+    "GE":"Georgien", "GF":"Französisch-Guayana", "GG":"Guernsey", "GH":"Ghana", "GI":"Gibraltar", "GL":"Grönland",
+    "GM":"Gambia", "GN":"Guinea", "GP":"Guadeloupe", "GQ":"Äquatorialguinea", "GR":"Griechenland", "GS":"Südgeorgien und die Südlichen Sandwichinseln",
+    "GT":"Guatemala", "GU":"Guam", "GW":"Guinea-Bissau", "GY":"Guyana", "HK":"Hongkong", "HM":"Heard und McDonaldinseln",
+    "HN":"Honduras", "HR":"Kroatien", "HT":"Haiti", "HU":"Ungarn", "ID":"Indonesien", "IE":"Irland",
+    "IL":"Israel", "IM":"Insel Man", "IN":"Indien", "IO":"Britisches Territorium im Indischen Ozean", "IQ":"Irak", "IR":"Iran",
+    "IS":"Island", "IT":"Italien", "JE":"Jersey", "JM":"Jamaika", "JO":"Jordanien", "JP":"Japan",
+    "KE":"Kenia", "KG":"Kirgisistan", "KH":"Kambodscha", "KI":"Kiribati", "KM":"Komoren", "KN":"St. Kitts und Nevis",
+    "KP":"Nordkorea", "KR":"Südkorea", "KW":"Kuwait", "KY":"Kaimaninseln", "KZ":"Kasachstan", "LA":"Laos",
+    "LB":"Libanon", "LC":"St. Lucia", "LI":"Liechtenstein", "LK":"Sri Lanka", "LR":"Liberia", "LS":"Lesotho",
+    "LT":"Litauen", "LU":"Luxemburg", "LV":"Lettland", "LY":"Libyen", "MA":"Marokko", "MC":"Monaco",
+    "MD":"Moldau", "ME":"Montenegro", "MF":"Saint-Martin (frz.)", "MG":"Madagaskar", "MH":"Marshallinseln", "MK":"Nordmazedonien",
+    "ML":"Mali", "MM":"Myanmar", "MN":"Mongolei", "MO":"Macau", "MP":"Nördliche Marianen", "MQ":"Martinique",
+    "MR":"Mauretanien", "MS":"Montserrat", "MT":"Malta", "MU":"Mauritius", "MV":"Malediven", "MW":"Malawi",
+    "MX":"Mexiko", "MY":"Malaysia", "MZ":"Mosambik", "NA":"Namibia", "NC":"Neukaledonien", "NE":"Niger",
+    "NF":"Norfolkinsel", "NG":"Nigeria", "NI":"Nicaragua", "NL":"Niederlande", "NO":"Norwegen", "NP":"Nepal",
+    "NR":"Nauru", "NU":"Niue", "NZ":"Neuseeland", "OM":"Oman", "PA":"Panama", "PE":"Peru",
+    "PF":"Französisch-Polynesien", "PG":"Papua-Neuguinea", "PH":"Philippinen", "PK":"Pakistan", "PL":"Polen", "PM":"Saint-Pierre und Miquelon",
+    "PN":"Pitcairninseln", "PR":"Puerto Rico", "PS":"Palästina", "PT":"Portugal", "PW":"Palau", "PY":"Paraguay",
+    "QA":"Katar", "RE":"Réunion", "RO":"Rumänien", "RS":"Serbien", "RU":"Russland", "RW":"Ruanda",
+    "SA":"Saudi-Arabien", "SB":"Salomonen", "SC":"Seychellen", "SD":"Sudan", "SE":"Schweden", "SG":"Singapur",
+    "SH":"St. Helena", "SI":"Slowenien", "SJ":"Svalbard und Jan Mayen", "SK":"Slowakei", "SL":"Sierra Leone", "SM":"San Marino",
+    "SN":"Senegal", "SO":"Somalia", "SR":"Suriname", "SS":"Südsudan", "ST":"São Tomé und Príncipe", "SV":"El Salvador",
+    "SX":"Sint Maarten", "SY":"Syrien", "SZ":"Eswatini", "TC":"Turks- und Caicosinseln", "TD":"Tschad", "TF":"Französische Süd- und Antarktisgebiete",
+    "TG":"Togo", "TH":"Thailand", "TJ":"Tadschikistan", "TK":"Tokelau", "TL":"Timor-Leste", "TM":"Turkmenistan",
+    "TN":"Tunesien", "TO":"Tonga", "TR":"Türkei", "TT":"Trinidad und Tobago", "TV":"Tuvalu", "TW":"Taiwan",
+    "TZ":"Tansania", "UA":"Ukraine", "UG":"Uganda", "UM":"Kleinere Amerikanische Überseeinseln", "US":"Vereinigte Staaten", "UY":"Uruguay",
+    "UZ":"Usbekistan", "VA":"Vatikanstadt", "VC":"St. Vincent und die Grenadinen", "VE":"Venezuela", "VG":"Britische Jungferninseln", "VI":"Amerikanische Jungferninseln",
+    "VN":"Vietnam", "VU":"Vanuatu", "WF":"Wallis und Futuna", "WS":"Samoa", "XK":"Kosovo", "YE":"Jemen",
+    "YT":"Mayotte", "ZA":"Südafrika", "ZM":"Sambia", "ZW":"Simbabwe"
+  };
+  function countryLabel(c) { if (c == null || c === "") return "—"; var k = String(c).toUpperCase(); return COUNTRY_LABELS[k] || String(c); }
   function codeLabel(map, code) { if (code == null || code === "" || code === "—") return "—"; var k = String(code); return map[k] || map[String(parseInt(k, 10))] || k; }
   function tpfLabel(code) { return codeLabel(TPF_LABELS, code); }
   function eigentumLabel(code) { return codeLabel(EIGENTUM_LABELS, code); }
@@ -251,7 +305,7 @@
   function boot(PARCELS, OVERLAYS) {
     OVERLAYS = OVERLAYS || {};
   // ---- Precompute filter option counts (over the full dataset) ----
-  var cantonCounts = {}, eigentumCounts = {}, artTotal = {}, artParcelCount = {}, covWith = 0, covWithout = 0;
+  var cantonCounts = {}, countryCounts = {}, eigentumCounts = {}, artTotal = {}, artParcelCount = {}, covWith = 0, covWithout = 0;
   var excludeCounts = {}, statusCounts = {}, tpfCounts = {}, bauzoneTotal = {}, bauzoneParcelCount = {}, habitatTotal = {}, habitatParcelCount = {};
   var BAUZONE_RE = /^bauzonen_(.+)_m2$/; // bauzonen_<slug>_m2 (the bauzonen_m2 total does not match)
   // Display label per zone slug (ARE harmonised Hauptnutzung) — mirrors web/js/config.js.
@@ -272,10 +326,23 @@
     pionier_ruderalvegetation: "Pionier-/Ruderalvegetation", pflanzungen_aecker_kulturen: "Pflanzungen, Äcker, Kulturen",
     gebaeude_anlagen: "Gebäude / Anlagen"
   };
-  function hbLabel(h) { return HABITAT_LABELS[h] || String(h).replace(/_/g, " "); }
+  // Habitat column slug → display label. Level-1 name-slugs use HABITAT_LABELS; level-2/3
+  // code-slugs ("6_3_andere_laubwaelder") are reconstructed as "6.3 Andere Laubwaelder"
+  // (slugify dropped the umlauts, so the name part is best-effort); else prettified.
+  function hbLabel(h) {
+    if (HABITAT_LABELS[h]) return HABITAT_LABELS[h];
+    if (/^[1-9]/.test(h)) {
+      var parts = String(h).split("_"), code = [], i = 0;
+      while (i < parts.length && /^[0-9]+$/.test(parts[i])) { code.push(parts[i]); i++; }
+      var name = parts.slice(i).map(function (w) { return w ? w.charAt(0).toUpperCase() + w.slice(1) : w; }).join(" ");
+      return code.join(".") + (name ? " " + name : "");
+    }
+    return String(h).replace(/_/g, " ");
+  }
   EXCLUDE_RULES.forEach(function (r) { excludeCounts[r.key] = 0; });
   PARCELS.forEach(function (p) {
     var c = p.input_rg || ""; if (c) cantonCounts[c] = (cantonCounts[c] || 0) + 1;
+    var lc = p["input_l/r"] || ""; if (lc) countryCounts[lc] = (countryCounts[lc] || 0) + 1;
     var e = p["input_eigent.art"] || ""; if (e) eigentumCounts[e] = (eigentumCounts[e] || 0) + 1;
     var tp = (p.input_tpf == null || p.input_tpf === "") ? "—" : String(p.input_tpf); tpfCounts[tp] = (tpfCounts[tp] || 0) + 1;
     var st = statusKey(p); statusCounts[st] = (statusCounts[st] || 0) + 1;
@@ -293,6 +360,8 @@
     }
   });
   var cantonList = Object.keys(cantonCounts).sort(function (a, b) { return cantonCounts[b] - cantonCounts[a]; });
+  // Country list sorted by frequency (CH dominant); the raw ISO code stays the filter key.
+  var countryList = Object.keys(countryCounts).sort(function (a, b) { return countryCounts[b] - countryCounts[a]; });
   var artListAll = Object.keys(artTotal).sort(function (a, b) { return artTotal[b] - artTotal[a]; });
   var bauzoneListAll = Object.keys(bauzoneTotal).sort(function (a, b) { return bauzoneTotal[b] - bauzoneTotal[a]; });
   var habitatListAll = Object.keys(habitatTotal).sort(function (a, b) { return habitatTotal[b] - habitatTotal[a]; });
@@ -307,8 +376,9 @@
     .concat(Object.keys(statusCounts).filter(function (s) { return STATUS_ORDER.indexOf(s) === -1; }));
 
   // ---- Filter state ----
-  // Defaults active on load: ABGA*/LÖVM*/PP* excluded, E-GRID-Status "Gefunden",
-  // and Eigentumsart 1 (Bodenbedeckung defaults to "Alle"). The empty URL
+  // Defaults active on load: ABGA*/LÖVM*/PP* excluded, Eigentumsart 1, Land = CH
+  // (E-GRID-Status defaults to "Alle", so the Datenqualität completeness checks can
+  // see not-found parcels; Bodenbedeckung defaults to "Alle"). The empty URL
   // represents exactly this default state; query params encode deviations from it.
   // Aggregate "Enthält" categories (clickable on the SIA 416 / Grün·Versiegelung·VBS
   // charts). Like the per-Art filter, each selects Grundstücke that *contain* the
@@ -328,9 +398,12 @@
   PARCELS.forEach(function (p) { HAS_KEYS.forEach(function (m) { if (num(p[HAS_METRICS[m].field]) > 0) hasCounts[m]++; }); });
 
   function defaultEigentum() { return eigentumCounts["1"] ? { "1": true } : {}; }
-  function defaultStatus() { return statusCounts["found"] ? { found: true } : {}; }
+  // Country defaults to Switzerland — hides the foreign representation parcels (Ausland).
+  function defaultCountries() { return countryCounts["CH"] ? { CH: true } : {}; }
   function defaultFilters() {
-    return { cantons:{}, coverage:"all", arts:{}, has:{}, bauzonen:{}, tpf:{}, eigentum:defaultEigentum(), status:defaultStatus(), exclude:defaultExclude() };
+    // status defaults to {} (all) — not-found/invalid parcels stay visible so the
+    // Datenqualität "gefunden / Geometrie / Fläche" rules actually surface them.
+    return { countries:defaultCountries(), cantons:{}, coverage:"all", arts:{}, has:{}, bauzonen:{}, tpf:{}, eigentum:defaultEigentum(), status:{}, exclude:defaultExclude() };
   }
   var filters = defaultFilters();
 
@@ -341,6 +414,8 @@
     }
     var st = Object.keys(filters.status);
     if (st.length && !filters.status[statusKey(p)]) return false;
+    var co = Object.keys(filters.countries);
+    if (co.length && !filters.countries[p["input_l/r"] || ""]) return false;
     var cs = Object.keys(filters.cantons);
     if (cs.length && !filters.cantons[p.input_rg || ""]) return false;
     if (filters.coverage === "with" && !isCovered(p)) return false;
@@ -360,6 +435,7 @@
   function activeGroups() {
     var n = 0;
     if (EXCLUDE_RULES.some(function (r) { return filters.exclude[r.key] && excludeCounts[r.key] > 0; })) n++;
+    if (Object.keys(filters.countries).length) n++;
     if (Object.keys(filters.cantons).length) n++;
     if (filters.coverage !== "all") n++;
     if (Object.keys(filters.arts).length) n++;
@@ -407,11 +483,32 @@
              wfsIssues:wfsIssues, geomIssues:geomIssues };
   }
 
-  // ---- Summary-table renderer (with an inline proportion bar per row) ----
+  // ---- Summary-table renderer (sortable; inline proportion bar per row) ----
+  // Default order = the caller's (preserves fixed orders like SIA GGF/BUF/UUF and VBS A–D);
+  // clicking the "Kategorie" or value header sets a per-table sort. The user's choice
+  // survives filter re-renders; the muted "remainder" row always stays pinned last.
+  var _valCtx = {}, _valSort = {};
+  // Habitat mixes TypoCH levels (BAFU classifies polygons to different depths), so default
+  // it to category order — clusters each class (6, 6.1, 6.2 …) instead of scattering by area.
+  _valSort["tbl-habitat"] = { by: "name", dir: 1 };
   function renderValTable(elId, items, total, fmtVal, showTotal, valHeader, anteilHint) {
-    var el = document.getElementById(elId); if (!el) return;
+    _valCtx[elId] = { items: items, total: total, fmtVal: fmtVal, showTotal: showTotal, valHeader: valHeader, anteilHint: anteilHint };
+    _paintValTable(elId);
+  }
+  function _paintValTable(elId) {
+    var el = document.getElementById(elId), ctx = _valCtx[elId]; if (!el || !ctx) return;
+    var items = ctx.items, total = ctx.total, fmtVal = ctx.fmtVal, s = _valSort[elId];
     if (!items.length) { el.innerHTML = '<div class="empty-note">Keine Daten</div>'; return; }
-    var sum = items.reduce(function (s, it) { return s + it.value; }, 0);
+    if (s) { // user-chosen sort — split off the remainder so it stays last
+      var main = [], tail = [];
+      items.forEach(function (it) { (it.muted ? tail : main).push(it); });
+      main.sort(function (a, b) {
+        var r = s.by === "name" ? deCollator.compare(String(a.name), String(b.name)) : (a.value - b.value);
+        return r * s.dir;
+      });
+      items = main.concat(tail);
+    }
+    var sum = items.reduce(function (a, it) { return a + it.value; }, 0);
     var maxVal = items.reduce(function (m, it) { return it.muted ? m : Math.max(m, it.value); }, 0) || 1;
     var body = items.map(function (it) {
       var cls = ((it.muted ? "muted-row " : "") + (it.key ? "clickable" : "") + (it.selected ? " selected" : "")).trim();
@@ -424,11 +521,29 @@
              '<td class="bar-col">' + bar + '</td>' +
              '<td class="num">' + fmtVal(it.value) + '</td><td class="num">' + anteil + '</td></tr>';
     }).join("");
-    var totalRow = showTotal ? '<tr class="total"><td>Total</td><td class="bar-col"></td><td class="num">' + fmtVal(sum) + '</td><td class="num">' + (total ? pct(sum, total) + " %" : "") + '</td></tr>' : "";
-    var anteilTh = "Anteil" + (anteilHint ? ' <span class="ftip" tabindex="0" role="img" aria-label="' + esc(anteilHint) + '" data-tip="' + esc(anteilHint) + '">ⓘ</span>' : "");
-    el.innerHTML = '<table class="sumtbl"><thead><tr><th>Kategorie</th><th class="bar-col"></th><th class="num">' + (valHeader || "") +
-                   '</th><th class="num">' + anteilTh + '</th></tr></thead><tbody>' + body + totalRow + '</tbody></table>';
+    var totalRow = ctx.showTotal ? '<tr class="total"><td>Total</td><td class="bar-col"></td><td class="num">' + fmtVal(sum) + '</td><td class="num">' + (total ? pct(sum, total) + " %" : "") + '</td></tr>' : "";
+    var hint = ctx.anteilHint ? ' <span class="ftip" tabindex="0" role="img" aria-label="' + esc(ctx.anteilHint) + '" data-tip="' + esc(ctx.anteilHint) + '">ⓘ</span>' : "";
+    function th(by, numCls, label) {
+      var on = s && s.by === by, arr = on ? ' <span class="arrow">' + (s.dir < 0 ? "▼" : "▲") + "</span>" : "";
+      return '<th class="' + (numCls ? numCls + " " : "") + "sortable" + (on ? " sorted" : "") + '" data-vs="' + by +
+             '" tabindex="0" role="button" aria-sort="' + (on ? (s.dir < 0 ? "descending" : "ascending") : "none") + '">' + label + arr + '</th>';
+    }
+    el.innerHTML = '<table class="sumtbl"><thead><tr>' + th("name", "", "Kategorie") + '<th class="bar-col"></th>' +
+      th("value", "num", (ctx.valHeader || "")) + '<th class="num">Anteil' + hint + '</th></tr></thead><tbody>' + body + totalRow + '</tbody></table>';
   }
+  // Click / Enter / Space on a summary-table header → sort that one table (toggle direction).
+  function _valSortAct(e) {
+    if (e.type === "keydown" && e.key !== "Enter" && e.key !== " ") return;
+    var th = e.target.closest && e.target.closest(".sumtbl th.sortable[data-vs]"); if (!th) return;
+    if (e.type === "keydown") e.preventDefault();
+    var tbl = th.closest("table"), host = tbl && tbl.parentNode, elId = host && host.id;
+    if (!elId || !_valCtx[elId]) return;
+    var by = th.getAttribute("data-vs"), cur = _valSort[elId];
+    _valSort[elId] = (cur && cur.by === by) ? { by: by, dir: -cur.dir } : { by: by, dir: by === "name" ? 1 : -1 };
+    _paintValTable(elId);
+  }
+  document.addEventListener("click", _valSortAct);
+  document.addEventListener("keydown", _valSortAct);
 
   // ---- Total parcel area grouped by an arbitrary field (Portfolio, Region) → bar items ----
   var BAR_COLOR = "#6f8aac"; // a single calm hue for the Portfolio/Region bars — color reserved for emphasis elsewhere
@@ -548,30 +663,33 @@
 
   // ---- Datenqualität tab (uses the existing check_* / status columns) ----
   var qProblems = [], qState = { page: 1, pageSize: 25 };
-  var qAllProblems = [], qRules = {}, qActiveRule = null; // qActiveRule = a clicked Prüfregel → table shows its fails
+  var qAllProblems = [], qRules = {}, qActiveRule = null, qTotal = 0; // qActiveRule = a clicked Prüfregel → table shows its fails; qTotal = filtered total (Prüfregeln denominator)
   function renderQuality(rows) {
     if (!document.getElementById("q-kpis")) return;
-    var c = { found:0, merged:0, not_found:0, invalid:0, error:0 }, cOther = 0, withCov = 0, woCov = 0, wfsIssue = 0, geomIssue = 0;
-    var problems = [];
-    rows.forEach(function (p) {
-      var sk = statusKey(p); if (c[sk] != null) c[sk]++; else cOther++; // e.g. empty check_egrid → "—"
-      var cov = isCovered(p); if (cov) withCov++; else woCov++;
-      var wfs = p.check_wfs && p.check_wfs !== "ok"; if (wfs) wfsIssue++;
-      var geom = p.check_geom && p.check_geom !== "ok"; if (geom) geomIssue++;
-      var hint = "";
-      if (sk === "not_found") hint = "E-GRID nicht gefunden";
-      else if (sk === "invalid") hint = "Ungültige E-GRID";
-      else if (sk === "error") hint = "Fehler";
-      else if (!cov) hint = "0 m² Bodenbedeckung (kein Datenabruf)";
-      else if (geom) hint = "Geometrie-Hinweis";
-      else if (wfs) hint = "Datenabruf-Hinweis";
-      if (hint) problems.push({ p: p, hint: hint });
+    qTotal = rows.length;
+    qRules = computeRules(rows);
+    // Auffällige Grundstücke = every parcel that failed ≥1 Prüfregel (deduped, in row
+    // order); the hint lists the check name(s) it did not pass.
+    var failNames = new Map(); // parcel → [failed rule names]
+    RULE_DEFS.forEach(function (d) {
+      qRules[d.key].fails.forEach(function (f) {
+        var e = failNames.get(f.p); if (e) e.push(d.name); else failNames.set(f.p, [d.name]);
+      });
     });
-    var total = rows.length || 1, foundAll = c.found + c.merged;
+    qAllProblems = [];
+    var c = { found:0, merged:0, not_found:0, invalid:0, error:0 }, cOther = 0, noCover = 0, noHabitat = 0;
+    rows.forEach(function (p) {
+      var names = failNames.get(p); if (names) qAllProblems.push({ p: p, hint: names.join(", ") });
+      var sk = statusKey(p); if (c[sk] != null) c[sk]++; else cOther++;
+      if (!isCovered(p)) noCover++;
+      if (parcelStats(p).hbSum === 0) noHabitat++;
+    });
+    var denom = rows.length || 1;
     var qk = [
-      { label:"E-GRID aufgelöst", value:fmt(foundAll) + " / " + fmt(rows.length), sub:(c.merged ? fmt(c.merged) + " zusammengeführt" : "von der Auswahl") },
-      { label:"Ohne Bodenbedeckung", value:fmt(woCov), sub:pct(woCov, total) + "% der Auswahl" },
-      { label:"Geometrie-Hinweise", value:fmt(geomIssue), sub:fmt(wfsIssue) + " Datenabruf-Hinweise" }
+      { label:"Grundstücke", value:fmt(rows.length) + " / " + fmt(PARCELS.length), sub:"Auswahl / Alle" },
+      { label:"E-GRID nicht gefunden", value:fmt(qRules.egrid.fail), sub:pct(qRules.egrid.fail, denom) + "% der Auswahl" },
+      { label:"Ohne Bodenbedeckung", value:fmt(noCover), sub:pct(noCover, denom) + "% der Auswahl" },
+      { label:"Ohne Lebensräume", value:fmt(noHabitat), sub:pct(noHabitat, denom) + "% der Auswahl" }
     ];
     document.getElementById("q-kpis").innerHTML = qk.map(function (k) {
       return '<div class="card"><div class="label">' + esc(k.label) + '</div><div class="value">' + k.value + '</div><div class="sub">' + esc(k.sub) + '</div></div>';
@@ -582,9 +700,6 @@
       { name:"Ungültige E-GRID", value:c.invalid },
       { name:"Ohne Status", value:cOther }
     ].filter(function (it) { return it.value > 0; }), rows.length, fmt, true, "Anzahl", "Anteil an der Auswahl (Anzahl Grundstücke).");
-    qAllProblems = problems;
-    qRules = computeRules(rows);
-    // Keep the active rule filter across selection changes, unless it no longer has fails.
     if (qActiveRule && !(qRules[qActiveRule] && qRules[qActiveRule].fails.length)) qActiveRule = null;
     renderRulesTable();
     qState.page = 1; // new selection → back to the first page (mirrors the Übersicht table)
@@ -611,15 +726,19 @@
   }
 
   // ---- Datenqualität-Prüfregeln (per Grundstück geprüft, als Regel/Ergebnis/Status) ----
+  // Names + descriptions kept deliberately plain. Each rule is only evaluated on the
+  // subset it applies to (e.g. Bodenbedeckungs-Regeln nur auf Grundstücke mit Bodenbedeckung),
+  // so the tips state the scope — the table shows how many wurden übersprungen.
   var RULE_DEFS = [
-    { key: "bbCover", name: "Bodenbedeckung deckt Grundstück", tip: "Σ klassifizierte Bodenbedeckung = Grundstücksfläche (Grundstücke mit AV-Daten)." },
-    { key: "bzCover", name: "Bauzonen decken Grundstück", tip: "Σ Bauzonen inkl. „Ohne Bauzone“ = Grundstücksfläche." },
-    { key: "hbCover", name: "Lebensräume decken Grundstück", tip: "Σ Lebensräume = Grundstücksfläche." },
-    { key: "sealgreen", name: "Versiegelt + Grünfläche ≤ Bodenbedeckung", tip: "Versiegelte und Grünflächen sind disjunkte Teilmengen der klassifizierten Bodenbedeckung — ihre Summe darf sie nicht überschreiten (sonst Doppelzählung)." },
-    { key: "bounds", name: "Keine Fläche grösser als das Grundstück", tip: "Keine einzelne Bodenbedeckungs-/Zonen-/Lebensraum-Komponente überschreitet die Grundstücksfläche." },
-    { key: "egrid", name: "Alle E-GRID aufgelöst", tip: "Keine nicht gefundenen, ungültigen oder fehlerhaften E-GRID." },
-    { key: "bzOk", name: "Bauzonen vollständig", tip: "Kein Grundstück mit gekappten/unsicheren Bauzonen-Daten (truncated/partial)." },
-    { key: "hbOk", name: "Lebensräume vollständig", tip: "Kein Grundstück mit gekappten/unsicheren Lebensraum-Daten; geschätzte (gap-gefüllte) werden separat ausgewiesen." }
+    { key: "egrid", name: "Grundstück im Kataster gefunden", tip: "Die E-GRID wurde in der amtlichen Vermessung gefunden und die Geometrie geladen. Geprüft: alle Grundstücke der Auswahl." },
+    { key: "geom", name: "Geometrie vorhanden", tip: "Der Grundstück-Eintrag enthält eine Polygon-Geometrie (nicht NULL). Geprüft: alle Grundstücke der Auswahl." },
+    { key: "area", name: "Fläche vorhanden", tip: "Die Grundstücksfläche ist eine gültige, positive Zahl (nicht NULL, grösser 0). Geprüft: alle Grundstücke der Auswahl." },
+    { key: "egridUnique", name: "E-GRID eindeutig", tip: "Jede E-GRID kommt in der aktuellen Auswahl nur einmal vor (keine doppelten Einträge). Geprüft: Grundstücke mit E-GRID." },
+    { key: "bbCover", name: "Bodenbedeckung vollständig (Fläche)", tip: "Die klassifizierte Bodenbedeckung (Gebäude + Umgebung) summiert sich zur Grundstücksfläche (±1 %). Nur Grundstücke mit Bodenbedeckungsdaten." },
+    { key: "bzCover", name: "Bauzonen vollständig (Fläche)", tip: "Die Bauzonen inkl. „Ohne Bauzone“ summieren sich zur Grundstücksfläche (±1 %). Nur Grundstücke mit Bauzonen-Daten." },
+    { key: "hbCover", name: "Lebensräume vollständig (Fläche)", tip: "Die BAFU-Lebensräume summieren sich zur Grundstücksfläche (±1 %). Nur Grundstücke mit Lebensraum-Daten." },
+    { key: "bzOk", name: "Bauzonen-Abruf vollständig", tip: "Der Bauzonen-Abruf lieferte vollständige Daten (nicht gekappt/unsicher). Nur Grundstücke mit Bauzonen-Prüfung." },
+    { key: "hbOk", name: "Lebensraum-Abruf vollständig", tip: "Der Lebensraum-Abruf lieferte vollständige Daten (nicht gekappt/unsicher; geschätzte/lückengefüllte gelten als bestanden). Nur Grundstücke mit Lebensraum-Prüfung." }
   ];
   // Per-parcel derived scalars for the quality rules and prioritisation. Parcels are
   // immutable, so the wide-column scan runs once per parcel and is cached in a WeakMap
@@ -628,42 +747,47 @@
   // O(1) lookups. Field semantics mirror the original inline loops exactly:
   //   bzSum    — Σ bauzonen_<slug> EXCLUDING ohne_bauzone (the actual building-zone share)
   //   bzSumAll — Σ bauzonen_<slug> INCLUDING ohne_bauzone (the full parcel partition)
-  //   maxComp  — largest single av_/bauzonen_(incl. ohne)/habitat_ piece (NOT the SIA/DIN/
-  //              VBS/sealed/green aggregates, which legitimately approach the parcel area)
   var _statsCache = new WeakMap();
   function parcelStats(p) {
     var s = _statsCache.get(p); if (s) return s;
-    var bzSum = 0, bzSumAll = 0, hbSum = 0, hbNat = 0, maxComp = 0, nLc = 0, nHb = 0, bzDom = 0, bzDomSlug = "";
+    var bzSum = 0, bzSumAll = 0, hbSum = 0, hbNat = 0, nLc = 0, nHb = 0, bzDom = 0, bzDomSlug = "";
     for (var k in p) {
       if (!Object.prototype.hasOwnProperty.call(p, k) || k.slice(-3) !== "_m2") continue;
       var v = num(p[k]);
       var bm = BAUZONE_RE.exec(k);
-      if (bm) { bzSumAll += v; if (v > maxComp) maxComp = v; if (bm[1] !== "ohne_bauzone") { bzSum += v; if (v > bzDom) { bzDom = v; bzDomSlug = bm[1]; } } continue; }
+      if (bm) { bzSumAll += v; if (bm[1] !== "ohne_bauzone") { bzSum += v; if (v > bzDom) { bzDom = v; bzDomSlug = bm[1]; } } continue; }
       var hm = HABITAT_RE.exec(k);
-      if (hm) { hbSum += v; if (v > 0) nHb++; if (v > maxComp) maxComp = v; if (PRIO_NAT_HAB[hm[1]]) hbNat += v; continue; }
-      if (k.indexOf("av_") === 0) { if (v > 0) nLc++; if (v > maxComp) maxComp = v; }
+      if (hm) { hbSum += v; if (v > 0) nHb++; if (HABITAT_NAT_DIGIT[habDigit(hm[1])]) hbNat += v; continue; }
+      if (k.indexOf("av_") === 0) { if (v > 0) nLc++; }
     }
-    s = { bzSum: bzSum, bzSumAll: bzSumAll, hbSum: hbSum, hbNat: hbNat, maxComp: maxComp, nLc: nLc, nHb: nHb, bzDom: bzDom, bzDomSlug: bzDomSlug };
+    s = { bzSum: bzSum, bzSumAll: bzSumAll, hbSum: hbSum, hbNat: hbNat, nLc: nLc, nHb: nHb, bzDom: bzDom, bzDomSlug: bzDomSlug };
     _statsCache.set(p, s); return s;
   }
   function computeRules(rows) {
     var R = {}; RULE_DEFS.forEach(function (d) { R[d.key] = { name: d.name, pass: 0, fail: 0, est: 0, fails: [] }; });
+    // E-GRID uniqueness is judged over the current (filtered) selection — count first.
+    var egCounts = {};
+    rows.forEach(function (p) { var eg = String(p.egrid == null ? "" : p.egrid).trim(); if (eg) egCounts[eg] = (egCounts[eg] || 0) + 1; });
     rows.forEach(function (p) {
       var area = num(p.parcel_area_m2), tol = Math.max(1, area * 0.01);
       var nearOK = function (a, b) { return Math.abs(a - b) <= tol; };
       // pass → count; fail → count + remember the parcel so a click can list them.
       var rec = function (key, ok) { if (ok) R[key].pass++; else { R[key].fail++; R[key].fails.push({ p: p, hint: R[key].name }); } };
       var classified = num(p.sia416_ggf_m2) + num(p.sia416_buf_m2) + num(p.sia416_uuf_m2);
-      var st = parcelStats(p), sumBz = st.bzSumAll, sumHb = st.hbSum, maxComp = st.maxComp;
+      var st = parcelStats(p), sumBz = st.bzSumAll, sumHb = st.hbSum;
       var cov = isCovered(p);
+      // Completeness — every entry must resolve, carry a geometry + a real area, and be unique.
+      var sk = statusKey(p);
+      rec("egrid", sk === "found" || sk === "merged");
+      rec("geom", !!p._geom);
+      rec("area", area > 0);
+      var eg = String(p.egrid == null ? "" : p.egrid).trim();
+      if (eg) rec("egridUnique", egCounts[eg] === 1);
+      // Flächenbilanz — classified cover / Bauzonen / Lebensräume tile the parcel.
       if (cov) rec("bbCover", nearOK(classified, area));
       if (sumBz > 0 || (!!p.check_bauzonen && p.check_bauzonen !== "error")) rec("bzCover", nearOK(sumBz, area));
       if (sumHb > 0 || (!!p.check_habitat && p.check_habitat !== "error")) rec("hbCover", nearOK(sumHb, area));
-      // Versiegelt + Grünfläche are disjoint subsets of the classified cover (can over-count on a bug).
-      if (cov) rec("sealgreen", num(p.sealed_m2) + num(p.greenspace_m2) <= classified + tol);
-      if (area > 0) rec("bounds", maxComp <= area + tol);
-      var sk = statusKey(p);
-      rec("egrid", sk === "found" || sk === "merged");
+      // Datenabruf der Overlay-Layer.
       if (p.check_bauzonen) rec("bzOk", p.check_bauzonen === "ok");
       if (p.check_habitat) {
         if (p.check_habitat === "estimated") { R.hbOk.pass++; R.hbOk.est++; }
@@ -675,10 +799,9 @@
   function renderRulesTable() {
     var el = document.getElementById("q-rules"); if (!el) return;
     var body = RULE_DEFS.map(function (d) {
-      var r = qRules[d.key], checked = r.pass + r.fail, status, cls, result, aLabel;
-      if (checked === 0) { status = "–"; cls = "rule-na"; result = "keine Daten"; aLabel = "keine Daten"; }
-      else if (r.fail === 0) { status = "✓"; cls = "rule-ok"; result = fmt(r.pass) + " / " + fmt(checked) + (r.est ? " · " + fmt(r.est) + " geschätzt" : ""); aLabel = "bestanden"; }
-      else { status = "⚠"; cls = "rule-warn"; result = fmt(r.fail) + " von " + fmt(checked) + " abweichend"; aLabel = "Abweichung"; }
+      var r = qRules[d.key], ok = r.fail === 0;
+      var status = ok ? "✓" : "⚠", cls = ok ? "rule-ok" : "rule-warn", aLabel = ok ? "bestanden" : "Abweichung";
+      var result = fmt(r.fail) + " von " + fmt(qTotal) + " abweichend"; // always: fails out of the filtered total
       var attr = (r.fail > 0 ? ' class="clickable' + (d.key === qActiveRule ? ' selected' : '') + '" data-rk="' + d.key + '" tabindex="0" role="button"' : '') + ' data-tip="' + esc(d.tip) + '"';
       return '<tr' + attr + '><td>' + esc(d.name) + '</td><td class="num rule-res">' + esc(result) + '</td><td class="rule-status ' + cls + '" role="img" aria-label="' + aLabel + '">' + status + '</td></tr>';
     }).join("");
@@ -867,6 +990,9 @@
       if (filters.exclude[r.key] && excludeCounts[r.key] > 0)
         pills.push({ label: "Ohne: " + r.label, remove: function () { delete filters.exclude[r.key]; } });
     });
+    Object.keys(filters.countries).forEach(function (c) {
+      pills.push({ label: "Land: " + countryLabel(c), remove: function () { delete filters.countries[c]; } });
+    });
     Object.keys(filters.cantons).forEach(function (c) {
       pills.push({ label: "Kanton: " + c, remove: function () { delete filters.cantons[c]; } });
     });
@@ -909,7 +1035,7 @@
     syncDrawer(); commit();
   }
   function syncDrawer() {
-    renderExclude(); renderStatus(); renderCantons(); renderArts(); renderBauzonen(); renderTpf(); renderEigentum();
+    renderExclude(); renderStatus(); renderCountries(); renderCantons(); renderArts(); renderBauzonen(); renderTpf(); renderEigentum();
     var cov = document.querySelector('#f-coverage input[value="' + filters.coverage + '"]');
     if (cov) cov.checked = true;
   }
@@ -918,7 +1044,7 @@
   // Explicit model: every active filter is its own URL parameter; removing a
   // filter drops its parameter. A URL with no filter params means "no filters";
   // a completely empty URL (first visit) applies the defaults and stamps them in.
-  var URL_KEYS = ["q", "excl", "status", "eig", "cov", "kanton", "art", "bauz", "has", "tpf"];
+  var URL_KEYS = ["q", "excl", "status", "eig", "cov", "land", "kanton", "art", "bauz", "has", "tpf"];
   function writeURL() {
     var pr = new URLSearchParams();
     if (state.search.trim()) pr.set("q", state.search.trim());
@@ -927,6 +1053,7 @@
     var st = Object.keys(filters.status); if (st.length) pr.set("status", st.join(","));
     var eig = Object.keys(filters.eigentum); if (eig.length) pr.set("eig", eig.join(","));
     if (filters.coverage !== "all") pr.set("cov", filters.coverage);
+    var land = Object.keys(filters.countries); if (land.length) pr.set("land", land.join(","));
     var cant = Object.keys(filters.cantons); if (cant.length) pr.set("kanton", cant.join(","));
     var art = Object.keys(filters.arts); if (art.length) pr.set("art", art.join(","));
     var bauz = Object.keys(filters.bauzonen); if (bauz.length) pr.set("bauz", bauz.join(","));
@@ -948,6 +1075,7 @@
     filters.status = {}; (pr.get("status") || "").split(",").forEach(function (s) { if (s) filters.status[s] = true; });
     filters.eigentum = {}; (pr.get("eig") || "").split(",").forEach(function (e) { if (e) filters.eigentum[e] = true; });
     var cov = pr.get("cov"); filters.coverage = (cov === "with" || cov === "without") ? cov : "all";
+    filters.countries = {}; (pr.get("land") || "").split(",").forEach(function (c) { if (c) filters.countries[c] = true; });
     filters.cantons = {}; (pr.get("kanton") || "").split(",").forEach(function (c) { if (c) filters.cantons[c] = true; });
     filters.arts = {}; (pr.get("art") || "").split(",").forEach(function (a) { if (a) filters.arts[a] = true; });
     filters.bauzonen = {}; (pr.get("bauz") || "").split(",").forEach(function (z) { if (z) filters.bauzonen[z] = true; });
@@ -1091,6 +1219,7 @@
     el.innerHTML = html;
   }
   function renderExclude() { capList("f-exclude", EXCLUDE_RULES.map(function (r) { return chk("x", r.key, r.label, excludeCounts[r.key], filters.exclude[r.key]); })); }
+  function renderCountries() { capList("f-countries", countryList.map(function (c) { return chk("l", c, countryLabel(c), countryCounts[c], filters.countries[c]); })); }
   function renderCantons() { capList("f-cantons", cantonList.map(function (c) { return chk("c", c, c, cantonCounts[c], filters.cantons[c]); })); }
   function renderArts() { capList("f-arts", artListAll.map(function (a) { return chk("a", a, ART_LABELS[a] || a, artParcelCount[a], filters.arts[a]); })); }
   function renderBauzonen() { capList("f-bauzonen", bauzoneListAll.map(function (z) { return chk("z", z, bzLabel(z), bauzoneParcelCount[z], filters.bauzonen[z]); })); }
@@ -1100,7 +1229,7 @@
   document.getElementById("cov-with").textContent = fmt(covWith);
   document.getElementById("cov-without").textContent = fmt(covWithout);
 
-  var _rerenderGroup = { "f-exclude": renderExclude, "f-cantons": renderCantons, "f-arts": renderArts, "f-bauzonen": renderBauzonen, "f-tpf": renderTpf, "f-eigentum": renderEigentum, "f-status": renderStatus };
+  var _rerenderGroup = { "f-exclude": renderExclude, "f-countries": renderCountries, "f-cantons": renderCantons, "f-arts": renderArts, "f-bauzonen": renderBauzonen, "f-tpf": renderTpf, "f-eigentum": renderEigentum, "f-status": renderStatus };
   document.getElementById("filter-panel").addEventListener("click", function (e) {
     var b = e.target.closest(".show-all"); if (!b) return;
     var id = b.getAttribute("data-fl"); fExpanded[id] = !fExpanded[id];
@@ -1114,6 +1243,7 @@
     });
   }
   bindChecklist("f-exclude", "x", "exclude");
+  bindChecklist("f-countries", "l", "countries");
   bindChecklist("f-cantons", "c", "cantons");
   bindChecklist("f-arts", "a", "arts");
   bindChecklist("f-bauzonen", "z", "bauzonen");
@@ -1121,6 +1251,11 @@
   bindChecklist("f-eigentum", "e", "eigentum");
   bindChecklist("f-status", "s", "status");
   document.getElementById("f-coverage").addEventListener("change", function (e) { filters.coverage = e.target.value; commit(); });
+  document.getElementById("country-toggle").addEventListener("click", function () {
+    if (Object.keys(filters.countries).length < countryList.length) countryList.forEach(function (c) { filters.countries[c] = true; });
+    else filters.countries = {};
+    renderCountries(); commit();
+  });
   document.getElementById("cant-toggle").addEventListener("click", function () {
     if (Object.keys(filters.cantons).length < cantonList.length) cantonList.forEach(function (c) { filters.cantons[c] = true; });
     else filters.cantons = {};
@@ -1179,7 +1314,7 @@
   ];
   // Building-zone relevance for N&W (developed grounds): Arbeits/öffentlich highest.
   var PRIO_BZ_REL = { arbeitszonen: 1, zonen_fuer_oeffentliche_nutzungen: 1, zentrumszonen: 0.9, tourismus_und_freizeitzonen: 0.7, mischzonen: 0.75, wohnzonen: 0.6, eingeschraenkte_bauzonen: 0.5, weitere_bauzonen: 0.4, verkehrszonen_innerhalb_der_bauzonen: 0.3 };
-  var PRIO_NAT_HAB = { gewaesser: 1, ufer_feuchtgebiete: 1, gletscher_fels_schutt_geroell: 1, gruenland: 1, krautsaeume_hochstauden_gebuesche: 1, waelder: 1, pionier_ruderalvegetation: 1 };
+  // (naturnahe Lebensräume: siehe HABITAT_NAT_DIGIT oben — TypoCH L1-Klassen 1–7)
   var prio = { federal: true, sap: true, ufMin: 1000, bauzone: true, bzMin: 50, topN: 100, cap: true, capN: 20, tpfCap: true, tpfCapN: 30, page: 1, pageSize: 25, weights: {}, selected: [], poolCount: 0, sort: "score", dir: -1 };
   WEIGHT_DEFS.forEach(function (w) { prio.weights[w.key] = w.def; });
   function prioUF(p) { return num(p.sia416_buf_m2) + num(p.sia416_uuf_m2); }

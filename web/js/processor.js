@@ -12,7 +12,8 @@
 import { API, SLIVER_THRESHOLD, STATUS, classify, classifyBafu, typochToBBArt, isFound, fetchWithTimeout,
          BAFU_LAYER_ID, VBS_KATEGORIE_LABELS, VBS_PRODUKTIV_LABELS, VBS_TYP_LABELS,
          ERR_MSG, ERR_RUNTIME_PREFIX, bauzoneAreaKey, isBauzoneAreaKey,
-         habitatL1Label, habitatAreaKey, isHabitatAreaKey } from "./config.js";
+         ensureTypoch, typochL1Label, typochL2Label, typochL3Label, typochCodeAtLevel,
+         habitatAreaKeyL1, habitatAreaKeyL2, isHabitatAreaKey } from "./config.js";
 
 // Parcels processed in parallel. Each parcel makes two sequential requests to
 // two different hosts (swisstopo find + geodienste WFS), both HTTP/2, so a
@@ -45,6 +46,9 @@ export function cancelProcessing() {
  */
 export async function processRows(rows, onProgress, options = {}) {
   cancelled = false;
+  // Load the shared TypoCH name reference once up front (memoized, fail-soft) so the
+  // per-parcel habitat labelling below can resolve level-1/2/3 names synchronously.
+  if (options.habitat) await ensureTypoch();
   const total = rows.length;
   let completed = 0;
   let succeeded = 0;
@@ -236,11 +240,10 @@ export async function processRows(rows, onProgress, options = {}) {
             : gapFilled ? "estimated"
             : (bafu.dropped.length > 0 && significantGap) ? "partial"
             : "ok";
-          // One column per TypoCH level-1 habitat group (m²) — e.g. habitat_waelder_m2.
-          // Made rectangular across all parcels in the flatten pass below.
-          for (const [name, area] of Object.entries(hbAgg.types)) {
-            parcel[habitatAreaKey(name)] = area;
-          }
+          // One column per TypoCH code at level 1 and level 2 (habitat_l1_<code>_m2 /
+          // habitat_l2_<code>_m2). Made rectangular across all parcels in the flatten pass.
+          for (const [code, area] of Object.entries(hbAgg.typesL1)) parcel[habitatAreaKeyL1(code)] = area;
+          for (const [code, area] of Object.entries(hbAgg.typesL2)) parcel[habitatAreaKeyL2(code)] = area;
         } catch (err) {
           console.warn(`Habitat analysis failed for ${egrid}:`, err.message);
           parcel.habitat = "";
@@ -703,26 +706,33 @@ function aggregateBauzonen(rows) {
   };
 }
 
-/** Aggregate BAFU habitat detail rows into parcel columns, grouped by TypoCH
- *  **level-1** category (the 91 fine labels collapse to ~9 groups — the same
- *  grouping the map/table use). Returns semicolon-joined `habitat` (group names)
- *  + `habitat_m2` (areas) + a `types` map (group name → area) that becomes one
- *  `habitat_<slug>_m2` column per group, largest first. */
+/** Aggregate BAFU habitat detail rows into parcel columns, by TypoCH **code** at
+ *  level 1 and level 2 (level-2 falls back to the level-1 code for features BAFU only
+ *  classified to level 1). Returns the readable level-2 label summary
+ *  (`habitat` / `habitat_m2`, largest first) plus `typesL1` / `typesL2` (code → area)
+ *  that become `habitat_l1_<code>_m2` / `habitat_l2_<code>_m2` columns. */
 function aggregateHabitat(rows) {
-  const byTyp = new Map(); // TypoCH level-1 group name → area m²
+  const byL1 = new Map(), byL2 = new Map(), l2Label = new Map(); // code → area; l2 code → label
   for (const r of rows) {
-    const name = habitatL1Label(r.art);
-    byTyp.set(name, (byTyp.get(name) || 0) + (r._rawArea ?? r.area_m2));
+    const area = r._rawArea ?? r.area_m2;
+    const c1 = typochCodeAtLevel(r.art, 1);
+    const c2 = typochCodeAtLevel(r.art, 2) || c1; // level-1-only features fall back to their L1 code
+    if (c1) byL1.set(c1, (byL1.get(c1) || 0) + area);
+    if (c2) {
+      byL2.set(c2, (byL2.get(c2) || 0) + area);
+      if (!l2Label.has(c2)) l2Label.set(c2, r.typoch_l2 || typochL2Label(r.art) || typochL1Label(r.art));
+    }
   }
-
-  if (byTyp.size === 0) return { habitat: "", habitat_m2: "", types: {} };
-  const sorted = [...byTyp.entries()].sort((a, b) => b[1] - a[1]);
-  const types = {};
-  for (const [n, a] of sorted) types[n] = round2(a);
+  if (byL2.size === 0) return { habitat: "", habitat_m2: "", typesL1: {}, typesL2: {} };
+  const sortedL2 = [...byL2.entries()].sort((a, b) => b[1] - a[1]);
+  const typesL1 = {}, typesL2 = {};
+  for (const [c, a] of byL1) typesL1[c] = round2(a);
+  for (const [c, a] of sortedL2) typesL2[c] = round2(a);
   return {
-    habitat: sorted.map(([n]) => n).join("; "),
-    habitat_m2: sorted.map(([, a]) => a.toFixed(1)).join("; "),
-    types,
+    habitat: sortedL2.map(([c]) => l2Label.get(c)).join("; "),
+    habitat_m2: sortedL2.map(([, a]) => a.toFixed(1)).join("; "),
+    typesL1,
+    typesL2,
   };
 }
 
@@ -776,7 +786,13 @@ function makeHabitatRow(id, egrid, typoch, prob, fid, area, geometry) {
     id,
     egrid,
     fid,
-    art: typoch, // TypoCH habitat label, e.g. "6.3.1 Buchenwald"
+    art: typoch, // TypoCH habitat label as served, deepest level, e.g. "6.3.1 Buchenwald"
+    // Full TypoCH hierarchy split into its three levels ("<code> <name>"); typoch_l3 is
+    // "" where the layer only resolved the feature to level-2. Names come from the shared
+    // data/typoch.json reference (loaded by ensureTypoch()).
+    typoch_l1: typochL1Label(typoch),
+    typoch_l2: typochL2Label(typoch),
+    typoch_l3: typochL3Label(typoch),
     bfsnr: "",
     gwr_egid: "",
     check_greenspace: cls.greenSpace,

@@ -1,0 +1,2615 @@
+{
+ "_meta": {
+  "name": "TypoCH habitat typology — code/name reference (levels 1–4, DE/FR/IT)",
+  "purpose": "Authoritative code→name lookup for the BAFU Lebensraumkarte (ch.bafu.lebensraumkarte-schweiz) habitat overlay. Reused by the web app (web/js/config.js) and the Python CLI (python/) so habitat category names are not hardcoded twice.",
+  "typology": "Delarze R., Gonseth Y., Eggenberg S., Vust M. (2015): Lebensräume der Schweiz. Ökologie – Gefährdung – Kennarten. 3. Aufl.",
+  "source_list": "InfoFlora — Artenliste TypoCH / Liste des espèces / Lista delle specie (workbook, 2024-05-29), sheet 'TypoCH'.",
+  "source_url": "https://www.infoflora.ch/en/habitats/typoch-(delarze-et-al.).html",
+  "full_list_url": "https://www.infoflora.ch/en/habitats/typoch-(delarze-et-al.)/full-list-typoch.html",
+  "map_layer": "ch.bafu.lebensraumkarte-schweiz — BAFU Lebensraumkarte der Schweiz (WSL v1.2); served attributes typoch_de / typoch_fr / typoch_it.",
+  "code_normalization": "The official 'Code TypoCH' uses a '.-' separator before the level-2 digit (e.g. '1.-1.0'); normalized here to plain dots ('1.1.0') to match the map layer's dotted code prefixes (e.g. '6.3.1 Buchenwald').",
+  "levels": {
+   "1": "Hauptlebensraumtyp (main class)",
+   "2": "Lebensraumgruppe (group)",
+   "3": "Lebensraumtyp (type)",
+   "4": "Subtyp (subtype)"
+  },
+  "map_layer_depth": "The Lebensraumkarte resolves to level-2 at minimum, level-3 where possible; it does not emit level-4.",
+  "extracted": "2026-07-10",
+  "license_note": "TypoCH names © the cited authors / InfoFlora; consult the source for reuse terms. Habitat map © BAFU/swisstopo (geo.admin.ch)."
+ },
+ "types": [
+  {
+   "code": "1",
+   "id": 1,
+   "level": 1,
+   "de": "Gewässer",
+   "fr": "Eaux libres",
+   "it": "Ambienti acquatici"
+  },
+  {
+   "code": "1.1",
+   "id": 11,
+   "level": 2,
+   "de": "Stehende Gewässer",
+   "fr": "Eaux calmes",
+   "it": "Acque ferme"
+  },
+  {
+   "code": "1.1.0",
+   "id": 110,
+   "level": 3,
+   "de": "Stehendes Gewässer ohne Vegetation",
+   "fr": "Eau sans végétation",
+   "it": "Acque prive di vegetazione"
+  },
+  {
+   "code": "1.1.0.1",
+   "id": 1101,
+   "level": 4,
+   "de": "Tiefgründiges Gewässer (Freiwasserzone)",
+   "fr": "Eau profonde (zone limnétique)",
+   "it": "Acque profonde"
+  },
+  {
+   "code": "1.1.0.2",
+   "id": 1102,
+   "level": 4,
+   "de": "Seichtes Gewässer (Litoral, inkl. Tümpel)",
+   "fr": "Eau peu profonde (incl. mares temporaires)",
+   "it": "Acque poco profonde (comprese le pozze temporanee)"
+  },
+  {
+   "code": "1.1.1",
+   "id": 111,
+   "level": 3,
+   "de": "Armleuchteralgengesellschaft",
+   "fr": "Eau avec végétation immergée non vasculaire",
+   "it": "Acque con vegetazione di piante non vascolari sommerse"
+  },
+  {
+   "code": "1.1.2",
+   "id": 112,
+   "level": 3,
+   "de": "Laichkrautgesellschaften",
+   "fr": "Eau avec végétation immergée vasculaire",
+   "it": "Acque con vegetazione di piante vascolari sommerse"
+  },
+  {
+   "code": "1.1.3",
+   "id": 113,
+   "level": 3,
+   "de": "Wasserlinsengesellschaften",
+   "fr": "Eau avec végétation flottante libre",
+   "it": "Acque con vegetazione natante"
+  },
+  {
+   "code": "1.1.3.1",
+   "id": 1131,
+   "level": 4,
+   "de": "Froschbissgesellschaften",
+   "fr": "Hydrocharition",
+   "it": "Hydrocharition"
+  },
+  {
+   "code": "1.1.3.2",
+   "id": 1132,
+   "level": 4,
+   "de": "Wasserschlauchgesellschaften",
+   "fr": "Utricularion",
+   "it": "Utricularion"
+  },
+  {
+   "code": "1.1.4",
+   "id": 114,
+   "level": 3,
+   "de": "Schwimmblattgesellschaft",
+   "fr": "Eau avec végétation flottante fixée",
+   "it": "Acque con vegetazione stagnale"
+  },
+  {
+   "code": "1.1.4.1",
+   "id": 1141,
+   "level": 4,
+   "de": "Wasserhahnenfussgesellschaft",
+   "fr": "Ranunculion aquatilis",
+   "it": "Ranunculion aquatilis"
+  },
+  {
+   "code": "1.1.4.2",
+   "id": 1142,
+   "level": 4,
+   "de": "Wasserfedergesellschaft",
+   "fr": "Hottonietum",
+   "it": "Hottonietum"
+  },
+  {
+   "code": "1.2",
+   "id": 12,
+   "level": 2,
+   "de": "Fliessgewässer",
+   "fr": "Eaux courantes",
+   "it": "Acque correnti"
+  },
+  {
+   "code": "1.2.1",
+   "id": 121,
+   "level": 3,
+   "de": "Brachsmen- und Barbenregion (Epipotamon)",
+   "fr": "Zone de la brême et du barbeau (épipotamon)",
+   "it": "Zona del Barbo e dell'Abramide (Epipotamon)"
+  },
+  {
+   "code": "1.2.1.1",
+   "id": 1211,
+   "level": 4,
+   "de": "Breites Fliessgewässer des Flachlands",
+   "fr": "Grands cours d'eau de plaine",
+   "it": "Grandi corsi d'acqua di pianura"
+  },
+  {
+   "code": "1.2.1.2",
+   "id": 1212,
+   "level": 4,
+   "de": "Langsam fliessender Bach im Flachland",
+   "fr": "Petit cours d'eau de plaine à écoulement lent",
+   "it": "Piccoli corsi d'acqua di pianura a scorrimento lento"
+  },
+  {
+   "code": "1.2.2",
+   "id": 122,
+   "level": 3,
+   "de": "Äschenregion (Hyporhithron)",
+   "fr": "Zone de l'ombre (hyporhitron)",
+   "it": "Zona del Temolo"
+  },
+  {
+   "code": "1.2.2.0",
+   "id": 1220,
+   "level": 4,
+   "de": "Äschenregion ohne Vegetation",
+   "fr": "Zone de l'ombre, sans végétation",
+   "it": "Zona del Temolo priva di vegetazione"
+  },
+  {
+   "code": "1.2.2.1",
+   "id": 1221,
+   "level": 4,
+   "de": "Äschenregion mit Vegetation",
+   "fr": "Zone de l'ombre, avec végétation",
+   "it": "Zona del Temolo con vegetazione"
+  },
+  {
+   "code": "1.2.3",
+   "id": 123,
+   "level": 3,
+   "de": "Untere Forellenregion (Metarhithron)",
+   "fr": "Zone inférieure de la truite (métarhitron)",
+   "it": "Zona inferiore della Trota"
+  },
+  {
+   "code": "1.2.4",
+   "id": 124,
+   "level": 3,
+   "de": "Obere Forellenregion (Epirhithron)",
+   "fr": "Zone supérieure de la truite (épirhitron)",
+   "it": "Zona superiore della Trota"
+  },
+  {
+   "code": "1.2.5",
+   "id": 125,
+   "level": 3,
+   "de": "Temporärer Wasserlauf",
+   "fr": "Eau temporaire",
+   "it": "Acque temporanee"
+  },
+  {
+   "code": "1.2.6",
+   "id": 126,
+   "level": 3,
+   "de": "Zone der Gletscherbäche (Kryal)",
+   "fr": "Ruisseau glaciaire (Kryal)",
+   "it": "Torrente glaciale (Kryal)"
+  },
+  {
+   "code": "1.3",
+   "id": 13,
+   "level": 2,
+   "de": "Quellen und Quellfluren",
+   "fr": "Sources et suintements",
+   "it": "Sorgenti e stillicidi"
+  },
+  {
+   "code": "1.3.0",
+   "id": 130,
+   "level": 3,
+   "de": "Überrieselte Fläche, Quelle ohne Vegetation",
+   "fr": "Ecoulement superficiel, suintement sans végétation",
+   "it": "Sorgenti e stillicidi privi di vegetazione"
+  },
+  {
+   "code": "1.3.0.1",
+   "id": 1301,
+   "level": 4,
+   "de": "Auenquelle, Giesse",
+   "fr": "Source alluviale",
+   "it": "Sorgenti alluvionali"
+  },
+  {
+   "code": "1.3.1",
+   "id": 131,
+   "level": 3,
+   "de": "Wärmeliebende Quellflur",
+   "fr": "Végétation des rochers calcaires humides",
+   "it": "Stillicidi de roca calcaree con copertura vegetale"
+  },
+  {
+   "code": "1.3.2",
+   "id": 132,
+   "level": 3,
+   "de": "Kalkreiche Quellflur",
+   "fr": "Végétation des sources alcalines",
+   "it": "Sorgenti alcaline con copertura vegetale"
+  },
+  {
+   "code": "1.3.3",
+   "id": 133,
+   "level": 3,
+   "de": "Kalkarme Quellflur",
+   "fr": "Végétation des sources acides",
+   "it": "Sorgenti acide con copertura vegetale"
+  },
+  {
+   "code": "1.4",
+   "id": 14,
+   "level": 2,
+   "de": "Unterirdische Gewässer",
+   "fr": "Eaux souterraines",
+   "it": "Acque sotterranee"
+  },
+  {
+   "code": "1.4.1",
+   "id": 141,
+   "level": 3,
+   "de": "Porengrundwasser",
+   "fr": "Milieu interstitiel des sédiments (nappes alluviales et parafluviales)",
+   "it": "Ambienti interstiziali dei sedimenti (falda freatica)"
+  },
+  {
+   "code": "1.4.2",
+   "id": 142,
+   "level": 3,
+   "de": "Kluftgrundwasser",
+   "fr": "Milieu fissural",
+   "it": "Reticolo di fessure"
+  },
+  {
+   "code": "1.4.3",
+   "id": 143,
+   "level": 3,
+   "de": "Höhlenbach",
+   "fr": "Rivière souterraine",
+   "it": "Corsi d'acqua sotterranei"
+  },
+  {
+   "code": "1.4.4",
+   "id": 144,
+   "level": 3,
+   "de": "Höhlensee",
+   "fr": "Lac souterrain",
+   "it": "Laghi sotteranei"
+  },
+  {
+   "code": "2",
+   "id": 2,
+   "level": 1,
+   "de": "Ufer und Feuchtgebiete",
+   "fr": "Rivages et lieux humides",
+   "it": "Rive e luoghi umidi"
+  },
+  {
+   "code": "2.0",
+   "id": 20,
+   "level": 2,
+   "de": "Künstliche Ufer",
+   "fr": "Rives artificielles",
+   "it": "Rive artficiali"
+  },
+  {
+   "code": "2.0.0",
+   "id": 200,
+   "level": 3,
+   "de": "Künstliche Ufer ohne Vegetation",
+   "fr": "Rives artificielles sans végétation",
+   "it": "Rive artificiali prive di vegetazione"
+  },
+  {
+   "code": "2.0.1",
+   "id": 201,
+   "level": 3,
+   "de": "Künstliche Ufer mit Vegetation",
+   "fr": "Rives artificielles avec végétation",
+   "it": "Rive artificiali con vegetazione"
+  },
+  {
+   "code": "2.1",
+   "id": 21,
+   "level": 2,
+   "de": "Ufer mit Vegetation",
+   "fr": "Rivages avec végétation",
+   "it": "Rive con copertura vegetale"
+  },
+  {
+   "code": "2.1.1",
+   "id": 211,
+   "level": 3,
+   "de": "Moortümpelgesellschaft",
+   "fr": "Dépression inondée à utriculaires",
+   "it": "Depressioni allagate con Erba-vescica"
+  },
+  {
+   "code": "2.1.2",
+   "id": 212,
+   "level": 3,
+   "de": "Röhricht",
+   "fr": "Roselière",
+   "it": "Canneti"
+  },
+  {
+   "code": "2.1.2.1",
+   "id": 2121,
+   "level": 4,
+   "de": "Stillwasser-Röhricht",
+   "fr": "Roselière lacustre",
+   "it": "Canneti lacustri"
+  },
+  {
+   "code": "2.1.2.2",
+   "id": 2122,
+   "level": 4,
+   "de": "Flussufer- und Landröhricht",
+   "fr": "Roselière terrestre",
+   "it": "Canneti terrestri, ripariali"
+  },
+  {
+   "code": "2.1.3",
+   "id": 213,
+   "level": 3,
+   "de": "Strandlingsgesellschaften",
+   "fr": "Végétation temporaire des grèves",
+   "it": "Greti con copertura vegetale temporanea"
+  },
+  {
+   "code": "2.1.4",
+   "id": 214,
+   "level": 3,
+   "de": "Bachröhricht",
+   "fr": "Végétation des rives d'eau courante",
+   "it": "Rive di acque correnti con copertura vegetale"
+  },
+  {
+   "code": "2.2",
+   "id": 22,
+   "level": 2,
+   "de": "Flachmoore",
+   "fr": "Bas-marais",
+   "it": "Paludi (torbiere basse)"
+  },
+  {
+   "code": "2.2.1",
+   "id": 221,
+   "level": 3,
+   "de": "Grossseggenried",
+   "fr": "Magnocariçaie",
+   "it": "Paludi con grandi carici"
+  },
+  {
+   "code": "2.2.1.1",
+   "id": 2211,
+   "level": 4,
+   "de": "Grossseggenried",
+   "fr": "Magnocariçaie s.str.",
+   "it": "Paludi con grandi carici s.str. (Magnocariceto)"
+  },
+  {
+   "code": "2.2.1.2",
+   "id": 2212,
+   "level": 4,
+   "de": "Schneidbinsenried",
+   "fr": "Formation à marisque",
+   "it": "Acquitrini a Falasco"
+  },
+  {
+   "code": "2.2.2",
+   "id": 222,
+   "level": 3,
+   "de": "Kalkarmes Kleinseggenried (Braunseggenried)",
+   "fr": "Parvocariçaie acidophile",
+   "it": "Paludi con piccole carici acidofile"
+  },
+  {
+   "code": "2.2.3",
+   "id": 223,
+   "level": 3,
+   "de": "Kalkreiches Kleinseggenried (Davallseggenried)",
+   "fr": "Parvocariçaie neutro-basophile",
+   "it": "Paludi con piccole carici neutro-basofile"
+  },
+  {
+   "code": "2.2.4",
+   "id": 224,
+   "level": 3,
+   "de": "Übergangsmoor",
+   "fr": "Cariçaie de transition",
+   "it": "Torbiere di transizione"
+  },
+  {
+   "code": "2.2.5",
+   "id": 225,
+   "level": 3,
+   "de": "Schwemmufervegetation alpiner Wildbäche",
+   "fr": "Groupement pionnier des bords de torrents alpins",
+   "it": "Rive dei torrenti alpini con vegetazione pioniera (carici artiche relitte)"
+  },
+  {
+   "code": "2.3",
+   "id": 23,
+   "level": 2,
+   "de": "Feuchtwiesen",
+   "fr": "Prairies humides",
+   "it": "Prati acquitrinosi"
+  },
+  {
+   "code": "2.3.1",
+   "id": 231,
+   "level": 3,
+   "de": "Pfeifengraswiese",
+   "fr": "Prairie à molinie",
+   "it": "Prati acquitrinosi a Gramigna altissima (Molinia)"
+  },
+  {
+   "code": "2.3.2",
+   "id": 232,
+   "level": 3,
+   "de": "Nährstoffreiche Feuchtwiesen (Sumpfdotterblumenwiese)",
+   "fr": "Prairie à populage",
+   "it": "Prati acquitrinosi con Calta palustre"
+  },
+  {
+   "code": "2.3.3",
+   "id": 233,
+   "level": 3,
+   "de": "Feuchte Hochstaudenflur (Spierstaudenflur)",
+   "fr": "Mégaphorbiée marécageuse",
+   "it": "Prati acquitrinosi con alte erbe (Olmaria comune)"
+  },
+  {
+   "code": "2.4",
+   "id": 24,
+   "level": 2,
+   "de": "Hochmoore",
+   "fr": "Tourbière bombée",
+   "it": "Torbiere alte"
+  },
+  {
+   "code": "2.4.1",
+   "id": 241,
+   "level": 3,
+   "de": "Offene Hochmoore",
+   "fr": "Tourbière à sphaignes",
+   "it": "Torbiere a sfagni"
+  },
+  {
+   "code": "2.5",
+   "id": 25,
+   "level": 2,
+   "de": "Wechselfeuchte Pionierfluren",
+   "fr": "Végétation annuelle temporairement inondée",
+   "it": "Luoghi temporaneamente inondati con vegetazione annuale"
+  },
+  {
+   "code": "2.5.0",
+   "id": 250,
+   "level": 3,
+   "de": "Wechselfeuchte Pionierfluren ohne Vegetation",
+   "fr": "Végétation anuelle temporairement inondée sans végétation",
+   "it": "Luoghi con vegetazione di alte erbe annuali nitrofile senza vegetatione"
+  },
+  {
+   "code": "2.5.1",
+   "id": 251,
+   "level": 3,
+   "de": "Einjährige Schlammflur (Zwergbinsenflur)",
+   "fr": "Végétation de petites annuelles éphémères",
+   "it": "Luoghi con vegetazione di basse erbe annuali igrofile (giunchi nani)"
+  },
+  {
+   "code": "2.5.1.1",
+   "id": 2511,
+   "level": 4,
+   "de": "Zwergbinsen-Annuellenflur mit Sumpfbinsen",
+   "fr": "Communautés naines des eaux douces à Eleocharis",
+   "it": "Tappeti con Eleocharis"
+  },
+  {
+   "code": "2.5.1.2",
+   "id": 2512,
+   "level": 4,
+   "de": "Zwergbinsen-Annuellenflur mit Zypergräsern",
+   "fr": "Gazons à petits Cyperus",
+   "it": "Tappeti con giunchi nani"
+  },
+  {
+   "code": "2.5.1.3",
+   "id": 2513,
+   "level": 4,
+   "de": "Annuellenflur feuchter Böden mit Zwergkräutern",
+   "fr": "Communautés naines des substrats humides à herbacées",
+   "it": "Tappeti con herbe nane"
+  },
+  {
+   "code": "2.5.2",
+   "id": 252,
+   "level": 3,
+   "de": "Mehrjährige Schlammflur (Zweizahnflur)",
+   "fr": "Végétation de grandes annuelles nitrophiles",
+   "it": "Luoghi con vegetazione di alte erbe annuali nitrofile"
+  },
+  {
+   "code": "3",
+   "id": 3,
+   "level": 1,
+   "de": "Gletscher, Fels, Schutt und Geröll",
+   "fr": "Glaciers, rochers, éboulis et moraines",
+   "it": "Ghiacciai, rocce, ghiaioni, depositi fluviali e glaciali"
+  },
+  {
+   "code": "3.1",
+   "id": 31,
+   "level": 2,
+   "de": "Gletscher, Firn- und Schneefleder",
+   "fr": "Glaciers, névés",
+   "it": "Ghiacciai e nevai"
+  },
+  {
+   "code": "3.1.1",
+   "id": 311,
+   "level": 3,
+   "de": "Gletscher",
+   "fr": "Glacier",
+   "it": "Ghiacciai"
+  },
+  {
+   "code": "3.1.2",
+   "id": 312,
+   "level": 3,
+   "de": "Blockgletscher",
+   "fr": "Glacier rocheux",
+   "it": "Ghiacciai sassosi (Rockglacier)"
+  },
+  {
+   "code": "3.1.3",
+   "id": 313,
+   "level": 3,
+   "de": "Firnfeld (Sommer)",
+   "fr": "Névé d'altitude (été)",
+   "it": "Nevai perenni (Firn)"
+  },
+  {
+   "code": "3.1.4",
+   "id": 314,
+   "level": 3,
+   "de": "Schneefeld (Frühling)",
+   "fr": "Plaque de neige au printemps",
+   "it": "Nevai residui primaverili"
+  },
+  {
+   "code": "3.2",
+   "id": 32,
+   "level": 2,
+   "de": "Alluvionen und Moränen",
+   "fr": "Alluvions et moraines",
+   "it": "Suoli alluvionali e morene"
+  },
+  {
+   "code": "3.2.1",
+   "id": 321,
+   "level": 3,
+   "de": "Alluvionen (Schwemmland)",
+   "fr": "Alluvions",
+   "it": "Suoli alluvionali"
+  },
+  {
+   "code": "3.2.1.0",
+   "id": 3210,
+   "level": 4,
+   "de": "Alluvionen ohne Vegetation",
+   "fr": "Alluvions sans végétation",
+   "it": "Suoli alluvionali privi di vegetazione"
+  },
+  {
+   "code": "3.2.1.1",
+   "id": 3211,
+   "level": 4,
+   "de": "Alluvionen mit krautiger Pioniervegetation",
+   "fr": "Alluvions avec végétation pionnière herbacée",
+   "it": "Suoli alluvionali con vegetazione pioniera erbacea"
+  },
+  {
+   "code": "3.2.2",
+   "id": 322,
+   "level": 3,
+   "de": "Moräne",
+   "fr": "Moraine",
+   "it": "Morene"
+  },
+  {
+   "code": "3.2.2.0",
+   "id": 3220,
+   "level": 4,
+   "de": "Moräne ohne Vegetation",
+   "fr": "Moraine sans végétation",
+   "it": "Morene prive di vegetazione"
+  },
+  {
+   "code": "3.2.2.1",
+   "id": 3221,
+   "level": 4,
+   "de": "Moräne mit Pioniervegetation",
+   "fr": "Moraine avec végétation pionnière",
+   "it": "Morene con vegetazione pioniera"
+  },
+  {
+   "code": "3.3",
+   "id": 33,
+   "level": 2,
+   "de": "Steinschutt- und Geröllfluren",
+   "fr": "Eboulis",
+   "it": "Ghiaioni"
+  },
+  {
+   "code": "3.3.1",
+   "id": 331,
+   "level": 3,
+   "de": "Kalkschutt",
+   "fr": "Eboulis de roche calcaire",
+   "it": "Ghiaioni calcarei"
+  },
+  {
+   "code": "3.3.1.1",
+   "id": 3311,
+   "level": 4,
+   "de": "Kalkschutthalde ohne Gefässpflanzen",
+   "fr": "Eboulis calcaire sans végétation vasculaire",
+   "it": "Ghiaioni calcarei privi di piante vascolari"
+  },
+  {
+   "code": "3.3.1.2",
+   "id": 3312,
+   "level": 4,
+   "de": "Alpine Kalkblockflur",
+   "fr": "Eboulis calcaire d'altitude (roche dure)",
+   "it": "Ghiaioni calcarei d'altitudine (roccia compatta)"
+  },
+  {
+   "code": "3.3.1.3",
+   "id": 3313,
+   "level": 4,
+   "de": "Alpine Kalkschieferflur",
+   "fr": "Eboulis de calcschistes d'altitude",
+   "it": "Ghiaioni di calcescisti d'altitudine"
+  },
+  {
+   "code": "3.3.1.4",
+   "id": 3314,
+   "level": 4,
+   "de": "Feinerdereiche Kalkschuttflur",
+   "fr": "Eboulis calcaire humide",
+   "it": "Ghiaioni calcarei con vegetazione igrofila"
+  },
+  {
+   "code": "3.3.1.5",
+   "id": 3315,
+   "level": 4,
+   "de": "Trockenwarme Kalkschuttflur",
+   "fr": "Eboulis calcaire thermophile",
+   "it": "Ghiaioni calcarei con vegetazione termofila"
+  },
+  {
+   "code": "3.3.2",
+   "id": 332,
+   "level": 3,
+   "de": "Silikatschutt",
+   "fr": "Eboulis de roche siliceuse",
+   "it": "Ghiaioni silicatici"
+  },
+  {
+   "code": "3.3.2.1",
+   "id": 3321,
+   "level": 4,
+   "de": "Silikatschutthalde ohne Gefässpflanzen",
+   "fr": "Eboulis siliceux sans végétation vasculaire",
+   "it": "Ghiaioni silicatici privi di piante vascolari"
+  },
+  {
+   "code": "3.3.2.2",
+   "id": 3322,
+   "level": 4,
+   "de": "Alpine Silikatschuttflur",
+   "fr": "Eboulis siliceux d'altitude",
+   "it": "Ghiaioni silicatici d'altitudine con Androsace alpina"
+  },
+  {
+   "code": "3.3.2.3",
+   "id": 3323,
+   "level": 4,
+   "de": "Trockenwarme Silikatschuttflur",
+   "fr": "Eboulis siliceux thermophiles",
+   "it": "Ghiaioni silicatici con vegetazione termofila"
+  },
+  {
+   "code": "3.4",
+   "id": 34,
+   "level": 2,
+   "de": "Felsen",
+   "fr": "Parois rocheuses",
+   "it": "Pareti rocciose"
+  },
+  {
+   "code": "3.4.1",
+   "id": 341,
+   "level": 3,
+   "de": "Kalkfelsen",
+   "fr": "Paroi de roche calcaire",
+   "it": "Pareti di roccia calcarea"
+  },
+  {
+   "code": "3.4.1.1",
+   "id": 3411,
+   "level": 4,
+   "de": "Kalkfels ohne Gefässpflanzen",
+   "fr": "Paroi calcaire sans végétation vasculaire",
+   "it": "Pareti calcaree prive di piante vascolari"
+  },
+  {
+   "code": "3.4.1.2",
+   "id": 3412,
+   "level": 4,
+   "de": "Trockene Kalkfelsflur",
+   "fr": "Paroi calcaire ensoleillée avec végétation vasculaire",
+   "it": "Pareti calcaree soleggiate con piante vascolari rupicole"
+  },
+  {
+   "code": "3.4.1.3",
+   "id": 3413,
+   "level": 4,
+   "de": "Schattige Kalkfelsflur",
+   "fr": "Paroi calcaire ombragée avec végétation vasculaire",
+   "it": "Pareti calcaree ombreggiate con piante vascolari rupicole"
+  },
+  {
+   "code": "3.4.2",
+   "id": 342,
+   "level": 3,
+   "de": "Silikat- oder Serpentinfelsen",
+   "fr": "Paroi de roche siliceuse",
+   "it": "Pareti di roccia silicea"
+  },
+  {
+   "code": "3.4.2.1",
+   "id": 3421,
+   "level": 4,
+   "de": "Silikatfels ohne Gefässpflanzen",
+   "fr": "Paroi siliceuse sans végétation vasculaire",
+   "it": "Pareti silicee prive di piante vascolari"
+  },
+  {
+   "code": "3.4.2.2",
+   "id": 3422,
+   "level": 4,
+   "de": "Silikatfelsflur",
+   "fr": "Paroi siliceuse avec végétation vasculaire",
+   "it": "Pareti silicee con piante vascolari rupicole"
+  },
+  {
+   "code": "3.4.2.3",
+   "id": 3423,
+   "level": 4,
+   "de": "Serpentingesteinsflur",
+   "fr": "Végétation des rochers de serpentine",
+   "it": "Rocce serpentinose con piante rupicole"
+  },
+  {
+   "code": "3.5",
+   "id": 35,
+   "level": 2,
+   "de": "Höhlen",
+   "fr": "Grottes et cavernes obscures",
+   "it": "Grotte, caverne e cunicoli"
+  },
+  {
+   "code": "3.5.1",
+   "id": 351,
+   "level": 3,
+   "de": "Kleine Felsspalten, Halbhöhlen: endogäische Fauna (\"Fauna der Steinunterseite\")",
+   "fr": "Zone de la pierre enfoncée (faune endogée)",
+   "it": "Nicchie e fessure tra le pietro o sotto rocce sporgenti (fauna endogea)"
+  },
+  {
+   "code": "3.5.2",
+   "id": 352,
+   "level": 3,
+   "de": "Bau von Tieren",
+   "fr": "Terrier",
+   "it": "Tane e cunicoli di animali"
+  },
+  {
+   "code": "3.5.3",
+   "id": 353,
+   "level": 3,
+   "de": "Höhleneingang",
+   "fr": "Entrée de grotte",
+   "it": "Ingressi di grotta"
+  },
+  {
+   "code": "3.5.4",
+   "id": 354,
+   "level": 3,
+   "de": "Guanohaufen",
+   "fr": "Dépôt de guano",
+   "it": "Cumuli di guano"
+  },
+  {
+   "code": "3.5.5",
+   "id": 355,
+   "level": 3,
+   "de": "Künstliche Höhlung (Minen, Tunnel, etc.)",
+   "fr": "Cavité artificielle avec influences humaines",
+   "it": "Cavità artificiali legate all'attività umana (miniere, gallerie)"
+  },
+  {
+   "code": "3.5.6",
+   "id": 356,
+   "level": 3,
+   "de": "Unterirdische Lehmablagerung",
+   "fr": "Milieu profonde, dépôts d'argile",
+   "it": "Zone profonde delle grotte con depositi di argilla"
+  },
+  {
+   "code": "3.5.7",
+   "id": 357,
+   "level": 3,
+   "de": "Unterirdische Felswand",
+   "fr": "Milieu profonde, roche dure",
+   "it": "Zone profonde delle grotte con roccia compatta"
+  },
+  {
+   "code": "4",
+   "id": 4,
+   "level": 1,
+   "de": "Grünland (Naturrasen, Wiesen und Weiden)",
+   "fr": "Pelouses et prairies",
+   "it": "Praterie"
+  },
+  {
+   "code": "4.0",
+   "id": 40,
+   "level": 2,
+   "de": "Kunstrasen",
+   "fr": "Gazons et prairies artificielles",
+   "it": "Tappeti erbosi e prati artificiali"
+  },
+  {
+   "code": "4.0.1",
+   "id": 401,
+   "level": 3,
+   "de": "Kunstwiese auf Fruchtfolgefläche",
+   "fr": "Prairie temporaire sur terre assolée",
+   "it": "Prati pluriennali in rotazione"
+  },
+  {
+   "code": "4.0.2",
+   "id": 402,
+   "level": 3,
+   "de": "Kunstrasen auf Sportplätzen, im Siedlungsraum, etc.",
+   "fr": "Gazon artificiel terrains de sport, milieu urbain, etc.",
+   "it": "Tappeti erbosi di campi sportivi, di ambienti urbani ecc."
+  },
+  {
+   "code": "4.0.3",
+   "id": 403,
+   "level": 3,
+   "de": "Begrünung in Tieflagen (Strassenböchungen, etc.)",
+   "fr": "Ensemencement après terrassement à basse altitude (talus de route, etc.)",
+   "it": "Rinverdimenti di superfici rimodellate di bassa altitudine (scarpate lungo le strada ecc)"
+  },
+  {
+   "code": "4.0.4",
+   "id": 404,
+   "level": 3,
+   "de": "Begrünung in Hochlagen (Skipisten, etc.)",
+   "fr": "Ensemencement après terrassement à haute altitude (piste de ski, etc.)",
+   "it": "Rinverdimenti di superficie rimodellate d'altitudine (piste di sci ecc.)"
+  },
+  {
+   "code": "4.1",
+   "id": 41,
+   "level": 2,
+   "de": "Pionierfluren auf Felsböden (Felsgrusfluren)",
+   "fr": "Dalles rocheuses et lapiez",
+   "it": "Tavolati e campi solcati"
+  },
+  {
+   "code": "4.1.1",
+   "id": 411,
+   "level": 3,
+   "de": "Wärmeliebende Kalkfels-Pionierflur",
+   "fr": "Végétation des dalles calcaires de basse altitude",
+   "it": "Tavolati calcarei di bassa altitudine con copertura vegetale"
+  },
+  {
+   "code": "4.1.2",
+   "id": 412,
+   "level": 3,
+   "de": "Kalkfels-Pionierflur des Gebirges (Karstfluren)",
+   "fr": "Végétation des dalles calcaires et lapiez de montagne",
+   "it": "Tavolati calcarei e campi solcati d'altitudine con copertura vegetale"
+  },
+  {
+   "code": "4.1.3",
+   "id": 413,
+   "level": 3,
+   "de": "Wärmeliebende Silikatfels-Pionierflur",
+   "fr": "Végétation des dalles siliceuses de basse altitude",
+   "it": "Tavolati silicatici di bassa altitudine con copertura vegetale"
+  },
+  {
+   "code": "4.1.4",
+   "id": 414,
+   "level": 3,
+   "de": "Silikatfelsgrusflur des Gebirges",
+   "fr": "Végétation des dalles siliceuses de montagne",
+   "it": "Tavolati silicatici d'altitudine (vegetazione con Borracina)"
+  },
+  {
+   "code": "4.2",
+   "id": 42,
+   "level": 2,
+   "de": "Wärmeliebende Trockenrasen",
+   "fr": "Pelouses sèches thermophiles",
+   "it": "Praterie termofile aride e semiaride"
+  },
+  {
+   "code": "4.2.1",
+   "id": 421,
+   "level": 3,
+   "de": "Wärmeliebende Trockenrasen (Kontinentaler Trockenrasen; Innerwallis, Graubünden)",
+   "fr": "Pelouses sèches thermophiles (climat continental, Valais central et Grison)",
+   "it": "Praterie termofile aride (clima continentale, Vallese centrale, Grigioni)"
+  },
+  {
+   "code": "4.2.1.1",
+   "id": 4211,
+   "level": 4,
+   "de": "Inneralpine Felsensteppe",
+   "fr": "Pelouse steppique",
+   "it": "Praterie steppiche tipiche"
+  },
+  {
+   "code": "4.2.1.1",
+   "id": 42111,
+   "level": 4,
+   "de": "Inneralpine Felsensteppe der Westalpen",
+   "fr": "Pelouse steppique des Alpes occidentales",
+   "it": "Praterie steppiche tipiche delle Alpi occidentali"
+  },
+  {
+   "code": "4.2.1.1",
+   "id": 42112,
+   "level": 4,
+   "de": "Inneralpine Felsensteppe der Ostalpen",
+   "fr": "Pelouse steppique des Alpes orientales",
+   "it": "Praterie steppiche tipiche delle Alpi orientali"
+  },
+  {
+   "code": "4.2.1.2",
+   "id": 4212,
+   "level": 4,
+   "de": "Kontinentaler Halbtrockenrasen",
+   "fr": "Pelouse mi-sèche continentale",
+   "it": "Praterie continentali semiaride"
+  },
+  {
+   "code": "4.2.2",
+   "id": 422,
+   "level": 3,
+   "de": "Mitteleuropäischer Trockenrasen",
+   "fr": "Pelouse sèche médio-européenne",
+   "it": "Praterie medioeuropee aride con Forasacco"
+  },
+  {
+   "code": "4.2.3",
+   "id": 423,
+   "level": 3,
+   "de": "Insubrischer Trockenrasen",
+   "fr": "Pelouse sèche insubrienne",
+   "it": "Prati insubrici aridi su suolo acido"
+  },
+  {
+   "code": "4.2.4",
+   "id": 424,
+   "level": 3,
+   "de": "Mitteleuropäischer Halbtrockenrasen",
+   "fr": "Pelouse mi-sèche médio-europénne",
+   "it": "Praterie medioeuropee semiaride con Forasacco"
+  },
+  {
+   "code": "4.3",
+   "id": 43,
+   "level": 2,
+   "de": "Gebirgs-Magerrasen",
+   "fr": "Pelouses et pâturages maigres d'altitude",
+   "it": "Praterie e pascoli magri d'altitudine"
+  },
+  {
+   "code": "4.3.1",
+   "id": 431,
+   "level": 3,
+   "de": "Blaugrashalde",
+   "fr": "Pelouse calcaire sèche à seslerie",
+   "it": "Prati aridi su suolo calcareo con Sesleria comune"
+  },
+  {
+   "code": "4.3.1.1",
+   "id": 4311,
+   "level": 4,
+   "de": "Blaugrashalde s.str.",
+   "fr": "Pelouse calcaire sèche à seslerie s.str.",
+   "it": "Prati aridi su suolo calcareo con Sesleria comune s.str."
+  },
+  {
+   "code": "4.3.1.2",
+   "id": 4312,
+   "level": 4,
+   "de": "Blaugrashalde der südlichen Kalkalpen",
+   "fr": "Pelouse calcaire à seslérie et  laiche austroalpine",
+   "it": "Prati aridi su suolo calcareo con Sesleria e Carice sudalpina"
+  },
+  {
+   "code": "4.3.2",
+   "id": 432,
+   "level": 3,
+   "de": "Polsterseggenrasen",
+   "fr": "Pelouse calcaire sèche à laiche ferme",
+   "it": "Prati aridi su suolo calcareo con Carice rigida"
+  },
+  {
+   "code": "4.3.3",
+   "id": 433,
+   "level": 3,
+   "de": "Rostseggenhalde",
+   "fr": "Pelouse calcaire fraîche",
+   "it": "Prati freschi e pascoli su suolo calcareo con Carice ferruginae"
+  },
+  {
+   "code": "4.3.4",
+   "id": 434,
+   "level": 3,
+   "de": "Windkantenrasen (Nacktriedrasen)",
+   "fr": "Gazon des crêtes ventées",
+   "it": "Creste e dossi ventosi a suolo calcareo con copertura vegetale"
+  },
+  {
+   "code": "4.3.5",
+   "id": 435,
+   "level": 3,
+   "de": "Borstgrasrasen",
+   "fr": "Pâturage maigre acide",
+   "it": "Pascoli magri su suolo acido con Cervino"
+  },
+  {
+   "code": "4.3.6",
+   "id": 436,
+   "level": 3,
+   "de": "Buntschwingelhalde",
+   "fr": "Pelouse rocheuse acide",
+   "it": "Balze e cenge su suolo silicatico con Festuca varia"
+  },
+  {
+   "code": "4.3.6.1",
+   "id": 4361,
+   "level": 4,
+   "de": "Buntschwingelhalde s.str.",
+   "fr": "Pelouse rocheuse acide à fétuque bigarrée s.str.",
+   "it": "Balze e cenge su suolo silicatico con Festuca varia s.str."
+  },
+  {
+   "code": "4.3.6.2",
+   "id": 4362,
+   "level": 4,
+   "de": "Violettschwingelrasen",
+   "fr": "Pelouse rocheuse acide à pâturin violet",
+   "it": "Balze e cenge su suolo silicatico con Fienarola violacea"
+  },
+  {
+   "code": "4.3.6.3",
+   "id": 4363,
+   "level": 4,
+   "de": "Goldschwingelrasen",
+   "fr": "Pelouse rocheuse acide à fétuque paniculée",
+   "it": "Balze e cenge su suolo silicatico con Festuca pannocchiuta"
+  },
+  {
+   "code": "4.3.7",
+   "id": 437,
+   "level": 3,
+   "de": "Krummseggenrasen",
+   "fr": "Pelouse acide de l'étage alpin supérieur",
+   "it": "Praterie dell orizzonte alpino superiore su suolo acido con Carice ricurva"
+  },
+  {
+   "code": "4.4",
+   "id": 44,
+   "level": 2,
+   "de": "Schneetälchen",
+   "fr": "Combes à neige",
+   "it": "Vallette nivali"
+  },
+  {
+   "code": "4.4.1",
+   "id": 441,
+   "level": 3,
+   "de": "Kalkreiches Schneetälchen",
+   "fr": "Combe à neige calcaire",
+   "it": "Vallette nivali con suolo calcareo"
+  },
+  {
+   "code": "4.4.2",
+   "id": 442,
+   "level": 3,
+   "de": "Kalkarmes Schneetälchen",
+   "fr": "Combe à neige acide",
+   "it": "Vallette nivali con suolo acido"
+  },
+  {
+   "code": "4.5",
+   "id": 45,
+   "level": 2,
+   "de": "Fettwiesen und -weiden",
+   "fr": "Prairies grasses",
+   "it": "Praterie e pascoli pingui"
+  },
+  {
+   "code": "4.5.1",
+   "id": 451,
+   "level": 3,
+   "de": "Talfettwiesen (Fromentalwiese)",
+   "fr": "Prairie de fauche de basse altitude",
+   "it": "Praterie da sfalcio di bassa quota"
+  },
+  {
+   "code": "4.5.1.1",
+   "id": 4511,
+   "level": 4,
+   "de": "Knaulgraswiesen",
+   "fr": "Prairie à dactyle",
+   "it": "Praterie  con Erba mazzolina comune"
+  },
+  {
+   "code": "4.5.1.2",
+   "id": 4512,
+   "level": 4,
+   "de": "Typische Fromentalwiese",
+   "fr": "Prairie à fromental typique",
+   "it": "Praterie con Avena altissima tipiche"
+  },
+  {
+   "code": "4.5.1.3",
+   "id": 4513,
+   "level": 4,
+   "de": "Trockene Fromentalwiese",
+   "fr": "Prairie à fromental sécharde",
+   "it": "Praterie con Avena altissima aride"
+  },
+  {
+   "code": "4.5.1.4",
+   "id": 4514,
+   "level": 4,
+   "de": "Feuchte Fuchschwanzwiese",
+   "fr": "Prairie humide à vulpin",
+   "it": "Praterie acquitrinose con Coda di topo comune"
+  },
+  {
+   "code": "4.5.2",
+   "id": 452,
+   "level": 3,
+   "de": "Bergfettwiese (Goldhaferwiese)",
+   "fr": "Prairie de fauche de montagne",
+   "it": "Prati da sfalcio pingui di montagna"
+  },
+  {
+   "code": "4.5.3",
+   "id": 453,
+   "level": 3,
+   "de": "Talfettweide (Kammgrasweide)",
+   "fr": "Pâturage de basse et moyenne altitude",
+   "it": "Pascoli di bassa e media altitudine con Covetta"
+  },
+  {
+   "code": "4.5.4",
+   "id": 454,
+   "level": 3,
+   "de": "Bergfettweide (Milchkrautweide)",
+   "fr": "Pâturage gras subalpin et alpin",
+   "it": "Pascoli pingui degli orizzonti subalpino e alpino"
+  },
+  {
+   "code": "4.6",
+   "id": 46,
+   "level": 2,
+   "de": "Grasbrachen",
+   "fr": "Friches à graminées",
+   "it": "Aree abbandonate erbose"
+  },
+  {
+   "code": "4.6.1",
+   "id": 461,
+   "level": 3,
+   "de": "Queckenbrache",
+   "fr": "Friche à chiendent",
+   "it": "Aree abbandonate aride e termofile con Gramigna"
+  },
+  {
+   "code": "4.6.2",
+   "id": 462,
+   "level": 3,
+   "de": "Fiederzwenckenbrache",
+   "fr": "Friche à Brachypodium pinnatum",
+   "it": "Aree abbandonate semiaride con Paléo comune"
+  },
+  {
+   "code": "4.6.3",
+   "id": 463,
+   "level": 3,
+   "de": "Fromentalbrache",
+   "fr": "Friche à Arrhenatherum elatius",
+   "it": "Aree abbandonate ad Avena altissima"
+  },
+  {
+   "code": "4.6.4",
+   "id": 464,
+   "level": 3,
+   "de": "Pfeifengrasbrache",
+   "fr": "Friche à Molinia arundinacea",
+   "it": "Aree abbandonate umide con Gramigna altissima"
+  },
+  {
+   "code": "4.6.5",
+   "id": 465,
+   "level": 3,
+   "de": "Reitgrasbrache",
+   "fr": "Friche à Calamagrostis varia",
+   "it": "Aree abbandonate aride con Cannella comune"
+  },
+  {
+   "code": "5",
+   "id": 5,
+   "level": 1,
+   "de": "Krautsäume, Hochstaudenfluren und Gebüsche",
+   "fr": "Landes, lisières et mégaphorbiaies",
+   "it": "Margini di bosco, radure, aggregati di alte erbe, cespuglieti e brughiere"
+  },
+  {
+   "code": "5.1",
+   "id": 51,
+   "level": 2,
+   "de": "Krautsäume",
+   "fr": "Lisières herbacées (ourlets)",
+   "it": "Margini di bosco erbacei"
+  },
+  {
+   "code": "5.1.0",
+   "id": 510,
+   "level": 3,
+   "de": "Atypische Saumgesellschaft",
+   "fr": "Ourlet atypique",
+   "it": "Orlo, margine atipico"
+  },
+  {
+   "code": "5.1.1",
+   "id": 511,
+   "level": 3,
+   "de": "Trockenwarmer Krautsaum",
+   "fr": "Ourlet maigre xérothermophile",
+   "it": "Margini magri e xero-termofili"
+  },
+  {
+   "code": "5.1.2",
+   "id": 512,
+   "level": 3,
+   "de": "Mesophiler Krautsaum",
+   "fr": "Ourlet maigre mésophile",
+   "it": "Margini magri mesofili"
+  },
+  {
+   "code": "5.1.3",
+   "id": 513,
+   "level": 3,
+   "de": "Feuchter Krautsaum (Tieflagen)",
+   "fr": "Ourlet hygrophile de plaine",
+   "it": "Margini igrofili di pianura"
+  },
+  {
+   "code": "5.1.4",
+   "id": 514,
+   "level": 3,
+   "de": "Feuchter Krautsaum (höheren Lagen)",
+   "fr": "Ourlet hygrophile d'altitude",
+   "it": "Margini igrofili d'altitudine"
+  },
+  {
+   "code": "5.1.5",
+   "id": 515,
+   "level": 3,
+   "de": "Nährstoffreicher Krautsaum",
+   "fr": "Ourlet nitrophile mésophile",
+   "it": "Margini nitro-mesofili"
+  },
+  {
+   "code": "5.2",
+   "id": 52,
+   "level": 2,
+   "de": "Hochstauden- und Schlagfluren",
+   "fr": "Mégaphorbiaies, coupes forestières",
+   "it": "Tagli rasi, radure e luoghi con alte erbe"
+  },
+  {
+   "code": "5.2.1",
+   "id": 521,
+   "level": 3,
+   "de": "Kalkreiche Schlagflur",
+   "fr": "Coupe, clairière sur sol baso-neutrophile",
+   "it": "Tagli rasi e radure su suolo calcareo"
+  },
+  {
+   "code": "5.2.2",
+   "id": 522,
+   "level": 3,
+   "de": "Kalkarme Schlagflur",
+   "fr": "Coupe, clairière sur sol acide",
+   "it": "Tagli rasi e radure su suolo acido"
+  },
+  {
+   "code": "5.2.3",
+   "id": 523,
+   "level": 3,
+   "de": "Hochgrasflur des Gebirges",
+   "fr": "Mégaphorbiaie de montagne mésophile à graminées",
+   "it": "Megaforbie montane mesofile (Cannella)"
+  },
+  {
+   "code": "5.2.4",
+   "id": 524,
+   "level": 3,
+   "de": "Hochstaudenflur des Gebirges",
+   "fr": "Mégaphorbiaie de montagne hygrophile à Adenostyles alliariae",
+   "it": "Megaforbie montane igrofile (Cavolaccio alpino)"
+  },
+  {
+   "code": "5.2.5",
+   "id": 525,
+   "level": 3,
+   "de": "Adlerfarnflur",
+   "fr": "Mégaphorbiaie à Pteridium aquilinum",
+   "it": "Megaforbie (alte erbe) con Felce aquilina"
+  },
+  {
+   "code": "5.3",
+   "id": 53,
+   "level": 2,
+   "de": "Gebüsche",
+   "fr": "Formations buissonnantes (manteau, fourrés, haies)",
+   "it": "Cespuglieti (mantelli, spessine, siepi)"
+  },
+  {
+   "code": "5.3.0",
+   "id": 530,
+   "level": 3,
+   "de": "Naturferne Pflanzung",
+   "fr": "Plantation artificielle",
+   "it": "Piantagioni artificiali"
+  },
+  {
+   "code": "5.3.0.1",
+   "id": 5301,
+   "level": 4,
+   "de": "Naturferne Pflanzung mit sommergrünen Arten",
+   "fr": "Plantation artificielle à feuilles caduques",
+   "it": "Piantagioni artificiali di caducifoglie (piante decidue)"
+  },
+  {
+   "code": "5.3.0.2",
+   "id": 5302,
+   "level": 4,
+   "de": "Naturferne Pflanzung mit immergrünen Arten",
+   "fr": "Plantation artificielle à feuilles persistantes",
+   "it": "Piantagioni artificiali di sempreverdi"
+  },
+  {
+   "code": "5.3.1",
+   "id": 531,
+   "level": 3,
+   "de": "Besenginster-Gebüsche",
+   "fr": "Buissons thermophiles sur sol acide",
+   "it": "Cespuglieti termofili su suolo acido"
+  },
+  {
+   "code": "5.3.2",
+   "id": 532,
+   "level": 3,
+   "de": "Trockenwarmes Gebüsch",
+   "fr": "Buissons xérothermophiles sur sol neutre à alcalin",
+   "it": "Cespuglieti xero-termofili su suolo calcareo (Crespino)"
+  },
+  {
+   "code": "5.3.3",
+   "id": 533,
+   "level": 3,
+   "de": "Mesophiles Gebüsch",
+   "fr": "Buissons mésophiles",
+   "it": "Cespuglieti mesofili"
+  },
+  {
+   "code": "5.3.4",
+   "id": 534,
+   "level": 3,
+   "de": "Brombeergestrüpp",
+   "fr": "Roncier à Rubus fructicosus s.l.",
+   "it": "Roveti"
+  },
+  {
+   "code": "5.3.5",
+   "id": 535,
+   "level": 3,
+   "de": "Gebüschreiche Vorwaldgesellschaften",
+   "fr": "Stade arbustif préforestier",
+   "it": "Aree cespugliate in fase di rimboschimento"
+  },
+  {
+   "code": "5.3.6",
+   "id": 536,
+   "level": 3,
+   "de": "Auen-Weidengebüsch",
+   "fr": "Saulaie buissonnante alluviale",
+   "it": "Saliceti arbustivi alluvionali"
+  },
+  {
+   "code": "5.3.7",
+   "id": 537,
+   "level": 3,
+   "de": "Moor-Weidengebüsch",
+   "fr": "Saulaie buissonnante marécageuse",
+   "it": "Saliceti arbustivi palustri"
+  },
+  {
+   "code": "5.3.8",
+   "id": 538,
+   "level": 3,
+   "de": "Gebirgs-Weidengebüsch",
+   "fr": "Saulaie buissonnante subalpine",
+   "it": "Saliceti arbustivi subalpini"
+  },
+  {
+   "code": "5.3.9",
+   "id": 539,
+   "level": 3,
+   "de": "Grünerlengebüsche",
+   "fr": "Aulnaie verte",
+   "it": "Arbusteti di Ontano verde (Alneto verde)"
+  },
+  {
+   "code": "5.4",
+   "id": 54,
+   "level": 2,
+   "de": "Zwergstrauchheiden",
+   "fr": "Landes",
+   "it": "Brughiere"
+  },
+  {
+   "code": "5.4.1",
+   "id": 541,
+   "level": 3,
+   "de": "Subatlantische Zwergstrauchheide (Ginsterheide)",
+   "fr": "Lande subatlantique acidophile",
+   "it": "Brughiere subatlantiche acidofile"
+  },
+  {
+   "code": "5.4.1.1",
+   "id": 5411,
+   "level": 4,
+   "de": "Subatlantische Heide auf Torf",
+   "fr": "Lande subatlantique sur sol tourbeux",
+   "it": "Landa subatlantica su suolo torboso"
+  },
+  {
+   "code": "5.4.1.2",
+   "id": 5412,
+   "level": 4,
+   "de": "Subatlantsiche Heide, nicht auf Torf",
+   "fr": "Lande subatlantique sur sol non tourbeux",
+   "it": "Brughiera subatlantica su suolo non torboso"
+  },
+  {
+   "code": "5.4.2",
+   "id": 542,
+   "level": 3,
+   "de": "Kontinentale Zwergstrauchheide (Sefistrauchheide)",
+   "fr": "Lande continentale à genévrier sabine",
+   "it": "Brughiere continentali con Ginepro sabino"
+  },
+  {
+   "code": "5.4.3",
+   "id": 543,
+   "level": 3,
+   "de": "Subalpine Kalkheide (Erikaheide)",
+   "fr": "Lande subalpine calcicole",
+   "it": "Brughiere subalpine su suolo calcareo"
+  },
+  {
+   "code": "5.4.4",
+   "id": 544,
+   "level": 3,
+   "de": "Trockene subalpine Zwergstrauchheide (Zwergwacholderheide)",
+   "fr": "Lande subalpine xérophile sur sol acide",
+   "it": "Brughiere subalpine xerofile su suolo acido con Ginepro nano"
+  },
+  {
+   "code": "5.4.5",
+   "id": 545,
+   "level": 3,
+   "de": "Mesophile subalpine Zwergstrauchheide (Alpenrosenheide)",
+   "fr": "Lande subalpine méso-hygrophile sur sol acide",
+   "it": "Brughiere subalpine meso-igrofile su suolo acido con Rododendro e Mirtillo nero"
+  },
+  {
+   "code": "5.4.6",
+   "id": 546,
+   "level": 3,
+   "de": "Alpine Windheide",
+   "fr": "Lande alpine ventée",
+   "it": "Brughiere alpine ventose (brughiere arctico-alpine di arbusti nani, brughiere a Loiseleuria)"
+  },
+  {
+   "code": "6",
+   "id": 6,
+   "level": 1,
+   "de": "Wälder",
+   "fr": "Forêts",
+   "it": "Ambienti boscati"
+  },
+  {
+   "code": "6.0",
+   "id": 60,
+   "level": 2,
+   "de": "Forstpflanzungen",
+   "fr": "Plantations",
+   "it": "Piantagioni"
+  },
+  {
+   "code": "6.0.1",
+   "id": 601,
+   "level": 3,
+   "de": "Aufforstung mit Laubgehölzen",
+   "fr": "Plantation de feuillus",
+   "it": "Piantagioni di latifoglie"
+  },
+  {
+   "code": "6.0.2",
+   "id": 602,
+   "level": 3,
+   "de": "Aufforstung mit Nadelgehölzen",
+   "fr": "Plantation de conifères",
+   "it": "Piantagioni di conifere"
+  },
+  {
+   "code": "6.0.3",
+   "id": 603,
+   "level": 3,
+   "de": "Einzelbaum",
+   "fr": "Arbre isolé",
+   "it": "Albero isolato"
+  },
+  {
+   "code": "6.1",
+   "id": 61,
+   "level": 2,
+   "de": "Bruch- und Auenwälder",
+   "fr": "Forêts inondables",
+   "it": "Boschi innondabili, alluvionali"
+  },
+  {
+   "code": "6.1.1",
+   "id": 611,
+   "level": 3,
+   "de": "Erlen-Bruchwald",
+   "fr": "Aulnaie noire",
+   "it": "Ontaneti su suolo fradicio con Ontano comune"
+  },
+  {
+   "code": "6.1.2",
+   "id": 612,
+   "level": 3,
+   "de": "Weichholz-Auenwald",
+   "fr": "Saulaie blanche",
+   "it": "Saliceti alluvionali con Salice comune"
+  },
+  {
+   "code": "6.1.3",
+   "id": 613,
+   "level": 3,
+   "de": "Grauerlen-Auenwald",
+   "fr": "Aulnaie alluviale",
+   "it": "Ontaneti alluvionali con Ontano bianco"
+  },
+  {
+   "code": "6.1.3.1",
+   "id": 6131,
+   "level": 4,
+   "de": "Alpen-Weidenauenwald",
+   "fr": "Saulaie laurier",
+   "it": "Saliceti alluvionali con Salice odoroso"
+  },
+  {
+   "code": "6.1.4",
+   "id": 614,
+   "level": 3,
+   "de": "Hartholz-Auenwald",
+   "fr": "Frênaie humide",
+   "it": "Frassineti umidi"
+  },
+  {
+   "code": "6.2",
+   "id": 62,
+   "level": 2,
+   "de": "Buchenwälder",
+   "fr": "Hêtraies",
+   "it": "Faggete"
+  },
+  {
+   "code": "6.2.1",
+   "id": 621,
+   "level": 3,
+   "de": "Orchideen-Buchenwald",
+   "fr": "Hêtraie xérothermophile",
+   "it": "Faggete xero-termofile su suolo calcareo a Orchidee"
+  },
+  {
+   "code": "6.2.2",
+   "id": 622,
+   "level": 3,
+   "de": "Hainsimsen-Buchenwald",
+   "fr": "Hêtraie acidophile",
+   "it": "Faggete acidofile con Erba lucciola"
+  },
+  {
+   "code": "6.2.3",
+   "id": 623,
+   "level": 3,
+   "de": "Waldmeister-Buchenwald",
+   "fr": "Hêtraie mésophile de basse altitude",
+   "it": "Faggete mesofile di bassa altitudine a Stellina odorosa"
+  },
+  {
+   "code": "6.2.3.1",
+   "id": 6231,
+   "level": 4,
+   "de": "Atlantischer Buchenwald",
+   "fr": "Hêtraie atlantique",
+   "it": "Faggete atlantiche"
+  },
+  {
+   "code": "6.2.4",
+   "id": 624,
+   "level": 3,
+   "de": "Zahnwurz-Buchenwald",
+   "fr": "Hêtraie mésophile de l'étage montagnard inférieur",
+   "it": "Faggete mesofile dell'orizzonte montano inferiore"
+  },
+  {
+   "code": "6.2.5",
+   "id": 625,
+   "level": 3,
+   "de": "Tannen-Buchenwald",
+   "fr": "Hêtraie à sapins de l'étage montagnard",
+   "it": "Boschi di Faggio comune e Abete dell'orizzonte montano"
+  },
+  {
+   "code": "6.3",
+   "id": 63,
+   "level": 2,
+   "de": "Andere Laubwälder",
+   "fr": "Autres forêts de feuillus",
+   "it": "Altri boschi di latifoglie"
+  },
+  {
+   "code": "6.3.1",
+   "id": 631,
+   "level": 3,
+   "de": "Ahorn-Schluchtwald",
+   "fr": "Erablaie de ravin méso-hygrophile",
+   "it": "Acerete di forra meso-igrofile (boschi di Acero su suolo detritico, boschi di forra a Lunaria)"
+  },
+  {
+   "code": "6.3.2",
+   "id": 632,
+   "level": 3,
+   "de": "Linden-Mischwald",
+   "fr": "Tillaie thermophile sur éboulis ou lapiez",
+   "it": "Boschi misti con Tiglio termofili su suolo detritico"
+  },
+  {
+   "code": "6.3.3",
+   "id": 633,
+   "level": 3,
+   "de": "Eichen- Hainbuchenwald",
+   "fr": "Chênaie à charmes",
+   "it": "Quercete con Carpino"
+  },
+  {
+   "code": "6.3.4",
+   "id": 634,
+   "level": 3,
+   "de": "Flaumeichenwald",
+   "fr": "Chênaie buissonnante",
+   "it": "Quercete cespugliosi con Roverella e Rovere"
+  },
+  {
+   "code": "6.3.5",
+   "id": 635,
+   "level": 3,
+   "de": "Hopfenbuchenwald",
+   "fr": "Ostryaie buissonnante du sud des Alpes",
+   "it": "Boschi cespugliosi sudalpini con Carpino nero e Orno (Ostrieto)"
+  },
+  {
+   "code": "6.3.6",
+   "id": 636,
+   "level": 3,
+   "de": "Saurer Eichenmischwald",
+   "fr": "Chênaie acidophile",
+   "it": "Quercete miste acidofile a Quercia comune e Quercia rovere"
+  },
+  {
+   "code": "6.3.7",
+   "id": 637,
+   "level": 3,
+   "de": "Kastanienwald",
+   "fr": "Châtaigneraie",
+   "it": "Castagneti (boschi misti di Castagno e Quercia)"
+  },
+  {
+   "code": "6.3.8",
+   "id": 638,
+   "level": 3,
+   "de": "Laubwald mit immergrünen Sträuchern",
+   "fr": "Forêt à sous-bois laurifolié",
+   "it": "Boschi con sottobosco di laurofille"
+  },
+  {
+   "code": "6.3.9",
+   "id": 639,
+   "level": 3,
+   "de": "Robinienwald",
+   "fr": "Forêt secondaire de robiniers",
+   "it": "Boschi secondari con Robinia"
+  },
+  {
+   "code": "6.4",
+   "id": 64,
+   "level": 2,
+   "de": "Wärmeliebende Föhrenwälder",
+   "fr": "Pinèdes thermophiles",
+   "it": "Pinete termofile"
+  },
+  {
+   "code": "6.4.1",
+   "id": 641,
+   "level": 3,
+   "de": "Pfeifengras-Föhrenwald",
+   "fr": "Pinède subatlantique des pentes marneuses",
+   "it": "Pinete subatlantiche su pendii marnosi a Gramigna altissima"
+  },
+  {
+   "code": "6.4.2",
+   "id": 642,
+   "level": 3,
+   "de": "Subkontinentaler kalkreicher Föhrenwald",
+   "fr": "Pinède subcontinentale basophile",
+   "it": "Pinete subcontinentali basofile (di bassa altitudine e a Erica e Citiso)"
+  },
+  {
+   "code": "6.4.2.1",
+   "id": 6421,
+   "level": 4,
+   "de": "Mitteleuropäischer subkontinentaler kalkreicher Föhrenwald (Geissklee-Föhrenwald)",
+   "fr": "Pinède subcontinentale basophile medioeuropéenne",
+   "it": "Pinete subcontinentali basofile medioeuropee (di bassa altitudine e a Erica e Citiso)"
+  },
+  {
+   "code": "6.4.3",
+   "id": 643,
+   "level": 3,
+   "de": "Kontinentaler Steppen-Föhrenwald",
+   "fr": "Pinède continentale xérophile",
+   "it": "Pinete continentali xerofile a Ononide"
+  },
+  {
+   "code": "6.4.3.1",
+   "id": 6431,
+   "level": 4,
+   "de": "Kalkreicher Steppen-Föhrenwald",
+   "fr": "Pinède continentale xérophile sur sol calcaire",
+   "it": "Pinete continentali xerofile su suoli calcarei"
+  },
+  {
+   "code": "6.4.3.2",
+   "id": 6432,
+   "level": 4,
+   "de": "Kalkarmer Steppen-Föhrenwald",
+   "fr": "Pinède continentale xérophile sur sol non calcaire",
+   "it": "Pinete continentali xerofile su suoli non calcarei"
+  },
+  {
+   "code": "6.4.4",
+   "id": 644,
+   "level": 3,
+   "de": "Kalkarmer Föhrenwald",
+   "fr": "Pinède mésophile sur silice",
+   "it": "Pinete mesofile su suolo acido"
+  },
+  {
+   "code": "6.5",
+   "id": 65,
+   "level": 2,
+   "de": "Hochmoorwälder",
+   "fr": "Forêts de tourbières",
+   "it": "Boschi di torbiera"
+  },
+  {
+   "code": "6.5.1",
+   "id": 651,
+   "level": 3,
+   "de": "Hochmoor-Birkenwald",
+   "fr": "Bétulaie sur tourbe",
+   "it": "Boschi di Betulla su suolo torboso"
+  },
+  {
+   "code": "6.5.2",
+   "id": 652,
+   "level": 3,
+   "de": "Hochmoor-Bergföhrenwald",
+   "fr": "Pinède sur tourbe",
+   "it": "Pinete con Pino montano su suolo torboso"
+  },
+  {
+   "code": "6.5.3",
+   "id": 653,
+   "level": 3,
+   "de": "Hochmoor-Fichtenwald",
+   "fr": "Pessière sur tourbe",
+   "it": "Peccete su suolo torboso"
+  },
+  {
+   "code": "6.6",
+   "id": 66,
+   "level": 2,
+   "de": "Gebirgsnadelwälder",
+   "fr": "Forêts de conifères d'altitude",
+   "it": "Boschi di conifere d'altitudine"
+  },
+  {
+   "code": "6.6.1",
+   "id": 661,
+   "level": 3,
+   "de": "Tannen-Fichtenwald",
+   "fr": "Pessière-sapinière",
+   "it": "Boschi misti di Peccio e Abete bianco"
+  },
+  {
+   "code": "6.6.2",
+   "id": 662,
+   "level": 3,
+   "de": "Heidelbeer-Fichtenwald",
+   "fr": "Pessière",
+   "it": "Peccete"
+  },
+  {
+   "code": "6.6.3",
+   "id": 663,
+   "level": 3,
+   "de": "Lärchen-Arvenwald",
+   "fr": "Forêt de mélèzes et d'aroles",
+   "it": "Boschi di Larice comune e Pino cembro, Cembrete"
+  },
+  {
+   "code": "6.6.4",
+   "id": 664,
+   "level": 3,
+   "de": "Lärchenwald",
+   "fr": "Mélézein",
+   "it": "Lariceti"
+  },
+  {
+   "code": "6.6.5",
+   "id": 665,
+   "level": 3,
+   "de": "Bergföhrenwald",
+   "fr": "Pinède de montagne",
+   "it": "Pinete montane con Pino montano"
+  },
+  {
+   "code": "6.6.5.1",
+   "id": 6651,
+   "level": 4,
+   "de": "Kalkarmer Bergföhrenwald",
+   "fr": "Pinède de montagne acidophile",
+   "it": "Pinete montane con Pino montano acidofile"
+  },
+  {
+   "code": "6.6.5.2",
+   "id": 6652,
+   "level": 4,
+   "de": "Kalkreicher Bergföhrenwald",
+   "fr": "Pinède de montagne basophile",
+   "it": "Pinete montane con Pino montano basofile"
+  },
+  {
+   "code": "7",
+   "id": 7,
+   "level": 1,
+   "de": "Pioniervegetation gestörter Plätze (Ruderalstandorte)",
+   "fr": "Végétation pionnière des endroits perturbés par l'homme",
+   "it": "Ambienti ruderali e perturbati dall'uomo"
+  },
+  {
+   "code": "7.1",
+   "id": 71,
+   "level": 2,
+   "de": "Trittrasen und Ruderalfluren",
+   "fr": "Terrains piétinés et rudéraux",
+   "it": "Terreni calpestati e ruderali"
+  },
+  {
+   "code": "7.1.0",
+   "id": 710,
+   "level": 3,
+   "de": "Tritt- und Trümmerflächen ohne Vegetation",
+   "fr": "Terrain piétiné et décombres dépourvus de végétation",
+   "it": "Luoghi calpestati e ruderali privi di vegetazione"
+  },
+  {
+   "code": "7.1.1",
+   "id": 711,
+   "level": 3,
+   "de": "Feuchte Trittflur",
+   "fr": "Endroit piétiné humide",
+   "it": "Luoghi calpestati umidi (praterie umide a Gramigna e Romice)"
+  },
+  {
+   "code": "7.1.2",
+   "id": 712,
+   "level": 3,
+   "de": "Trockene Trittflur",
+   "fr": "Endroit piétiné sec",
+   "it": "Luoghi calpestati aridi"
+  },
+  {
+   "code": "7.1.3",
+   "id": 713,
+   "level": 3,
+   "de": "Subalpin-alpine Trittflur",
+   "fr": "Endroit piétiné subalpin ou alpin",
+   "it": "Luoghi calpestati dell'orizzonte subalpino e alpino"
+  },
+  {
+   "code": "7.1.4",
+   "id": 714,
+   "level": 3,
+   "de": "Einjährige Ruderalflur",
+   "fr": "Rudérales annuelles",
+   "it": "Luoghi con vegetazione ruderale annuale"
+  },
+  {
+   "code": "7.1.5",
+   "id": 715,
+   "level": 3,
+   "de": "Trockenwarme Ruderalflur",
+   "fr": "Rudérales pluriannuelles thermophiles",
+   "it": "Luoghi con vegetazione ruderale pluriennale termofila (Onopordo tomentoso)"
+  },
+  {
+   "code": "7.1.6",
+   "id": 716,
+   "level": 3,
+   "de": "Mesophile Ruderalflur (Steinkleeflur)",
+   "fr": "Rudérales pluriannuelles mésophiles",
+   "it": "Luoghi con vegetazione ruderale pluriennale mesofila"
+  },
+  {
+   "code": "7.1.7",
+   "id": 717,
+   "level": 3,
+   "de": "Alpine Lägerflur (Alpenblackenflur)",
+   "fr": "Reposoir à bétail subalpin ou alpin",
+   "it": "Luoghi di riposo del bestiame nell'orizzonte subalpino e alpino con vegetazione nitrofila"
+  },
+  {
+   "code": "7.1.8",
+   "id": 718,
+   "level": 3,
+   "de": "Lägerflur der Tieflagen",
+   "fr": "Reposoir à bétail de basse altitude",
+   "it": "Luoghi di riposo del bestiame di bassa altitudine"
+  },
+  {
+   "code": "7.2",
+   "id": 72,
+   "level": 2,
+   "de": "Anthropogene Steinfluren",
+   "fr": "Milieux rocheux anthropogènes",
+   "it": "Manufatti in sasso, muri e selciati"
+  },
+  {
+   "code": "7.2.0",
+   "id": 720,
+   "level": 3,
+   "de": "Mauer oder Steinpflästerung ohne Vegetation",
+   "fr": "Mur ou pavement dépourvu de végétation",
+   "it": "Muri e selciati privi di vegetazione"
+  },
+  {
+   "code": "7.2.1",
+   "id": 721,
+   "level": 3,
+   "de": "Trockenwarme Mauerflur",
+   "fr": "Ruine ou vieux mur",
+   "it": "Rovine, vecchi muri e muri a secco"
+  },
+  {
+   "code": "7.2.2",
+   "id": 722,
+   "level": 3,
+   "de": "Steinpflaster-Trittflur",
+   "fr": "Pavement",
+   "it": "Selciati"
+  },
+  {
+   "code": "8",
+   "id": 8,
+   "level": 1,
+   "de": "Pflanzungen, Äcker und Kulturen",
+   "fr": "Plantations, champs et cultures",
+   "it": "Ambienti coltivati"
+  },
+  {
+   "code": "8.1",
+   "id": 81,
+   "level": 2,
+   "de": "Baumschulen, Obstgärten, Rebberge",
+   "fr": "Cultures de plantes ligneuses",
+   "it": "Colture di piante legnose"
+  },
+  {
+   "code": "8.1.1",
+   "id": 811,
+   "level": 3,
+   "de": "Baumschule aus Laubgehölzen",
+   "fr": "Pépinière de feuillus",
+   "it": "Vivai di latifoglie"
+  },
+  {
+   "code": "8.1.2",
+   "id": 812,
+   "level": 3,
+   "de": "Baumschule aus Nadelgehölzen",
+   "fr": "Pépinière de conifères",
+   "it": "Vivai di conifere"
+  },
+  {
+   "code": "8.1.3",
+   "id": 813,
+   "level": 3,
+   "de": "Kastanienhain (ohne Unterholz)",
+   "fr": "Verger de châtaigniers (sans sous-bois)",
+   "it": "Selve castanili (prive di sottobosco)"
+  },
+  {
+   "code": "8.1.4",
+   "id": 814,
+   "level": 3,
+   "de": "Hochstammobstgarten",
+   "fr": "Verger de fruitiers haute tige",
+   "it": "Frutteti ad alto fusto"
+  },
+  {
+   "code": "8.1.5",
+   "id": 815,
+   "level": 3,
+   "de": "Niederstammobstgarten",
+   "fr": "Verger de fruitiers basse tige",
+   "it": "Frutteti a basso fusto"
+  },
+  {
+   "code": "8.1.6",
+   "id": 816,
+   "level": 3,
+   "de": "Rebberg",
+   "fr": "Vigne",
+   "it": "Vigneti"
+  },
+  {
+   "code": "8.1.7",
+   "id": 817,
+   "level": 3,
+   "de": "Beerenkultur",
+   "fr": "Petits fruits",
+   "it": "Colture di arbusti da piccoli frutti, bacche"
+  },
+  {
+   "code": "8.2",
+   "id": 82,
+   "level": 2,
+   "de": "Feldkulturen (Äcker)",
+   "fr": "Cultures de plantes herbacées",
+   "it": "Colture di piante erbacee"
+  },
+  {
+   "code": "8.2.0",
+   "id": 820,
+   "level": 3,
+   "de": "Feldkulturen (Äcker) ohne Vegetation",
+   "fr": "Culture de plantes herbacées sans végétation",
+   "it": "Colture di arbusti da bacche senza vegetatione"
+  },
+  {
+   "code": "8.2.1",
+   "id": 821,
+   "level": 3,
+   "de": "Getreidefeld (vorwiegend Winterkultur)",
+   "fr": "Culture de céréales (panifiables)",
+   "it": "Colture di cereali (panificabili)"
+  },
+  {
+   "code": "8.2.1.0",
+   "id": 8210,
+   "level": 4,
+   "de": "Getreide ohne Begleitvegetation",
+   "fr": "Céréales sans végétation adventice",
+   "it": "Colture di cereali prive di vegetazione segetale"
+  },
+  {
+   "code": "8.2.1.1",
+   "id": 8211,
+   "level": 4,
+   "de": "Kalkarme Getreideäcker",
+   "fr": "Végétation ségétale des sols acides",
+   "it": "Colture su suolo acido con vegetazione segetale"
+  },
+  {
+   "code": "8.2.1.2",
+   "id": 8212,
+   "level": 4,
+   "de": "Kalkreiche Getreideäcker",
+   "fr": "Végétation ségétale des sols carbonatés",
+   "it": "Colture su suolo carbonatico con vegetazione segetale"
+  },
+  {
+   "code": "8.2.2",
+   "id": 822,
+   "level": 3,
+   "de": "Mais-, Tabak- und andere Ackerkulturen (vorwiegend Sommerkultur)",
+   "fr": "Maïs, tabac, autres grandes cultures",
+   "it": "Altre colture su vaste superficie (granoturco, tabacco ecc.)"
+  },
+  {
+   "code": "8.2.3",
+   "id": 823,
+   "level": 3,
+   "de": "Hackfruchtacker (Sommerkultur), Garten",
+   "fr": "Culture sarclée, jardin",
+   "it": "Colture sarchiate, orti e giardini"
+  },
+  {
+   "code": "8.2.3.0",
+   "id": 8230,
+   "level": 4,
+   "de": "Hackfrucht ohne Begleitflora",
+   "fr": "Culture sarclée sans végétation adventice",
+   "it": "Colture archiate prive di vegetazione avventizia"
+  },
+  {
+   "code": "8.2.3.1",
+   "id": 8231,
+   "level": 4,
+   "de": "Kalkarmer, lehmiger Hackfruchtacker",
+   "fr": "Végétation adventice des sols argileux neutres à acides",
+   "it": "Luoghi con vegetazione avventizia su suoli argillosi da neutri ad acidi"
+  },
+  {
+   "code": "8.2.3.2",
+   "id": 8232,
+   "level": 4,
+   "de": "Kalkreicher, lehmiger Hackfruchtacker",
+   "fr": "Végétation adventice des sols argileux calcaires",
+   "it": "Luoghi con vegetazione avventizia su suoli argillosi calcarei"
+  },
+  {
+   "code": "8.2.3.3",
+   "id": 8233,
+   "level": 4,
+   "de": "Kalkarmer, trockener Hackfruchtacker",
+   "fr": "Végétation adventice des sols légers neutres à acides",
+   "it": "Luoghi con vegetazione avventizia su suoli leggeri da neutri ad acidi"
+  },
+  {
+   "code": "8.2.3.4",
+   "id": 8234,
+   "level": 4,
+   "de": "Kalkreicher, trockener Hackfruchtacker",
+   "fr": "Végétation adventice des sols légers calcaires",
+   "it": "Luoghi con vegetazione avventizia su suoli leggeri calcarei"
+  },
+  {
+   "code": "9",
+   "id": 9,
+   "level": 1,
+   "de": "Bauten, Anlagen",
+   "fr": "Milieux construits",
+   "it": "Ambienti edificati e infrastrutture"
+  },
+  {
+   "code": "9.1",
+   "id": 91,
+   "level": 2,
+   "de": "Lagerplätze, Deponien",
+   "fr": "Décharges, dépôts",
+   "it": "Discariche, depositi di materiale vario"
+  },
+  {
+   "code": "9.1.1",
+   "id": 911,
+   "level": 3,
+   "de": "Deponie (Sperrgut)",
+   "fr": "Décharge (matériaux inertes)",
+   "it": "Discaria d'inerti"
+  },
+  {
+   "code": "9.1.2",
+   "id": 912,
+   "level": 3,
+   "de": "Deponie (organische Abfälle)",
+   "fr": "Décharge (déchets organiques)",
+   "it": "Discaria (rifiuti organici)"
+  },
+  {
+   "code": "9.2",
+   "id": 92,
+   "level": 2,
+   "de": "Bauten",
+   "fr": "Bâtiment",
+   "it": "Edifici"
+  },
+  {
+   "code": "9.2.1",
+   "id": 921,
+   "level": 3,
+   "de": "Bewohntes Gebäude",
+   "fr": "Bâtiment habité",
+   "it": "Edifici abitati"
+  },
+  {
+   "code": "9.2.1.1",
+   "id": 9211,
+   "level": 4,
+   "de": "Bauernhaus",
+   "fr": "Ferme",
+   "it": "Fattoria"
+  },
+  {
+   "code": "9.2.1.2",
+   "id": 9212,
+   "level": 4,
+   "de": "Sennhütte, Chalet",
+   "fr": "Chalet",
+   "it": "Chalet"
+  },
+  {
+   "code": "9.2.1.3",
+   "id": 9213,
+   "level": 4,
+   "de": "Einfamilienhaus",
+   "fr": "Villa",
+   "it": "Villetta"
+  },
+  {
+   "code": "9.2.1.4",
+   "id": 9214,
+   "level": 4,
+   "de": "Mietgebäude, Gewerbegebäude",
+   "fr": "Immeuble locatif ou commercial",
+   "it": "Immobile locativo o commerciale"
+  },
+  {
+   "code": "9.2.2",
+   "id": 922,
+   "level": 3,
+   "de": "Tierstallungen, Gewächshäuser",
+   "fr": "Locaux d'élevage, de culture",
+   "it": "Fabbricati adibiti all'allevamento o alle colture"
+  },
+  {
+   "code": "9.2.2.1",
+   "id": 9221,
+   "level": 4,
+   "de": "Kuh- und Pferdestall",
+   "fr": "Ecurie, étable",
+   "it": "Scuderie e stalle"
+  },
+  {
+   "code": "9.2.2.2",
+   "id": 9222,
+   "level": 4,
+   "de": "Schweinestall",
+   "fr": "Porcherie",
+   "it": "Porcili"
+  },
+  {
+   "code": "9.2.2.3",
+   "id": 9223,
+   "level": 4,
+   "de": "Hühnerstall",
+   "fr": "Poulailler",
+   "it": "Pollai"
+  },
+  {
+   "code": "9.2.2.4",
+   "id": 9224,
+   "level": 4,
+   "de": "Treibhaus",
+   "fr": "Serre",
+   "it": "Serre"
+  },
+  {
+   "code": "9.2.3",
+   "id": 923,
+   "level": 3,
+   "de": "Nebengebäude, Halle, Garage",
+   "fr": "Dépendances, hangar, garage",
+   "it": "Capanni (dépendance), hangar, garage"
+  },
+  {
+   "code": "9.2.3.1",
+   "id": 9231,
+   "level": 4,
+   "de": "Scheune, Schopf",
+   "fr": "Grange, mazot",
+   "it": "Fienili, granai"
+  },
+  {
+   "code": "9.2.3.2",
+   "id": 9232,
+   "level": 4,
+   "de": "Garage",
+   "fr": "Garage",
+   "it": "Garage"
+  },
+  {
+   "code": "9.2.3.3",
+   "id": 9233,
+   "level": 4,
+   "de": "Bootshaus",
+   "fr": "Hangar à bateau",
+   "it": "Darsena"
+  },
+  {
+   "code": "9.2.3.4",
+   "id": 9234,
+   "level": 4,
+   "de": "Bunker",
+   "fr": "Bunker",
+   "it": "Bunker"
+  },
+  {
+   "code": "9.2.3.5",
+   "id": 9235,
+   "level": 4,
+   "de": "Berghütte, Forsthaus",
+   "fr": "Refuge, maison forestière",
+   "it": "Rifugio, casa forestale"
+  },
+  {
+   "code": "9.2.4",
+   "id": 924,
+   "level": 3,
+   "de": "Fabrik, Halle, Lagerhaus",
+   "fr": "Usine, halle, entrepôt",
+   "it": "Fabbriche, capannoni e magazzini"
+  },
+  {
+   "code": "9.2.4.1",
+   "id": 9241,
+   "level": 4,
+   "de": "Fabrik",
+   "fr": "Usine",
+   "it": "Fabbriche"
+  },
+  {
+   "code": "9.2.4.2",
+   "id": 9242,
+   "level": 4,
+   "de": "Lagerhaus",
+   "fr": "Entrepôt",
+   "it": "Magazzini"
+  },
+  {
+   "code": "9.2.4.3",
+   "id": 9243,
+   "level": 4,
+   "de": "Elektrisches Kraftwerk",
+   "fr": "Centrale électrice",
+   "it": "Centrale elettrica"
+  },
+  {
+   "code": "9.2.4.4",
+   "id": 9244,
+   "level": 4,
+   "de": "Atomkraftwerk",
+   "fr": "Centrale nucleaire",
+   "it": "Centrale nucleare"
+  },
+  {
+   "code": "9.2.4.5",
+   "id": 9245,
+   "level": 4,
+   "de": "Raffinerie",
+   "fr": "Raffinerie",
+   "it": "Raffineria"
+  },
+  {
+   "code": "9.2.4.6",
+   "id": 9246,
+   "level": 4,
+   "de": "Sägerei, Schreinerei",
+   "fr": "Scierie, menuiserie",
+   "it": "Segheria, sminuzzatrica"
+  },
+  {
+   "code": "9.2.5",
+   "id": 925,
+   "level": 3,
+   "de": "Öffentliches Gebäude, Denkmal",
+   "fr": "Bâtiment public, monument",
+   "it": "Edificio pubblico, monumento"
+  },
+  {
+   "code": "9.2.5.1",
+   "id": 9251,
+   "level": 4,
+   "de": "Schloss",
+   "fr": "Château",
+   "it": "Castello"
+  },
+  {
+   "code": "9.2.5.2",
+   "id": 9252,
+   "level": 4,
+   "de": "Kriche",
+   "fr": "Église",
+   "it": "Chiesa"
+  },
+  {
+   "code": "9.2.5.3",
+   "id": 9253,
+   "level": 4,
+   "de": "Bahnhof",
+   "fr": "Gare",
+   "it": "Stazione ferroviaria"
+  },
+  {
+   "code": "9.2.5.4",
+   "id": 9254,
+   "level": 4,
+   "de": "Spital",
+   "fr": "Hôpital",
+   "it": "Ospedale"
+  },
+  {
+   "code": "9.3",
+   "id": 93,
+   "level": 2,
+   "de": "Verkehrswege",
+   "fr": "Voies de communication",
+   "it": "Vie di communicazione"
+  },
+  {
+   "code": "9.3.2",
+   "id": 932,
+   "level": 3,
+   "de": "Asphalt- und Betonstrasse",
+   "fr": "Routes revêtues",
+   "it": "Strade pavimentate, asfaltate"
+  },
+  {
+   "code": "9.3.2.1",
+   "id": 9321,
+   "level": 4,
+   "de": "Strasse",
+   "fr": "Route",
+   "it": "Strade"
+  },
+  {
+   "code": "9.3.2.2",
+   "id": 9322,
+   "level": 4,
+   "de": "Autobahn",
+   "fr": "Autoroute",
+   "it": "Autostrade"
+  },
+  {
+   "code": "9.3.2.3",
+   "id": 9323,
+   "level": 4,
+   "de": "Weg ohne Vegetation (Beton, Kies)",
+   "fr": "Chemin sans végétation (béton, caillasse)",
+   "it": "Sentiero sassoso senza vegetazione (cemento, ghiaia)"
+  },
+  {
+   "code": "9.3.3",
+   "id": 933,
+   "level": 3,
+   "de": "Naturstrasse, Weg",
+   "fr": "Chemin non revêtus, sentiers",
+   "it": "Strade non pavimentate, sienteri"
+  },
+  {
+   "code": "9.3.3.1",
+   "id": 9331,
+   "level": 4,
+   "de": "Naturweg (Dreckweg)",
+   "fr": "Chemin de terre",
+   "it": "Sentiero in terra battuta"
+  },
+  {
+   "code": "9.3.3.2",
+   "id": 9332,
+   "level": 4,
+   "de": "Holzerweg",
+   "fr": "Piste de débardage",
+   "it": "Pista forestale"
+  },
+  {
+   "code": "9.3.3.3",
+   "id": 9333,
+   "level": 4,
+   "de": "Pfad",
+   "fr": "Sentier",
+   "it": "Sentiero"
+  },
+  {
+   "code": "9.3.4",
+   "id": 934,
+   "level": 3,
+   "de": "Bahngleis",
+   "fr": "Voie ferrée",
+   "it": "Linea ferroviaria"
+  },
+  {
+   "code": "9.4",
+   "id": 94,
+   "level": 2,
+   "de": "Versiegeleter Sportplatz, Parkplatz etc.",
+   "fr": "Terrain de sport revêtu, place de parc",
+   "it": "Campi sportivi, parcheggi pavimentati ecc."
+  }
+ ]
+}

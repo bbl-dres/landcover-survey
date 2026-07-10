@@ -4,8 +4,8 @@
  */
 import { ART_LABELS, isFound, statusLabel, greenSpaceLabel, vbsKategorieLabel,
          vbsProduktivLabel, vbsTypLabel, errorsLabel, esc, fmtNum,
-         isBauzoneAreaKey, bauzoneNameFromKey, habitatL1Label,
-         isHabitatAreaKey, habitatNameFromKey,
+         isBauzoneAreaKey, bauzoneNameFromKey, typochL2Label,
+         isHabitatAreaKey, habitatKeyLevel, habitatNameFromKey,
          fmtAreaValue, areaUnitLabel, stripAreaUnit } from "./config.js";
 import { t } from "./i18n.js";
 
@@ -83,11 +83,11 @@ function computeBauzonenCols(parcels) {
   }));
 }
 
-/** Per-type habitat column defs (default-hidden, toggleable) — one per
- *  `habitat_<group>_m2` key found in the data. Computed once per dataset. */
+/** Per-type habitat column defs (default-hidden, toggleable) — one per level-2
+ *  `habitat_l2_<code>_m2` key found in the data. Computed once per dataset. */
 function computeHabitatCols(parcels) {
   const keys = new Set();
-  for (const p of parcels) for (const k in p) if (isHabitatAreaKey(k)) keys.add(k);
+  for (const p of parcels) for (const k in p) if (isHabitatAreaKey(k) && habitatKeyLevel(k) === 2) keys.add(k);
   return [...keys].sort().map((k) => ({
     key: k,
     label: `${habitatNameFromKey(k)} m²`,
@@ -159,7 +159,7 @@ export function populateTable(parcels, landcover, bauzonen, habitat) {
   parcelsData = (parcels || []).map((p, i) => ({ ...p, _idx: i }));
   landcoverData = (landcover || []).map((lc, i) => ({ ...lc, _idx: i, art_label: ART_LABELS[lc.art] || lc.art }));
   bauzonenData = (bauzonen || []).map((r, i) => ({ ...r, _idx: i }));
-  habitatData = (habitat || []).map((r, i) => ({ ...r, _idx: i, art_label: habitatL1Label(r.art) }));
+  habitatData = (habitat || []).map((r, i) => ({ ...r, _idx: i, art_label: r.typoch_l2 || typochL2Label(r.art) }));
   // Gate the tabs on actual detail rows (consistent with the summary dropdown),
   // not just on whether the option ran — an empty layer gets no tab.
   hasBauzonen = bauzonenData.length > 0;

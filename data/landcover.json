@@ -1,0 +1,247 @@
+{
+ "_meta": {
+  "name": "AV Bodenbedeckung (land cover) type reference — BBArt (DE/FR/IT + INTERLIS hierarchy)",
+  "purpose": "Authoritative Art→name + main-group/subgroup lookup for the official Amtliche Vermessung land cover (ms:LCSF / lcsf). Reused by the web app (web/js/config.js) and the Python CLI (python/config.py) so BBArt names are not hardcoded twice. Classification (SIA 416 / DIN 277 / green space / sealed / VBS) stays in code, keyed on `key`.",
+  "data_model": "DM.01-AV-CH — Informationsebene «Bodenbedeckung und Einzelobjekte»; BBArt domain per TVAV (SR 211.432.21, Art. 14–19). Replaced by DMAV by 2027-12-31.",
+  "source_url": "https://www.cadastre-manual.admin.ch/de/informationsebene-bodenbedeckung-and-einzelobjekte",
+  "key_note": "`key` is the Art enumeration value the classifier keys on (e.g. `geschlossener_Wald`, `Gewaesser_stehendes`) — matches web/js/config.js and python/config.py exactly. The web AV WFS is pinned to the German (`deu`) geodienste.ch endpoint so these values are not translated at source.",
+  "lang_note": "`de` is authoritative (the app's display labels). `fr`/`it` follow the DM.01-AV-CH Objektkatalog terminology and are provided for reference; verify against the Objektkatalog before relying on exact wording.",
+  "count": 26,
+  "extracted": "2026-07-10",
+  "license_note": "AV land cover © the cantons, distributed via geodienste.ch; data model © swisstopo. See geo.admin.ch terms of use."
+ },
+ "maingroups": {
+  "gebaeude": {
+   "de": "Gebäude",
+   "fr": "Bâtiment",
+   "it": "Edificio"
+  },
+  "befestigt": {
+   "de": "Befestigte Flächen",
+   "fr": "Surfaces revêtues",
+   "it": "Superfici pavimentate"
+  },
+  "humusiert": {
+   "de": "Humusierte Flächen",
+   "fr": "Surfaces à sol naturel",
+   "it": "Superfici con terreno umifero"
+  },
+  "gewaesser": {
+   "de": "Gewässer",
+   "fr": "Eaux",
+   "it": "Acque"
+  },
+  "bestockt": {
+   "de": "Bestockte Flächen",
+   "fr": "Surfaces boisées",
+   "it": "Superfici boschive"
+  },
+  "vegetationslos": {
+   "de": "Vegetationslose Flächen",
+   "fr": "Surfaces sans végétation",
+   "it": "Superfici senza vegetazione"
+  }
+ },
+ "subgroups": {
+  "Intensivkultur": {
+   "maingroup": "humusiert",
+   "de": "Intensivkultur",
+   "fr": "Culture intensive",
+   "it": "Coltura intensiva"
+  },
+  "Wytweide": {
+   "maingroup": "bestockt",
+   "de": "Wytweide",
+   "fr": "Pâturage boisé",
+   "it": "Pascolo alberato"
+  }
+ },
+ "types": [
+  {
+   "key": "Gebaeude",
+   "maingroup": "gebaeude",
+   "de": "Gebäude",
+   "fr": "Bâtiment",
+   "it": "Edificio"
+  },
+  {
+   "key": "Strasse_Weg",
+   "maingroup": "befestigt",
+   "de": "Strasse/Weg",
+   "fr": "Route, chemin",
+   "it": "Strada, sentiero"
+  },
+  {
+   "key": "Trottoir",
+   "maingroup": "befestigt",
+   "de": "Trottoir",
+   "fr": "Trottoir",
+   "it": "Marciapiede"
+  },
+  {
+   "key": "Verkehrsinsel",
+   "maingroup": "befestigt",
+   "de": "Verkehrsinsel",
+   "fr": "Îlot",
+   "it": "Aiuola spartitraffico"
+  },
+  {
+   "key": "Bahn",
+   "maingroup": "befestigt",
+   "de": "Bahn",
+   "fr": "Chemin de fer",
+   "it": "Ferrovia"
+  },
+  {
+   "key": "Flugplatz",
+   "maingroup": "befestigt",
+   "de": "Flugplatz",
+   "fr": "Place d'aviation",
+   "it": "Aerodromo"
+  },
+  {
+   "key": "Wasserbecken",
+   "maingroup": "befestigt",
+   "de": "Wasserbecken",
+   "fr": "Bassin",
+   "it": "Bacino"
+  },
+  {
+   "key": "uebrige_befestigte",
+   "maingroup": "befestigt",
+   "de": "Übrige befestigte",
+   "fr": "Autre surface stabilisée",
+   "it": "Altra superficie consolidata"
+  },
+  {
+   "key": "Acker_Wiese_Weide",
+   "maingroup": "humusiert",
+   "de": "Acker/Wiese/Weide",
+   "fr": "Champ, pré, pâturage",
+   "it": "Campo, prato, pascolo"
+  },
+  {
+   "key": "Reben",
+   "maingroup": "humusiert",
+   "subgroup": "Intensivkultur",
+   "de": "Reben",
+   "fr": "Vigne",
+   "it": "Vigna"
+  },
+  {
+   "key": "uebrige_Intensivkultur",
+   "maingroup": "humusiert",
+   "subgroup": "Intensivkultur",
+   "de": "Übrige Intensivkultur",
+   "fr": "Autre culture intensive",
+   "it": "Altra coltura intensiva"
+  },
+  {
+   "key": "Gartenanlage",
+   "maingroup": "humusiert",
+   "de": "Gartenanlage",
+   "fr": "Jardin",
+   "it": "Giardino"
+  },
+  {
+   "key": "Hoch_Flachmoor",
+   "maingroup": "humusiert",
+   "de": "Hoch-/Flachmoor",
+   "fr": "Haut-marais, bas-marais",
+   "it": "Torbiera alta e bassa"
+  },
+  {
+   "key": "uebrige_humusierte",
+   "maingroup": "humusiert",
+   "de": "Übrige humusierte",
+   "fr": "Autre surface à sol naturel",
+   "it": "Altra superficie con terreno umifero"
+  },
+  {
+   "key": "Gewaesser_stehendes",
+   "maingroup": "gewaesser",
+   "de": "Stehendes Gewässer",
+   "fr": "Eau stagnante",
+   "it": "Acqua stagnante"
+  },
+  {
+   "key": "Gewaesser_fliessendes",
+   "maingroup": "gewaesser",
+   "de": "Fliessendes Gewässer",
+   "fr": "Eau courante",
+   "it": "Acqua corrente"
+  },
+  {
+   "key": "Schilfguertel",
+   "maingroup": "gewaesser",
+   "de": "Schilfgürtel",
+   "fr": "Roselière",
+   "it": "Canneto"
+  },
+  {
+   "key": "geschlossener_Wald",
+   "maingroup": "bestockt",
+   "de": "Geschlossener Wald",
+   "fr": "Forêt dense",
+   "it": "Bosco fitto"
+  },
+  {
+   "key": "Wytweide_dicht",
+   "maingroup": "bestockt",
+   "subgroup": "Wytweide",
+   "de": "Wytweide (dicht)",
+   "fr": "Pâturage boisé dense",
+   "it": "Pascolo alberato denso"
+  },
+  {
+   "key": "Wytweide_offen",
+   "maingroup": "bestockt",
+   "subgroup": "Wytweide",
+   "de": "Wytweide (offen)",
+   "fr": "Pâturage boisé ouvert",
+   "it": "Pascolo alberato rado"
+  },
+  {
+   "key": "uebrige_bestockte",
+   "maingroup": "bestockt",
+   "de": "Übrige bestockte",
+   "fr": "Autre surface boisée",
+   "it": "Altra superficie boschiva"
+  },
+  {
+   "key": "Fels",
+   "maingroup": "vegetationslos",
+   "de": "Fels",
+   "fr": "Rocher",
+   "it": "Roccia"
+  },
+  {
+   "key": "Gletscher_Firn",
+   "maingroup": "vegetationslos",
+   "de": "Gletscher/Firn",
+   "fr": "Glacier, névé",
+   "it": "Ghiacciaio, nevaio"
+  },
+  {
+   "key": "Geroell_Sand",
+   "maingroup": "vegetationslos",
+   "de": "Geröll/Sand",
+   "fr": "Éboulis, sable",
+   "it": "Detriti, sabbia"
+  },
+  {
+   "key": "Abbau_Deponie",
+   "maingroup": "vegetationslos",
+   "de": "Abbau/Deponie",
+   "fr": "Extraction, décharge",
+   "it": "Estrazione, discarica"
+  },
+  {
+   "key": "uebrige_vegetationslose",
+   "maingroup": "vegetationslos",
+   "de": "Übrige vegetationslose",
+   "fr": "Autre surface sans végétation",
+   "it": "Altra superficie senza vegetazione"
+  }
+ ]
+}
