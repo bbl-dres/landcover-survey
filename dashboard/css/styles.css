@@ -342,6 +342,7 @@ table.sumtbl th.sortable:hover:not(.sorted)::after { opacity: 1; }
 /* Pivot / tree tables (Bodenbedeckung nach Art · BAFU Lebensräume) */
 .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 14px; }
 .panel-head h3 { margin: 0; }
+.panel-note { font-size: 12px; color: var(--gray-500); margin: 12px 0 0; line-height: 1.45; }
 .tree-all-ctrl { display: inline-flex; gap: 12px; white-space: nowrap; flex: none; }
 .tree-icon { display: inline-flex; align-items: center; justify-content: center; width: 15px; height: 15px; margin-right: 7px; border: 1px solid var(--gray-300); border-radius: 3px; color: var(--gray-600); font-size: 12px; line-height: 1; }
 .tree-icon.tree-spacer { border-color: transparent; }

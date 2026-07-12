@@ -168,14 +168,17 @@
   // ---- Shared layer colours (map fills + map legend + table category swatches) ----
   // Land cover collapses to the 6 AV main categories (Hauptgruppen) so the map +
   // legend stay legible; each BBArt row's swatch uses its main-category colour.
+  // Values mirror data/landcover.json `maingroups[].color` (aligned to the official
+  // BAFU habitat colour families) — keep in sync with it.
   var MAIN_COLORS = {
-    "Gebäude": "#c0392b", "Befestigt": "#8d99a6", "Humusiert": "#7cb342",
-    "Bestockt": "#0d6e54", "Gewässer": "#3498db", "Vegetationslos": "#c9b27c"
+    "Gebäude": "#333333", "Befestigt": "#808080", "Humusiert": "#FC8C1D",
+    "Bestockt": "#62AF39", "Gewässer": "#0D74FC", "Vegetationslos": "#9AAAB3"
   };
   var MAIN_ORDER = ["Gebäude", "Befestigt", "Humusiert", "Bestockt", "Gewässer", "Vegetationslos"];
   function mainColor(a) { return MAIN_COLORS[ART_MAIN[a]] || "#94a3b8"; }
-  // Habitat by TypoCH level-1 (digit → colour; mirrors web/js/config.js BAFU_TYPOCH_L1).
-  var HABITAT_L1_COLORS = { "1":"#2980b9", "2":"#16a085", "3":"#aab7b8", "4":"#2ecc71", "5":"#82c341", "6":"#1e8449", "7":"#d4ac0d", "8":"#a3d977", "9":"#c0392b" };
+  // Habitat by TypoCH level-1 (digit → colour). Official BAFU Lebensraumkarte mid-tone
+  // family reps; mirrors data/typoch.json `l1_colors` and web/js/config.js BAFU_TYPOCH_L1.
+  var HABITAT_L1_COLORS = { "1":"#0D74FC", "2":"#12DEFF", "3":"#9AAAB3", "4":"#FC8C1D", "5":"#F0F000", "6":"#62AF39", "7":"#C89646", "8":"#E673E4", "9":"#505050" };
   // TypoCH level-1 classes 1–7 are naturnah; 8 (Kulturen) & 9 (Bauten/Anlagen) are not.
   var HABITAT_NAT_DIGIT = { "1":1, "2":1, "3":1, "4":1, "5":1, "6":1, "7":1 };
   // Legacy level-1 name-slugs (older exports collapsed habitat to level-1).
@@ -359,6 +362,9 @@
   function fmtAreaU(m2) { return fmtArea(m2) + " " + unitLabel(); }
   function stripM2(s) { return String(s == null ? "" : s).replace(/\s*m²$/, ""); }
   function pct(part, whole) { return whole > 0 ? Math.round(part/whole*100) : 0; }
+  // Share label for a table row: a positive share that would round to 0 % reads as
+  // "< 1 %" so tiny-but-present slivers aren't shown as absent. Caller guards whole > 0.
+  function pctLabel(part, whole) { if (!(part > 0)) return "0 %"; var r = part / whole * 100; return r < 0.5 ? "< 1 %" : Math.round(r) + " %"; }
   function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[c]; }); }
   function isCovered(p) { return num(p.sia416_ggf_m2) + num(p.sia416_buf_m2) + num(p.sia416_uuf_m2) > 0; }
 
@@ -378,7 +384,14 @@
     ohne_bauzone: "Ohne Bauzone" // parcel area no building zone covers (emitted by processing)
   };
   function bzLabel(z) { return BAUZONE_LABELS[z] || String(z).replace(/_/g, " "); }
-  var HABITAT_RE = /^habitat_(.+)_m2$/; // habitat_<slug>_m2 (the habitat_m2 total does not match)
+  // Habitat columns come in two export shapes: the current pipeline emits code columns
+  // habitat_l1_<code>_m2 + habitat_l2_<code>_m2; older exports a single slug family
+  // habitat_<slug>_m2. Use the LEVEL-2 leaves only — the l1_ columns are redundant and
+  // would double-count. Detect the shape once, then match leaves (the habitat_m2 total
+  // never matches). The captured group is the slug/code; habDigit/habCode/hbLabel handle it.
+  var _habCodeCols = PARCELS.some(function (p) { for (var k in p) if (k.indexOf("habitat_l2_") === 0) return true; return false; });
+  var HABITAT_RE = _habCodeCols ? /^habitat_l2_(.+)_m2$/ : /^habitat_(.+)_m2$/;
+  var _habKeyBySlug = {}; // captured slug/code → the actual column key (differs for code columns)
   // Display label per habitat slug (TypoCH level-1) — mirrors web/js/config.js.
   var HABITAT_LABELS = {
     gewaesser: "Gewässer", ufer_feuchtgebiete: "Ufer & Feuchtgebiete",
@@ -401,6 +414,12 @@
     var code = habCode(h);
     return code ? typochLabel(code) : String(h).replace(/_/g, " ");
   }
+  // A habitat column is the level-1 "catch-all" when BAFU only classified it to level 1,
+  // so its code is a single part (e.g. "6"). The pipeline emits it as habitat_l2_<digit>_m2
+  // (level-2 code falls back to the level-1 code), so it sits under its own L1 group as a
+  // child that would otherwise read identically to the group total — flag it distinctly.
+  function hbIsL1Only(h) { var c = habCode(h); return c !== "" && c.indexOf(".") < 0; }
+  function hbLabelFull(h) { return hbIsL1Only(h) ? hbLabel(h) + " (nur Stufe 1)" : hbLabel(h); }
   EXCLUDE_RULES.forEach(function (r) { excludeCounts[r.key] = 0; });
   PARCELS.forEach(function (p) {
     var c = p.input_rg || ""; if (c) cantonCounts[c] = (cantonCounts[c] || 0) + 1;
@@ -418,7 +437,7 @@
       var bm = BAUZONE_RE.exec(bk);
       if (bm) { var bv = num(p[bk]); if (bv > 0) { var bz = bm[1]; bauzoneTotal[bz] = (bauzoneTotal[bz] || 0) + bv; bauzoneParcelCount[bz] = (bauzoneParcelCount[bz] || 0) + 1; } }
       var hm = HABITAT_RE.exec(bk);
-      if (hm) { var hv = num(p[bk]); if (hv > 0) { var hz = hm[1]; habitatTotal[hz] = (habitatTotal[hz] || 0) + hv; habitatParcelCount[hz] = (habitatParcelCount[hz] || 0) + 1; } }
+      if (hm) { var hv = num(p[bk]); if (hv > 0) { var hz = hm[1]; _habKeyBySlug[hz] = bk; habitatTotal[hz] = (habitatTotal[hz] || 0) + hv; habitatParcelCount[hz] = (habitatParcelCount[hz] || 0) + 1; } }
     }
   });
   var cantonList = Object.keys(cantonCounts).sort(function (a, b) { return cantonCounts[b] - cantonCounts[a]; });
@@ -431,7 +450,7 @@
   // doesn't rebuild "av_<a>_m2" / "bauzonen_<z>_m2" / "habitat_<h>_m2" strings every render.
   var artCols = ART_KEYS.map(artCol);
   var bzCols = bauzoneListAll.map(function (z) { return "bauzonen_" + z + "_m2"; });
-  var hbCols = habitatListAll.map(function (h) { return "habitat_" + h + "_m2"; });
+  var hbCols = habitatListAll.map(function (h) { return _habKeyBySlug[h]; }); // real column key (code cols ≠ "habitat_"+slug)
   var tpfList = Object.keys(tpfCounts).sort(function (a, b) { return tpfCounts[b] - tpfCounts[a]; });
   var eigentumList = Object.keys(eigentumCounts).sort();
   var statusList = STATUS_ORDER.filter(function (s) { return statusCounts[s]; })
@@ -580,7 +599,7 @@
                : kind === "child" ? '<span class="tree-icon tree-spacer"></span>' : "";
       var sw = it.swatch ? '<span class="cat-sw" style="background:' + it.swatch + '"></span>' : "";
       var bar = it.muted ? "" : '<span class="sumbar"><i style="width:' + (it.value / maxVal * 100).toFixed(1) + '%"></i></span>';
-      var anteil = total ? pct(it.value, total) + " %" : "";
+      var anteil = total ? pctLabel(it.value, total) : "";
       var cls = ((it.muted ? "muted-row " : "") + (it.key ? "clickable " : "") + (it.selected ? "selected " : "")
                + (kind === "child" ? "tree-child " : "") + (kind === "open" || kind === "closed" ? "tree-parent " : "")).trim();
       var attr = it.key ? ' data-key="' + esc(it.key) + '" tabindex="0" role="button" data-tip="' + esc(it.name + " — anklicken zum Filtern") + '"'
@@ -709,6 +728,19 @@
       return m > 0 ? items.concat([{ name: label || "Ohne Bodenbedeckung", value: m, muted: true }]) : items;
     }
     renderValTable("tbl-art", withMiss(artGroups), pa, fmtArea, true, unitLabel(), gsfHint);
+    // Provenance note: parcels whose land cover was synthesized from BAFU (real AV < 5 %) are
+    // blended into the BBArt totals above, but those areas are modelled estimates, not surveyed.
+    var artNote = document.getElementById("note-art");
+    if (artNote) {
+      // lc_synthetic === "yes" is the precise flag (a real synthetic-cover parcel); lc_source
+      // === "BAFU" also tags zero-area degenerate rows, so it would over-count. This matches
+      // the per-parcel ⚠ warning in the detail view (buildParcelDetailHTML).
+      var synthN = 0; for (var si = 0; si < rows.length; si++) { if (rows[si].lc_synthetic === "yes") synthN++; }
+      if (synthN > 0) {
+        artNote.innerHTML = "Enthält " + fmt(synthN) + " von " + fmt(rows.length) + " Grundstücken mit <strong>synthetischer</strong> Bodenbedeckung (aus BAFU-Lebensräumen modelliert, da amtliche AV-Daten fehlen) — diese Flächen sind Schätzwerte.";
+        artNote.hidden = false;
+      } else { artNote.hidden = true; }
+    }
     renderValTable("tbl-sia", withMiss([
       { name:"GGF · Gebäudegrundfläche", value:a.totals.GGF, key:"GGF", selected:!!filters.has.GGF },
       { name:"BUF · bearbeitete Umgebung", value:a.totals.BUF, key:"BUF", selected:!!filters.has.BUF },
@@ -748,7 +780,7 @@
         var d = habDigit(h) || "?";
         var g = hbByDigit[d] || (hbByDigit[d] = { name: typochLabel(d), value: 0, swatch: HABITAT_L1_COLORS[d] || "#8e7cc3", group: d, children: [] });
         g.value += v;
-        g.children.push({ name: hbLabel(h), value: v, swatch: habColor(h) });
+        g.children.push({ name: hbLabelFull(h), value: v, swatch: habColor(h) });
       });
       var hbGroups = Object.keys(hbByDigit).map(function (d) { return hbByDigit[d]; });
       renderValTable("tbl-habitat", withMiss(hbGroups, "Ohne Lebensraum-Daten"), pa, fmtArea, true, unitLabel(), gsfHint);
@@ -1820,7 +1852,7 @@
     }).filter(function (r) { return r.area > 0; }).sort(function (x, y) { return y.area - x.area; });
   }
   function reportHabitat(p) {
-    var out = []; for (var k in p) { if (Object.prototype.hasOwnProperty.call(p, k)) { var hm = HABITAT_RE.exec(k); if (hm) { var v = num(p[k]); if (v > 0) out.push({ label: hbLabel(hm[1]), area: v, color: habColor(hm[1]) }); } } }
+    var out = []; for (var k in p) { if (Object.prototype.hasOwnProperty.call(p, k)) { var hm = HABITAT_RE.exec(k); if (hm) { var v = num(p[k]); if (v > 0) out.push({ label: hbLabelFull(hm[1]), area: v, color: habColor(hm[1]) }); } } }
     return out.sort(function (a, b) { return b.area - a.area; });
   }
   // Bauzonen overview (ARE-harmonised Hauptnutzung) for one parcel, mirroring the
@@ -2339,7 +2371,7 @@
       items.forEach(function (it) {
         sum += it.value;
         var sw = it.swatch ? '<span class="sw" style="background:' + it.swatch + '"></span>' : '';
-        var an = total ? pct(it.value, total) + ' %' : '';
+        var an = total ? pctLabel(it.value, total) : '';
         b += '<tr><td>' + sw + esc(it.name) + '</td><td class="num">' + fmtAreaU(it.value) + '</td><td class="num">' + an + '</td></tr>';
       });
       b += '<tr class="tot"><td>Total</td><td class="num">' + fmtAreaU(sum) + '</td><td class="num">' + (total ? pct(sum, total) + ' %' : '') + '</td></tr>';
@@ -2364,7 +2396,7 @@
     for (var k in p) {
       if (!Object.prototype.hasOwnProperty.call(p, k)) continue;
       var bm = BAUZONE_RE.exec(k); if (bm) { var bv = num(p[k]); if (bv > 0) bzItems.push({ name: bzLabel(bm[1]), value: bv, swatch: bzColor(bm[1]) }); continue; }
-      var hm = HABITAT_RE.exec(k); if (hm) { var hv = num(p[k]); if (hv > 0) hbItems.push({ name: hbLabel(hm[1]), value: hv, swatch: habColor(hm[1]) }); }
+      var hm = HABITAT_RE.exec(k); if (hm) { var hv = num(p[k]); if (hv > 0) hbItems.push({ name: hbLabelFull(hm[1]), value: hv, swatch: habColor(hm[1]) }); }
     }
     bzItems.sort(function (x, y) { return y.value - x.value; });
     hbItems.sort(function (x, y) { return y.value - x.value; });
@@ -2399,7 +2431,7 @@
       ["C · Bestockte Fläche", fmtAreaU(vc)], ["D · Unproduktive Fläche", fmtAreaU(vd)]
     ])) : "";
     var bzCard = bzItems.length ? card("Bauzonen (ARE)", detailAreaTable(bzItems, parcelArea)) : "";
-    var hbCard = hbItems.length ? card("Lebensräume (BAFU · TypoCH L1)", detailAreaTable(hbItems, parcelArea)) : "";
+    var hbCard = hbItems.length ? card("Lebensräume (BAFU · TypoCH)", detailAreaTable(hbItems, parcelArea)) : "";
     var qCard = card("Datenqualität", detailKV([
       ["E-GRID-Status", stLabel], ["Bodenbedeckung-WFS", p.check_wfs || "—"], ["Geometrie", p.check_geom || "—"],
       (("check_bauzonen" in p) && p.check_bauzonen ? ["Bauzonen", p.check_bauzonen] : null),

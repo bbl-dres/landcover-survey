@@ -8,38 +8,45 @@
   "lang_note": "`de` is authoritative (the app's display labels). `fr`/`it` follow the DM.01-AV-CH Objektkatalog terminology and are provided for reference; verify against the Objektkatalog before relying on exact wording.",
   "count": 26,
   "extracted": "2026-07-10",
-  "license_note": "AV land cover © the cantons, distributed via geodienste.ch; data model © swisstopo. See geo.admin.ch terms of use."
+  "license_note": "AV land cover © the cantons, distributed via geodienste.ch; data model © swisstopo. See geo.admin.ch terms of use.",
+  "color_note": "`color` is a house palette: there is no official per-BBArt colour scheme (the AV « Plan für das Grundbuch » is rendered black/white with selective symbols/hatching per the swisstopo federal model). Colours are aligned to the official BAFU Lebensraumkarte colour families via the BBArt↔TypoCH correspondence — water→blue, forest→green, buildings/sealed→grey, grassland→orange, crops/vines→magenta, rock/glacier→grey-blue — so the land-cover and habitat layers stay visually coherent. See typoch.json `color_source`."
  },
  "maingroups": {
   "gebaeude": {
    "de": "Gebäude",
    "fr": "Bâtiment",
-   "it": "Edificio"
+   "it": "Edificio",
+   "color": "#333333"
   },
   "befestigt": {
    "de": "Befestigte Flächen",
    "fr": "Surfaces revêtues",
-   "it": "Superfici pavimentate"
+   "it": "Superfici pavimentate",
+   "color": "#808080"
   },
   "humusiert": {
    "de": "Humusierte Flächen",
    "fr": "Surfaces à sol naturel",
-   "it": "Superfici con terreno umifero"
+   "it": "Superfici con terreno umifero",
+   "color": "#FC8C1D"
   },
   "gewaesser": {
    "de": "Gewässer",
    "fr": "Eaux",
-   "it": "Acque"
+   "it": "Acque",
+   "color": "#0D74FC"
   },
   "bestockt": {
    "de": "Bestockte Flächen",
    "fr": "Surfaces boisées",
-   "it": "Superfici boschive"
+   "it": "Superfici boschive",
+   "color": "#62AF39"
   },
   "vegetationslos": {
    "de": "Vegetationslose Flächen",
    "fr": "Surfaces sans végétation",
-   "it": "Superfici senza vegetazione"
+   "it": "Superfici senza vegetazione",
+   "color": "#9AAAB3"
   }
  },
  "subgroups": {
@@ -47,13 +54,15 @@
    "maingroup": "humusiert",
    "de": "Intensivkultur",
    "fr": "Culture intensive",
-   "it": "Coltura intensiva"
+   "it": "Coltura intensiva",
+   "color": "#FFA6FE"
   },
   "Wytweide": {
    "maingroup": "bestockt",
    "de": "Wytweide",
    "fr": "Pâturage boisé",
-   "it": "Pascolo alberato"
+   "it": "Pascolo alberato",
+   "color": "#8ED554"
   }
  },
  "types": [
@@ -62,63 +71,72 @@
    "maingroup": "gebaeude",
    "de": "Gebäude",
    "fr": "Bâtiment",
-   "it": "Edificio"
+   "it": "Edificio",
+   "color": "#333333"
   },
   {
    "key": "Strasse_Weg",
    "maingroup": "befestigt",
    "de": "Strasse/Weg",
    "fr": "Route, chemin",
-   "it": "Strada, sentiero"
+   "it": "Strada, sentiero",
+   "color": "#595959"
   },
   {
    "key": "Trottoir",
    "maingroup": "befestigt",
    "de": "Trottoir",
    "fr": "Trottoir",
-   "it": "Marciapiede"
+   "it": "Marciapiede",
+   "color": "#737373"
   },
   {
    "key": "Verkehrsinsel",
    "maingroup": "befestigt",
    "de": "Verkehrsinsel",
    "fr": "Îlot",
-   "it": "Aiuola spartitraffico"
+   "it": "Aiuola spartitraffico",
+   "color": "#8C8C8C"
   },
   {
    "key": "Bahn",
    "maingroup": "befestigt",
    "de": "Bahn",
    "fr": "Chemin de fer",
-   "it": "Ferrovia"
+   "it": "Ferrovia",
+   "color": "#4D4D4D"
   },
   {
    "key": "Flugplatz",
    "maingroup": "befestigt",
    "de": "Flugplatz",
    "fr": "Place d'aviation",
-   "it": "Aerodromo"
+   "it": "Aerodromo",
+   "color": "#666666"
   },
   {
    "key": "Wasserbecken",
    "maingroup": "befestigt",
    "de": "Wasserbecken",
    "fr": "Bassin",
-   "it": "Bacino"
+   "it": "Bacino",
+   "color": "#6E93B5"
   },
   {
    "key": "uebrige_befestigte",
    "maingroup": "befestigt",
    "de": "Übrige befestigte",
    "fr": "Autre surface stabilisée",
-   "it": "Altra superficie consolidata"
+   "it": "Altra superficie consolidata",
+   "color": "#999999"
   },
   {
    "key": "Acker_Wiese_Weide",
    "maingroup": "humusiert",
    "de": "Acker/Wiese/Weide",
    "fr": "Champ, pré, pâturage",
-   "it": "Campo, prato, pascolo"
+   "it": "Campo, prato, pascolo",
+   "color": "#FC8C1D"
   },
   {
    "key": "Reben",
@@ -126,7 +144,8 @@
    "subgroup": "Intensivkultur",
    "de": "Reben",
    "fr": "Vigne",
-   "it": "Vigna"
+   "it": "Vigna",
+   "color": "#E673E4"
   },
   {
    "key": "uebrige_Intensivkultur",
@@ -134,56 +153,64 @@
    "subgroup": "Intensivkultur",
    "de": "Übrige Intensivkultur",
    "fr": "Autre culture intensive",
-   "it": "Altra coltura intensiva"
+   "it": "Altra coltura intensiva",
+   "color": "#FFA6FE"
   },
   {
    "key": "Gartenanlage",
    "maingroup": "humusiert",
    "de": "Gartenanlage",
    "fr": "Jardin",
-   "it": "Giardino"
+   "it": "Giardino",
+   "color": "#FCC690"
   },
   {
    "key": "Hoch_Flachmoor",
    "maingroup": "humusiert",
    "de": "Hoch-/Flachmoor",
    "fr": "Haut-marais, bas-marais",
-   "it": "Torbiera alta e bassa"
+   "it": "Torbiera alta e bassa",
+   "color": "#5AE3FE"
   },
   {
    "key": "uebrige_humusierte",
    "maingroup": "humusiert",
    "de": "Übrige humusierte",
    "fr": "Autre surface à sol naturel",
-   "it": "Altra superficie con terreno umifero"
+   "it": "Altra superficie con terreno umifero",
+   "color": "#FCE3CA"
   },
   {
    "key": "Gewaesser_stehendes",
    "maingroup": "gewaesser",
    "de": "Stehendes Gewässer",
    "fr": "Eau stagnante",
-   "it": "Acqua stagnante"
+   "it": "Acqua stagnante",
+   "color": "#0D74FC"
   },
   {
    "key": "Gewaesser_fliessendes",
    "maingroup": "gewaesser",
    "de": "Fliessendes Gewässer",
    "fr": "Eau courante",
-   "it": "Acqua corrente"
+   "it": "Acqua corrente",
+   "color": "#589FFC"
   },
   {
    "key": "Schilfguertel",
    "maingroup": "gewaesser",
    "de": "Schilfgürtel",
    "fr": "Roselière",
-   "it": "Canneto"
+   "it": "Canneto",
+   "color": "#12DEFF"
   },
   {
    "key": "geschlossener_Wald",
    "maingroup": "bestockt",
    "de": "Geschlossener Wald",
    "fr": "Forêt dense",
-   "it": "Bosco fitto"
+   "it": "Bosco fitto",
+   "color": "#62AF39"
   },
   {
    "key": "Wytweide_dicht",
@@ -191,7 +218,8 @@
    "subgroup": "Wytweide",
    "de": "Wytweide (dicht)",
    "fr": "Pâturage boisé dense",
-   "it": "Pascolo alberato denso"
+   "it": "Pascolo alberato denso",
+   "color": "#78C246"
   },
   {
    "key": "Wytweide_offen",
@@ -199,49 +227,56 @@
    "subgroup": "Wytweide",
    "de": "Wytweide (offen)",
    "fr": "Pâturage boisé ouvert",
-   "it": "Pascolo alberato rado"
+   "it": "Pascolo alberato rado",
+   "color": "#A5E862"
   },
   {
    "key": "uebrige_bestockte",
    "maingroup": "bestockt",
    "de": "Übrige bestockte",
    "fr": "Autre surface boisée",
-   "it": "Altra superficie boschiva"
+   "it": "Altra superficie boschiva",
+   "color": "#8ED554"
   },
   {
    "key": "Fels",
    "maingroup": "vegetationslos",
    "de": "Fels",
    "fr": "Rocher",
-   "it": "Roccia"
+   "it": "Roccia",
+   "color": "#9AAAB3"
   },
   {
    "key": "Gletscher_Firn",
    "maingroup": "vegetationslos",
    "de": "Gletscher/Firn",
    "fr": "Glacier, névé",
-   "it": "Ghiacciaio, nevaio"
+   "it": "Ghiacciaio, nevaio",
+   "color": "#CBDCE8"
   },
   {
    "key": "Geroell_Sand",
    "maingroup": "vegetationslos",
    "de": "Geröll/Sand",
    "fr": "Éboulis, sable",
-   "it": "Detriti, sabbia"
+   "it": "Detriti, sabbia",
+   "color": "#C1D3DD"
   },
   {
    "key": "Abbau_Deponie",
    "maingroup": "vegetationslos",
    "de": "Abbau/Deponie",
    "fr": "Extraction, décharge",
-   "it": "Estrazione, discarica"
+   "it": "Estrazione, discarica",
+   "color": "#ADBEC8"
   },
   {
    "key": "uebrige_vegetationslose",
    "maingroup": "vegetationslos",
    "de": "Übrige vegetationslose",
    "fr": "Autre surface sans végétation",
-   "it": "Altra superficie senza vegetazione"
+   "it": "Altra superficie senza vegetazione",
+   "color": "#B8C6CF"
   }
  ]
 }

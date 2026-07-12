@@ -1,5 +1,7 @@
 /**
- * File parsing and validation — CSV with ID + EGRID columns
+ * File parsing and validation — CSV/XLSX with ID + EGRID columns, plus a special
+ * reader for the raw SAP "Dynamische Listenausgabe" .txt export (see parseSAP), so
+ * an SAP dump can be uploaded as-is without a manual clean-up first.
  */
 import { loadScript } from "./config.js";
 import { t } from "./i18n.js";
@@ -123,7 +125,11 @@ async function handleFile(file) {
     let parsedData;
 
     if (ext === "csv" || ext === "tsv" || ext === "txt") {
-      parsedData = await parseCSV(file);
+      const text = await readFileText(file);
+      // SAP's "Dynamische Listenausgabe" export is a pipe-delimited .txt with banner
+      // rows above the header — route it to the dedicated reader; everything else is
+      // handled by the generic delimited parser.
+      parsedData = isSapExport(text) ? parseSAP(text) : parseDelimited(text);
     } else if (ext === "xlsx" || ext === "xls") {
       parsedData = await parseExcel(file);
     } else {
@@ -174,34 +180,90 @@ function hideError() {
   el.hidden = true;
 }
 
-function parseCSV(file) {
+function readFileText(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = (e) => {
-      let text = e.target.result;
-      // Honour a leading Excel "sep=<d>" hint line (written by some locales'
-      // CSV exports), mirroring the Python readers; otherwise auto-detect.
-      const sepHint = /^sep=(.)\r?\n/i.exec(text);
-      const delimiter = sepHint ? sepHint[1] : detectDelimiter(text);
-      if (sepHint) text = text.slice(sepHint[0].length);
-
-      const matrix = tokenizeDelimited(text, delimiter)
-        .map((cells) => cells.map((c) => c.trim()))
-        .filter((cells) => cells.some((c) => c !== "")); // drop blank lines
-
-      if (matrix.length < 2) return reject(new Error(t("upload.error.header")));
-
-      const headers = matrix[0];
-      const rows = matrix.slice(1).map((values) => {
-        const row = {};
-        headers.forEach((h, idx) => (row[h] = values[idx] || ""));
-        return row;
-      });
-      resolve({ headers, rows });
-    };
+    reader.onload = (e) => resolve(e.target.result);
     reader.onerror = reject;
     reader.readAsText(file, "utf-8");
   });
+}
+
+function parseDelimited(raw) {
+  let text = raw;
+  // Honour a leading Excel "sep=<d>" hint line (written by some locales' CSV exports),
+  // mirroring the Python readers; otherwise auto-detect.
+  const sepHint = /^sep=(.)\r?\n/i.exec(text);
+  const delimiter = sepHint ? sepHint[1] : detectDelimiter(text);
+  if (sepHint) text = text.slice(sepHint[0].length);
+
+  const matrix = tokenizeDelimited(text, delimiter)
+    .map((cells) => cells.map((c) => c.trim()))
+    .filter((cells) => cells.some((c) => c !== "")); // drop blank lines
+
+  if (matrix.length < 2) throw new Error(t("upload.error.header"));
+
+  const headers = matrix[0];
+  const rows = matrix.slice(1).map((values) => {
+    const row = {};
+    headers.forEach((h, idx) => (row[h] = values[idx] || ""));
+    return row;
+  });
+  return { headers, rows };
+}
+
+/**
+ * Recognise an SAP "Dynamische Listenausgabe" export: a pipe-delimited .txt whose
+ * column header row starts with `|BuKr` (banner/metadata lines sit above it).
+ */
+function isSapExport(text) {
+  return /^\|BuKr\|/m.test(text);
+}
+
+/**
+ * Parse an SAP "Dynamische Listenausgabe" export into the standard {headers, rows}
+ * shape. The report is pipe-delimited with enclosing pipes and banner rows above the
+ * header; the dashed rules and page footer are skipped. We synthesize the two required
+ * columns — `id` = BuKr/WE/Grundstk and `egrid` = E-GRID — and pass every other named
+ * column through unchanged, so the pipeline maps it to input_<name> like any CSV column.
+ */
+function parseSAP(text) {
+  const lines = text.split(/\r?\n/);
+  const hi = lines.findIndex((l) => l.startsWith("|BuKr"));
+  if (hi < 0) throw new Error(t("upload.error.sap"));
+
+  // "|a |b  |c|" → ["a","b","c"]: split on the pipe, then drop the empty edge cells
+  // produced by the leading and trailing pipes, and trim each field's padding.
+  const splitRow = (line) => {
+    const cells = line.split("|");
+    return cells.slice(1, cells.length - 1).map((c) => c.trim());
+  };
+
+  const rawHeaders = splitRow(lines[hi]);
+  const colIndex = (name) => rawHeaders.findIndex((h) => h.toLowerCase() === name.toLowerCase());
+  const iBuKr = colIndex("BuKr"), iWE = colIndex("WE"), iGrundstk = colIndex("Grundstk"), iEgrid = colIndex("E-GRID");
+  if (iBuKr < 0 || iWE < 0 || iGrundstk < 0 || iEgrid < 0) throw new Error(t("upload.error.sap"));
+
+  // Pass-through columns: every named column except the id parts + E-GRID (consumed above).
+  const consumed = new Set([iBuKr, iWE, iGrundstk, iEgrid]);
+  const passCols = rawHeaders
+    .map((name, i) => ({ name, i }))
+    .filter((c) => c.name !== "" && !consumed.has(c.i));
+
+  const headers = ["id", "egrid", ...passCols.map((c) => c.name)];
+  const rows = [];
+  for (let i = hi + 1; i < lines.length; i++) {
+    const line = lines[i];
+    if (!/^\|\s*\d/.test(line)) continue; // skip the dashed rules, blank lines, and the footer
+    const cells = splitRow(line);
+    if (cells.length < rawHeaders.length) continue; // malformed / truncated row
+    const bukr = cells[iBuKr], we = cells[iWE], grundstk = cells[iGrundstk];
+    if (!bukr && !we && !grundstk) continue;
+    const row = { id: `${bukr}/${we}/${grundstk}`, egrid: cells[iEgrid] || "" };
+    passCols.forEach((c) => { row[c.name] = cells[c.i] || ""; });
+    rows.push(row);
+  }
+  return { headers, rows };
 }
 
 /**

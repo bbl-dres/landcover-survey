@@ -174,15 +174,15 @@ export const ART_LABELS = {
  * See docs/CLASSIFICATION.md (§Fallback) for rationale and the ⚠ judgment calls.
  */
 export const BAFU_TYPOCH_L1 = {
-  "1": { name: "Gewässer", color: "#2980b9", green: "Not green space", vbsKategorie: "kat_d", vbsProduktiv: "produktiv", vbsTyp: "typ2" },
-  "2": { name: "Ufer & Feuchtgebiete", color: "#16a085", green: "Green space (soil-covered)", vbsKategorie: "kat_d", vbsProduktiv: "produktiv", vbsTyp: "typ2" },
-  "3": { name: "Gletscher, Fels, Schutt, Geröll", color: "#aab7b8", green: "Not green space", vbsKategorie: "kat_d", vbsProduktiv: "unproduktiv", vbsTyp: null },
-  "4": { name: "Grünland", color: "#2ecc71", green: "Green space (soil-covered)", vbsKategorie: "kat_b", vbsProduktiv: "produktiv", vbsTyp: "typ2" },
-  "5": { name: "Krautsäume, Hochstauden, Gebüsche", color: "#82c341", green: "Green space (wooded)", vbsKategorie: "kat_c", vbsProduktiv: "produktiv", vbsTyp: "typ2" },
-  "6": { name: "Wälder", color: "#1e8449", green: "Green space (wooded)", vbsKategorie: "kat_c", vbsProduktiv: "produktiv", vbsTyp: "typ2" },
-  "7": { name: "Pionier-/Ruderalvegetation", color: "#d4ac0d", green: "Not green space", vbsKategorie: "kat_d", vbsProduktiv: "produktiv", vbsTyp: "typ2" },
-  "8": { name: "Pflanzungen, Äcker, Kulturen", color: "#a3d977", green: "Green space (soil-covered)", vbsKategorie: "kat_b", vbsProduktiv: "produktiv", vbsTyp: "typ2" },
-  "9": { name: "Gebäude / Anlagen", color: "#c0392b", green: "Not green space", vbsKategorie: "kat_a", vbsProduktiv: "unproduktiv", vbsTyp: null },
+  "1": { name: "Gewässer", color: "#0D74FC", green: "Not green space", vbsKategorie: "kat_d", vbsProduktiv: "produktiv", vbsTyp: "typ2" },
+  "2": { name: "Ufer & Feuchtgebiete", color: "#12DEFF", green: "Green space (soil-covered)", vbsKategorie: "kat_d", vbsProduktiv: "produktiv", vbsTyp: "typ2" },
+  "3": { name: "Gletscher, Fels, Schutt, Geröll", color: "#9AAAB3", green: "Not green space", vbsKategorie: "kat_d", vbsProduktiv: "unproduktiv", vbsTyp: null },
+  "4": { name: "Grünland", color: "#FC8C1D", green: "Green space (soil-covered)", vbsKategorie: "kat_b", vbsProduktiv: "produktiv", vbsTyp: "typ2" },
+  "5": { name: "Krautsäume, Hochstauden, Gebüsche", color: "#F0F000", green: "Green space (wooded)", vbsKategorie: "kat_c", vbsProduktiv: "produktiv", vbsTyp: "typ2" },
+  "6": { name: "Wälder", color: "#62AF39", green: "Green space (wooded)", vbsKategorie: "kat_c", vbsProduktiv: "produktiv", vbsTyp: "typ2" },
+  "7": { name: "Pionier-/Ruderalvegetation", color: "#C89646", green: "Not green space", vbsKategorie: "kat_d", vbsProduktiv: "produktiv", vbsTyp: "typ2" },
+  "8": { name: "Pflanzungen, Äcker, Kulturen", color: "#E673E4", green: "Green space (soil-covered)", vbsKategorie: "kat_b", vbsProduktiv: "produktiv", vbsTyp: "typ2" },
+  "9": { name: "Gebäude / Anlagen", color: "#505050", green: "Not green space", vbsKategorie: "kat_a", vbsProduktiv: "unproduktiv", vbsTyp: null },
 };
 
 /** geo.admin.ch layer id of the BAFU habitat map (own layer + legacy fallback). */
@@ -672,32 +672,34 @@ export const CATEGORY_COLORS = {
   UUF: "#27ae60",      // undeveloped — green
 };
 
-/** Colors for Art types (for detail view) */
+/** Per-BBArt land-cover colours (map fills + detail view). House palette aligned to the
+ *  official BAFU Lebensraumkarte colour families via the BBArt↔TypoCH correspondence —
+ *  canonical source of record is [data/landcover.json] `color`; keep these in sync with it. */
 export const ART_COLORS = {
-  Gebaeude: "#c0392b",
-  Strasse_Weg: "#7f8c8d",
-  Trottoir: "#95a5a6",
-  Verkehrsinsel: "#bdc3c7",
-  Bahn: "#2c3e50",
-  Flugplatz: "#34495e",
-  Wasserbecken: "#3498db",
-  uebrige_befestigte: "#9b59b6",
-  Acker_Wiese_Weide: "#2ecc71",
-  Reben: "#8e44ad",
-  uebrige_Intensivkultur: "#1abc9c",
-  Gartenanlage: "#27ae60",
-  Hoch_Flachmoor: "#16a085",
-  uebrige_humusierte: "#a3d977",
-  Wytweide_dicht: "#82c341",
-  Wytweide_offen: "#a8d08d",
-  Gewaesser_stehendes: "#2980b9",
-  Gewaesser_fliessendes: "#1f6faa",
-  Schilfguertel: "#45b39d",
-  geschlossener_Wald: "#1e8449",
-  uebrige_bestockte: "#196f3d",
-  Fels: "#aab7b8",
-  Gletscher_Firn: "#d5dbdb",
-  Geroell_Sand: "#d4ac0d",
-  Abbau_Deponie: "#873600",
-  uebrige_vegetationslose: "#b7950b",
+  Gebaeude: "#333333",
+  Strasse_Weg: "#595959",
+  Trottoir: "#737373",
+  Verkehrsinsel: "#8C8C8C",
+  Bahn: "#4D4D4D",
+  Flugplatz: "#666666",
+  Wasserbecken: "#6E93B5",
+  uebrige_befestigte: "#999999",
+  Acker_Wiese_Weide: "#FC8C1D",
+  Reben: "#E673E4",
+  uebrige_Intensivkultur: "#FFA6FE",
+  Gartenanlage: "#FCC690",
+  Hoch_Flachmoor: "#5AE3FE",
+  uebrige_humusierte: "#FCE3CA",
+  Wytweide_dicht: "#78C246",
+  Wytweide_offen: "#A5E862",
+  Gewaesser_stehendes: "#0D74FC",
+  Gewaesser_fliessendes: "#589FFC",
+  Schilfguertel: "#12DEFF",
+  geschlossener_Wald: "#62AF39",
+  uebrige_bestockte: "#8ED554",
+  Fels: "#9AAAB3",
+  Gletscher_Firn: "#CBDCE8",
+  Geroell_Sand: "#C1D3DD",
+  Abbau_Deponie: "#ADBEC8",
+  uebrige_vegetationslose: "#B8C6CF",
 };
