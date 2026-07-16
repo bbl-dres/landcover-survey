@@ -1757,6 +1757,63 @@
     });
   }
 
+  // ---- Datenqualität export: Prüfregeln (Referenz) + Abweichungen (Langformat) ----
+  // Reuses computeRules' authoritative per-rule `fails` lists — the SAME pass/fail
+  // decisions the Datenqualität tab makes (no re-derivation) — and only adds the display
+  // values (Ist / Soll / Abweichung) per deviation. Recomputed fresh from a row set (like
+  // prioRows) so the export is correct even if the Datenqualität tab was never opened.
+  // E-GRID uniqueness (and every count) is judged within `rows`, so Alle/Gefiltert differ.
+  function _devDelta(diff, base) { // "+50 (+5 %)" / "-32 (-3.8 %)" — Ist minus Soll, signed
+    var d = Math.round(diff), p = base > 0 ? Math.round(diff / base * 1000) / 10 : null;
+    return (d > 0 ? "+" : "") + d + (p == null ? "" : " (" + (p > 0 ? "+" : "") + p + " %)");
+  }
+  // Ist / Soll / Abweichung / Einheit for one FAILED check (the parcel already failed `key`,
+  // so e.g. the geom Ist is always "nein" and the coverage Ist ≠ Soll). Mirrors the checks
+  // in computeRules exactly; only the *values*, not the pass/fail decision, live here.
+  function _devValues(key, p, egCounts) {
+    var area = num(p.parcel_area_m2), st = parcelStats(p);
+    var classified = num(p.sia416_ggf_m2) + num(p.sia416_buf_m2) + num(p.sia416_uuf_m2);
+    var eg = String(p.egrid == null ? "" : p.egrid).trim(), sk = statusKey(p);
+    switch (key) {
+      case "egrid":       return { ist: STATUS_LABELS[sk] || sk || "—", soll: "gefunden", abw: "", unit: "" };
+      case "geom":        return { ist: "nein", soll: "ja", abw: "", unit: "" };
+      case "area":        return { ist: Math.round(area), soll: "> 0", abw: "", unit: "m²" };
+      case "egridUnique": return { ist: (eg ? (egCounts[eg] || 0) : 0), soll: 1, abw: "", unit: "Vorkommen" };
+      case "bbCover":     return { ist: Math.round(classified), soll: Math.round(area), abw: _devDelta(classified - area, area), unit: "m²" };
+      case "bzCover":     return { ist: Math.round(st.bzSumAll), soll: Math.round(area), abw: _devDelta(st.bzSumAll - area, area), unit: "m²" };
+      case "hbCover":     return { ist: Math.round(st.hbSum), soll: Math.round(area), abw: _devDelta(st.hbSum - area, area), unit: "m²" };
+      default:            return { ist: "", soll: "", abw: "", unit: "" };
+    }
+  }
+  function qualityDeviationRows(rows) {
+    var R = computeRules(rows), egCounts = {};
+    rows.forEach(function (p) { var eg = String(p.egrid == null ? "" : p.egrid).trim(); if (eg) egCounts[eg] = (egCounts[eg] || 0) + 1; });
+    var out = [];
+    RULE_DEFS.forEach(function (d) {
+      R[d.key].fails.forEach(function (f) { out.push({ key: d.key, name: d.name, p: f.p, v: _devValues(d.key, f.p, egCounts) }); });
+    });
+    return { rules: R, deviations: out };
+  }
+  // Two-sheet workbook: "Prüfregeln" (rule reference keyed by Prüf-ID + pass/fail summary)
+  // and "Abweichungen" (one row per failed check × Grundstück, long/tidy format).
+  function exportQualityXlsx(rows, fname) {
+    return loadXlsx().then(function (XLSX) {
+      var q = qualityDeviationRows(rows);
+      var rulesAoa = [["Prüf-ID", "Prüfung", "Beschreibung", "Geprüft", "Bestanden", "Abweichend"]];
+      RULE_DEFS.forEach(function (d) { var r = q.rules[d.key]; rulesAoa.push([d.key, d.name, d.tip, r.pass + r.fail, r.pass, r.fail]); });
+      var devAoa = [["Prüf-ID", "Prüfung", "Grundstück-ID", "E-GRID", "Ort", "PLZ", "Kanton", "Bezeichnung", "Ist-Wert", "Soll-Wert", "Abweichung", "Einheit"]];
+      q.deviations.forEach(function (x) {
+        var p = x.p, v = x.v;
+        devAoa.push([x.key, x.name, p.id == null ? "" : String(p.id), p.egrid == null ? "" : String(p.egrid),
+          p.input_ort || "", p.input_plz || "", p.input_rg || "", p[NAME_COL] || "", v.ist, v.soll, v.abw, v.unit]);
+      });
+      var wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rulesAoa), "Prüfregeln");
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(devAoa), "Abweichungen");
+      XLSX.writeFile(wb, fname);
+    });
+  }
+
   // ──────────────────────────────────────────────────────────────────────────
   // Grundstücksbericht (PDF, A3 hoch) — eine Seite je priorisiertes Grundstück.
   // Vollständig clientseitig: swisstopo-WMS-Bilder (CORS-frei) → Canvas (+ rote
@@ -2078,6 +2135,8 @@
       document.getElementById("dl-n-all").textContent = "(" + fmt(PARCELS.length) + ")";
       document.getElementById("dl-n-flt").textContent = "(" + fmt(state.rows.length) + ")";
       document.getElementById("dl-n-prio").textContent = "(" + fmt(prio.selected.length) + ")";
+      document.getElementById("dl-n-q-all").textContent = "(" + fmt(qualityDeviationRows(PARCELS).deviations.length) + " Abweichungen)";
+      document.getElementById("dl-n-q-flt").textContent = "(" + fmt(qualityDeviationRows(state.rows).deviations.length) + " Abweichungen)";
     }
     function bgInert(on) { [document.querySelector("header"), document.getElementById("app"), document.querySelector("footer")].forEach(function (el) { if (!el) return; el.inert = on; if (on) el.setAttribute("aria-hidden", "true"); else el.removeAttribute("aria-hidden"); }); } // hide background from AT/Tab while the dialog is open
     function openModal() { lastFocus = document.activeElement; refreshCounts(); hint.textContent = defHint; modal.hidden = false; bgInert(true); document.getElementById("dl-close").focus(); }
@@ -2117,6 +2176,9 @@
     document.getElementById("dl-flt-xlsx").addEventListener("click", function () { busy("Excel wird erstellt…", function () { return exportXlsxRows(state.rows, base() + "-gefiltert.xlsx", "Grundstücke"); }); });
     document.getElementById("dl-prio-geo").addEventListener("click", function () { busy("GeoJSON wird erstellt…", function () { exportGeojsonRows(prioRows(), base() + "-priorisierung-top" + prio.topN + ".geojson"); }); });
     document.getElementById("dl-prio-xlsx").addEventListener("click", function () { busy("Excel wird erstellt…", function () { return exportXlsxRows(prioRows(), base() + "-priorisierung-top" + prio.topN + ".xlsx", "Priorisierung", PRIO_XLSX_COLS); }); });
+    // Datenqualität — Prüfregeln + auffällige Grundstücke (2-sheet Excel), Alle / Gefiltert.
+    document.getElementById("dl-q-all-xlsx").addEventListener("click", function () { busy("Datenqualität-Excel wird erstellt…", function () { return exportQualityXlsx(PARCELS, base() + "-datenqualitaet-alle.xlsx"); }); });
+    document.getElementById("dl-q-flt-xlsx").addEventListener("click", function () { busy("Datenqualität-Excel wird erstellt…", function () { return exportQualityXlsx(state.rows, base() + "-datenqualitaet-gefiltert.xlsx"); }); });
     // PDF-Bericht (A3, eine Seite je priorisiertes Grundstück) — Hintergrund-Verarbeitung mit Fortschrittsbalken.
     document.getElementById("dl-pdf").addEventListener("click", function () {
       var pbtn = this, prog = document.getElementById("dl-progress"), bar = document.getElementById("dl-progress-bar"), txt = document.getElementById("dl-progress-txt"), abortBtn = document.getElementById("dl-abort");
