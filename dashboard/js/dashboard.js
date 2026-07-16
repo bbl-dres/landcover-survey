@@ -545,13 +545,14 @@
 
   // ---- Aggregation over a dataset ----
   function aggregate(rows) {
-    var t = { parcelArea:0, GGF:0, BUF:0, UUF:0, Sealed:0, Green:0, VBSp:0, VBSu:0, VBSa:0, VBSb:0, VBSc:0, VBSd:0 }, byArt = {}, byBauzone = {}, byHabitat = {}, withData = 0;
+    var t = { parcelArea:0, GGF:0, BUF:0, UUF:0, Sealed:0, Green:0, VBSp:0, VBSu:0, VBSa:0, VBSb:0, VBSc:0, VBSd:0, VBSt1:0, VBSt2:0 }, byArt = {}, byBauzone = {}, byHabitat = {}, withData = 0;
     var wfsIssues = 0, geomIssues = 0;
     rows.forEach(function (p) {
       t.parcelArea += num(p.parcel_area_m2);
       t.GGF += num(p.sia416_ggf_m2); t.BUF += num(p.sia416_buf_m2); t.UUF += num(p.sia416_uuf_m2);
       t.Sealed += num(p.sealed_m2); t.Green += num(p.greenspace_m2);
       t.VBSp += num(p.vbs_produktiv_m2); t.VBSu += num(p.vbs_unproduktiv_m2);
+      t.VBSt1 += num(p.vbs_typ1_m2); t.VBSt2 += num(p.vbs_typ2_m2); // VBS Typ (within produktiv): typ1+typ2 == produktiv
       t.VBSa += num(p.vbs_kat_a_m2); t.VBSb += num(p.vbs_kat_b_m2); t.VBSc += num(p.vbs_kat_c_m2); t.VBSd += num(p.vbs_kat_d_m2);
       if (isCovered(p)) withData++;
       if (p.check_wfs && p.check_wfs !== "ok") wfsIssues++;
@@ -571,6 +572,8 @@
   var _valCtx = {}, _valSort = {}, _treeOpen = {}; // per-table render context / sort / expand-state
   // Habitat mixes TypoCH levels, so default it to category order — clusters each class (1,2,…9).
   _valSort["tbl-habitat"] = { by: "name", dir: 1 };
+  // The VBS Produktiv & Typ pivot starts expanded so Typ 1 / Typ 2 are visible without a click.
+  _treeOpen["tbl-vbsprod"] = { produktiv: true };
   function renderValTable(elId, items, total, fmtVal, showTotal, valHeader, anteilHint) {
     _valCtx[elId] = { items: items, total: total, fmtVal: fmtVal, showTotal: showTotal, valHeader: valHeader, anteilHint: anteilHint };
     _paintValTable(elId);
@@ -758,9 +761,16 @@
       { name:"C · Bestockte Fläche", value:a.totals.VBSc },
       { name:"D · Unproduktive Fläche", value:a.totals.VBSd }
     ]), pa, fmtArea, true, unitLabel(), gsfHint);
+    // VBS Produktivität (Layer 2) → Typ (Layer 3) as a pivot: "Biologisch produktiv" expands
+    // to Typ 1 / Typ 2 (which sum to it exactly — VBSt1+VBSt2==VBSp); "Biologisch unproduktiv"
+    // is a sibling. The muted "Ohne Bodenbedeckung" remainder (via withMiss) keeps the Total at
+    // 100 % of GSF. Collapsed, this reads exactly like the former flat "VBS Produktiv" tab.
     renderValTable("tbl-vbsprod", withMiss([
-      { name:"VBS produktiv", value:a.totals.VBSp },
-      { name:"VBS unproduktiv", value:a.totals.VBSu }
+      { name:"Biologisch produktiv", value:a.totals.VBSp, group:"produktiv", children:[
+        { name:"Typ 1 · Grünflächen in Gebäudeumgebung", value:a.totals.VBSt1 },
+        { name:"Typ 2 · Übrige Grünflächen", value:a.totals.VBSt2 }
+      ] },
+      { name:"Biologisch unproduktiv", value:a.totals.VBSu }
     ]), pa, fmtArea, true, unitLabel(), gsfHint);
     // "Ohne Bauzone" is the zone-free remainder — render it as the muted last row
     // (via withMiss), not as a normal zone, so the table reads like before but now
@@ -1470,7 +1480,7 @@
       quality: Math.max(0, q)
     };
   }
-  function prioSeg(m) { return m.greenShare >= 0.30 ? "Grün-reich" : m.greenShare >= 0.15 ? "Gemischt" : "Versiegelt"; } // ≥30 % / 15–30 %, per SURVEY_PRIORITIZATION.md
+  function prioSeg(m) { return m.greenShare >= 0.30 ? "Grün-reich" : m.greenShare >= 0.15 ? "Gemischt" : "Versiegelt"; } // ≥30 % / 15–30 % green share of UF (descriptive segment label; see docs/PRIORITIZATION.md)
   function prioGate(p) {
     if (prio.federal && String(p["input_eigent.art"]) !== "1") return false;
     if (prio.sap && EXCLUDE_RULES.some(function (r) { return nameMatches(p, r); })) return false;
@@ -1897,10 +1907,15 @@
       img.src = url;
     });
   }
-  function reportSia(p) { return [
-    { label: "Gebäudegrundfläche (GGF)", area: num(p.sia416_ggf_m2) },
-    { label: "Bearbeitete Umgebung (BUF)", area: num(p.sia416_buf_m2) },
-    { label: "Unbearbeitete Umgebung (UUF)", area: num(p.sia416_uuf_m2) }
+  // VBS "naturnahe Flächen" for the report — the productive green split (Typ 1 / Typ 2)
+  // plus biologically unproductive. Typ1+Typ2+Unproduktiv == classified cover, so
+  // reportTable's "Ohne Bodenbedeckung" remainder makes the Total read 100 % of the GSF
+  // (same reconciliation as the on-screen VBS Produktiv & Typ pivot). Replaces the former
+  // SIA 416 table: for a naturnahe-VBS survey report the VBS split is the on-topic breakdown.
+  function reportVbs(p) { return [
+    { label: "Typ 1 · Grünflächen in Gebäudeumgebung", area: num(p.vbs_typ1_m2), color: "#8ED554" },
+    { label: "Typ 2 · Übrige Grünflächen", area: num(p.vbs_typ2_m2), color: "#62AF39" },
+    { label: "Biologisch unproduktiv", area: num(p.vbs_unproduktiv_m2), color: "#9AAAB3" }
   ]; }
   function reportLandcover(p) {
     // Full BBArt detail (not collapsed to the 6 Hauptgruppen): "Hauptgruppe · BBArt", coloured by main category.
@@ -1951,7 +1966,7 @@
   function landcoverFills(b, pid) { if (_lcIdx === null) _lcIdx = _overlayIndex(OVERLAYS && OVERLAYS.landcover, mainColor); return _forParcel(_lcIdx, b, pid); }
   function habitatFills(b, pid) { if (_hbIdx === null) _hbIdx = _overlayIndex(OVERLAYS && OVERLAYS.habitat, habColorArt); return _forParcel(_hbIdx, b, pid); }
   var REPORT_SECTIONS = [
-    { n: "1", title: "Lage & SIA 416", layers: "ch.swisstopo.swissimage", tbl: "SIA 416 (Umgebung)", rows: reportSia },
+    { n: "1", title: "Lage & VBS", layers: "ch.swisstopo.swissimage", tbl: "VBS - Naturnahe Flächen", rows: reportVbs },
     { n: "2", title: "Bodenbedeckung (AV)", layers: "ch.swisstopo.pixelkarte-grau", tbl: "Bodenbedeckung", rows: reportLandcover, fills: landcoverFills },
     { n: "3", title: "BAFU Lebensräume", layers: "ch.swisstopo.pixelkarte-grau", tbl: "Lebensräume (TypoCH)", rows: reportHabitat, fills: habitatFills }
   ];

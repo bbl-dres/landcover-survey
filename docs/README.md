@@ -12,6 +12,7 @@ official Amtliche Vermessung (AV) data.
 | **Understand the input/output columns** | **[DATAMODEL.md](DATAMODEL.md)** — inputs, outputs, modes |
 | **Understand how it works / extend it** | **[ARCHITECTURE.md](ARCHITECTURE.md)** — pipeline, implementation, limits |
 | **Understand the dashboard's data-quality checks** | **[CHECKING-RULES.md](CHECKING-RULES.md)** — Datenqualität rules, scope + tolerances |
+| **Understand the survey-prioritisation method / sampling** | **[PRIORITIZATION.md](PRIORITIZATION.md)** — Priorisierung algorithm, sliders, and its statistical (sampling) properties |
 | **Find other land cover / land use / habitat data sources** | **[RESEARCH-LANDCOVER.md](RESEARCH-LANDCOVER.md)** — screening reference (global → EU → DACH → CH); **[RESEARCH-NEAR-NATURAL.md](RESEARCH-NEAR-NATURAL.md)** for near-natural / VBS |
 
 > ★ Most people are here for the **AV layer mappings** — start with
