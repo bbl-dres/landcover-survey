@@ -395,6 +395,11 @@ table.sumtbl .sumbar > i { display: block; height: 100%; background: var(--bar-f
 /* Map widget (swisstopo polygons, MapLibre loaded on demand) */
 .map-panel { padding: 0; overflow: hidden; }
 #map { height: 560px; width: 100%; }
+/* The fixed height above is an ID selector, so it outranks MapLibre's own
+   .maplibregl-map:fullscreen rule — restore a full-viewport map explicitly.
+   Separate rules: one unknown selector would invalidate a combined list. */
+#map:fullscreen { height: 100%; }
+#map:-webkit-full-screen { height: 100%; }
 .map-msg { padding: 32px 24px; color: var(--gray-500); font-size: 14px; text-align: center; }
 .maplibregl-popup-content { font: inherit; font-size: 12px; line-height: 1.5; padding: 9px 12px; border-radius: var(--radius); }
 .maplibregl-ctrl-group button.map-home { display: flex; align-items: center; justify-content: center; color: var(--gray-700); }

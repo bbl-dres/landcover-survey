@@ -469,14 +469,43 @@
     BUF:    { label:"Bearbeitete Umgebung (BUF)", field:"sia416_buf_m2" },
     UUF:    { label:"Unbearbeitete Umgebung (UUF)", field:"sia416_uuf_m2" },
     Green:  { label:"Grünfläche", field:"greenspace_m2" },
-    Sealed: { label:"Versiegelte Fläche", field:"sealed_m2" },
-    VBSp:   { label:"VBS produktiv", field:"vbs_produktiv_m2" },
-    VBSu:   { label:"VBS unproduktiv", field:"vbs_unproduktiv_m2" }
+    Sealed: { label:"Versiegelte Fläche", field:"sealed_m2" }
   };
   var HAS_KEYS = Object.keys(HAS_METRICS);
   var hasCounts = {};
   HAS_KEYS.forEach(function (m) { hasCounts[m] = 0; });
-  PARCELS.forEach(function (p) { HAS_KEYS.forEach(function (m) { if (num(p[HAS_METRICS[m].field]) > 0) hasCounts[m]++; }); });
+
+  // VBS (arImmo) as two independent filter groups — Produktivität (layer 2) and, within
+  // the productive share, Typ (layer 3; typ1 + typ2 == produktiv). They get their own
+  // facets rather than joining `has`, because that facet ORs across all of its keys:
+  // "produktiv or Typ 1" is never a useful question, while two facets AND like every
+  // other group ("produktiv" AND "Typ 1") and still OR inside a group.
+  var VBS_GROUPS = {
+    vbsprod: {
+      keys: ["produktiv", "unproduktiv"], pill: "VBS", attr: "vp",
+      fields: { produktiv:"vbs_produktiv_m2", unproduktiv:"vbs_unproduktiv_m2" },
+      labels: { produktiv:"Biologisch produktiv", unproduktiv:"Biologisch unproduktiv" },
+      short:  { produktiv:"Biologisch produktiv", unproduktiv:"Biologisch unproduktiv" }
+    },
+    vbstyp: {
+      keys: ["typ1", "typ2"], pill: "VBS Typ", attr: "vt",
+      fields: { typ1:"vbs_typ1_m2", typ2:"vbs_typ2_m2" },
+      labels: { typ1:"Typ 1 · Grünflächen in Gebäudeumgebung", typ2:"Typ 2 · Übrige Grünflächen" },
+      short:  { typ1:"Typ 1", typ2:"Typ 2" }
+    }
+  };
+  var VBS_FACETS = Object.keys(VBS_GROUPS);
+  var vbsCounts = {}; // facet → key → number of parcels carrying that area
+  VBS_FACETS.forEach(function (f) { vbsCounts[f] = {}; VBS_GROUPS[f].keys.forEach(function (k) { vbsCounts[f][k] = 0; }); });
+  PARCELS.forEach(function (p) {
+    HAS_KEYS.forEach(function (m) { if (num(p[HAS_METRICS[m].field]) > 0) hasCounts[m]++; });
+    VBS_FACETS.forEach(function (f) {
+      VBS_GROUPS[f].keys.forEach(function (k) { if (num(p[VBS_GROUPS[f].fields[k]]) > 0) vbsCounts[f][k]++; });
+    });
+  });
+  // A legacy export without any vbs_* column would leave a dead filter behind — hide
+  // the whole group in that case (the current pipeline always writes these columns).
+  function vbsHasData(f) { return VBS_GROUPS[f].keys.some(function (k) { return vbsCounts[f][k] > 0; }); }
 
   function defaultEigentum() { return eigentumCounts["1"] ? { "1": true } : {}; }
   // Country defaults to Switzerland — hides the foreign representation parcels (Ausland).
@@ -490,7 +519,7 @@
   function defaultFilters() {
     // status defaults to {} (all) — not-found/invalid parcels stay visible so the
     // Datenqualität "gefunden / Geometrie / Fläche" rules actually surface them.
-    return { countries:defaultCountries(), cantons:{}, coverage:{}, arts:{}, has:{}, bauzonen:{}, tpf:{}, eigentum:defaultEigentum(), status:{}, exclude:defaultExclude() };
+    return { countries:defaultCountries(), cantons:{}, coverage:{}, arts:{}, has:{}, bauzonen:{}, vbsprod:{}, vbstyp:{}, tpf:{}, eigentum:defaultEigentum(), status:{}, exclude:defaultExclude() };
   }
   var filters = defaultFilters();
 
@@ -513,6 +542,10 @@
     if (bz.length && !bz.some(function (z) { return num(p["bauzonen_" + z + "_m2"]) > 0; })) return false;
     var hs = Object.keys(filters.has);
     if (hs.length && !hs.some(function (m) { return num(p[HAS_METRICS[m].field]) > 0; })) return false;
+    for (var vi = 0; vi < VBS_FACETS.length; vi++) {
+      var vf = VBS_FACETS[vi], vg = VBS_GROUPS[vf], vs = Object.keys(filters[vf]);
+      if (vs.length && !vs.some(function (k) { return num(p[vg.fields[k]]) > 0; })) return false;
+    }
     var es = Object.keys(filters.eigentum);
     if (es.length && !filters.eigentum[p["input_eigent.art"] || ""]) return false;
     var tp = Object.keys(filters.tpf);
@@ -528,6 +561,7 @@
     if (Object.keys(filters.arts).length) n++;
     if (Object.keys(filters.bauzonen).length) n++;
     if (Object.keys(filters.has).length) n++;
+    VBS_FACETS.forEach(function (f) { if (Object.keys(filters[f]).length) n++; });
     if (Object.keys(filters.tpf).length) n++;
     if (Object.keys(filters.eigentum).length) n++;
     if (Object.keys(filters.status).length) n++;
@@ -1160,6 +1194,11 @@
     Object.keys(filters.has).forEach(function (m) {
       pills.push({ label: "Enthält: " + HAS_METRICS[m].label, remove: function () { delete filters.has[m]; } });
     });
+    VBS_FACETS.forEach(function (f) {
+      Object.keys(filters[f]).forEach(function (k) {
+        pills.push({ label: VBS_GROUPS[f].pill + ": " + VBS_GROUPS[f].short[k], remove: function () { delete filters[f][k]; } });
+      });
+    });
     Object.keys(filters.tpf).forEach(function (t) {
       pills.push({ label: "Teilportfolio: " + tpfLabel(t), remove: function () { delete filters.tpf[t]; } });
     });
@@ -1188,14 +1227,16 @@
     syncDrawer(); commit();
   }
   function syncDrawer() {
-    renderExclude(); renderStatus(); renderCoverage(); renderCountries(); renderCantons(); renderArts(); renderBauzonen(); renderTpf(); renderEigentum();
+    renderExclude(); renderStatus(); renderCoverage(); renderCountries(); renderCantons(); renderArts(); renderBauzonen(); renderVbsProd(); renderVbsTyp(); renderTpf(); renderEigentum();
   }
 
   // ---- URL <-> filter state ----
   // Explicit model: every active filter is its own URL parameter; removing a
   // filter drops its parameter. A URL with no filter params means "no filters";
   // a completely empty URL (first visit) applies the defaults and stamps them in.
-  var URL_KEYS = ["q", "excl", "status", "eig", "cov", "land", "kanton", "art", "bauz", "has", "tpf"];
+  var URL_KEYS = ["q", "excl", "status", "eig", "cov", "land", "kanton", "art", "bauz", "has", "vbsp", "vbst", "tpf"];
+  var VBS_URL_KEY = { vbsprod: "vbsp", vbstyp: "vbst" };
+  var urlMigrated = false; // a legacy parameter was rewritten to its current spelling
   function writeURL() {
     var pr = new URLSearchParams();
     if (state.search.trim()) pr.set("q", state.search.trim());
@@ -1211,6 +1252,7 @@
     var art = Object.keys(filters.arts); if (art.length) pr.set("art", art.join(","));
     var bauz = Object.keys(filters.bauzonen); if (bauz.length) pr.set("bauz", bauz.join(","));
     var has = Object.keys(filters.has); if (has.length) pr.set("has", has.join(","));
+    VBS_FACETS.forEach(function (f) { var v = Object.keys(filters[f]); if (v.length) pr.set(VBS_URL_KEY[f], v.join(",")); });
     var tpf = Object.keys(filters.tpf); if (tpf.length) pr.set("tpf", tpf.join(","));
     var qs = pr.toString();
     try { history.replaceState(null, "", qs ? "?" + qs : location.pathname); } catch (e) { /* file:// may block */ }
@@ -1233,6 +1275,17 @@
     filters.arts = {}; (pr.get("art") || "").split(",").forEach(function (a) { if (a) filters.arts[a] = true; });
     filters.bauzonen = {}; (pr.get("bauz") || "").split(",").forEach(function (z) { if (z) filters.bauzonen[z] = true; });
     filters.has = {}; (pr.get("has") || "").split(",").forEach(function (m) { if (m && HAS_METRICS[m]) filters.has[m] = true; });
+    VBS_FACETS.forEach(function (f) {
+      filters[f] = {};
+      (pr.get(VBS_URL_KEY[f]) || "").split(",").forEach(function (k) { if (k && VBS_GROUPS[f].fields[k]) filters[f][k] = true; });
+    });
+    // Back-compat: VBS productivity used to be two keys of the `has` facet, reachable
+    // only by hand-writing the URL. Keep such links working by folding them in here,
+    // and flag it so boot stamps the current spelling back into the address bar.
+    (pr.get("has") || "").split(",").forEach(function (m) {
+      if (m === "VBSp") { filters.vbsprod.produktiv = true; urlMigrated = true; }
+      if (m === "VBSu") { filters.vbsprod.unproduktiv = true; urlMigrated = true; }
+    });
     filters.tpf = {}; (pr.get("tpf") || "").split(",").forEach(function (t) { if (t) filters.tpf[t] = true; });
     return false;
   }
@@ -1373,6 +1426,13 @@
   }
   function renderExclude() { capList("f-exclude", EXCLUDE_RULES.map(function (r) { return chk("x", r.key, r.label, excludeCounts[r.key], filters.exclude[r.key]); })); }
   function renderCoverage() { capList("f-coverage", COVERAGE_KEYS.map(function (k) { return chk("v", k, COVERAGE_LABELS[k], coverageCount(k), filters.coverage[k]); })); }
+  function renderVbs(f) {
+    var g = VBS_GROUPS[f], grp = document.getElementById("fg-" + f);
+    if (grp) grp.hidden = !vbsHasData(f);
+    capList("f-" + f, g.keys.map(function (k) { return chk(g.attr, k, g.labels[k], vbsCounts[f][k], filters[f][k]); }));
+  }
+  function renderVbsProd() { renderVbs("vbsprod"); }
+  function renderVbsTyp() { renderVbs("vbstyp"); }
   function renderCountries() { capList("f-countries", countryList.map(function (c) { return chk("l", c, countryLabel(c), countryCounts[c], filters.countries[c]); })); }
   function renderCantons() { capList("f-cantons", cantonList.map(function (c) { return chk("c", c, c, cantonCounts[c], filters.cantons[c]); })); }
   function renderArts() { capList("f-arts", artListAll.map(function (a) { return chk("a", a, ART_LABELS[a] || a, artParcelCount[a], filters.arts[a]); })); }
@@ -1380,7 +1440,7 @@
   function renderTpf() { capList("f-tpf", tpfList.map(function (t) { return chk("t", t, tpfLabel(t), tpfCounts[t], filters.tpf[t]); })); }
   function renderEigentum() { capList("f-eigentum", eigentumList.map(function (e) { return chk("e", e, eigentumLabel(e), eigentumCounts[e], filters.eigentum[e]); })); }
   function renderStatus() { capList("f-status", statusList.map(function (s) { return chk("s", s, STATUS_LABELS[s] || s, statusCounts[s], filters.status[s]); })); }
-  var _rerenderGroup = { "f-exclude": renderExclude, "f-coverage": renderCoverage, "f-countries": renderCountries, "f-cantons": renderCantons, "f-arts": renderArts, "f-bauzonen": renderBauzonen, "f-tpf": renderTpf, "f-eigentum": renderEigentum, "f-status": renderStatus };
+  var _rerenderGroup = { "f-exclude": renderExclude, "f-coverage": renderCoverage, "f-countries": renderCountries, "f-cantons": renderCantons, "f-arts": renderArts, "f-bauzonen": renderBauzonen, "f-vbsprod": renderVbsProd, "f-vbstyp": renderVbsTyp, "f-tpf": renderTpf, "f-eigentum": renderEigentum, "f-status": renderStatus };
   // Every fgroup-head carries the same "alle / keine" toggle (data-toggle="<facet>"):
   // one click fills the facet with all of its options, the next clears it. Note that
   // for value-based groups (Kanton, Land, Eigentumsart, Status) "alle" is not quite
@@ -1394,14 +1454,18 @@
     countries: { opts: countryList,     render: renderCountries },
     cantons:   { opts: cantonList,      render: renderCantons },
     arts:      { opts: artListAll,      render: renderArts },
-    bauzonen:  { opts: bauzoneListAll,  render: renderBauzonen }
+    bauzonen:  { opts: bauzoneListAll,  render: renderBauzonen },
+    vbsprod:   { opts: VBS_GROUPS.vbsprod.keys, render: renderVbsProd },
+    vbstyp:    { opts: VBS_GROUPS.vbstyp.keys,  render: renderVbsTyp }
   };
   document.getElementById("filter-panel").addEventListener("click", function (e) {
     var t = e.target.closest("[data-toggle]");
     if (t) {
       var facet = t.getAttribute("data-toggle"), g = GROUP_TOGGLES[facet];
       if (!g) return;
-      var all = Object.keys(filters[facet]).length >= g.opts.length;
+      // Toggle within the group's own options only, and read "alle" off them too —
+      // a stale key from a hand-edited URL then neither counts as selected nor survives.
+      var all = g.opts.every(function (k) { return filters[facet][k]; });
       filters[facet] = {};
       if (!all) g.opts.forEach(function (k) { filters[facet][k] = true; });
       g.render(); commit();
@@ -1422,6 +1486,8 @@
   bindChecklist("f-countries", "l", "countries");
   bindChecklist("f-cantons", "c", "cantons");
   bindChecklist("f-arts", "a", "arts");
+  bindChecklist("f-vbsprod", "vp", "vbsprod");
+  bindChecklist("f-vbstyp", "vt", "vbstyp");
   bindChecklist("f-bauzonen", "z", "bauzonen");
   bindChecklist("f-tpf", "t", "tpf");
   bindChecklist("f-eigentum", "e", "eigentum");
@@ -2710,6 +2776,10 @@
     map = new maplibregl.Map({ container: el, style: "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json", center: [8.23, 46.82], zoom: 6.4, preserveDrawingBuffer: true, cooperativeGestures: true });
     map.addControl(new maplibregl.NavigationControl({ showCompass: true }), "top-right"); // compass = north icon; click resets bearing to 0
     map.addControl(new HomeControl(), "top-right");
+    // Fullscreen over the map element itself, so the map controls, legend and popups
+    // (all children of the container) come along. #map has a fixed height, which would
+    // otherwise beat MapLibre's :fullscreen rule — css/styles.css overrides it back.
+    map.addControl(new maplibregl.FullscreenControl(), "top-right");
     map.addControl(new maplibregl.ScaleControl({ maxWidth: 120, unit: "metric" }), "bottom-left");
     map.on("load", function () {
       map.addSource("parcels", { type: "geojson", data: rowsToFC(lastRows) });
@@ -2783,7 +2853,7 @@
   var dt0 = document.getElementById("dash-title"); if (dt0 && window.DASHBOARD_TITLE) dt0.textContent = window.DASHBOARD_TITLE;
   var appliedDefaults = readURL();
   syncDrawer();
-  if (appliedDefaults) writeURL();   // first (empty) visit → stamp the active defaults into the URL
+  if (appliedDefaults || urlMigrated) writeURL();   // first (empty) visit → stamp the active defaults; legacy params → their current spelling
   update();
   ensureMap();
   } // ── end boot() ──
