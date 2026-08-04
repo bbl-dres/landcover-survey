@@ -90,43 +90,39 @@
     <div class="fp-body">
       <div id="pill-row" class="pill-row"></div>
       <div class="fgroup">
-        <div class="fgroup-head"><span class="ftitle">Ausschliessen (Bezeichnung)<span class="ftip" data-tip="Standardmässig ausgeschlossen. Häkchen entfernen, um die Grundstücke wieder einzublenden.">ⓘ</span></span></div>
+        <div class="fgroup-head"><span class="ftitle">Ausschliessen (Bezeichnung)<span class="ftip" data-tip="Standardmässig ausgeschlossen. Häkchen entfernen, um die Grundstücke wieder einzublenden.">ⓘ</span></span><button class="flink" data-toggle="exclude">alle / keine</button></div>
         <div class="checklist single" id="f-exclude"></div>
       </div>
       <div class="fgroup">
-        <div class="fgroup-head"><span class="ftitle">E-GRID-Status<span class="ftip" data-tip="Standardmässig nur Grundstücke mit gefundenem E-GRID. Ungültige/nicht gefundene haben keine Bodenbedeckungsdaten.">ⓘ</span></span></div>
+        <div class="fgroup-head"><span class="ftitle">E-GRID-Status<span class="ftip" data-tip="Standardmässig nur Grundstücke mit gefundenem E-GRID. Ungültige/nicht gefundene haben keine Bodenbedeckungsdaten.">ⓘ</span></span><button class="flink" data-toggle="status">alle / keine</button></div>
         <div class="checklist single" id="f-status"></div>
       </div>
       <div class="fgroup">
-        <div class="fgroup-head"><span class="ftitle">Bodenbedeckung</span></div>
-        <div class="radiolist" id="f-coverage">
-          <label><input type="radio" name="cov" value="all" checked> Alle</label>
-          <label><input type="radio" name="cov" value="with"> Nur mit Bodenbedeckung (<span id="cov-with"></span>)</label>
-          <label><input type="radio" name="cov" value="without"> Nur ohne Bodenbedeckung (<span id="cov-without"></span>)</label>
-        </div>
+        <div class="fgroup-head"><span class="ftitle">Bodenbedeckung<span class="ftip" data-tip="Keine oder beide Häkchen = alle Grundstücke.">ⓘ</span></span><button class="flink" data-toggle="coverage">alle / keine</button></div>
+        <div class="checklist single" id="f-coverage"></div>
       </div>
       <div class="fgroup">
-        <div class="fgroup-head"><span class="ftitle">Eigentumsart</span></div>
+        <div class="fgroup-head"><span class="ftitle">Eigentumsart</span><button class="flink" data-toggle="eigentum">alle / keine</button></div>
         <div class="checklist single" id="f-eigentum"></div>
       </div>
       <div class="fgroup">
-        <div class="fgroup-head"><span class="ftitle">Teilportfolio<span class="ftip" data-tip="Teilportfolio-Code aus SAP.">ⓘ</span></span><button class="flink" id="tpf-clear">zurücksetzen</button></div>
+        <div class="fgroup-head"><span class="ftitle">Teilportfolio<span class="ftip" data-tip="Teilportfolio-Code aus SAP.">ⓘ</span></span><button class="flink" data-toggle="tpf">alle / keine</button></div>
         <div class="checklist single" id="f-tpf"></div>
       </div>
       <div class="fgroup">
-        <div class="fgroup-head"><span class="ftitle">Land<span class="ftip" data-tip="Land des Grundstücks (ISO-Ländercode aus SAP). Standardmässig nur die Schweiz (CH); ausländische Objekte sind Vertretungen im Ausland.">ⓘ</span></span><button class="flink" id="country-toggle">alle / keine</button></div>
+        <div class="fgroup-head"><span class="ftitle">Land<span class="ftip" data-tip="Land des Grundstücks (ISO-Ländercode aus SAP). Standardmässig nur die Schweiz (CH); ausländische Objekte sind Vertretungen im Ausland.">ⓘ</span></span><button class="flink" data-toggle="countries">alle / keine</button></div>
         <div class="checklist single" id="f-countries"></div>
       </div>
       <div class="fgroup">
-        <div class="fgroup-head"><span class="ftitle">Region (Kanton)</span><button class="flink" id="cant-toggle">alle / keine</button></div>
+        <div class="fgroup-head"><span class="ftitle">Region (Kanton)</span><button class="flink" data-toggle="cantons">alle / keine</button></div>
         <div class="checklist single" id="f-cantons"></div>
       </div>
       <div class="fgroup">
-        <div class="fgroup-head"><span class="ftitle">Enthält Bodenbedeckungsart<span class="ftip" data-tip="Wählt Grundstücke, die diese Art enthalten. Die Auswertung zeigt weiterhin die gesamte Bodenbedeckung dieser Grundstücke.">ⓘ</span></span><button class="flink" id="art-clear">zurücksetzen</button></div>
+        <div class="fgroup-head"><span class="ftitle">Enthält Bodenbedeckungsart<span class="ftip" data-tip="Wählt Grundstücke, die diese Art enthalten. Die Auswertung zeigt weiterhin die gesamte Bodenbedeckung dieser Grundstücke.">ⓘ</span></span><button class="flink" data-toggle="arts">alle / keine</button></div>
         <div class="checklist single" id="f-arts"></div>
       </div>
       <div class="fgroup">
-        <div class="fgroup-head"><span class="ftitle">Enthält Bauzone<span class="ftip" data-tip="Wählt Grundstücke, die diese Bauzone (ARE-harmonisiert) enthalten. Die Auswertung zeigt weiterhin alle Zonen dieser Grundstücke.">ⓘ</span></span><button class="flink" id="bauz-clear">zurücksetzen</button></div>
+        <div class="fgroup-head"><span class="ftitle">Enthält Bauzone<span class="ftip" data-tip="Wählt Grundstücke, die diese Bauzone (ARE-harmonisiert) enthalten. Die Auswertung zeigt weiterhin alle Zonen dieser Grundstücke.">ⓘ</span></span><button class="flink" data-toggle="bauzonen">alle / keine</button></div>
         <div class="checklist single" id="f-bauzonen"></div>
       </div>
     </div>

@@ -481,10 +481,16 @@
   function defaultEigentum() { return eigentumCounts["1"] ? { "1": true } : {}; }
   // Country defaults to Switzerland — hides the foreign representation parcels (Ausland).
   function defaultCountries() { return countryCounts["CH"] ? { CH: true } : {}; }
+  // Bodenbedeckung is a two-option checklist like every other group (so its head
+  // carries the same "alle / keine" toggle): an empty selection — or both boxes,
+  // since every parcel is either covered or not — means "alle".
+  var COVERAGE_KEYS = ["with", "without"];
+  var COVERAGE_LABELS = { with: "Mit Bodenbedeckung", without: "Ohne Bodenbedeckung" };
+  function coverageCount(k) { return k === "with" ? covWith : covWithout; }
   function defaultFilters() {
     // status defaults to {} (all) — not-found/invalid parcels stay visible so the
     // Datenqualität "gefunden / Geometrie / Fläche" rules actually surface them.
-    return { countries:defaultCountries(), cantons:{}, coverage:"all", arts:{}, has:{}, bauzonen:{}, tpf:{}, eigentum:defaultEigentum(), status:{}, exclude:defaultExclude() };
+    return { countries:defaultCountries(), cantons:{}, coverage:{}, arts:{}, has:{}, bauzonen:{}, tpf:{}, eigentum:defaultEigentum(), status:{}, exclude:defaultExclude() };
   }
   var filters = defaultFilters();
 
@@ -499,8 +505,8 @@
     if (co.length && !filters.countries[p["input_l/r"] || ""]) return false;
     var cs = Object.keys(filters.cantons);
     if (cs.length && !filters.cantons[p.input_rg || ""]) return false;
-    if (filters.coverage === "with" && !isCovered(p)) return false;
-    if (filters.coverage === "without" && isCovered(p)) return false;
+    var cv = Object.keys(filters.coverage);
+    if (cv.length && !cv.some(function (k) { return k === "with" ? isCovered(p) : !isCovered(p); })) return false;
     var as = Object.keys(filters.arts);
     if (as.length && !as.some(function (a) { return num(p[artCol(a)]) > 0; })) return false;
     var bz = Object.keys(filters.bauzonen);
@@ -518,7 +524,7 @@
     if (EXCLUDE_RULES.some(function (r) { return filters.exclude[r.key] && excludeCounts[r.key] > 0; })) n++;
     if (Object.keys(filters.countries).length) n++;
     if (Object.keys(filters.cantons).length) n++;
-    if (filters.coverage !== "all") n++;
+    if (Object.keys(filters.coverage).length === 1) n++; // both boxes = alle = no constraint
     if (Object.keys(filters.arts).length) n++;
     if (Object.keys(filters.bauzonen).length) n++;
     if (Object.keys(filters.has).length) n++;
@@ -1140,8 +1146,11 @@
     Object.keys(filters.cantons).forEach(function (c) {
       pills.push({ label: "Kanton: " + c, remove: function () { delete filters.cantons[c]; } });
     });
-    if (filters.coverage === "with") pills.push({ label: "Nur mit Bodenbedeckung", remove: function () { filters.coverage = "all"; } });
-    if (filters.coverage === "without") pills.push({ label: "Nur ohne Bodenbedeckung", remove: function () { filters.coverage = "all"; } });
+    // Only a single-sided selection narrows anything — both boxes means "alle".
+    if (Object.keys(filters.coverage).length === 1) {
+      var covKey = Object.keys(filters.coverage)[0];
+      pills.push({ label: covKey === "with" ? "Nur mit Bodenbedeckung" : "Nur ohne Bodenbedeckung", remove: function () { filters.coverage = {}; } });
+    }
     Object.keys(filters.arts).forEach(function (a) {
       pills.push({ label: "Enthält: " + (ART_LABELS[a] || a), remove: function () { delete filters.arts[a]; } });
     });
@@ -1179,9 +1188,7 @@
     syncDrawer(); commit();
   }
   function syncDrawer() {
-    renderExclude(); renderStatus(); renderCountries(); renderCantons(); renderArts(); renderBauzonen(); renderTpf(); renderEigentum();
-    var cov = document.querySelector('#f-coverage input[value="' + filters.coverage + '"]');
-    if (cov) cov.checked = true;
+    renderExclude(); renderStatus(); renderCoverage(); renderCountries(); renderCantons(); renderArts(); renderBauzonen(); renderTpf(); renderEigentum();
   }
 
   // ---- URL <-> filter state ----
@@ -1196,7 +1203,9 @@
     if (excl.length) pr.set("excl", excl.join(","));
     var st = Object.keys(filters.status); if (st.length) pr.set("status", st.join(","));
     var eig = Object.keys(filters.eigentum); if (eig.length) pr.set("eig", eig.join(","));
-    if (filters.coverage !== "all") pr.set("cov", filters.coverage);
+    // `cov` stays single-valued (with|without): a complete or empty selection is
+    // "alle" and drops the parameter, so a shared URL never carries a no-op filter.
+    var cov = Object.keys(filters.coverage); if (cov.length === 1) pr.set("cov", cov[0]);
     var land = Object.keys(filters.countries); if (land.length) pr.set("land", land.join(","));
     var cant = Object.keys(filters.cantons); if (cant.length) pr.set("kanton", cant.join(","));
     var art = Object.keys(filters.arts); if (art.length) pr.set("art", art.join(","));
@@ -1218,7 +1227,7 @@
     filters.exclude = {}; (pr.get("excl") || "").split(",").forEach(function (k) { if (k && validExcl[k]) filters.exclude[k] = true; });
     filters.status = {}; (pr.get("status") || "").split(",").forEach(function (s) { if (s) filters.status[s] = true; });
     filters.eigentum = {}; (pr.get("eig") || "").split(",").forEach(function (e) { if (e) filters.eigentum[e] = true; });
-    var cov = pr.get("cov"); filters.coverage = (cov === "with" || cov === "without") ? cov : "all";
+    filters.coverage = {}; var cov = pr.get("cov"); if (cov === "with" || cov === "without") filters.coverage[cov] = true;
     filters.countries = {}; (pr.get("land") || "").split(",").forEach(function (c) { if (c) filters.countries[c] = true; });
     filters.cantons = {}; (pr.get("kanton") || "").split(",").forEach(function (c) { if (c) filters.cantons[c] = true; });
     filters.arts = {}; (pr.get("art") || "").split(",").forEach(function (a) { if (a) filters.arts[a] = true; });
@@ -1363,6 +1372,7 @@
     el.innerHTML = html;
   }
   function renderExclude() { capList("f-exclude", EXCLUDE_RULES.map(function (r) { return chk("x", r.key, r.label, excludeCounts[r.key], filters.exclude[r.key]); })); }
+  function renderCoverage() { capList("f-coverage", COVERAGE_KEYS.map(function (k) { return chk("v", k, COVERAGE_LABELS[k], coverageCount(k), filters.coverage[k]); })); }
   function renderCountries() { capList("f-countries", countryList.map(function (c) { return chk("l", c, countryLabel(c), countryCounts[c], filters.countries[c]); })); }
   function renderCantons() { capList("f-cantons", cantonList.map(function (c) { return chk("c", c, c, cantonCounts[c], filters.cantons[c]); })); }
   function renderArts() { capList("f-arts", artListAll.map(function (a) { return chk("a", a, ART_LABELS[a] || a, artParcelCount[a], filters.arts[a]); })); }
@@ -1370,11 +1380,33 @@
   function renderTpf() { capList("f-tpf", tpfList.map(function (t) { return chk("t", t, tpfLabel(t), tpfCounts[t], filters.tpf[t]); })); }
   function renderEigentum() { capList("f-eigentum", eigentumList.map(function (e) { return chk("e", e, eigentumLabel(e), eigentumCounts[e], filters.eigentum[e]); })); }
   function renderStatus() { capList("f-status", statusList.map(function (s) { return chk("s", s, STATUS_LABELS[s] || s, statusCounts[s], filters.status[s]); })); }
-  document.getElementById("cov-with").textContent = fmt(covWith);
-  document.getElementById("cov-without").textContent = fmt(covWithout);
-
-  var _rerenderGroup = { "f-exclude": renderExclude, "f-countries": renderCountries, "f-cantons": renderCantons, "f-arts": renderArts, "f-bauzonen": renderBauzonen, "f-tpf": renderTpf, "f-eigentum": renderEigentum, "f-status": renderStatus };
+  var _rerenderGroup = { "f-exclude": renderExclude, "f-coverage": renderCoverage, "f-countries": renderCountries, "f-cantons": renderCantons, "f-arts": renderArts, "f-bauzonen": renderBauzonen, "f-tpf": renderTpf, "f-eigentum": renderEigentum, "f-status": renderStatus };
+  // Every fgroup-head carries the same "alle / keine" toggle (data-toggle="<facet>"):
+  // one click fills the facet with all of its options, the next clears it. Note that
+  // for value-based groups (Kanton, Land, Eigentumsart, Status) "alle" is not quite
+  // "no filter" — it hides parcels whose value is empty, since "" is never an option.
+  var GROUP_TOGGLES = {
+    exclude:   { opts: EXCLUDE_RULES.map(function (r) { return r.key; }), render: renderExclude },
+    status:    { opts: statusList,      render: renderStatus },
+    coverage:  { opts: COVERAGE_KEYS,   render: renderCoverage },
+    eigentum:  { opts: eigentumList,    render: renderEigentum },
+    tpf:       { opts: tpfList,         render: renderTpf },
+    countries: { opts: countryList,     render: renderCountries },
+    cantons:   { opts: cantonList,      render: renderCantons },
+    arts:      { opts: artListAll,      render: renderArts },
+    bauzonen:  { opts: bauzoneListAll,  render: renderBauzonen }
+  };
   document.getElementById("filter-panel").addEventListener("click", function (e) {
+    var t = e.target.closest("[data-toggle]");
+    if (t) {
+      var facet = t.getAttribute("data-toggle"), g = GROUP_TOGGLES[facet];
+      if (!g) return;
+      var all = Object.keys(filters[facet]).length >= g.opts.length;
+      filters[facet] = {};
+      if (!all) g.opts.forEach(function (k) { filters[facet][k] = true; });
+      g.render(); commit();
+      return;
+    }
     var b = e.target.closest(".show-all"); if (!b) return;
     var id = b.getAttribute("data-fl"); fExpanded[id] = !fExpanded[id];
     if (_rerenderGroup[id]) _rerenderGroup[id]();
@@ -1394,20 +1426,7 @@
   bindChecklist("f-tpf", "t", "tpf");
   bindChecklist("f-eigentum", "e", "eigentum");
   bindChecklist("f-status", "s", "status");
-  document.getElementById("f-coverage").addEventListener("change", function (e) { filters.coverage = e.target.value; commit(); });
-  document.getElementById("country-toggle").addEventListener("click", function () {
-    if (Object.keys(filters.countries).length < countryList.length) countryList.forEach(function (c) { filters.countries[c] = true; });
-    else filters.countries = {};
-    renderCountries(); commit();
-  });
-  document.getElementById("cant-toggle").addEventListener("click", function () {
-    if (Object.keys(filters.cantons).length < cantonList.length) cantonList.forEach(function (c) { filters.cantons[c] = true; });
-    else filters.cantons = {};
-    renderCantons(); commit();
-  });
-  document.getElementById("art-clear").addEventListener("click", function () { filters.arts = {}; renderArts(); commit(); });
-  document.getElementById("bauz-clear").addEventListener("click", function () { filters.bauzonen = {}; renderBauzonen(); commit(); });
-  document.getElementById("tpf-clear").addEventListener("click", function () { filters.tpf = {}; renderTpf(); commit(); });
+  bindChecklist("f-coverage", "v", "coverage");
   var frBtn = document.getElementById("f-reset"); if (frBtn) frBtn.addEventListener("click", resetAll);
 
   // ---- Tabs ----

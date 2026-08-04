@@ -37,7 +37,10 @@ renders offline.
   vorhanden, Enthält Bodenbedeckungsart, Eigentumsart, and an **Ausschliessen
   (Bezeichnung)** group. Filtering is live and recomputes the **whole dashboard**
   (KPIs, charts and table). A badge on the button and a "gefiltert" flag show when
-  any filter is active.
+  any filter is active. Every group is a checklist with the same **alle / keine**
+  toggle in its header (`data-toggle="<facet>"` → one delegated handler, see
+  `GROUP_TOGGLES` in `js/dashboard.js`): one click selects every option, the next
+  clears the group.
 - **Active-filter pills** — a row under the header lists every active filter as a
   pill with an ✕ to remove it, ending in an "Alle Filter zurücksetzen" link.
 - **Click-to-filter** — clicking a bar in **any** of the three charts adds an
@@ -67,7 +70,11 @@ filters already active (an empty URL = this state, stamped into the URL):
   invalid / not-found parcels have no land-cover data)
 - **Eigentumsart 1** (`eig=…` for other codes)
 
-Bodenbedeckung defaults to **Alle** (`cov=with` / `cov=without` to restrict).
+Bodenbedeckung defaults to **Alle** — it is a two-box checklist (Mit / Ohne
+Bodenbedeckung), where an empty *or* complete selection means "alle" and only a
+one-sided selection restricts. So `cov` stays single-valued (`cov=with` /
+`cov=without`) and drops out of the URL as soon as the group no longer narrows
+anything.
 
 ### Default exclusions
 
