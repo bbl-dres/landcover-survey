@@ -34,13 +34,23 @@ renders offline.
 - **Charts** (CSS bars, no library) — Bodenbedeckung nach Art (top 10 + Übrige),
   SIA 416 (GGF/BUF/UUF), and Grünfläche · Versiegelung · VBS.
 - **Filter** (button in the header → right drawer) — Kanton, Bodenbedeckung
-  vorhanden, Enthält Bodenbedeckungsart, Eigentumsart, and an **Ausschliessen
+  vorhanden, Enthält Bodenbedeckungsart, Eigentumsart, **VBS Produktivität**,
+  **VBS Typ**, and an **Ausschliessen
   (Bezeichnung)** group. Filtering is live and recomputes the **whole dashboard**
   (KPIs, charts and table). A badge on the button and a "gefiltert" flag show when
   any filter is active. Every group is a checklist with the same **alle / keine**
   toggle in its header (`data-toggle="<facet>"` → one delegated handler, see
   `GROUP_TOGGLES` in `js/dashboard.js`): one click selects every option, the next
   clears the group.
+- **VBS filters** — two independent groups off the arImmo classification:
+  **VBS Produktivität** (biologisch produktiv / unproduktiv, from
+  `vbs_produktiv_m2` / `vbs_unproduktiv_m2`) and **VBS Typ** (Typ 1 Grünflächen in
+  Gebäudeumgebung / Typ 2 übrige Grünflächen, from `vbs_typ1_m2` / `vbs_typ2_m2`,
+  which partition the productive share). Like *Enthält*, each selects Grundstücke
+  that **contain** such area. Options inside one group OR, the two groups AND
+  (`vbsp=produktiv&vbst=typ1` = productive parcels that have Typ 1). A legacy
+  `has=VBSp` / `has=VBSu` link still resolves, and is rewritten to `vbsp=…` on load.
+  Both groups hide themselves if the export carries no `vbs_*` columns.
 - **Active-filter pills** — a row under the header lists every active filter as a
   pill with an ✕ to remove it, ending in an "Alle Filter zurücksetzen" link.
 - **Click-to-filter** — clicking a bar in **any** of the three charts adds an
@@ -52,9 +62,12 @@ renders offline.
   cadastre on the colour basemap), centred on that parcel via `swisssearch`.
 - **Explicit shareable URLs** — every active filter is its own query parameter, so
   removing a filter drops its parameter:
-  `?excl=ABGA,LÖVM,PP&status=found&eig=1&cov=with&kanton=GR&art=…&has=…&q=…`.
+  `?excl=ABGA,LÖVM,PP&status=found&eig=1&cov=with&kanton=GR&art=…&vbsp=…&vbst=…&has=…&q=…`.
   A completely empty URL (first visit) applies the defaults and stamps them in;
   any URL with parameters is taken literally (no hidden defaults).
+- **Map controls** (top right) — zoom, compass (click = north up), **auf Auswahl
+  zoomen** (home), and **Vollbild**. Fullscreen expands the map element itself, so
+  the layer control, legend and popups come with it.
 - **Table** — all parcels with search, sortable columns (↕ on hover), a column
   picker, a **Total** row summing the filtered set, and pagination.
 - **Print / PDF** — Ctrl-P hides the controls, expands to all filtered rows, and

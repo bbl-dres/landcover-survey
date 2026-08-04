@@ -1029,7 +1029,11 @@
     { key:"greenspace_m2", label:"Grünfläche m²", num:true, def:true, tip:"Grünfläche (humusiert + bestockt)." },
     { key:"sealed_m2", label:"Versiegelt m²", num:true, def:true, tip:"Versiegelte Fläche (Gebäude + befestigt)." },
     { key:"vbs_produktiv_m2", label:"VBS produktiv m²", num:true, def:false, tip:"Biologisch produktive Fläche (VBS-Klassifizierung)." },
-    { key:"vbs_unproduktiv_m2", label:"VBS unproduktiv m²", num:true, def:false, tip:"Biologisch unproduktive Fläche (VBS-Klassifizierung)." }
+    { key:"vbs_unproduktiv_m2", label:"VBS unproduktiv m²", num:true, def:false, tip:"Biologisch unproduktive Fläche (VBS-Klassifizierung)." },
+    // Typ 1 + Typ 2 partition the productive share — selectable so the VBS-Typ filter's
+    // dimension can also be read off the table (both default-hidden, like the two above).
+    { key:"vbs_typ1_m2", label:"VBS Typ 1 m²", num:true, def:false, tip:"Typ 1 · Grünflächen in Gebäudeumgebung (Teil der biologisch produktiven Fläche)." },
+    { key:"vbs_typ2_m2", label:"VBS Typ 2 m²", num:true, def:false, tip:"Typ 2 · Übrige Grünflächen (Teil der biologisch produktiven Fläche)." }
   ];
   var colByKey = {};
   COLUMNS.forEach(function (c) { colByKey[c.key] = c; c.visible = c.def; });
