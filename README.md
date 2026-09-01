@@ -5,15 +5,15 @@
 [![Demo](https://img.shields.io/badge/demo-GitHub%20Pages-2ea44f?logo=github&logoColor=white)](https://bbl-dres.github.io/landcover-survey/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Tools for calculating land-cover area per Swiss cadastral parcel from official
-survey data (Amtliche Vermessung), with browser, command-line, and specialist
-workflow implementations.
-
 > [!CAUTION]
 > **Alpha software for research and demonstration, not production use.** The web
 > app depends on external services with known coverage and response limits; validate
 > results before use. The local Python workflow can use a full GeoPackage. See the
 > [user guide](docs/MANUAL.md) and [current CLI limitations](python/TODO.md).
+
+Tools for calculating land-cover area per Swiss cadastral parcel from official
+survey data (Amtliche Vermessung), with browser, command-line, and specialist
+workflow implementations.
 
 ## Demo
 
