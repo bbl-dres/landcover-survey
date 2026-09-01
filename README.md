@@ -19,12 +19,10 @@ workflow implementations.
 
 **Live web app:** https://bbl-dres.github.io/landcover-survey/
 
-<table border="0" cellpadding="0" cellspacing="0" role="presentation" width="100%">
-  <tr>
-    <td width="50%" valign="top"><img src="assets/images/preview-5.jpg" alt="Land Cover Survey parcel analysis with map, summary, and results table" width="100%"/></td>
-    <td width="50%" valign="top"><img src="assets/images/preview-6.jpg" alt="Land Cover Survey map with classified land-cover areas on a parcel" width="100%"/></td>
-  </tr>
-</table>
+<p align="center">
+  <img src="assets/images/preview-5.jpg" alt="Land Cover Survey parcel analysis with map, summary, and results table" width="49%"/>
+  <img src="assets/images/preview-6.jpg" alt="Land Cover Survey map with classified land-cover areas on a parcel" width="49%"/>
+</p>
 
 The repository root opens the browser implementation.
 
