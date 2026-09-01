@@ -1,6 +1,9 @@
 # Land Cover Survey
 
-[![Land Cover Survey preview — open the live app](assets/Social1.jpg)](https://bbl-dres.github.io/landcover-survey/)
+[![Land Cover Survey preview — open the live app](assets/social-preview.jpg)](https://bbl-dres.github.io/landcover-survey/)
+
+[![Demo](https://img.shields.io/badge/demo-GitHub%20Pages-2ea44f?logo=github&logoColor=white)](https://bbl-dres.github.io/landcover-survey/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Tools for calculating land-cover area per Swiss cadastral parcel from official
 survey data (Amtliche Vermessung), with browser, command-line, and specialist
@@ -15,6 +18,13 @@ workflow implementations.
 ## Demo
 
 **Live web app:** https://bbl-dres.github.io/landcover-survey/
+
+<table border="0" cellpadding="0" cellspacing="0" role="presentation" width="100%">
+  <tr>
+    <td width="50%" valign="top"><img src="assets/images/preview-5.jpg" alt="Land Cover Survey parcel analysis with map, summary, and results table" width="100%"/></td>
+    <td width="50%" valign="top"><img src="assets/images/preview-6.jpg" alt="Land Cover Survey map with classified land-cover areas on a parcel" width="100%"/></td>
+  </tr>
+</table>
 
 The repository root opens the browser implementation.
 
