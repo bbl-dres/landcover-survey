@@ -28,7 +28,7 @@ a { transition: color var(--transition-fast); }
 }
 .header-left { display: flex; align-items: center; gap: var(--space-3); cursor: pointer; transition: opacity var(--duration-fast); flex-shrink: 0; }
 .header-left:hover { opacity: 0.7; }
-.header-flag { flex-shrink: 0; }
+.header-logo { flex-shrink: 0; }
 .header-title { display: flex; flex-direction: column; gap: var(--space-px); }
 .header-agency { font-size: var(--text-2xs); color: var(--gray-500); font-weight: var(--font-medium); letter-spacing: 0.02em; }
 .header-app { font-size: var(--text-sm); font-weight: var(--font-bold); color: var(--gray-900); line-height: var(--leading-none); }
@@ -1226,9 +1226,9 @@ main { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: 
   #header { padding: 0 var(--space-3); gap: var(--space-2); }
   .header-agency { display: none; }
   .header-app { font-size: var(--text-xs); }
-  .header-flag { width: 16px; height: 18px; }
+  .header-logo { width: 16px; height: 18px; }
   /* The header search only appears in the results view; when it does, drop the
-     app title so the search bar gets the width (the flag still brands + homes). */
+     app title so the search bar gets the width (the logo still brands + homes). */
   #header:has(#search-wrapper:not([hidden])) .header-app { display: none; }
 
   /* Search full width */
