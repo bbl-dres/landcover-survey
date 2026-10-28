@@ -90,6 +90,13 @@
     // so the HTML parser can't terminate the inlined module early — backslash-escaped, it stays
     // identical JS (\/ === /) but is no longer a tag the parser recognises.
     while ((m = sre.exec(html))) add(m[0], m[1], function (js) { return "<script>\n" + js.replace(/<(\/script)/gi, function (_m, t) { return "<" + String.fromCharCode(92) + t; }) + "\n<\/script>"; });
+    // Local images (the basemap thumbnails) → data URIs, so the saved file needs no assets/ folder.
+    var ire = /<img\b[^>]*src=["'](?!https?:|data:)([^"']+)["'][^>]*>/g;
+    while ((m = ire.exec(html))) (function (tag, url) {
+      jobs.push(fetch(url).then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status + " für " + url); return r.blob(); }).then(function (b) {
+        return new Promise(function (res, rej) { var fr = new FileReader(); fr.onload = function () { res([tag, tag.replace(url, fr.result)]); }; fr.onerror = function () { rej(new Error("Bild konnte nicht gelesen werden: " + url)); }; fr.readAsDataURL(b); });
+      }));
+    })(m[0], m[1]);
     return Promise.all(jobs).then(function (pairs) {
       pairs.forEach(function (pr) { html = html.replace(pr[0], function () { return pr[1]; }); });
       return html;
@@ -368,12 +375,47 @@
   function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[c]; }); }
   function isCovered(p) { return num(p.sia416_ggf_m2) + num(p.sia416_buf_m2) + num(p.sia416_uuf_m2) > 0; }
 
+  // ---- Icons: Lucide (ISC), 24 grid, stroke 2, round caps — inlined so the offline file needs no font/CDN ----
+  var ICON = (function () {
+    var P = {
+      search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+      x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+      chevRight: '<path d="m9 18 6-6-6-6"/>', chevLeft: '<path d="m15 18-6-6 6-6"/>', chevDown: '<path d="m6 9 6 6 6-6"/>', chevUp: '<path d="m18 15-6-6-6 6"/>',
+      info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>',
+      plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
+      extlink: '<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
+      house: '<path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+      zoomIn: '<circle cx="11" cy="11" r="8"/><line x1="21" x2="16.65" y1="21" y2="16.65"/><line x1="11" x2="11" y1="8" y2="14"/><line x1="8" x2="14" y1="11" y2="11"/>',
+      funnel: '<path d="M10 20a1 1 0 0 0 .553.895l2 1A1 1 0 0 0 14 21v-7a2 2 0 0 1 .517-1.341L21.74 4.67A1 1 0 0 0 21 3H3a1 1 0 0 0-.742 1.67l7.225 7.989A2 2 0 0 1 10 14z"/>',
+      fileText: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/>',
+      check: '<path d="M20 6 9 17l-5-5"/>',
+      alert: '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/>'
+    };
+    var o = {}, k;
+    function svg(name, size) { return '<svg viewBox="0 0 24 24" width="' + size + '" height="' + size + '" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + P[name] + "</svg>"; }
+    for (k in P) o[k] = svg(k, 16);
+    o.sz = svg; // ICON.sz("info", 18) for other sizes
+    return o;
+  })();
+  // ---- Counting rule: a parcel counts in a VBS category when it covers ≥ 10 % of the parcel area ----
+  var VBS_THRESHOLD = 0.10;
+  function vbsShare(p, field) { var a = num(p.parcel_area_m2); return a > 0 ? num(p[field]) / a : 0; }
+  function vbsHas(p, field) { var s = vbsShare(p, field); return s > 0 && s >= VBS_THRESHOLD; }
+  var SEL_MAX = 50; // parcels per PDF report (selection cap)
+  // ---- Green inventory (Grünflächeninventar der Bundesgärtnerei): optional join column `greeninv`
+  // (yes / no, written by the web app or the CLI), shown as filter, table column and links into
+  // the inventory app, which reads center + zoom from its URL. ----
+  var GREEN_INVENTORY_APP = "https://bbl-dres.github.io/green-inventory/prototype-main/";
+  var GREENINV_KEYS = ["yes", "no"], GREENINV_LABELS = { yes: "Erfasst", no: "Nicht erfasst" };
+  function greeninvLabel(v) { return GREENINV_LABELS[v] || "—"; }
+
 
   function boot(PARCELS, OVERLAYS) {
     OVERLAYS = OVERLAYS || {};
   // ---- Precompute filter option counts (over the full dataset) ----
   var cantonCounts = {}, countryCounts = {}, eigentumCounts = {}, artTotal = {}, artParcelCount = {}, covWith = 0, covWithout = 0;
   var excludeCounts = {}, statusCounts = {}, tpfCounts = {}, bauzoneTotal = {}, bauzoneParcelCount = {}, habitatTotal = {}, habitatParcelCount = {};
+  var greeninvCounts = { yes: 0, no: 0 }, hasGreeninv = false; // the export carries the opt-in join column
   var BAUZONE_RE = /^bauzonen_(.+)_m2$/; // bauzonen_<slug>_m2 (the bauzonen_m2 total does not match)
   // Display label per zone slug (ARE harmonised Hauptnutzung) — mirrors web/js/config.js.
   var BAUZONE_LABELS = {
@@ -428,6 +470,7 @@
     var tp = (p.input_tpf == null || p.input_tpf === "") ? "—" : String(p.input_tpf); tpfCounts[tp] = (tpfCounts[tp] || 0) + 1;
     var st = statusKey(p); statusCounts[st] = (statusCounts[st] || 0) + 1;
     if (isCovered(p)) covWith++; else covWithout++;
+    if (p.greeninv === "yes" || p.greeninv === "no") { greeninvCounts[p.greeninv]++; hasGreeninv = true; }
     EXCLUDE_RULES.forEach(function (r) { if (nameMatches(p, r)) excludeCounts[r.key]++; });
     ART_KEYS.forEach(function (a) {
       var v = num(p[artCol(a)]);
@@ -500,7 +543,7 @@
   PARCELS.forEach(function (p) {
     HAS_KEYS.forEach(function (m) { if (num(p[HAS_METRICS[m].field]) > 0) hasCounts[m]++; });
     VBS_FACETS.forEach(function (f) {
-      VBS_GROUPS[f].keys.forEach(function (k) { if (num(p[VBS_GROUPS[f].fields[k]]) > 0) vbsCounts[f][k]++; });
+      VBS_GROUPS[f].keys.forEach(function (k) { if (vbsHas(p, VBS_GROUPS[f].fields[k])) vbsCounts[f][k]++; });
     });
   });
   // A legacy export without any vbs_* column would leave a dead filter behind — hide
@@ -519,7 +562,7 @@
   function defaultFilters() {
     // status defaults to {} (all) — not-found/invalid parcels stay visible so the
     // Datenqualität "gefunden / Geometrie / Fläche" rules actually surface them.
-    return { countries:defaultCountries(), cantons:{}, coverage:{}, arts:{}, has:{}, bauzonen:{}, vbsprod:{}, vbstyp:{}, tpf:{}, eigentum:defaultEigentum(), status:{}, exclude:defaultExclude() };
+    return { countries:defaultCountries(), cantons:{}, coverage:{}, arts:{}, has:{}, bauzonen:{}, vbsprod:{}, vbstyp:{}, tpf:{}, eigentum:defaultEigentum(), status:{}, exclude:defaultExclude(), greeninv:{} };
   }
   var filters = defaultFilters();
 
@@ -544,8 +587,10 @@
     if (hs.length && !hs.some(function (m) { return num(p[HAS_METRICS[m].field]) > 0; })) return false;
     for (var vi = 0; vi < VBS_FACETS.length; vi++) {
       var vf = VBS_FACETS[vi], vg = VBS_GROUPS[vf], vs = Object.keys(filters[vf]);
-      if (vs.length && !vs.some(function (k) { return num(p[vg.fields[k]]) > 0; })) return false;
+      if (vs.length && !vs.some(function (k) { return vbsHas(p, vg.fields[k]); })) return false;
     }
+    var gi = Object.keys(filters.greeninv);
+    if (gi.length && !filters.greeninv[p.greeninv || ""]) return false;
     var es = Object.keys(filters.eigentum);
     if (es.length && !filters.eigentum[p["input_eigent.art"] || ""]) return false;
     var tp = Object.keys(filters.tpf);
@@ -565,14 +610,20 @@
     if (Object.keys(filters.tpf).length) n++;
     if (Object.keys(filters.eigentum).length) n++;
     if (Object.keys(filters.status).length) n++;
+    if (Object.keys(filters.greeninv).length) n++;
     return n;
   }
 
   // ---- Table state & search ----
   var SEARCH_KEYS = ["id", "egrid", "nummer", "input_ort", "input_rg", "input_bez. grundstück"];
   var state = { sort:"parcel_area_m2", dir:-1, search:"", page:1, pageSize:25, rows:PARCELS.slice() };
-  var selectedParcelId = null; // parcel highlighted on the map / selected in the table
+  var selectedParcelId = null; // parcel highlighted on the map / focused in the table
   var printing = false;
+  // PDF-report selection: session state (not in the URL), at most SEL_MAX parcels.
+  var sel = {};
+  function selIds() { return Object.keys(sel); }
+  function selCount() { return selIds().length; }
+  function selRows() { return selIds().map(parcelById).filter(function (p) { return !!p; }); }
 
   function getFiltered() {
     var q = state.search.trim().toLowerCase();
@@ -586,7 +637,7 @@
   // ---- Aggregation over a dataset ----
   function aggregate(rows) {
     var t = { parcelArea:0, GGF:0, BUF:0, UUF:0, Sealed:0, Green:0, VBSp:0, VBSu:0, VBSa:0, VBSb:0, VBSc:0, VBSd:0, VBSt1:0, VBSt2:0 }, byArt = {}, byBauzone = {}, byHabitat = {}, withData = 0;
-    var wfsIssues = 0, geomIssues = 0;
+    var wfsIssues = 0, geomIssues = 0, nT1 = 0, nT2 = 0, nU = 0, nP = 0; // parcel counts by the 10 % rule
     rows.forEach(function (p) {
       t.parcelArea += num(p.parcel_area_m2);
       t.GGF += num(p.sia416_ggf_m2); t.BUF += num(p.sia416_buf_m2); t.UUF += num(p.sia416_uuf_m2);
@@ -595,6 +646,8 @@
       t.VBSt1 += num(p.vbs_typ1_m2); t.VBSt2 += num(p.vbs_typ2_m2); // VBS Typ (within produktiv): typ1+typ2 == produktiv
       t.VBSa += num(p.vbs_kat_a_m2); t.VBSb += num(p.vbs_kat_b_m2); t.VBSc += num(p.vbs_kat_c_m2); t.VBSd += num(p.vbs_kat_d_m2);
       if (isCovered(p)) withData++;
+      var h1 = vbsHas(p, "vbs_typ1_m2"), h2 = vbsHas(p, "vbs_typ2_m2");
+      if (h1) nT1++; if (h2) nT2++; if (h1 || h2) nP++; if (vbsHas(p, "vbs_unproduktiv_m2")) nU++;
       if (p.check_wfs && p.check_wfs !== "ok") wfsIssues++;
       if (p.check_geom && p.check_geom !== "ok") geomIssues++;
       for (var ai = 0; ai < ART_KEYS.length; ai++) { var av = num(p[artCols[ai]]); if (av) byArt[ART_KEYS[ai]] = (byArt[ART_KEYS[ai]] || 0) + av; }
@@ -602,7 +655,7 @@
       for (var hi = 0; hi < habitatListAll.length; hi++) { var hv2 = num(p[hbCols[hi]]); if (hv2) byHabitat[habitatListAll[hi]] = (byHabitat[habitatListAll[hi]] || 0) + hv2; }
     });
     return { len:rows.length, withData:withData, totals:t, byArt:byArt, byBauzone:byBauzone, byHabitat:byHabitat, classified:t.GGF + t.BUF + t.UUF,
-             wfsIssues:wfsIssues, geomIssues:geomIssues };
+             wfsIssues:wfsIssues, geomIssues:geomIssues, nT1:nT1, nT2:nT2, nU:nU, nP:nP };
   }
 
   // ---- Summary-table renderer (sortable; inline proportion bar per row) ----
@@ -614,8 +667,9 @@
   _valSort["tbl-habitat"] = { by: "name", dir: 1 };
   // The VBS Produktiv & Typ pivot starts expanded so Typ 1 / Typ 2 are visible without a click.
   _treeOpen["tbl-vbsprod"] = { produktiv: true };
-  function renderValTable(elId, items, total, fmtVal, showTotal, valHeader, anteilHint) {
-    _valCtx[elId] = { items: items, total: total, fmtVal: fmtVal, showTotal: showTotal, valHeader: valHeader, anteilHint: anteilHint };
+  // opts.showN adds a "Grundstücke" count column (items carry `n`; the Total row shows opts.nTotal).
+  function renderValTable(elId, items, total, fmtVal, showTotal, valHeader, anteilHint, opts) {
+    _valCtx[elId] = { items: items, total: total, fmtVal: fmtVal, showTotal: showTotal, valHeader: valHeader, anteilHint: anteilHint, showN: !!(opts && opts.showN), nTotal: opts ? opts.nTotal : null };
     _paintValTable(elId);
   }
   // Renders a flat summary table, or — when any item carries `children` — a two-level pivot
@@ -645,11 +699,12 @@
       var anteil = total ? pctLabel(it.value, total) : "";
       var cls = ((it.muted ? "muted-row " : "") + (it.key ? "clickable " : "") + (it.selected ? "selected " : "")
                + (kind === "child" ? "tree-child " : "") + (kind === "open" || kind === "closed" ? "tree-parent " : "")).trim();
-      var attr = it.key ? ' data-key="' + esc(it.key) + '" tabindex="0" role="button" data-tip="' + esc(it.name + " — anklicken zum Filtern") + '"'
+      var attr = it.key ? ' data-key="' + esc(it.key) + '" tabindex="0" role="button" data-tip="' + esc(it.name + ": anklicken zum Filtern") + '"'
                : (groupKey != null ? ' data-tree-group="' + esc(groupKey) + '" tabindex="0" role="button"' : "");
+      var nCell = ctx.showN ? '<td class="num cnt">' + (it.n != null ? fmt(it.n) : "") + '</td>' : "";
       return '<tr class="' + cls + '"' + attr + '><td><span class="cat-cell">' + chev + sw + esc(it.name) + '</span></td>' +
              '<td class="bar-col">' + bar + '</td>' +
-             '<td class="num">' + fmtVal(it.value) + '</td><td class="num">' + anteil + '</td></tr>';
+             '<td class="num">' + fmtVal(it.value) + '</td><td class="num">' + anteil + '</td>' + nCell + '</tr>';
     }
     var body = "";
     main.forEach(function (g) {
@@ -662,15 +717,16 @@
       }
     });
     tail.forEach(function (it) { body += row(it, "muted"); });
-    var totalRow = ctx.showTotal ? '<tr class="total"><td>Total</td><td class="bar-col"></td><td class="num">' + fmtVal(sum) + '</td><td class="num">' + (total ? pct(sum, total) + " %" : "") + '</td></tr>' : "";
-    var hint = ctx.anteilHint ? ' <span class="ftip" tabindex="0" role="img" aria-label="' + esc(ctx.anteilHint) + '" data-tip="' + esc(ctx.anteilHint) + '">ⓘ</span>' : "";
+    var totalRow = ctx.showTotal ? '<tr class="total"><td>Total</td><td class="bar-col"></td><td class="num">' + fmtVal(sum) + '</td><td class="num">' + (total ? pct(sum, total) + " %" : "") + '</td>' +
+      (ctx.showN ? '<td class="num cnt">' + (ctx.nTotal != null ? fmt(ctx.nTotal) : "") + '</td>' : "") + '</tr>' : "";
+    var hint = ctx.anteilHint ? ' <span class="ftip" tabindex="0" role="img" aria-label="' + esc(ctx.anteilHint) + '" data-tip="' + esc(ctx.anteilHint) + '"></span>' : "";
     function th(by, numCls, label) {
-      var on = s && s.by === by, arr = on ? ' <span class="arrow">' + (s.dir < 0 ? "▼" : "▲") + "</span>" : "";
+      var on = s && s.by === by, arr = on ? ' <span class="arrow">' + (s.dir < 0 ? ICON.sz("chevDown", 12) : ICON.sz("chevUp", 12)) + "</span>" : "";
       return '<th class="' + (numCls ? numCls + " " : "") + "sortable" + (on ? " sorted" : "") + '" data-vs="' + by +
              '" tabindex="0" role="button" aria-sort="' + (on ? (s.dir < 0 ? "descending" : "ascending") : "none") + '">' + label + arr + '</th>';
     }
     el.innerHTML = '<table class="sumtbl' + (isTree ? " tree-tbl" : "") + '"><thead><tr>' + th("name", "", "Kategorie") + '<th class="bar-col"></th>' +
-      th("value", "num", (ctx.valHeader || "")) + '<th class="num">Anteil' + hint + '</th></tr></thead><tbody>' + body + totalRow + '</tbody></table>';
+      th("value", "num", (ctx.valHeader || "")) + '<th class="num">Anteil' + hint + '</th>' + (ctx.showN ? '<th class="num">Grundstücke</th>' : "") + '</tr></thead><tbody>' + body + totalRow + '</tbody></table>';
   }
   // Header click → sort that table (toggle direction), hierarchy-aware.
   function _valSortAct(e) {
@@ -706,21 +762,21 @@
     _paintValTable(elId);
   });
 
-  // ---- Total parcel area grouped by an arbitrary field (Portfolio, Region) → bar items ----
-  var BAR_COLOR = "#6f8aac"; // a single calm hue for the Portfolio/Region bars — color reserved for emphasis elsewhere
+  // ---- Parcel area + parcel count grouped by a field (Teilportfolio, Region) → table items ----
+  // Exclusive counts (each parcel in exactly one group), so the count column sums to the Total row.
   function groupBarItems(rows, field, selMap, topN, labelFn) {
-    var map = {};
+    var map = {}, cnt = {};
     rows.forEach(function (p) {
       var v = p[field]; var k = (v == null || v === "") ? "—" : String(v);
-      map[k] = (map[k] || 0) + num(p.parcel_area_m2);
+      map[k] = (map[k] || 0) + num(p.parcel_area_m2); cnt[k] = (cnt[k] || 0) + 1;
     });
-    var keys = Object.keys(map).filter(function (k) { return map[k] > 0; }).sort(function (a, b) { return map[b] - map[a]; });
-    var items = keys.slice(0, topN).map(function (k, i) {
-      return { name: labelFn ? labelFn(k) : k, value: map[k], color: BAR_COLOR, key: (k === "—" ? null : k), selected: !!(selMap && selMap[k]) };
+    var keys = Object.keys(map).sort(function (a, b) { return map[b] - map[a] || cnt[b] - cnt[a]; });
+    var items = keys.slice(0, topN).map(function (k) {
+      return { name: labelFn ? labelFn(k) : k, value: map[k], n: cnt[k], key: (k === "—" ? null : k), selected: !!(selMap && selMap[k]) };
     });
     if (keys.length > topN) {
-      var rest = keys.slice(topN).reduce(function (s, k) { return s + map[k]; }, 0);
-      items.push({ name: "Übrige (" + (keys.length - topN) + ")", value: rest, swatch: "#cbd5e1" });
+      var rest = 0, restN = 0; keys.slice(topN).forEach(function (k) { rest += map[k]; restN += cnt[k]; });
+      items.push({ name: "Übrige (" + (keys.length - topN) + ")", value: rest, n: restN, swatch: "#cbd5e1" });
     }
     return items;
   }
@@ -735,14 +791,16 @@
         tip:"Anzahl Grundstücke (Liegenschaften und SDR) in der aktuellen Auswahl. Davon " + fmt(a.withData) + " mit Bodenbedeckung. " +
             "Entspricht " + pct(a.len, PARCELS.length) + "% des Datensatzes (" + fmt(PARCELS.length) + " Grundstücke)." },
       { label:"Grundstücksfläche", value:fmtAreaU(a.totals.parcelArea), sub:fmt(a.len) + " Grundstücke",
-        tip:"Summe der berechneten Grundstücksflächen (GSF) — 2D-Planfläche auf LV95 (EPSG:2056). " +
+        tip:"Summe der berechneten Grundstücksflächen (GSF), 2D-Planfläche auf LV95 (EPSG:2056). " +
             "Klassifizierte Bodenbedeckung: " + fmtAreaU(a.classified) + " (" + ofArea(a.classified) + ")." },
       { label:"Grünfläche", value:fmtAreaU(a.totals.Green), sub:ofCover(a.totals.Green),
         tip:"Humusierte und bestockte Flächen gemäss Grünflächen-Klassifizierung. Aktuell " + ofCover(a.totals.Green) + " bzw. " + ofArea(a.totals.Green) + "." },
       { label:"Versiegelte Fläche", value:fmtAreaU(a.totals.Sealed), sub:ofCover(a.totals.Sealed),
         tip:"Gebäude und befestigte Flächen (versiegelt). Aktuell " + ofCover(a.totals.Sealed) + " bzw. " + ofArea(a.totals.Sealed) + "." },
       { label:"Gebäudegrundfläche (GGF)", value:fmtAreaU(a.totals.GGF), sub:ofCover(a.totals.GGF),
-        tip:"Gebäudegrundfläche nach SIA 416 (GGF). Aktuell " + ofCover(a.totals.GGF) + " bzw. " + ofArea(a.totals.GGF) + "." }
+        tip:"Gebäudegrundfläche nach SIA 416 (GGF). Aktuell " + ofCover(a.totals.GGF) + " bzw. " + ofArea(a.totals.GGF) + "." },
+      { label:"Grundstücke mit Typ 1", value:fmt(a.nT1), sub:"Typ 2: " + fmt(a.nT2) + " · ab 10 % Fläche",
+        tip:"Grundstücke, deren VBS-Typ-Fläche mindestens 10 % der Grundstücksfläche ausmacht. Ein Grundstück kann beide Typen haben." }
     ];
     document.getElementById("kpis").innerHTML = kpis.map(function (k) {
       return '<div class="card"><div class="label tip-term" data-tip="' + esc(k.tip) + '">' + k.label + '</div>' +
@@ -765,10 +823,10 @@
     var pa = a.totals.parcelArea;
     // Append a muted "remainder" row so each table sums to 100 % of the Grundstücksfläche;
     // the gap = parcel area the categories don't cover (z. B. ohne Bodenbedeckungsdaten).
-    function withMiss(items, label) {
+    function withMiss(items, label, n) {
       var s = 0; items.forEach(function (it) { s += it.value; });
       var m = pa - s;
-      return m > 0 ? items.concat([{ name: label || "Ohne Bodenbedeckung", value: m, muted: true }]) : items;
+      return m > 0 ? items.concat([{ name: label || "Ohne Bodenbedeckung", value: m, muted: true, n: n }]) : items;
     }
     renderValTable("tbl-art", withMiss(artGroups), pa, fmtArea, true, unitLabel(), gsfHint);
     // Provenance note: parcels whose land cover was synthesized from BAFU (real AV < 5 %) are
@@ -780,7 +838,7 @@
       // the per-parcel ⚠ warning in the detail view (buildParcelDetailHTML).
       var synthN = 0; for (var si = 0; si < rows.length; si++) { if (rows[si].lc_synthetic === "yes") synthN++; }
       if (synthN > 0) {
-        artNote.innerHTML = "Enthält " + fmt(synthN) + " von " + fmt(rows.length) + " Grundstücken mit <strong>synthetischer</strong> Bodenbedeckung (aus BAFU-Lebensräumen modelliert, da amtliche AV-Daten fehlen) — diese Flächen sind Schätzwerte.";
+        artNote.innerHTML = "Enthält " + fmt(synthN) + " von " + fmt(rows.length) + " Grundstücken mit <strong>synthetischer</strong> Bodenbedeckung (aus BAFU-Lebensräumen modelliert, da amtliche AV-Daten fehlen). Diese Flächen sind Schätzwerte.";
         artNote.hidden = false;
       } else { artNote.hidden = true; }
     }
@@ -806,12 +864,12 @@
     // is a sibling. The muted "Ohne Bodenbedeckung" remainder (via withMiss) keeps the Total at
     // 100 % of GSF. Collapsed, this reads exactly like the former flat "VBS Produktiv" tab.
     renderValTable("tbl-vbsprod", withMiss([
-      { name:"Biologisch produktiv", value:a.totals.VBSp, group:"produktiv", children:[
-        { name:"Typ 1 · Grünflächen in Gebäudeumgebung", value:a.totals.VBSt1 },
-        { name:"Typ 2 · Übrige Grünflächen", value:a.totals.VBSt2 }
+      { name:"Biologisch produktiv", value:a.totals.VBSp, n:a.nP, group:"produktiv", children:[
+        { name:"Typ 1 · Grünflächen in Gebäudeumgebung", value:a.totals.VBSt1, n:a.nT1 },
+        { name:"Typ 2 · Übrige Grünflächen", value:a.totals.VBSt2, n:a.nT2 }
       ] },
-      { name:"Biologisch unproduktiv", value:a.totals.VBSu }
-    ]), pa, fmtArea, true, unitLabel(), gsfHint);
+      { name:"Biologisch unproduktiv", value:a.totals.VBSu, n:a.nU }
+    ], null, a.len - a.withData), pa, fmtArea, true, unitLabel(), gsfHint, { showN: true, nTotal: a.len });
     // "Ohne Bauzone" is the zone-free remainder — render it as the muted last row
     // (via withMiss), not as a normal zone, so the table reads like before but now
     // sums to 100 % from real data (processing emits an "Ohne Bauzone" polygon).
@@ -835,8 +893,8 @@
       var hbGroups = Object.keys(hbByDigit).map(function (d) { return hbByDigit[d]; });
       renderValTable("tbl-habitat", withMiss(hbGroups, "Ohne Lebensraum-Daten"), pa, fmtArea, true, unitLabel(), gsfHint);
     }
-    renderValTable("tbl-tpf", groupBarItems(rows, "input_tpf", filters.tpf, 12, tpfLabel), a.totals.parcelArea, fmtArea, true, unitLabel(), gsfHint);
-    renderValTable("tbl-rg", groupBarItems(rows, "input_rg", filters.cantons, 12), a.totals.parcelArea, fmtArea, true, unitLabel(), gsfHint);
+    renderValTable("tbl-tpf", groupBarItems(rows, "input_tpf", filters.tpf, 12, tpfLabel), a.totals.parcelArea, fmtArea, true, unitLabel(), gsfHint, { showN: true, nTotal: a.len });
+    renderValTable("tbl-rg", groupBarItems(rows, "input_rg", filters.cantons, 12), a.totals.parcelArea, fmtArea, true, unitLabel(), gsfHint, { showN: true, nTotal: a.len });
 
     var qa = "";
     if (a.wfsIssues || a.geomIssues) {
@@ -930,10 +988,10 @@
     { key: "bzCover", name: "Summe Bauzonen = Grundstücksfläche", tip: "Die Summe der einzelnen Bauzonenflächen inkl. „Ohne Bauzone“ entspricht der Grundstücksfläche (±1 %). Nur Grundstücke mit Bauzonen-Daten." },
     { key: "hbCover", name: "Summe Lebensräume = Grundstücksfläche", tip: "Die Summe der einzelnen BAFU-Lebensraumflächen entspricht der Grundstücksfläche (±1 %). Nur Grundstücke mit Lebensraum-Daten." }
   ];
-  // Per-parcel derived scalars for the quality rules and prioritisation. Parcels are
+  // Per-parcel derived scalars for the quality rules. Parcels are
   // immutable, so the wide-column scan runs once per parcel and is cached in a WeakMap
   // (not on the object — keeps it out of exports/the embedded deliverable). This turns
-  // the repeated per-render O(columns) scans in computeRules/prioMetrics/prioGate into
+  // the repeated per-render O(columns) scans in computeRules into
   // O(1) lookups. Field semantics mirror the original inline loops exactly:
   //   bzSum    — Σ bauzonen_<slug> EXCLUDING ohne_bauzone (the actual building-zone share)
   //   bzSumAll — Σ bauzonen_<slug> INCLUDING ohne_bauzone (the full parcel partition)
@@ -984,7 +1042,7 @@
     var el = document.getElementById("q-rules"); if (!el) return;
     var body = RULE_DEFS.map(function (d) {
       var r = qRules[d.key], ok = r.fail === 0;
-      var status = ok ? "✓" : "⚠", cls = ok ? "rule-ok" : "rule-warn", aLabel = ok ? "bestanden" : "Abweichung";
+      var status = ok ? ICON.check : ICON.alert, cls = ok ? "rule-ok" : "rule-warn", aLabel = ok ? "bestanden" : "Abweichung";
       var result = fmt(r.fail) + " von " + fmt(qTotal) + " abweichend"; // always: fails out of the filtered total
       var attr = (r.fail > 0 ? ' class="clickable' + (d.key === qActiveRule ? ' selected' : '') + '" data-rk="' + d.key + '" tabindex="0" role="button"' : '') + ' data-tip="' + esc(d.tip) + '"';
       return '<tr' + attr + '><td>' + esc(d.name) + '</td><td class="num rule-res">' + esc(result) + '</td><td class="rule-status ' + cls + '" role="img" aria-label="' + aLabel + '">' + status + '</td></tr>';
@@ -998,7 +1056,7 @@
     qProblems = active ? qRules[active].fails : qAllProblems;
     var cnt = document.getElementById("q-count");
     if (cnt) {
-      if (active) cnt.innerHTML = "Regel »" + esc(qRules[active].name) + "« · " + fmt(qProblems.length) + " · <span class='q-filter-x' id='q-filter-x' role='button' tabindex='0'>✕ Filter aufheben</span>";
+      if (active) cnt.innerHTML = "Regel »" + esc(qRules[active].name) + "« · " + fmt(qProblems.length) + " · <span class='q-filter-x' id='q-filter-x' role='button' tabindex='0'>" + ICON.sz("x", 13) + "Filter aufheben</span>";
       else cnt.textContent = fmt(qProblems.length) + " " + (qProblems.length === 1 ? "Grundstück" : "Grundstücke");
     }
     renderQBody();
@@ -1012,7 +1070,7 @@
         if (!v) return '<span class="muted">–</span>';
         var u = "https://map.geo.admin.ch/#/map?lang=de&topic=ech&bgLayer=ch.swisstopo.pixelkarte-farbe" +
                 "&layers=ch.swisstopo-vd.stand-oerebkataster&swisssearch=" + encodeURIComponent(v);
-        return '<a class="egrid-link" href="' + u + '" target="_blank" rel="noopener" data-tip="Grundstück auf map.geo.admin.ch öffnen (ÖREB-Kataster, neuer Tab)">' + esc(v) + " ↗</a>";
+        return '<a class="egrid-link" href="' + u + '" target="_blank" rel="noopener" data-tip="Grundstück auf map.geo.admin.ch öffnen (ÖREB-Kataster, neuer Tab)">' + esc(v) + ICON.sz("extlink", 12) + "</a>";
       } },
     { key:"nummer", label:"Grundstück-Nr.", def:false, tip:"Offizielle Grundstücknummer aus der amtlichen Vermessung." },
     { key:"input_ort", label:"Ort", def:true, tip:"Standortgemeinde des Grundstücks." },
@@ -1022,7 +1080,13 @@
     { key:"input_eigent.art", label:"Eigentumsart", def:false, tip:"Eigentumsart aus SAP (1 = Eigentum Bund, 3 = Anmiete, 5 = Spezialfall).", render: function (v) { return v ? esc(eigentumLabel(v)) : '<span class="muted">–</span>'; } },
     { key:"input_tpf", label:"Teilportfolio", def:false, tip:"Teilportfolio (GOM) aus SAP.", render: function (v) { return v ? esc(tpfLabel(v)) : '<span class="muted">–</span>'; } },
     { key:"check_egrid", label:"Status", def:false, tip:"E-GRID-Status (gefunden / zusammengeführt / nicht gefunden)." },
-    { key:"parcel_area_m2", label:"Grundstücksfläche m²", num:true, def:true, tip:"Berechnete Grundstücksfläche (GSF) — 2D-Planfläche auf LV95." },
+    { key:"greeninv", label:"Grüninventar", def:true, tip:"Im Grüninventar der Bundesgärtnerei erfasst (Abgleich über E-GRID und SAP-Schlüssel). Der Link öffnet das Grüninventar an der Lage des Grundstücks.",
+      render: function (v, p) {
+        if (v !== "yes" && v !== "no") return '<span class="muted">–</span>';
+        var u = v === "yes" ? greenInventoryUrl(p) : "";
+        return u ? '<a class="egrid-link" href="' + esc(u) + '" target="_blank" rel="noopener" data-tip="Im Grüninventar öffnen (neuer Tab)">' + esc(greeninvLabel(v)) + ICON.sz("extlink", 12) + '</a>' : esc(greeninvLabel(v));
+      } },
+    { key:"parcel_area_m2", label:"Grundstücksfläche m²", num:true, def:true, tip:"Berechnete Grundstücksfläche (GSF), 2D-Planfläche auf LV95." },
     { key:"sia416_ggf_m2", label:"GGF m²", num:true, def:true, tip:"Gebäudegrundfläche nach SIA 416." },
     { key:"sia416_buf_m2", label:"BUF m²", num:true, def:false, tip:"Bearbeitete Umgebungsfläche nach SIA 416 (befestigt + humusiert)." },
     { key:"sia416_uuf_m2", label:"UUF m²", num:true, def:false, tip:"Unbearbeitete Umgebungsfläche nach SIA 416 (Gewässer + bestockt + vegetationslos)." },
@@ -1035,6 +1099,7 @@
     { key:"vbs_typ1_m2", label:"VBS Typ 1 m²", num:true, def:false, tip:"Typ 1 · Grünflächen in Gebäudeumgebung (Teil der biologisch produktiven Fläche)." },
     { key:"vbs_typ2_m2", label:"VBS Typ 2 m²", num:true, def:false, tip:"Typ 2 · Übrige Grünflächen (Teil der biologisch produktiven Fläche)." }
   ];
+  if (!hasGreeninv) COLUMNS = COLUMNS.filter(function (c) { return c.key !== "greeninv"; }); // column only when the export carries the join
   var colByKey = {};
   COLUMNS.forEach(function (c) { colByKey[c.key] = c; c.visible = c.def; });
 
@@ -1047,11 +1112,16 @@
       return deCollator.compare(String(x == null ? "" : x), String(y == null ? "" : y)) * dir;
     });
   }
+  // Rows of the current page (what the header checkbox selects).
+  function pageRows() { var start = (state.page - 1) * state.pageSize; return printing ? state.rows : state.rows.slice(start, start + state.pageSize); }
   function renderHead() {
     var vis = COLUMNS.filter(function (c) { return c.visible; });
-    document.getElementById("thead-row").innerHTML = vis.map(function (c) {
+    var pr = pageRows(), allSel = pr.length > 0 && pr.every(function (p) { return !!sel[String(p.id == null ? "" : p.id)]; });
+    document.getElementById("thead-row").innerHTML =
+      '<th class="sel-col" scope="col"><input type="checkbox" id="sel-all" aria-label="Alle Grundstücke dieser Seite für den PDF-Bericht auswählen" title="Alle dieser Seite auswählen"' + (allSel ? " checked" : "") + '></th>' +
+      vis.map(function (c) {
       var sorted = state.sort === c.key;
-      var arrow = sorted ? ' <span class="arrow">' + (state.dir < 0 ? "▼" : "▲") + "</span>" : "";
+      var arrow = sorted ? ' <span class="arrow">' + (state.dir < 0 ? ICON.sz("chevDown", 12) : ICON.sz("chevUp", 12)) + "</span>" : "";
       var tip = c.tip ? ' data-tip="' + esc(c.tip) + '"' : "";
       var cls = (c.num ? "num" : "") + (sorted ? " sorted" : "");
       var lbl = c.num ? stripM2(c.label) + " (" + unitLabel() + ")" : c.label;
@@ -1064,12 +1134,13 @@
       document.getElementById("tbody").innerHTML = '<tr><td class="empty" colspan="' + vis.length + '">Keine Grundstücke entsprechen den Filtern.</td></tr>';
       return;
     }
-    var start = (state.page - 1) * state.pageSize;
-    var pageRows = printing ? state.rows : state.rows.slice(start, start + state.pageSize);
-    document.getElementById("tbody").innerHTML = pageRows.map(function (p) {
-      var pid = (p.id == null ? "" : String(p.id));
-      var sel = (selectedParcelId && pid === selectedParcelId) ? ' class="row-selected"' : "";
-      return '<tr data-id="' + esc(pid) + '" tabindex="0"' + sel + ">" + vis.map(function (c) {
+    var full = selCount() >= SEL_MAX;
+    document.getElementById("tbody").innerHTML = pageRows().map(function (p) {
+      var pid = (p.id == null ? "" : String(p.id)), isSel = !!sel[pid];
+      var cls = ((selectedParcelId && pid === selectedParcelId) ? "row-selected " : "") + (isSel ? "row-sel" : "");
+      var rs = cls.trim() ? ' class="' + cls.trim() + '"' : "";
+      var cb = '<td class="sel-col"><input type="checkbox" data-sel="' + esc(pid) + '" aria-label="Für PDF-Bericht auswählen"' + (isSel ? " checked" : "") + (!isSel && full ? ' disabled title="Maximal ' + SEL_MAX + ' Grundstücke"' : "") + '></td>';
+      return '<tr data-id="' + esc(pid) + '" tabindex="0"' + rs + ">" + cb + vis.map(function (c) {
         var v = p[c.key];
         if (c.num) return '<td class="num">' + (num(v) ? fmtArea(num(v)) : '<span class="muted">0</span>') + "</td>";
         if (c.render) return "<td>" + c.render(v == null ? "" : String(v), p) + "</td>";
@@ -1093,7 +1164,7 @@
     vis.forEach(function (c) { if (c.num) sums[c.key] = 0; });
     state.rows.forEach(function (p) { vis.forEach(function (c) { if (c.num) sums[c.key] += num(p[c.key]); }); });
     var labelDone = false;
-    document.getElementById("tfoot-row").innerHTML = vis.map(function (c) {
+    document.getElementById("tfoot-row").innerHTML = '<td class="sel-col"></td>' + vis.map(function (c) {
       if (c.num) return '<td class="num">' + fmtArea(sums[c.key]) + "</td>";
       if (!labelDone) { labelDone = true; return "<td>Total · " + fmt(state.rows.length) + " Grundstücke</td>"; }
       return "<td></td>";
@@ -1101,8 +1172,8 @@
   }
   function renderTable() { renderHead(); renderBody(); renderFoot(); renderPager(); }
 
-  // Select a parcel from the map: highlight its polygon, then page to / highlight its row in
-  // whichever table owns the map (Übersicht or Priorisierung). No viewport scroll.
+  // Select (focus) a parcel from the map: highlight its polygon, then page to / highlight its row
+  // in the table. No viewport scroll.
   function selectParcel(id) {
     selectedParcelId = (id == null || id === "") ? null : String(id);
     if (map && mapReady && map.getLayer("parcels-hl")) {
@@ -1110,7 +1181,6 @@
       map.setFilter("parcels-hl", hlFilter);
       if (map.getLayer("parcels-hl-casing")) map.setFilter("parcels-hl-casing", hlFilter);
     }
-    if (mapMode === "priority") { selectPrioRow(); return; }
     if (!selectedParcelId) { renderBody(); return; }
     var idx = -1;
     for (var i = 0; i < state.rows.length; i++) {
@@ -1119,35 +1189,57 @@
     if (idx < 0) { renderBody(); return; } // parcel is filtered out of the current table
     var page = Math.floor(idx / state.pageSize) + 1;
     if (page !== state.page) { state.page = page; renderPager(); }
-    renderBody();
+    renderHead(); renderBody();
   }
-  // Page the Priorisierung table to the selected parcel + re-render (highlights its row).
-  function selectPrioRow() {
-    if (!selectedParcelId) { renderPrioBody(); return; }
-    var idx = -1;
-    for (var i = 0; i < prio.selected.length; i++) {
-      if (String(prio.selected[i].p.id == null ? "" : prio.selected[i].p.id) === selectedParcelId) { idx = i; break; }
-    }
-    if (idx < 0) { renderPrioBody(); return; } // parcel isn't in the current Top-N
-    var page = Math.floor(idx / prio.pageSize) + 1;
-    if (page !== prio.page) prio.page = page;
-    renderPrioBody();
+  // Table row click, search hit, popup action → switch to the map tab, select + fly to the parcel.
+  function focusParcel(id, opts) {
+    selectParcel(id);
+    if (currentTab !== "map") { showTab("map"); setTimeout(function () { zoomToParcel(id, opts); }, 80); } // let the map resize first
+    else zoomToParcel(id, opts);
   }
-  // Click a table row → select the parcel on the map + zoom/pan to frame it.
-  function focusParcel(id) { selectParcel(id); zoomToParcel(id); }
+  // Deep link into the green inventory app at the parcel's visual centre (the app reads center + zoom from its URL).
+  function greenInventoryUrl(p) {
+    if (!p || !p._geom) return "";
+    if (p._pole === undefined) p._pole = poleOfGeom(p._geom);
+    if (!p._pole) return "";
+    return GREEN_INVENTORY_APP + "?center=" + p._pole[0].toFixed(5) + "," + p._pole[1].toFixed(5) + "&zoom=17.5";
+  }
   var _parcelById = null;
   function parcelById(id) {
     if (!_parcelById) { _parcelById = {}; PARCELS.forEach(function (p) { _parcelById[String(p.id == null ? "" : p.id)] = p; }); }
     return _parcelById[String(id)];
   }
-  function zoomToParcel(id) {
-    if (!map || !mapReady || id == null || id === "") return;
-    var p = parcelById(id);
-    if (p && p._geom) fitMap(rowsToFC([p]), true);
+  function zoomToParcel(id, opts) {
+    if (id == null || id === "") return;
+    var p = parcelById(id); if (!p || !p._geom) return;
+    if (!map || !mapReady) { _pendingZoom = { id: id, opts: opts }; return; } // the map is still loading: fly once it is ready
+    if (opts && opts.zoom) { var pole = poleOfGeom(p._geom); if (pole) map.flyTo({ center: pole, zoom: opts.zoom, duration: 800 }); }
+    else fitMap(rowsToFC([p]), true);
+    if (!(opts && opts.noPopup)) openParcelPopup(p); // anchored at the parcel's visual centre, so it rides along with the camera
+  }
+  var _pendingZoom = null;
+
+  // ---- PDF-report selection (table checkboxes, map popup) ----
+  function setSelected(id, on) {
+    var k = String(id == null ? "" : id); if (!k) return;
+    if (on) { if (!sel[k] && selCount() >= SEL_MAX) return; sel[k] = 1; } else delete sel[k];
+    renderSelUI();
+  }
+  function clearSelection() { sel = {}; renderSelUI(); }
+  // Re-render everything that shows the selection: table rows, table bar, map outline + bar, download counts.
+  function renderSelUI() {
+    renderHead(); renderBody();
+    var n = selCount(), info = document.getElementById("sel-info"), lbl = document.getElementById("sel-label"), sf = document.getElementById("sel-filtered"), pb = document.getElementById("pdf-sel-btn");
+    if (info) info.hidden = n === 0;
+    if (lbl) lbl.textContent = n + " von max. " + SEL_MAX + " ausgewählt";
+    if (sf) { var canAll = n === 0 && state.rows.length > 0 && state.rows.length <= SEL_MAX; sf.hidden = !canAll; sf.textContent = "Alle " + state.rows.length + " gefilterten auswählen"; }
+    if (pb) { pb.disabled = n === 0; pb.textContent = n ? "PDF-Bericht (" + n + ")" : "PDF-Bericht"; pb.title = n ? "A3-Bericht, eine Seite pro ausgewähltem Grundstück" : "Zuerst Grundstücke über die Checkboxen auswählen (max. " + SEL_MAX + ")"; }
+    if (map && mapReady && map.getLayer("parcels-sel")) map.setFilter("parcels-sel", ["in", ["get", "id"], ["literal", selIds()]]);
+    renderSelBar();
   }
 
   // ---- Central update: filter → recompute everything ----
-  var currentTab = "overview"; // active tab — gates the costly Datenqualität render out of update()
+  var currentTab = "map"; // active tab; gates the costly Datenqualität render out of update()
   function update() {
     var rows = getFiltered();
     state.rows = rows;
@@ -1156,7 +1248,7 @@
     renderDashboard(rows);
     if (currentTab === "quality") renderQuality(rows); // skip the costly rule scan unless the Datenqualität tab is open
     renderTable();
-    if (mapMode !== "priority") renderMap(rows); // the priority tab owns the map while active
+    renderMap(rows);
     var n = activeGroups(), b = document.getElementById("filter-badge");
     if (b) { b.textContent = n; b.classList.toggle("show", n > 0); }
     var filtered = rows.length < PARCELS.length;
@@ -1164,6 +1256,7 @@
     var fq = document.getElementById("flag-q"); if (fq) fq.classList.toggle("show", filtered);
     var fc = document.getElementById("f-count"); if (fc) fc.textContent = fmt(rows.length) + " Grundstücke";
     renderPills();
+    renderSelUI();
   }
   function commit() { refitMap = true; writeURL(); update(); }
 
@@ -1172,7 +1265,7 @@
   function buildPills() {
     var pills = [];
     if (state.search.trim()) {
-      pills.push({ label: 'Suche: "' + state.search.trim() + '"', remove: function () { state.search = ""; document.getElementById("search").value = ""; } });
+      pills.push({ label: "Tabelle: «" + state.search.trim() + "»", remove: function () { state.search = ""; document.getElementById("tsearch").value = ""; } });
     }
     EXCLUDE_RULES.forEach(function (r) {
       if (filters.exclude[r.key] && excludeCounts[r.key] > 0)
@@ -1212,6 +1305,9 @@
     Object.keys(filters.status).forEach(function (s) {
       pills.push({ label: "Status: " + (STATUS_LABELS[s] || s), remove: function () { delete filters.status[s]; } });
     });
+    Object.keys(filters.greeninv).forEach(function (g) {
+      pills.push({ label: "Grüninventar: " + greeninvLabel(g), remove: function () { delete filters.greeninv[g]; } });
+    });
     return pills;
   }
   function renderPills() {
@@ -1220,29 +1316,36 @@
     if (!_pillActions.length) { row.innerHTML = ""; row.style.display = "none"; return; }
     row.style.display = "flex";
     row.innerHTML = _pillActions.map(function (p, i) {
-      return '<span class="pill">' + esc(p.label) + '<button class="pill-x" data-i="' + i + '" aria-label="Filter entfernen">✕</button></span>';
+      return '<span class="pill">' + esc(p.label) + '<button class="pill-x" data-i="' + i + '" aria-label="Filter entfernen">' + ICON.sz("x", 12) + '</button></span>';
     }).join("") + '<button class="pill-reset" id="pill-reset">Alle Filter zurücksetzen</button>';
   }
 
   // ---- Reset & drawer sync ----
   function resetAll() {
     filters = defaultFilters();
-    state.search = ""; document.getElementById("search").value = "";
+    state.search = ""; document.getElementById("tsearch").value = "";
     syncDrawer(); commit();
   }
   function syncDrawer() {
-    renderExclude(); renderStatus(); renderCoverage(); renderCountries(); renderCantons(); renderArts(); renderBauzonen(); renderVbsProd(); renderVbsTyp(); renderTpf(); renderEigentum();
+    renderExclude(); renderStatus(); renderCoverage(); renderCountries(); renderCantons(); renderArts(); renderBauzonen(); renderVbsProd(); renderVbsTyp(); renderTpf(); renderEigentum(); renderGreeninv();
   }
 
-  // ---- URL <-> filter state ----
+  // ---- URL <-> state ----
   // Explicit model: every active filter is its own URL parameter; removing a
   // filter drops its parameter. A URL with no filter params means "no filters";
   // a completely empty URL (first visit) applies the defaults and stamps them in.
-  var URL_KEYS = ["q", "excl", "status", "eig", "cov", "land", "kanton", "art", "bauz", "has", "vbsp", "vbst", "tpf"];
+  // Navigation state travels alongside, never counting as a filter: tab=map|overview|quality|about,
+  // basemap=light|standard|aerial|aerial-labels|dark, ext=<external map ids, "-" prefix = hidden>.
+  var URL_KEYS = ["q", "excl", "status", "eig", "cov", "land", "kanton", "art", "bauz", "has", "vbsp", "vbst", "tpf", "gi"];
+  var NAV_KEYS = ["tab", "basemap", "ext"];
   var VBS_URL_KEY = { vbsprod: "vbsp", vbstyp: "vbst" };
   var urlMigrated = false; // a legacy parameter was rewritten to its current spelling
+  var nav = { tab: "map", basemap: null, ext: null }; // parsed navigation params (consumed by showTab / the map)
   function writeURL() {
     var pr = new URLSearchParams();
+    if (currentTab && currentTab !== "map") pr.set("tab", currentTab);
+    if (typeof basemapUrlValue === "function" && basemapUrlValue() !== "light") pr.set("basemap", basemapUrlValue());
+    if (typeof extUrlValue === "function" && extUrlValue()) pr.set("ext", extUrlValue());
     if (state.search.trim()) pr.set("q", state.search.trim());
     var excl = EXCLUDE_RULES.filter(function (r) { return filters.exclude[r.key]; }).map(function (r) { return r.key; });
     if (excl.length) pr.set("excl", excl.join(","));
@@ -1258,18 +1361,21 @@
     var has = Object.keys(filters.has); if (has.length) pr.set("has", has.join(","));
     VBS_FACETS.forEach(function (f) { var v = Object.keys(filters[f]); if (v.length) pr.set(VBS_URL_KEY[f], v.join(",")); });
     var tpf = Object.keys(filters.tpf); if (tpf.length) pr.set("tpf", tpf.join(","));
+    var gi = Object.keys(filters.greeninv); if (gi.length) pr.set("gi", gi.join(","));
     var qs = pr.toString();
     try { history.replaceState(null, "", qs ? "?" + qs : location.pathname); } catch (e) { /* file:// may block */ }
   }
-  // Returns true if defaults were applied (empty URL) and should be written back.
+  // Returns true if defaults were applied (no filter params) and should be written back.
   function readURL() {
     var pr = new URLSearchParams(location.search);
+    var tab = pr.get("tab"); nav.tab = (tab === "overview" || tab === "quality" || tab === "about" || tab === "map") ? tab : "map";
+    nav.basemap = pr.get("basemap"); nav.ext = pr.get("ext");
     if (!URL_KEYS.some(function (k) { return pr.has(k); })) {
-      filters = defaultFilters(); state.search = ""; document.getElementById("search").value = ""; return true;
+      filters = defaultFilters(); state.search = ""; document.getElementById("tsearch").value = ""; return true;
     }
     var validExcl = defaultExclude();
     state.search = pr.get("q") || "";
-    document.getElementById("search").value = state.search;
+    document.getElementById("tsearch").value = state.search;
     filters.exclude = {}; (pr.get("excl") || "").split(",").forEach(function (k) { if (k && validExcl[k]) filters.exclude[k] = true; });
     filters.status = {}; (pr.get("status") || "").split(",").forEach(function (s) { if (s) filters.status[s] = true; });
     filters.eigentum = {}; (pr.get("eig") || "").split(",").forEach(function (e) { if (e) filters.eigentum[e] = true; });
@@ -1291,6 +1397,7 @@
       if (m === "VBSu") { filters.vbsprod.unproduktiv = true; urlMigrated = true; }
     });
     filters.tpf = {}; (pr.get("tpf") || "").split(",").forEach(function (t) { if (t) filters.tpf[t] = true; });
+    filters.greeninv = {}; (pr.get("gi") || "").split(",").forEach(function (g) { if (GREENINV_LABELS[g]) filters.greeninv[g] = true; });
     return false;
   }
 
@@ -1366,7 +1473,7 @@
     th.addEventListener("click", sortAct); th.addEventListener("keydown", sortAct); // Enter/Space sorts a focused header
   })();
   var searchTimer;
-  document.getElementById("search").addEventListener("input", function (e) {
+  document.getElementById("tsearch").addEventListener("input", function (e) {
     clearTimeout(searchTimer);
     var v = e.target.value;
     searchTimer = setTimeout(function () { state.search = v; commit(); }, 150);
@@ -1375,12 +1482,31 @@
   (function () {
     function rowAct(e) {
       if (e.type === "keydown" && e.key !== "Enter" && e.key !== " ") return;
+      if (e.target.closest && e.target.closest(".sel-col")) return; // the checkbox cell selects, it does not navigate
       var tr = e.target.closest && e.target.closest("tr[data-id]"); if (!tr) return;
       if (e.type === "keydown") e.preventDefault();
       focusParcel(tr.getAttribute("data-id"));
     }
     var tb = document.getElementById("tbody");
     tb.addEventListener("click", rowAct); tb.addEventListener("keydown", rowAct);
+    // Selection: row checkboxes, the header checkbox (this page), the bar links + the PDF button.
+    tb.addEventListener("change", function (e) {
+      var k = e.target.getAttribute && e.target.getAttribute("data-sel"); if (k == null) return;
+      setSelected(k, e.target.checked);
+    });
+    document.getElementById("thead-row").addEventListener("change", function (e) {
+      if (e.target.id !== "sel-all") return;
+      var pr = pageRows(), on = e.target.checked;
+      pr.forEach(function (p) { var k = String(p.id == null ? "" : p.id); if (on) { if (!sel[k] && selCount() < SEL_MAX) sel[k] = 1; } else delete sel[k]; });
+      renderSelUI();
+    });
+    document.getElementById("sel-clear").addEventListener("click", clearSelection);
+    document.getElementById("sel-filtered").addEventListener("click", function () {
+      if (state.rows.length > SEL_MAX) return;
+      sel = {}; state.rows.forEach(function (p) { var k = String(p.id == null ? "" : p.id); if (k) sel[k] = 1; });
+      renderSelUI();
+    });
+    document.getElementById("pdf-sel-btn").addEventListener("click", function () { if (selCount()) openDownload("sel", selRows()); });
   })();
   document.getElementById("prev").addEventListener("click", function () { if (state.page > 1) { state.page--; renderBody(); renderPager(); } });
   document.getElementById("next").addEventListener("click", function () {
@@ -1410,7 +1536,7 @@
   document.getElementById("q-rules").addEventListener("click", qRuleAct);
   document.getElementById("q-rules").addEventListener("keydown", qRuleAct);
   document.getElementById("q-count").addEventListener("click", function (e) {
-    if (e.target && e.target.id === "q-filter-x") { qActiveRule = null; qState.page = 1; renderRulesTable(); applyQView(); }
+    if (e.target.closest && e.target.closest("#q-filter-x")) { qActiveRule = null; qState.page = 1; renderRulesTable(); applyQView(); }
   });
 
   // ---- Filter panel (single column, capped with a "Alle anzeigen" toggle) ----
@@ -1444,7 +1570,12 @@
   function renderTpf() { capList("f-tpf", tpfList.map(function (t) { return chk("t", t, tpfLabel(t), tpfCounts[t], filters.tpf[t]); })); }
   function renderEigentum() { capList("f-eigentum", eigentumList.map(function (e) { return chk("e", e, eigentumLabel(e), eigentumCounts[e], filters.eigentum[e]); })); }
   function renderStatus() { capList("f-status", statusList.map(function (s) { return chk("s", s, STATUS_LABELS[s] || s, statusCounts[s], filters.status[s]); })); }
-  var _rerenderGroup = { "f-exclude": renderExclude, "f-coverage": renderCoverage, "f-countries": renderCountries, "f-cantons": renderCantons, "f-arts": renderArts, "f-bauzonen": renderBauzonen, "f-vbsprod": renderVbsProd, "f-vbstyp": renderVbsTyp, "f-tpf": renderTpf, "f-eigentum": renderEigentum, "f-status": renderStatus };
+  // Grüninventar: only exports that carry the opt-in join column show the group.
+  function renderGreeninv() {
+    var grp = document.getElementById("fg-greeninv"); if (grp) grp.hidden = !hasGreeninv;
+    capList("f-greeninv", GREENINV_KEYS.map(function (k) { return chk("g", k, GREENINV_LABELS[k], greeninvCounts[k], filters.greeninv[k]); }));
+  }
+  var _rerenderGroup = { "f-exclude": renderExclude, "f-coverage": renderCoverage, "f-countries": renderCountries, "f-cantons": renderCantons, "f-arts": renderArts, "f-bauzonen": renderBauzonen, "f-vbsprod": renderVbsProd, "f-vbstyp": renderVbsTyp, "f-tpf": renderTpf, "f-eigentum": renderEigentum, "f-status": renderStatus, "f-greeninv": renderGreeninv };
   // Every fgroup-head carries the same "alle / keine" toggle (data-toggle="<facet>"):
   // one click fills the facet with all of its options, the next clears it. Note that
   // for value-based groups (Kanton, Land, Eigentumsart, Status) "alle" is not quite
@@ -1460,7 +1591,8 @@
     arts:      { opts: artListAll,      render: renderArts },
     bauzonen:  { opts: bauzoneListAll,  render: renderBauzonen },
     vbsprod:   { opts: VBS_GROUPS.vbsprod.keys, render: renderVbsProd },
-    vbstyp:    { opts: VBS_GROUPS.vbstyp.keys,  render: renderVbsTyp }
+    vbstyp:    { opts: VBS_GROUPS.vbstyp.keys,  render: renderVbsTyp },
+    greeninv:  { opts: GREENINV_KEYS,          render: renderGreeninv }
   };
   document.getElementById("filter-panel").addEventListener("click", function (e) {
     var t = e.target.closest("[data-toggle]");
@@ -1497,12 +1629,13 @@
   bindChecklist("f-eigentum", "e", "eigentum");
   bindChecklist("f-status", "s", "status");
   bindChecklist("f-coverage", "v", "coverage");
+  bindChecklist("f-greeninv", "g", "greeninv");
   var frBtn = document.getElementById("f-reset"); if (frBtn) frBtn.addEventListener("click", resetAll);
 
-  // ---- Tabs ----
+  // ---- Tabs (Karte is the start view; the tab is kept in the URL) ----
   var tabBtns = Array.prototype.slice.call(document.querySelectorAll(".tab"));
-  var mapMode = "overview"; // which tab owns the single shared map widget
   function showTab(name) {
+    if (["map", "overview", "quality", "about"].indexOf(name) < 0) name = "map";
     currentTab = name;
     tabBtns.forEach(function (t) {
       var on = t.getAttribute("data-tab") === name;
@@ -1510,21 +1643,14 @@
       t.setAttribute("aria-selected", on ? "true" : "false");
       t.tabIndex = on ? 0 : -1; // roving tabindex
     });
-    ["overview", "quality", "about", "priority"].forEach(function (n) {
+    ["map", "overview", "quality", "about"].forEach(function (n) {
       var panel = document.getElementById("panel-" + n);
       if (panel) panel.hidden = (n !== name);
     });
     if (name === "quality") renderQuality(state.rows); // gated out of update(); render it on demand with the current filtered set
-    var mapEl = document.getElementById("map"), resize = function () { if (map && mapReady) setTimeout(function () { map.resize(); }, 30); };
-    if (name === "priority") {
-      mapMode = "priority";
-      var slot = document.getElementById("pr-map-panel"); if (slot && mapEl && mapEl.parentNode !== slot) slot.appendChild(mapEl);
-      ensureMap(); refitMap = true; renderPriority(); resize(); // renderPriority renders the selection onto the moved map
-    } else if (mapMode === "priority") {
-      mapMode = "overview";
-      var ov = document.getElementById("ov-map-panel"); if (ov && mapEl && mapEl.parentNode !== ov) ov.appendChild(mapEl);
-      refitMap = true; renderMap(state.rows); resize(); // back to the filtered selection
-    }
+    document.getElementById("app").classList.toggle("tab-map", name === "map"); // map tab: page fits the viewport, no scrolling
+    if (name === "map") { ensureMap(); if (map && mapReady) setTimeout(function () { map.resize(); }, 30); } // hidden tabs report 0×0
+    writeURL();
   }
   tabBtns.forEach(function (t) { t.addEventListener("click", function () { showTab(t.getAttribute("data-tab")); }); });
   var tablistEl = document.querySelector(".tabs[role=tablist]");
@@ -1535,237 +1661,6 @@
     else if (e.key === "Home") j = 0; else if (e.key === "End") j = n - 1; else return;
     e.preventDefault(); showTab(tabBtns[j].getAttribute("data-tab")); tabBtns[j].focus();
   });
-
-  // ---- Priorisierung tab: gate → score (6 percentile signals) → top-N + Kanton cap ----
-  var WEIGHT_DEFS = [
-    { key: "green", name: "Grünumgebung", def: 25, tip: "Anteil und Menge Grünfläche an der Umgebungsfläche — bevorzugt grünreiche Grundstücke mit Aufwertungspotenzial." },
-    { key: "scale", name: "Grösse / Skala", def: 15, tip: "Grösse der Umgebungsfläche (logarithmisch) — grössere Flächen haben tendenziell mehr Wirkung." },
-    { key: "urban", name: "Urbane Relevanz", def: 15, tip: "Eignung des dominierenden Bauzonentyps — zentrale und urbane Zonen werden höher gewichtet." },
-    { key: "habitat", name: "Lebensräume", def: 10, tip: "Anteil naturnaher Lebensräume an der kartierten BAFU-Lebensraumfläche." },
-    { key: "diversity", name: "Strukturvielfalt", def: 5, tip: "Anzahl verschiedener Bodenbedeckungs- bzw. Lebensraumtypen — vielfältigere Grundstücke werden höher bewertet." },
-    { key: "quality", name: "Datenqualität", def: 10, tip: "Verlässlichkeit der Daten: amtliche AV-Quelle, vollständige Abdeckung, bestandene Geometrie- und Datenabruf-Prüfung." }
-  ];
-  // Building-zone relevance for N&W (developed grounds): Arbeits/öffentlich highest.
-  var PRIO_BZ_REL = { arbeitszonen: 1, zonen_fuer_oeffentliche_nutzungen: 1, zentrumszonen: 0.9, tourismus_und_freizeitzonen: 0.7, mischzonen: 0.75, wohnzonen: 0.6, eingeschraenkte_bauzonen: 0.5, weitere_bauzonen: 0.4, verkehrszonen_innerhalb_der_bauzonen: 0.3 };
-  // (naturnahe Lebensräume: siehe HABITAT_NAT_DIGIT oben — TypoCH L1-Klassen 1–7)
-  var prio = { federal: true, sap: true, ufMin: 1000, bauzone: true, bzMin: 50, topN: 100, cap: true, capN: 20, tpfCap: true, tpfCapN: 30, page: 1, pageSize: 25, weights: {}, selected: [], poolCount: 0, sort: "score", dir: -1 };
-  WEIGHT_DEFS.forEach(function (w) { prio.weights[w.key] = w.def; });
-  function prioUF(p) { return num(p.sia416_buf_m2) + num(p.sia416_uuf_m2); }
-  function prioMetrics(p) {
-    var area = num(p.parcel_area_m2), uf = prioUF(p), green = num(p.greenspace_m2);
-    var st = parcelStats(p), bzDomSlug = st.bzDomSlug, hbNat = st.hbNat, hbAll = st.hbSum, nLc = st.nLc, nHb = st.nHb;
-    // Feasibility: authoritative AV cover is best; no land cover at all = little to survey.
-    var q = (p.lc_source === "AV" ? 1 : 0.6);
-    if (!isCovered(p)) q -= 0.3;
-    if (p.check_geom && p.check_geom !== "ok") q -= 0.2;
-    if (p.check_wfs && p.check_wfs !== "ok") q -= 0.2;
-    return {
-      area: area, uf: uf, green: green,
-      greenShare: uf ? Math.min(1, green / uf) : 0,          // a share — clamp at 100 %
-      urban: (PRIO_BZ_REL[bzDomSlug] || 0),                  // zone-type fit; Bauzone-share is the gate, not the score
-      hbAll: hbAll,                                          // total mapped habitat area (0 = BAFU layer not queried for this parcel)
-      natShare: hbAll ? hbNat / hbAll : 0,                   // natural share of MAPPED habitat (robust to partial coverage)
-      diversity: Math.max(nLc, nHb),                         // max, not sum — don't double-weight parcels that have both layers
-      quality: Math.max(0, q)
-    };
-  }
-  function prioSeg(m) { return m.greenShare >= 0.30 ? "Grün-reich" : m.greenShare >= 0.15 ? "Gemischt" : "Versiegelt"; } // ≥30 % / 15–30 % green share of UF (descriptive segment label; see docs/PRIORITIZATION.md)
-  function prioGate(p) {
-    if (prio.federal && String(p["input_eigent.art"]) !== "1") return false;
-    if (prio.sap && EXCLUDE_RULES.some(function (r) { return nameMatches(p, r); })) return false;
-    if (prioUF(p) < prio.ufMin) return false;
-    if (prio.bauzone) {
-      var area = num(p.parcel_area_m2), bz = parcelStats(p).bzSum;
-      if (!area || bz / area < prio.bzMin / 100) return false;
-    }
-    return true;
-  }
-  // Percentile rank in [0,1] within the pool, using midrank for ties so identical
-  // values always get the same score (no spurious gradient from array order).
-  function pctRanks(vals) {
-    var n = vals.length;
-    if (n <= 1) return vals.map(function () { return 0.5; }); // a lone candidate has no percentile context
-    var idx = vals.map(function (v, i) { return i; }).sort(function (a, b) { return vals[a] - vals[b]; });
-    var r = new Array(n), i = 0;
-    while (i < n) { var j = i; while (j + 1 < n && vals[idx[j + 1]] === vals[idx[i]]) j++; var mid = ((i + j) / 2) / (n - 1); for (var k = i; k <= j; k++) r[idx[k]] = mid; i = j + 1; }
-    return r;
-  }
-  // Like pctRanks, but null/undefined/non-finite values (e.g. parcels with no habitat
-  // data) are excluded from the ranking and scored neutrally (0.5), so missing data is
-  // not mistaken for an ecologically poor parcel.
-  function pctRanksDefined(vals) {
-    var pos = [], defined = [];
-    vals.forEach(function (v, i) { if (v != null && isFinite(v)) { pos.push(i); defined.push(v); } });
-    var r = []; for (var i = 0; i < vals.length; i++) r[i] = 0.5;
-    var dr = pctRanks(defined); pos.forEach(function (origI, k) { r[origI] = dr[k]; });
-    return r;
-  }
-  function prioBlend(a, b, wa) { return a.map(function (v, i) { return wa * v + (1 - wa) * b[i]; }); }
-  // The pool + per-parcel metrics + percentile arrays depend only on the selection-funnel
-  // gate (federal/SAP/UF/Bauzone), NOT on the weights or Top-N/caps. Cache them on a gate
-  // signature so dragging a weight/Top-N/cap slider only recombines + re-sorts (cheap),
-  // instead of re-filtering the full dataset and re-ranking 6 signals every input event.
-  var _prioBase = null, _prioSig = null;
-  function prioBase() {
-    var sig = [prio.federal, prio.sap, prio.ufMin, prio.bauzone, prio.bzMin].join("|");
-    if (_prioBase && _prioSig === sig) return _prioBase;
-    var pool = PARCELS.filter(prioGate);
-    var M = pool.map(prioMetrics);
-    var sc = {
-      green: prioBlend(pctRanks(M.map(function (m) { return m.greenShare; })), pctRanks(M.map(function (m) { return m.green; })), 0.6),
-      scale: pctRanks(M.map(function (m) { return Math.log(1 + m.uf); })),
-      urban: pctRanks(M.map(function (m) { return m.urban; })),
-      habitat: pctRanksDefined(M.map(function (m) { return m.hbAll > 0 ? m.natShare : null; })),
-      diversity: pctRanks(M.map(function (m) { return m.diversity; })),
-      quality: pctRanks(M.map(function (m) { return m.quality; }))
-    };
-    _prioSig = sig; _prioBase = { pool: pool, M: M, sc: sc };
-    return _prioBase;
-  }
-  function computePrio() {
-    var base = prioBase(), pool = base.pool, M = base.M, sc = base.sc;
-    var W = prio.weights, Wsum = WEIGHT_DEFS.reduce(function (s, w) { return s + (W[w.key] || 0); }, 0) || 1;
-    var scored = pool.map(function (p, i) {
-      return { p: p, m: M[i], score: (W.green * sc.green[i] + W.scale * sc.scale[i] + W.urban * sc.urban[i] + W.habitat * sc.habitat[i] + W.diversity * sc.diversity[i] + W.quality * sc.quality[i]) / Wsum };
-    });
-    scored.sort(function (a, b) { return b.score - a.score; });
-    var out = [], kt = {}, tp = {}, capK = prio.cap ? prio.capN : 0, capT = prio.tpfCap ? prio.tpfCapN : 0;
-    for (var i = 0; i < scored.length && out.length < prio.topN; i++) {
-      var sp = scored[i].p, k = sp.input_rg || "?", t = (sp.input_tpf == null || sp.input_tpf === "") ? "?" : String(sp.input_tpf);
-      if (capK && (kt[k] || 0) >= capK) continue;
-      if (capT && (tp[t] || 0) >= capT) continue;
-      kt[k] = (kt[k] || 0) + 1; tp[t] = (tp[t] || 0) + 1; out.push(scored[i]);
-    }
-    out.forEach(function (s, i) { s.rank = i + 1; }); // score-rank, stable across table sorts
-    prio.poolCount = pool.length; prio.selected = out;
-  }
-  function renderPrioWeights() {
-    var el = document.getElementById("pr-weights"); if (!el) return;
-    el.innerHTML = WEIGHT_DEFS.map(function (w) {
-      return '<div class="prio-w"><label for="prw-' + w.key + '"><span>' + esc(w.name) + (w.tip ? ' <span class="ftip" tabindex="0" role="img" aria-label="' + esc(w.tip) + '" data-tip="' + esc(w.tip) + '">ⓘ</span>' : '') + '</span><strong>' + prio.weights[w.key] + '</strong></label>' +
-             '<input type="range" id="prw-' + w.key + '" data-wk="' + w.key + '" aria-label="Gewicht ' + esc(w.name) + '" min="0" max="40" step="1" value="' + prio.weights[w.key] + '"></div>';
-    }).join("");
-  }
-  var PRIO_SEGS = ["Grün-reich", "Gemischt", "Versiegelt"], PRIO_SEG_COL = { "Grün-reich": "#7cb342", "Gemischt": "#e0a23c", "Versiegelt": "#8d99a6" };
-  // Count of selected parcels grouped by a field (Kanton / Teilportfolio) → renderValTable items, top-N + Übrige.
-  function prioCountItems(field, topN, labelFn) {
-    var map = {};
-    prio.selected.forEach(function (s) { var v = s.p[field], key = (v == null || v === "") ? "—" : String(v); map[key] = (map[key] || 0) + 1; });
-    var keys = Object.keys(map).sort(function (a, b) { return map[b] - map[a]; });
-    var items = keys.slice(0, topN).map(function (key) { return { name: labelFn ? labelFn(key) : key, value: map[key] }; });
-    if (keys.length > topN) { var rest = keys.slice(topN).reduce(function (s, key) { return s + map[key]; }, 0); items.push({ name: "Übrige (" + (keys.length - topN) + ")", value: rest }); }
-    return items;
-  }
-  function renderPriority() {
-    if (!document.getElementById("pr-tbody")) return;
-    computePrio();
-    var n = prio.selected.length, total = n || 1;
-    var segCnt = { "Grün-reich": 0, "Gemischt": 0, "Versiegelt": 0 }, sumArea = 0, sumGreen = 0;
-    prio.selected.forEach(function (s) { segCnt[prioSeg(s.m)]++; sumArea += num(s.p.parcel_area_m2); sumGreen += num(s.p.greenspace_m2); });
-    var card = function (label, value, sub) { return '<div class="card"><div class="label">' + esc(label) + '</div><div class="value">' + value + '</div><div class="sub">' + esc(sub) + '</div></div>'; };
-    var segMix = '<div class="prio-stack">' + PRIO_SEGS.map(function (s) { return segCnt[s] ? '<span style="width:' + (100 * segCnt[s] / total).toFixed(1) + '%;background:' + PRIO_SEG_COL[s] + '"></span>' : ""; }).join("") + '</div>' +
-      '<div class="prio-legend">' + PRIO_SEGS.map(function (s) { return '<span><i style="background:' + PRIO_SEG_COL[s] + '"></i>' + s + ' ' + fmt(segCnt[s]) + '</span>'; }).join("") + '</div>';
-    document.getElementById("pr-kpis").innerHTML =
-      card("Kandidaten", fmt(prio.poolCount), "nach Eingrenzung") +
-      card("Auswahl", fmt(n), "Top-N " + prio.topN) +
-      card("Grundstücksfläche", fmtAreaU(sumArea), fmt(n) + " Grundstücke") +
-      card("Grünfläche", fmtAreaU(sumGreen), (sumArea ? pct(sumGreen, sumArea) : 0) + "% der Fläche") +
-      '<div class="card prio-seg-card"><div class="label">Segment-Mix der Auswahl</div>' + segMix + '</div>';
-    renderValTable("pr-rg", prioCountItems("input_rg", 12), n, fmt, true, "Anzahl", "Anteil an der Auswahl (Anzahl Grundstücke).");
-    renderValTable("pr-tpf", prioCountItems("input_tpf", 12, tpfLabel), n, fmt, true, "Anzahl", "Anteil an der Auswahl (Anzahl Grundstücke).");
-    document.getElementById("pr-count").textContent = fmt(n) + " von " + fmt(prio.poolCount) + " Kandidaten";
-    prio.page = 1; renderPrioHead(); renderPrioBody();
-    if (mapMode === "priority") renderMap(prio.selected.map(function (s) { return s.p; })); // selected parcels on the map
-  }
-  // Rangliste columns — each maps a {p, m, score} row to a sort value (mirrors the Übersicht COLUMNS).
-  var PRIO_COLS = [
-    { key: "rang",  label: "Rang",        num: true,  val: function (s) { return s.rank; } },
-    { key: "id",    label: "ID",          num: false, val: function (s) { return s.p.id || ""; } },
-    { key: "egrid", label: "E-GRID",      num: false, val: function (s) { return s.p.egrid || ""; } },
-    { key: "ort",   label: "Ort",         num: false, val: function (s) { return s.p.input_ort || ""; } },
-    { key: "kt",    label: "Kt",          num: false, val: function (s) { return s.p.input_rg || ""; } },
-    { key: "seg",   label: "Segment",     num: true,  val: function (s) { return s.m.greenShare; } }, // by underlying Grün-Anteil
-    { key: "uf",    label: "UF",          num: true,  val: function (s) { return s.m.uf; }, tip: "Umgebungsfläche = SIA 416 BUF + UUF (Grundstück ohne Gebäudegrundfläche)." },
-    { key: "gruen", label: "Grün&nbsp;%", num: true,  val: function (s) { return s.m.greenShare; }, tip: "Grünanteil an der Umgebungsfläche UF (nicht an der Grundstücksfläche)." },
-    { key: "score", label: "Score",       num: true,  val: function (s) { return s.score; }, tip: "Gewichteter Mittelwert von 6 Perzentil-Signalen (0–1); höher = höhere Begehungs-Priorität." }
-  ];
-  var prioColByKey = {}; PRIO_COLS.forEach(function (c) { prioColByKey[c.key] = c; });
-  function renderPrioHead() {
-    var tr = document.getElementById("pr-thead-row"); if (!tr) return;
-    tr.innerHTML = PRIO_COLS.map(function (c) {
-      var sorted = prio.sort === c.key, arrow = sorted ? ' <span class="arrow">' + (prio.dir < 0 ? "▼" : "▲") + "</span>" : "";
-      var tip = c.tip ? ' data-tip="' + esc(c.tip) + '"' : "";
-      return '<th class="' + (c.num ? "num" : "") + (sorted ? " sorted" : "") + '" scope="col" tabindex="0" aria-sort="' + (sorted ? (prio.dir < 0 ? "descending" : "ascending") : "none") + '" data-key="' + c.key + '"' + tip + ">" + c.label + arrow + "</th>";
-    }).join("");
-  }
-  function renderPrioBody() {
-    var tb = document.getElementById("pr-tbody"); if (!tb) return;
-    var rows = prio.selected.slice(), col = prioColByKey[prio.sort]; // sort a copy — prio.selected stays score-ranked
-    if (col) rows.sort(function (a, b) {
-      var x = col.val(a), y = col.val(b);
-      return col.num ? (num(x) - num(y)) * prio.dir : deCollator.compare(String(x == null ? "" : x), String(y == null ? "" : y)) * prio.dir;
-    });
-    var pages = Math.max(1, Math.ceil(rows.length / prio.pageSize));
-    if (prio.page > pages) prio.page = pages; if (prio.page < 1) prio.page = 1;
-    var start = (prio.page - 1) * prio.pageSize;
-    tb.innerHTML = rows.length
-      ? rows.slice(start, start + prio.pageSize).map(function (s) {
-          var p = s.p, m = s.m, pid = (p.id == null ? "" : String(p.id));
-          var rs = (selectedParcelId && pid === selectedParcelId) ? ' class="row-selected"' : "";
-          return '<tr data-id="' + esc(pid) + '" tabindex="0"' + rs + "><td>" + s.rank + "</td><td>" + esc(p.id || "") + "</td><td>" + (p.egrid ? esc(p.egrid) : '<span class="muted">–</span>') +
-                 "</td><td>" + esc(p.input_ort || "") + "</td><td>" + esc(p.input_rg || "") + "</td><td>" + esc(prioSeg(m)) +
-                 "</td><td class='num'>" + fmtArea(m.uf) + "</td><td class='num'>" + Math.round(100 * m.greenShare) + "</td><td class='num'>" + s.score.toFixed(3) + "</td></tr>";
-        }).join("")
-      : '<tr><td colspan="9" class="empty">Keine Kandidaten — Eingrenzung lockern.</td></tr>';
-    var info = document.getElementById("pr-page-info"), prev = document.getElementById("pr-prev"), next = document.getElementById("pr-next");
-    if (info) info.textContent = "Seite " + prio.page + " von " + pages;
-    if (prev) prev.disabled = prio.page <= 1;
-    if (next) next.disabled = prio.page >= pages;
-  }
-  if (document.getElementById("pr-uf")) {
-    renderPrioWeights();
-    var prBind = function (id, ev, fn) { var el = document.getElementById(id); if (el) el.addEventListener(ev, fn); };
-    var _prT; var renderPriorityD = function () { clearTimeout(_prT); _prT = setTimeout(renderPriority, 110); }; // coalesce continuous slider drags (the value label updates immediately)
-    prBind("pr-federal", "change", function (e) { prio.federal = e.target.checked; renderPriority(); });
-    prBind("pr-sap", "change", function (e) { prio.sap = e.target.checked; renderPriority(); });
-    prBind("pr-uf", "input", function (e) { prio.ufMin = +e.target.value; document.getElementById("pr-uf-val").textContent = fmt(prio.ufMin); renderPriorityD(); });
-    prBind("pr-bauzone", "change", function (e) { prio.bauzone = e.target.checked; renderPriority(); });
-    prBind("pr-bz", "input", function (e) { prio.bzMin = +e.target.value; document.getElementById("pr-bz-val").textContent = prio.bzMin; renderPriorityD(); });
-    prBind("pr-topn", "input", function (e) { prio.topN = +e.target.value; document.getElementById("pr-topn-val").textContent = prio.topN; renderPriorityD(); });
-    prBind("pr-cap", "change", function (e) { prio.cap = e.target.checked; renderPriority(); });
-    prBind("pr-cap-n", "input", function (e) { prio.capN = Math.max(1, +e.target.value || 1); renderPriorityD(); });
-    prBind("pr-tcap", "change", function (e) { prio.tpfCap = e.target.checked; renderPriority(); });
-    prBind("pr-tcap-n", "input", function (e) { prio.tpfCapN = Math.max(1, +e.target.value || 1); renderPriorityD(); });
-    prBind("pr-reset-w", "click", function () { WEIGHT_DEFS.forEach(function (w) { prio.weights[w.key] = w.def; }); renderPrioWeights(); renderPriority(); });
-    document.getElementById("pr-weights").addEventListener("input", function (e) {
-      var wk = e.target.getAttribute && e.target.getAttribute("data-wk"); if (!wk) return;
-      prio.weights[wk] = +e.target.value;
-      var st = e.target.previousElementSibling && e.target.previousElementSibling.querySelector("strong"); if (st) st.textContent = prio.weights[wk];
-      renderPriorityD();
-    });
-    var prRowAct = function (e) { // click or Enter/Space a row → select on map + zoom (Priorisierung)
-      if (e.type === "keydown" && e.key !== "Enter" && e.key !== " ") return;
-      var tr = e.target.closest && e.target.closest("tr[data-id]"); if (!tr) return;
-      if (e.type === "keydown") e.preventDefault();
-      focusParcel(tr.getAttribute("data-id"));
-    };
-    prBind("pr-tbody", "click", prRowAct); prBind("pr-tbody", "keydown", prRowAct);
-    prBind("pr-prev", "click", function () { if (prio.page > 1) { prio.page--; renderPrioBody(); } });
-    prBind("pr-next", "click", function () { if (prio.page < Math.ceil(prio.selected.length / prio.pageSize)) { prio.page++; renderPrioBody(); } });
-    prBind("pr-page-size", "change", function (e) { prio.pageSize = parseInt(e.target.value, 10); prio.page = 1; renderPrioBody(); });
-    prBind("pr-export", "click", function () { var b = document.getElementById("dl-btn"); if (b) b.click(); }); // → öffnet das Download-Fenster (Priorisiert-Bereich)
-    var prTh = document.getElementById("pr-thead-row"); // sortable Rangliste columns (mirrors the Übersicht thead)
-    function prSortAct(e) {
-      if (e.type === "keydown" && e.key !== "Enter" && e.key !== " ") return;
-      var th = e.target.closest && e.target.closest("th[data-key]"); if (!th) return;
-      if (e.type === "keydown") e.preventDefault();
-      var key = th.getAttribute("data-key");
-      if (prio.sort === key) prio.dir = -prio.dir;
-      else { prio.sort = key; prio.dir = prioColByKey[key] && prioColByKey[key].num ? -1 : 1; }
-      prio.page = 1; renderPrioHead(); renderPrioBody();
-    }
-    if (prTh) { prTh.addEventListener("click", prSortAct); prTh.addEventListener("keydown", prSortAct); }
-  }
 
   // ---- Filter panel collapse / expand ----
   var appEl = document.getElementById("app");
@@ -1822,7 +1717,7 @@
   // (the JS-rendered ftips already carry tabindex/aria-label inline, so they are skipped here).
   Array.prototype.forEach.call(document.querySelectorAll(".ftip[data-tip]:not([aria-label])"), function (el) { el.tabIndex = 0; el.setAttribute("role", "img"); el.setAttribute("aria-label", el.getAttribute("data-tip")); });
 
-  // ---- Export helpers (shared by the download modal + the Priorisierung tab) ----
+  // ---- Export helpers (download dialog) ----
   // Parcels → GeoJSON features: geometry + all non-internal props (PII stripped on import). WGS84.
   function parcelFeatures(parcels) {
     return parcels.map(function (p) {
@@ -1845,22 +1740,11 @@
       XLSX.writeFile(wb, fname);
     });
   }
-  var PRIO_XLSX_COLS = [{ label: "Rang", key: "survey_rank", num: true }, { label: "Score", key: "survey_score", num: true }, { label: "Segment", key: "survey_segment" }];
-  // Top-N prioritised parcels as flat rows (incl. _geom) tagged with survey rank / score / segment.
-  function prioRows() {
-    computePrio();
-    return prio.selected.map(function (s, i) {
-      var r = {}; for (var k in s.p) { if (Object.prototype.hasOwnProperty.call(s.p, k)) r[k] = s.p[k]; }
-      r.survey_rank = i + 1; r.survey_score = +s.score.toFixed(4); r.survey_segment = prioSeg(s.m);
-      return r;
-    });
-  }
-
   // ---- Datenqualität export: Prüfregeln (Referenz) + Abweichungen (Langformat) ----
-  // Reuses computeRules' authoritative per-rule `fails` lists — the SAME pass/fail
-  // decisions the Datenqualität tab makes (no re-derivation) — and only adds the display
-  // values (Ist / Soll / Abweichung) per deviation. Recomputed fresh from a row set (like
-  // prioRows) so the export is correct even if the Datenqualität tab was never opened.
+  // Reuses computeRules' authoritative per-rule `fails` lists (the SAME pass/fail
+  // decisions the Datenqualität tab makes, no re-derivation) and only adds the display
+  // values (Ist / Soll / Abweichung) per deviation. Recomputed fresh from a row set
+  // so the export is correct even if the Datenqualität tab was never opened.
   // E-GRID uniqueness (and every count) is judged within `rows`, so Alle/Gefiltert differ.
   function _devDelta(diff, base) { // "+50 (+5 %)" / "-32 (-3.8 %)" — Ist minus Soll, signed
     var d = Math.round(diff), p = base > 0 ? Math.round(diff / base * 1000) / 10 : null;
@@ -1914,7 +1798,7 @@
   }
 
   // ──────────────────────────────────────────────────────────────────────────
-  // Grundstücksbericht (PDF, A3 hoch) — eine Seite je priorisiertes Grundstück.
+  // Grundstücksbericht (PDF, A3 hoch), eine Seite je ausgewähltes Grundstück (max. SEL_MAX).
   // Vollständig clientseitig: swisstopo-WMS-Bilder (CORS-frei) → Canvas (+ rote
   // Parzellengrenze) → jsPDF. Benötigt Internet (WMS-Bilder + jsPDF vom CDN).
   // ──────────────────────────────────────────────────────────────────────────
@@ -2095,12 +1979,12 @@
   // Inhaltsverzeichnis / Übersicht as the first page(s).
   function renderTocPages(pdf, rows, tocPages, totalPages) {
     var M = 12, PW = 297, w = PW - 2 * M;
-    var cols = [{ t: "Rang", x: M, a: "left" }, { t: "System ID", x: M + 16, a: "left" }, { t: "Ort", x: M + 58, a: "left" }, { t: "Kt", x: M + 120, a: "left" }, { t: "Fläche", x: M + 158, a: "right" }, { t: "Grün %", x: M + 192, a: "right" }, { t: "Score", x: M + 224, a: "right" }, { t: "Seite", x: M + w, a: "right" }];
+    var cols = [{ t: "Nr.", x: M, a: "left" }, { t: "System ID", x: M + 16, a: "left" }, { t: "Ort", x: M + 58, a: "left" }, { t: "Kt", x: M + 120, a: "left" }, { t: "Fläche", x: M + 158, a: "right" }, { t: "Grün %", x: M + 192, a: "right" }, { t: "E-GRID", x: M + 204, a: "left" }, { t: "Seite", x: M + w, a: "right" }];
     for (var pg = 0; pg < tocPages; pg++) {
       if (pg > 0) pdf.addPage();
       pdf.setTextColor(31, 41, 55); pdf.setFont("helvetica", "bold"); pdf.setFontSize(17); pdf.text("Grundstücksbericht", M, 16);
       pdf.setFont("helvetica", "normal"); pdf.setFontSize(9); pdf.setTextColor(120); pdf.text("Bundesamt für Bauten und Logistik BBL", PW - M, 16, { align: "right" });
-      pdf.setFontSize(11); pdf.setTextColor(70); pdf.text("Übersicht — " + rows.length + " priorisierte Grundstücke · Stand " + reportDateStr(), M, 24);
+      pdf.setFontSize(11); pdf.setTextColor(70); pdf.text("Übersicht: " + rows.length + " Grundstücke · Stand " + reportDateStr(), M, 24);
       var hy = 34;
       pdf.setFont("helvetica", "bold"); pdf.setFontSize(8.5); pdf.setTextColor(110);
       cols.forEach(function (c) { pdf.text(c.t, c.x, hy, { align: c.a }); });
@@ -2109,13 +1993,13 @@
       rows.slice(start, start + ROWS_PER_TOC).forEach(function (p, j) {
         var gi = start + j, area = num(p.parcel_area_m2), green = num(p.greenspace_m2), gp = area ? Math.round(green / area * 100) : 0;
         pdf.setFont("helvetica", "normal"); pdf.setFontSize(9); pdf.setTextColor(40);
-        pdf.text(String(p.survey_rank || (gi + 1)), cols[0].x, ry);
+        pdf.text(String(gi + 1), cols[0].x, ry);
         pdf.text(String(p.id || "-"), cols[1].x, ry, { maxWidth: 40 });
         pdf.text(((p.input_plz ? p.input_plz + " " : "") + (p.input_ort || "-")), cols[2].x, ry, { maxWidth: 58 });
         pdf.text(String(p.input_rg || "-"), cols[3].x, ry);
         pdf.text(fmtArea(area) + " " + unitLabel(), cols[4].x, ry, { align: "right" });
         pdf.text(gp + "%", cols[5].x, ry, { align: "right" });
-        pdf.text(p.survey_score != null ? String(p.survey_score) : "-", cols[6].x, ry, { align: "right" });
+        pdf.text(String(p.egrid || "-"), cols[6].x, ry);
         pdf.text(String(tocPages + gi + 1), cols[7].x, ry, { align: "right" });
         pdf.setDrawColor(236); pdf.line(M, ry + 2.6, PW - M, ry + 2.6); ry += 7;
       });
@@ -2151,13 +2035,13 @@
   }
   // Draw one already-fetched page (synchronous — jsPDF is single-document/stateful, so pages
   // must be drawn one at a time in order; only the image fetching above runs concurrently).
-  function drawReportPage(pdf, p, urls, total, pageNum, totalPages) {
+  function drawReportPage(pdf, p, urls, total, pageNum, totalPages, nr) {
     var M = 12, PW = 297, w = PW - 2 * M;
     pdf.setTextColor(31, 41, 55); pdf.setFont("helvetica", "bold"); pdf.setFontSize(15); pdf.text("Grundstücksbericht", M, 13);
     pdf.setFont("helvetica", "normal"); pdf.setFontSize(9); pdf.setTextColor(120); pdf.text("Bundesamt für Bauten und Logistik BBL", PW - M, 13, { align: "right" });
     pdf.setDrawColor(200); pdf.line(M, 16, PW - M, 16);
     pdf.setTextColor(31, 41, 55); pdf.setFont("helvetica", "bold"); pdf.setFontSize(13); pdf.text("System ID " + (p.id || "-"), M, 22);
-    pdf.setFontSize(10.5); pdf.text(p.survey_rank ? ("Rang " + p.survey_rank + " / " + total) : "", PW - M, 22, { align: "right" });
+    pdf.setFontSize(10.5); pdf.text("Nr. " + nr + " / " + total, PW - M, 22, { align: "right" });
     var bez = p["input_bez. grundstück"] || "";
     pdf.setFont("helvetica", "normal"); pdf.setFontSize(9.5); pdf.setTextColor(90); if (bez) pdf.text(String(bez), M, 27, { maxWidth: w });
     var pole = poleOfGeom(p._geom);
@@ -2166,8 +2050,8 @@
     drawLocatorMap(pdf, PW - M - 47, 34.5, 47, 28, pole ? pole[0] : null, pole ? pole[1] : null); // locator beside the attribute table
     // clean 2-column key/value table (left block; locator map sits to its right)
     var area = num(p.parcel_area_m2), green = num(p.greenspace_m2), gp = area ? Math.round(green / area * 100) : 0;
-    var L = [["Ort", (p.input_plz ? p.input_plz + " " : "") + (p.input_ort || "-")], ["Kanton", p.input_rg || "-"], ["E-GRID", p.egrid || "-"], ["Nummer", p.nummer || "-"], ["Segment", p.survey_segment || "-"]];
-    var R = [["Teilportfolio", tpfLabel(p.input_tpf)], ["Eigentumsart", eigentumLabel(p["input_eigent.art"])], ["Grundstücksfläche", fmtArea(area) + " " + unitLabel()], ["Grünfläche", fmtArea(green) + " " + unitLabel() + " (" + gp + "%)"], ["Score", p.survey_score != null ? String(p.survey_score) : "-"]];
+    var L = [["Ort", (p.input_plz ? p.input_plz + " " : "") + (p.input_ort || "-")], ["Kanton", p.input_rg || "-"], ["E-GRID", p.egrid || "-"], ["Nummer", p.nummer || "-"], ["E-GRID-Status", STATUS_LABELS[statusKey(p)] || statusKey(p) || "-"]];
+    var R = [["Teilportfolio", tpfLabel(p.input_tpf)], ["Eigentumsart", eigentumLabel(p["input_eigent.art"])], ["Grundstücksfläche", fmtArea(area) + " " + unitLabel()], ["Grünfläche", fmtArea(green) + " " + unitLabel() + " (" + gp + "%)"], ["Datenquelle", p.lc_source === "AV" ? "Amtliche Vermessung (AV)" : p.lc_source === "BAFU" ? "BAFU (modelliert)" : (p.lc_source || "-")]];
     var ty = 35, rowH = 4.8, colW = 108, labW = 30;
     for (var i = 0; i < 5; i++) {
       var yy = ty + i * rowH;
@@ -2193,10 +2077,10 @@
     });
     reportFooter(pdf, pageNum, totalPages);
   }
-  // Build the PDF (one A3 page per prioritised parcel) and trigger the download.
-  function generateParcelReport(filename, onProgress, token) {
-    var rows = prioRows();
-    if (!rows.length) return Promise.reject(new Error("Keine priorisierten Grundstücke vorhanden."));
+  // Build the PDF (one A3 page per parcel in `rows`) and trigger the download.
+  function generateParcelReport(rows, filename, onProgress, token) {
+    if (!rows || !rows.length) return Promise.reject(new Error("Keine Grundstücke ausgewählt."));
+    if (rows.length > SEL_MAX) return Promise.reject(new Error("Maximal " + SEL_MAX + " Grundstücke pro Bericht."));
     var tocPages = Math.max(1, Math.ceil(rows.length / ROWS_PER_TOC)), totalPages = tocPages + rows.length;
     var totalSteps = rows.length, done = 0; // one progress tick per parcel page (3 section tiles fetched in parallel)
     function tick(label) { done++; if (onProgress) onProgress(done / totalSteps, label); }
@@ -2217,7 +2101,7 @@
           return imgP[i].then(function (urls) {
             checkAbort(); // cancelled during fetch → stop before drawing this page
             pdf.addPage();
-            drawReportPage(pdf, p, urls, rows.length, tocPages + i + 1, totalPages);
+            drawReportPage(pdf, p, urls, rows.length, tocPages + i + 1, totalPages, i + 1);
             imgP[i] = null;            // release this page's data URLs
             ensureFetched(i + CONC);   // start the next fetch as this slot frees
             tick("Grundstück " + (i + 1) + " / " + rows.length);
@@ -2227,32 +2111,55 @@
     });
   }
 
-  // ---- Download modal (header): offline HTML + GeoJSON/Excel per scope (Alle / Gefiltert / Priorisiert) ----
+  // ---- Download dialog: one scope switch (Alle / Aktive Filter / Ausgewählt), one list of formats ----
+  // openDownload(scope, pdfRows): opens the dialog on `scope`; with `pdfRows` it starts the PDF
+  // report for exactly those parcels right away (table bar button, map popup action).
+  var openDownload;
   (function () {
     var btn = document.getElementById("dl-btn"), modal = document.getElementById("dl-modal"), card = modal.querySelector(".modal-card");
     var titleInput = document.getElementById("dl-title"), hint = document.getElementById("dl-hint"), defHint = hint.textContent, lastFocus = null;
+    var scopeEl = document.getElementById("dl-scope"), scope = "flt";
+    var prog = document.getElementById("dl-progress"), bar = document.getElementById("dl-progress-bar"), txt = document.getElementById("dl-progress-txt"), abortBtn = document.getElementById("dl-abort");
+    var pdfBtn = document.getElementById("dl-pdf"), pdfSub = document.getElementById("dl-pdf-sub"), running = false;
     if (window.DASHBOARD_TITLE) titleInput.value = window.DASHBOARD_TITLE;
     var titleVal = function () { return (titleInput.value || "Auswertung Bodenbedeckung").trim(); };
     var base = function () { return slug(titleVal()); };
-    function refreshCounts() {
-      computePrio();
-      document.getElementById("dl-n-all").textContent = "(" + fmt(PARCELS.length) + ")";
-      document.getElementById("dl-n-flt").textContent = "(" + fmt(state.rows.length) + ")";
-      document.getElementById("dl-n-prio").textContent = "(" + fmt(prio.selected.length) + ")";
-      document.getElementById("dl-n-q-all").textContent = "(" + fmt(qualityDeviationRows(PARCELS).deviations.length) + " Abweichungen)";
-      document.getElementById("dl-n-q-flt").textContent = "(" + fmt(qualityDeviationRows(state.rows).deviations.length) + " Abweichungen)";
+    var SCOPE_FILE = { all: "alle", flt: "gefiltert", sel: "auswahl" };
+    function counts() { return { all: PARCELS.length, flt: state.rows.length, sel: selCount() }; }
+    function scopeRows() { return scope === "sel" ? selRows() : scope === "flt" ? state.rows : PARCELS; }
+    function setRow(id, ok) { var b = document.getElementById(id); b.disabled = !ok; b.closest(".dl-row").classList.toggle("is-off", !ok); }
+    function refresh() {
+      var c = counts(), n = c[scope];
+      document.getElementById("dl-n-all").textContent = "(" + fmt(c.all) + ")";
+      document.getElementById("dl-n-flt").textContent = "(" + fmt(c.flt) + ")";
+      document.getElementById("dl-n-sel").textContent = "(" + fmt(c.sel) + ")";
+      Array.prototype.forEach.call(scopeEl.querySelectorAll(".seg-btn"), function (b) {
+        var k = b.getAttribute("data-scope");
+        b.setAttribute("aria-checked", k === scope ? "true" : "false"); b.disabled = c[k] === 0;
+      });
+      var pdfOk = n > 0 && n <= SEL_MAX && !running;
+      setRow("dl-pdf", pdfOk);
+      pdfSub.textContent = running ? "Bericht wird erstellt." : n === 0 ? "Keine Grundstücke im gewählten Umfang." : n > SEL_MAX ? "Maximal " + SEL_MAX + " Grundstücke. Grundstücke in der Tabelle auswählen." : "A3, eine Seite pro Grundstück (" + fmt(n) + ").";
+      pdfBtn.textContent = running ? "Läuft…" : "PDF erstellen";
+      setRow("dl-xlsx", n > 0); setRow("dl-geo", n > 0); setRow("dl-q", n > 0); setRow("dl-html", true);
     }
     function bgInert(on) { [document.querySelector("header"), document.getElementById("app"), document.querySelector("footer")].forEach(function (el) { if (!el) return; el.inert = on; if (on) el.setAttribute("aria-hidden", "true"); else el.removeAttribute("aria-hidden"); }); } // hide background from AT/Tab while the dialog is open
-    function openModal() { lastFocus = document.activeElement; refreshCounts(); hint.textContent = defHint; modal.hidden = false; bgInert(true); document.getElementById("dl-close").focus(); }
+    openDownload = function (sc, pdfRows) {
+      lastFocus = document.activeElement;
+      var c = counts();
+      scope = (sc && c[sc]) ? sc : (c.sel ? "sel" : (c.flt ? "flt" : "all"));
+      refresh(); hint.textContent = defHint; modal.hidden = false; bgInert(true);
+      document.getElementById("dl-close").focus();
+      if (pdfRows) runPdf(pdfRows);
+    };
     function closeModal() { modal.hidden = true; bgInert(false); if (lastFocus && lastFocus.focus) lastFocus.focus(); }
-    btn.addEventListener("click", openModal);
+    btn.addEventListener("click", function () { openDownload(null); });
+    scopeEl.addEventListener("click", function (e) { var b = e.target.closest(".seg-btn"); if (!b || b.disabled) return; scope = b.getAttribute("data-scope"); refresh(); });
     document.getElementById("dl-close").addEventListener("click", closeModal);
     modal.addEventListener("click", function (e) { if (e.target === modal) closeModal(); }); // click on the backdrop
     document.addEventListener("keydown", function (e) { if (e.key === "Escape" && !modal.hidden) closeModal(); });
     card.addEventListener("keydown", function (e) { // simple focus trap so Tab stays inside the dialog
       if (e.key !== "Tab") return;
-      // Only truly focusable controls: skip hidden/disabled ones (e.g. the #dl-progress/#dl-abort
-      // block is hidden until a download runs — including it would dead-end the trap).
       var f = Array.prototype.filter.call(card.querySelectorAll("button, input, [tabindex]"),
         function (el) { return !el.disabled && el.offsetParent !== null; });
       if (!f.length) return;
@@ -2260,7 +2167,7 @@
       if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
       else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
     });
-    // Run an export, surfacing progress / errors in the hint line; the modal stays open for more downloads.
+    // Run an export, surfacing progress / errors in the hint line; the dialog stays open for more downloads.
     function busy(msg, fn) {
       hint.textContent = msg;
       var done = function () { hint.textContent = defHint; }, fail = function (err) { hint.textContent = "Fehler: " + ((err && err.message) || err); };
@@ -2273,57 +2180,95 @@
           .catch(function (err) { throw new Error("HTML-Download benötigt einen Webserver (fetch ist über file:// blockiert). " + err.message); });
       });
     });
-    // Scopes — Alle = full dataset · Gefiltert = active side-panel filters · Priorisiert = Top-N (+ survey rank/score/segment).
-    document.getElementById("dl-all-geo").addEventListener("click", function () { busy("GeoJSON wird erstellt…", function () { exportGeojsonRows(PARCELS, base() + "-alle.geojson"); }); });
-    document.getElementById("dl-all-xlsx").addEventListener("click", function () { busy("Excel wird erstellt…", function () { return exportXlsxRows(PARCELS, base() + "-alle.xlsx", "Grundstücke"); }); });
-    document.getElementById("dl-flt-geo").addEventListener("click", function () { busy("GeoJSON wird erstellt…", function () { exportGeojsonRows(state.rows, base() + "-gefiltert.geojson"); }); });
-    document.getElementById("dl-flt-xlsx").addEventListener("click", function () { busy("Excel wird erstellt…", function () { return exportXlsxRows(state.rows, base() + "-gefiltert.xlsx", "Grundstücke"); }); });
-    document.getElementById("dl-prio-geo").addEventListener("click", function () { busy("GeoJSON wird erstellt…", function () { exportGeojsonRows(prioRows(), base() + "-priorisierung-top" + prio.topN + ".geojson"); }); });
-    document.getElementById("dl-prio-xlsx").addEventListener("click", function () { busy("Excel wird erstellt…", function () { return exportXlsxRows(prioRows(), base() + "-priorisierung-top" + prio.topN + ".xlsx", "Priorisierung", PRIO_XLSX_COLS); }); });
-    // Datenqualität — Prüfregeln + auffällige Grundstücke (2-sheet Excel), Alle / Gefiltert.
-    document.getElementById("dl-q-all-xlsx").addEventListener("click", function () { busy("Datenqualität-Excel wird erstellt…", function () { return exportQualityXlsx(PARCELS, base() + "-datenqualitaet-alle.xlsx"); }); });
-    document.getElementById("dl-q-flt-xlsx").addEventListener("click", function () { busy("Datenqualität-Excel wird erstellt…", function () { return exportQualityXlsx(state.rows, base() + "-datenqualitaet-gefiltert.xlsx"); }); });
-    // PDF-Bericht (A3, eine Seite je priorisiertes Grundstück) — Hintergrund-Verarbeitung mit Fortschrittsbalken.
-    document.getElementById("dl-pdf").addEventListener("click", function () {
-      var pbtn = this, prog = document.getElementById("dl-progress"), bar = document.getElementById("dl-progress-bar"), txt = document.getElementById("dl-progress-txt"), abortBtn = document.getElementById("dl-abort");
+    document.getElementById("dl-xlsx").addEventListener("click", function () { busy("Excel wird erstellt…", function () { return exportXlsxRows(scopeRows(), base() + "-" + SCOPE_FILE[scope] + ".xlsx", "Grundstücke"); }); });
+    document.getElementById("dl-geo").addEventListener("click", function () { busy("GeoJSON wird erstellt…", function () { exportGeojsonRows(scopeRows(), base() + "-" + SCOPE_FILE[scope] + ".geojson"); }); });
+    document.getElementById("dl-q").addEventListener("click", function () { busy("Datenqualität-Excel wird erstellt…", function () { return exportQualityXlsx(scopeRows(), base() + "-datenqualitaet-" + SCOPE_FILE[scope] + ".xlsx"); }); });
+    // PDF-Bericht (A3, eine Seite je Grundstück): Hintergrund-Verarbeitung mit Fortschrittsbalken + Abbrechen.
+    function runPdf(rowsIn) {
+      if (running) return;
+      var rows = rowsIn || scopeRows();
+      if (!rows.length || rows.length > SEL_MAX) { refresh(); return; }
       var token = { aborted: false };
-      pbtn.disabled = true; prog.hidden = false; bar.style.width = "0%"; txt.textContent = "Wird vorbereitet…"; hint.textContent = "PDF-Bericht wird erstellt — bitte warten.";
+      running = true; refresh();
+      prog.hidden = false; bar.style.width = "0%"; txt.textContent = "Wird vorbereitet…"; hint.textContent = "PDF-Bericht wird erstellt, bitte warten.";
       abortBtn.disabled = false; abortBtn.onclick = function () { token.aborted = true; abortBtn.disabled = true; txt.textContent = "Wird abgebrochen…"; };
-      generateParcelReport(base() + "-grundstuecksbericht.pdf", function (frac, label) {
+      var fname = base() + "-grundstuecksbericht" + (rows.length === 1 && rows[0].id ? "-" + slug(String(rows[0].id)) : "") + ".pdf";
+      generateParcelReport(rows, fname, function (frac, label) {
         bar.style.width = Math.round(frac * 100) + "%"; txt.textContent = Math.round(frac * 100) + "% · " + (label || "");
       }, token).then(function (n) {
-        bar.style.width = "100%"; txt.textContent = "Fertig — " + n + " Seite(n)."; hint.textContent = defHint;
-        setTimeout(function () { prog.hidden = true; }, 2500); pbtn.disabled = false;
+        bar.style.width = "100%"; txt.textContent = "Fertig: " + fname + " (" + n + (n === 1 ? " Seite" : " Seiten") + ")."; hint.textContent = defHint;
+        setTimeout(function () { prog.hidden = true; }, 2500);
       }).catch(function (err) {
         var aborted = err && err.message === "__ABORT__";
         txt.textContent = aborted ? "Abgebrochen." : ("Fehler: " + ((err && err.message) || err));
         hint.textContent = aborted ? defHint : "PDF-Bericht fehlgeschlagen.";
         if (aborted) setTimeout(function () { prog.hidden = true; }, 1800);
-        pbtn.disabled = false;
-      });
-    });
+      }).then(function () { running = false; abortBtn.disabled = true; refresh(); });
+    }
+    pdfBtn.addEventListener("click", function () { runPdf(null); });
   })();
 
   // ---- "Neue Datei": reload to a clean URL → file picker (served builder) ----
   var bn0 = document.getElementById("btn-new");
   if (bn0) bn0.addEventListener("click", function () { location.href = location.pathname; });
 
-  // ---- Area unit toggle (ha / m²) — display only; re-renders every area number ----
-  var unitBtns = Array.prototype.slice.call(document.querySelectorAll("#unit-toggle .unit-btn"));
-  function syncUnitUI() { unitBtns.forEach(function (b) { b.classList.toggle("is-active", b.getAttribute("data-unit") === areaUnit); }); }
-  unitBtns.forEach(function (b) {
-    b.addEventListener("click", function () {
-      var u = b.getAttribute("data-unit"); if (u === areaUnit) return;
+  // ---- Settings (gear menu): area unit ha / m², display only; re-renders every area number ----
+  (function () {
+    var btn = document.getElementById("gear-btn"), menu = document.getElementById("gear-menu");
+    function syncUnitUI() { var r = document.getElementById(areaUnit === "m2" ? "unit-m2" : "unit-ha"); if (r) r.checked = true; }
+    function setOpen(open) { menu.hidden = !open; btn.setAttribute("aria-expanded", open ? "true" : "false"); }
+    btn.addEventListener("click", function (e) { e.stopPropagation(); setOpen(menu.hidden); });
+    menu.addEventListener("click", function (e) { e.stopPropagation(); });
+    document.addEventListener("click", function () { if (!menu.hidden) setOpen(false); });
+    document.addEventListener("keydown", function (e) { if (e.key === "Escape" && !menu.hidden) { setOpen(false); btn.focus(); } });
+    menu.addEventListener("change", function (e) {
+      var u = e.target.value; if (!u || u === areaUnit) return;
       areaUnit = u;
-      try { localStorage.setItem("dashAreaUnit", u); } catch (e) { /* storage may be blocked */ }
-      syncUnitUI(); update();
-      if (!document.getElementById("panel-priority").hidden) renderPriority(); // reformat area KPIs + table on unit change
+      try { localStorage.setItem("dashAreaUnit", u); } catch (err) { /* storage may be blocked */ }
+      update();
     });
-  });
-  syncUnitUI();
+    syncUnitUI();
+  })();
 
-  // ---- Map: CARTO grey basemap + parcel polygons, poles & clustered ID points ----
+  // ---- Map: switchable basemaps + parcel polygons, poles & clustered ID points + external swisstopo maps ----
   var map = null, mapReady = false, mapFitted = false, refitMap = false, lastRows = [];
+  // Visibility of the app's own layers; survives basemap switches, which rebuild every layer.
+  var layerVis = { parcels: true, labels: true, landcover: false, bauzonen: false, habitat: false };
+  // Basemaps: CARTO vector styles (OpenMapTiles schema) and aerial imagery (Esri World Imagery worldwide,
+  // the higher-resolution swisstopo SWISSIMAGE on top within Switzerland). "Hybrid" adds Esri's Hybrid
+  // Reference labels via transformStyle. `url` is a style URL or an inline style object; the thumbnails are
+  // the <img> elements in #basemap-thumbs (index.html), which the offline deliverable inlines as data URIs.
+  var SWISSIMAGE_TILES = "https://wmts.geo.admin.ch/1.0.0/ch.swisstopo.swissimage/default/current/3857/{z}/{x}/{y}.jpeg";
+  var AERIAL_STYLE = { version: 8, glyphs: "https://tiles.basemaps.cartocdn.com/fonts/{fontstack}/{range}.pbf", sources: {
+      "world-imagery": { type: "raster", tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"], tileSize: 256, maxzoom: 19, attribution: "Esri, Maxar, Earthstar Geographics, and the GIS User Community" },
+      "swissimage": { type: "raster", tiles: [SWISSIMAGE_TILES], tileSize: 256, minzoom: 8, maxzoom: 20, bounds: [5.95, 45.81, 10.49, 47.81], attribution: '&copy; <a href="https://www.swisstopo.admin.ch">swisstopo</a>' }
+    }, layers: [{ id: "world-imagery", type: "raster", source: "world-imagery" }, { id: "swissimage", type: "raster", source: "swissimage" }] };
+  var BASEMAPS = [
+    { id: "positron", urlValue: "light", name: "Light", url: "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json" },
+    { id: "voyager", urlValue: "standard", name: "Standard", url: "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json" },
+    { id: "swissimage", urlValue: "aerial", name: "Luftbild", url: AERIAL_STYLE },
+    { id: "swissimage-labels", urlValue: "aerial-labels", name: "Hybrid", url: "https://www.arcgis.com/sharing/rest/content/items/30d6b8271e1849cd9c3042060001f425/resources/styles/root.json", hybrid: true },
+    { id: "dark-matter", urlValue: "dark", name: "Dark", url: "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json" }
+  ];
+  var basemapId = "positron";
+  function basemapById(id) { for (var i = 0; i < BASEMAPS.length; i++) if (BASEMAPS[i].id === id) return BASEMAPS[i]; return BASEMAPS[0]; }
+  function basemapUrlValue() { return basemapById(basemapId).urlValue; }
+  function basemapThumb(id) { var img = document.querySelector('#basemap-thumbs img[data-bm="' + id + '"]'); return img ? img.getAttribute("src") : ""; }
+  // MapLibre calls this after downloading the Esri reference style: put the imagery underneath and map
+  // its Arial labels onto the CARTO glyph service (Open Sans / Noto Sans) the other basemaps use.
+  function composeHybrid(prev, ref) {
+    var k, sources = {}; for (k in AERIAL_STYLE.sources) sources[k] = AERIAL_STYLE.sources[k];
+    sources.esri = { type: "vector", tiles: ["https://basemaps.arcgis.com/arcgis/rest/services/World_Basemap_v2/VectorTileServer/tile/{z}/{y}/{x}.pbf"], maxzoom: 16, attribution: "Esri, TomTom, Garmin, FAO, NOAA, USGS, &copy; OpenStreetMap contributors, and the GIS User Community" };
+    var out = {}; for (k in ref) out[k] = ref[k];
+    out.glyphs = AERIAL_STYLE.glyphs; out.sources = sources;
+    out.layers = AERIAL_STYLE.layers.concat((ref.layers || []).map(function (l) {
+      var f = l.layout && l.layout["text-font"]; if (!f) return l;
+      var w = f.some(function (x) { return x.indexOf("Bold") >= 0; }) ? "Bold" : f.some(function (x) { return x.indexOf("Italic") >= 0; }) ? "Italic" : "Regular";
+      var layout = {}, q; for (q in l.layout) layout[q] = l.layout[q]; layout["text-font"] = ["Open Sans " + w, "Noto Sans " + w];
+      var c = {}, r; for (r in l) c[r] = l[r]; c.layout = layout; return c;
+    }));
+    return out;
+  }
 
   // Pole of inaccessibility (a polygon's "visual center") — ported from @mapbox/polylabel (ISC).
   function _segDistSq(px, py, a, b) {
@@ -2413,7 +2358,7 @@
     var pts = map.getSource("points"); if (pts) pts.setData(rowsToPointsFC(rows));
     // Clip the data overlays to the visible parcels (join on SAP id) so filtering hides
     // the land cover / Bauzonen / Lebensräume of filtered-out parcels too — not just the
-    // parcel polygons. Covers both the Übersicht (filtered set) and Priorisierung (Top-N).
+    // parcel polygons.
     OVERLAY_DEFS.forEach(function (d) {
       var src = map.getSource("ov-" + d.key); if (!src) return;
       var byId = overlayById(d.key), feats = [];
@@ -2468,8 +2413,8 @@
       var fc = OVERLAYS[d.key];
       if (!fc || !fc.features || !fc.features.length || map.getSource("ov-" + d.key)) return;
       map.addSource("ov-" + d.key, { type: "geojson", data: fc, generateId: true }); // generateId → feature-state highlight
-      map.addLayer({ id: d.key + "-fill", type: "fill", source: "ov-" + d.key, minzoom: OVERLAY_MINZOOM, layout: { visibility: "none" }, paint: { "fill-color": d.fill, "fill-opacity": d.opacity } });
-      map.addLayer({ id: d.key + "-line", type: "line", source: "ov-" + d.key, minzoom: OVERLAY_MINZOOM, layout: { visibility: "none" }, paint: {
+      map.addLayer({ id: d.key + "-fill", type: "fill", source: "ov-" + d.key, minzoom: OVERLAY_MINZOOM, layout: { visibility: layerVis[d.key] ? "visible" : "none" }, paint: { "fill-color": d.fill, "fill-opacity": d.opacity } });
+      map.addLayer({ id: d.key + "-line", type: "line", source: "ov-" + d.key, minzoom: OVERLAY_MINZOOM, layout: { visibility: layerVis[d.key] ? "visible" : "none" }, paint: {
         "line-color": ["case", ["boolean", ["feature-state", "selected"], false], "#d8232a", d.line],
         "line-width": ["case", ["boolean", ["feature-state", "selected"], false], 2.6, 0.4]
       } });
@@ -2478,7 +2423,7 @@
   // One reusable popup + single-feature highlight, shared by parcels and overlays.
   var _mapPopup = null, _selOv = null;
   function showPopup(lngLat, html) {
-    if (!_mapPopup) _mapPopup = new maplibregl.Popup({ closeButton: false });
+    if (!_mapPopup) _mapPopup = new maplibregl.Popup({ closeButton: true, maxWidth: "300px" });
     _mapPopup.setLngLat(lngLat).setHTML(html).addTo(map);
   }
   function highlightOverlay(source, id) {
@@ -2575,7 +2520,8 @@
     var lageCard = card("Lage & Eigentum", detailKV([
       ["Ort", p.input_ort || "—"], ["PLZ", p.input_plz || "—"], ["Kanton", p.input_rg || "—"],
       ["Teilportfolio", p.input_tpf ? tpfLabel(p.input_tpf) : "—"],
-      ["Eigentumsart", p["input_eigent.art"] ? eigentumLabel(p["input_eigent.art"]) : "—"]
+      ["Eigentumsart", p["input_eigent.art"] ? eigentumLabel(p["input_eigent.art"]) : "—"],
+      (hasGreeninv ? ["Grüninventar", greeninvLabel(p.greeninv)] : null)
     ]));
     var flaechen = card("Flächen (Übersicht)", detailKV([
       ["Grundstücksfläche (GSF)", fmtAreaU(parcelArea)],
@@ -2603,13 +2549,16 @@
       (("check_bauzonen" in p) && p.check_bauzonen ? ["Bauzonen", p.check_bauzonen] : null),
       (("check_habitat" in p) && p.check_habitat ? ["Lebensräume", p.check_habitat] : null),
       ["Datenquelle (LC)", p.lc_source || "—"],
-      (p.lc_synthetic === "yes" ? ["Bodenbedeckung", "⚠ Synthetisch aus BAFU-Lebensräumen abgeleitet (keine AV-Daten)"] : null)
+      (p.lc_synthetic === "yes" ? ["Bodenbedeckung", "Hinweis: synthetisch aus BAFU-Lebensräumen abgeleitet (keine AV-Daten)"] : null)
     ]));
-    var linkCard = "";
+    var links = [];
     if (p.egrid) {
       var egridUrl = "https://map.geo.admin.ch/#/map?lang=de&topic=ech&bgLayer=ch.swisstopo.pixelkarte-farbe&layers=ch.swisstopo-vd.stand-oerebkataster&swisssearch=" + encodeURIComponent(p.egrid);
-      linkCard = card("Verknüpfungen", '<a href="' + esc(egridUrl) + '" target="_blank" rel="noopener">↗ Auf map.geo.admin.ch öffnen (ÖREB-Kataster)</a>');
+      links.push('<a href="' + esc(egridUrl) + '" target="_blank" rel="noopener">Auf map.geo.admin.ch öffnen (ÖREB-Kataster) ' + ICON.sz("extlink", 12) + '</a>');
     }
+    var giUrl = p.greeninv === "yes" ? greenInventoryUrl(p) : "";
+    if (giUrl) links.push('<a href="' + esc(giUrl) + '" target="_blank" rel="noopener">Im Grüninventar öffnen ' + ICON.sz("extlink", 12) + '</a>');
+    var linkCard = links.length ? card("Verknüpfungen", links.join("<br>")) : "";
     var rawKeys = Object.keys(p).filter(function (k) { return k.charAt(0) !== "_"; }).sort();
     var rawBody = "";
     rawKeys.forEach(function (k) { var v = p[k]; rawBody += '<tr><th>' + esc(k) + '</th><td>' + esc(v == null ? "" : String(v)) + '</td></tr>'; });
@@ -2624,7 +2573,7 @@
 
     var body =
       '<div class="head">' +
-        '<div class="actions"><button class="btn" onclick="window.print()">⎙ Drucken</button></div>' +
+        '<div class="actions"><button class="btn" onclick="window.print()">Drucken</button></div>' +
         '<div class="brand">Schweizerische Eidgenossenschaft · Grundstück-Details</div>' +
         '<h1>System-ID ' + esc(p.id || "—") + '</h1>' +
         '<div class="sub">' + subParts.join(" · ") + '</div>' +
@@ -2637,7 +2586,7 @@
 
     return '<!doctype html><html lang="de"><head><meta charset="utf-8">' +
       '<meta name="viewport" content="width=device-width, initial-scale=1">' +
-      '<title>Grundstück ' + esc(p.id || "") + ' — Details</title><style>' + DETAIL_CSS + '</style></head><body>' + body + '</body></html>';
+      '<title>Grundstück ' + esc(p.id || "") + ': Details</title><style>' + DETAIL_CSS + '</style></head><body>' + body + '</body></html>';
   }
 
   function openParcelDetails(id) {
@@ -2651,35 +2600,6 @@
     var a = e.target.closest && e.target.closest(".popup-details-link"); if (!a) return;
     e.preventDefault(); openParcelDetails(a.getAttribute("data-id"));
   });
-  // Layer control (top-left). Widget order mirrors the map z-order, top → bottom:
-  // labels + markers/clusters first, then overlays (habitat on top … landcover
-  // bottom), then the parcel polygons. "Beschriftung" owns the point/cluster layers
-  // so clustering still works when the parcel polygons ("Grundstücke") are hidden.
-  function LayerControl() {}
-  LayerControl.prototype.onAdd = function (m) {
-    this._map = m;
-    var div = document.createElement("div");
-    div.className = "maplibregl-ctrl maplibregl-ctrl-group layer-ctrl";
-    var groups = [
-      { label: "Beschriftung", layers: ["clusters", "cluster-count", "point", "point-label"], on: true }
-    ];
-    OVERLAY_DEFS.slice().reverse().forEach(function (d) {
-      if (m.getLayer(d.key + "-fill")) groups.push({ label: d.label, layers: [d.key + "-fill", d.key + "-line"], on: false });
-    });
-    groups.push({ label: "Grundstücke", layers: ["parcels-fill", "parcels-line", "parcels-hl"], on: true });
-    groups.forEach(function (g) {
-      var lbl = document.createElement("label");
-      var cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = g.on;
-      cb.addEventListener("change", function () {
-        g.layers.forEach(function (lid) { if (m.getLayer(lid)) m.setLayoutProperty(lid, "visibility", cb.checked ? "visible" : "none"); });
-        renderLegend();
-      });
-      lbl.appendChild(cb); lbl.appendChild(document.createTextNode(" " + g.label));
-      div.appendChild(lbl);
-    });
-    this._container = div; return div;
-  };
-  LayerControl.prototype.onRemove = function () { if (this._container && this._container.parentNode) this._container.parentNode.removeChild(this._container); this._map = undefined; };
   // Legend (bottom-right): swatches for the currently-visible layers only.
   var legendEl = null;
   function legendGroups() {
@@ -2776,70 +2696,516 @@
     });
   }
 
+  // ---- External swisstopo maps (WMS from the Geokatalog), listed under "Dargestellte Karten" ----
+  // Entry: { id, title, visible, opacity 10–100, rec }. `rec` marks the two recommended maps that start
+  // hidden. The URL carries the list as ext=id1,-id2 ("-" = hidden); recommended hidden maps are implicit.
+  var EXT_RECOMMENDED = [
+    { id: "ch.bafu.lebensraumkarte-schweiz", title: "Lebensraumkarte der Schweiz (BAFU)" },
+    { id: "ch.swisstopo-vd.amtliche-vermessung", title: "Amtliche Vermessung (OpenData)" }
+  ];
+  var EXT_SUGGEST = [ // "Häufig verwendete Karten" while the search field is still empty
+    ["ch.swisstopo.pixelkarte-farbe", "Landeskarten (farbig)"], ["ch.swisstopo.swissimage", "SWISSIMAGE Luftbild"],
+    ["ch.kantone.cadastralwebmap-farbe", "Amtliche Vermessung (farbig)"], ["ch.are.bauzonen", "Bauzonen Schweiz (harmonisiert)"],
+    ["ch.bafu.lebensraumkarte-schweiz", "Lebensraumkarte der Schweiz"], ["ch.bafu.waldreservate", "Waldreservate"]
+  ];
+  var EXT_ID_RE = /^[a-zA-Z0-9._-]+$/;
+  var extLayers = [];
+  function extDefaults() { return EXT_RECOMMENDED.map(function (r) { return { id: r.id, title: r.title, visible: false, opacity: 70, rec: true }; }); }
+  function extById(id) { for (var i = 0; i < extLayers.length; i++) if (extLayers[i].id === id) return extLayers[i]; return null; }
+  function extUrlValue() {
+    return extLayers.filter(function (l) { return !(l.rec && !l.visible); }).map(function (l) { return (l.visible ? "" : "-") + l.id; }).join(",");
+  }
+  // Apply the navigation params read from the URL (basemap=…, ext=…); defaults otherwise.
+  function applyNavState() {
+    basemapId = "positron"; BASEMAPS.forEach(function (b) { if (b.urlValue === nav.basemap) basemapId = b.id; });
+    extLayers = extDefaults();
+    (nav.ext || "").split(",").forEach(function (tok) {
+      tok = tok.trim(); if (!tok) return;
+      var hidden = tok.charAt(0) === "-", id = hidden ? tok.slice(1) : tok;
+      if (!EXT_ID_RE.test(id)) return;
+      var l = extById(id);
+      if (l) { l.visible = !hidden; return; }
+      if (extLayers.length >= 20) return; // at most 20 maps from a link
+      extLayers.push({ id: id, title: id, visible: !hidden, opacity: 70, rec: false, resolve: true });
+    });
+    extLayers.forEach(function (l) { if (l.resolve) resolveExtTitle(l); }); // best effort; offline the id stays
+  }
+  function extMapId(l) { return "ext-" + l.id; }
+  function extTileUrl(id) { return "https://wms.geo.admin.ch/?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=" + encodeURIComponent(id) + "&STYLES=&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&WIDTH=256&HEIGHT=256&FORMAT=image/png&TRANSPARENT=true"; }
+  // External maps sit below the app's data layers (inserted before parcels-fill); first in the list = on top.
+  function addExtToMap(l) {
+    var lid = extMapId(l); if (!map || map.getSource(lid)) return;
+    map.addSource(lid, { type: "raster", tiles: [extTileUrl(l.id)], tileSize: 256, maxzoom: 19, attribution: '&copy; <a href="https://www.swisstopo.admin.ch">swisstopo</a>' });
+    map.addLayer({ id: lid, type: "raster", source: lid, layout: { visibility: l.visible ? "visible" : "none" }, paint: { "raster-opacity": l.opacity / 100 } }, map.getLayer("parcels-fill") ? "parcels-fill" : undefined);
+  }
+  function syncExtOrder() {
+    if (!map || !map.getLayer("parcels-fill")) return;
+    extLayers.slice().reverse().forEach(function (l) { if (map.getLayer(extMapId(l))) map.moveLayer(extMapId(l), "parcels-fill"); });
+  }
+  function extCommit() { syncExtOrder(); renderAccordion(); writeURL(); }
+  function addExtLayer(id, title) {
+    if (!EXT_ID_RE.test(id || "")) return;
+    var l = extById(id);
+    if (l) { l.visible = true; if (title && l.title === l.id) l.title = title; }
+    else { l = { id: id, title: title || id, visible: true, opacity: 70, rec: false, resolve: !title }; extLayers.unshift(l); }
+    if (map && mapReady) { addExtToMap(l); map.setLayoutProperty(extMapId(l), "visibility", "visible"); }
+    if (l.resolve) resolveExtTitle(l);
+    accOpen = true; menuOpen = true;
+    extCommit();
+    if (currentTab !== "map") showTab("map");
+  }
+  function removeExtLayer(id) {
+    var l = extById(id); if (!l) return;
+    if (map && map.getLayer(extMapId(l))) { map.removeLayer(extMapId(l)); map.removeSource(extMapId(l)); }
+    extLayers = extLayers.filter(function (x) { return x !== l; });
+    extCommit();
+  }
+  function setExtVisible(id, on) { var l = extById(id); if (!l) return; l.visible = !!on; if (map && map.getLayer(extMapId(l))) map.setLayoutProperty(extMapId(l), "visibility", on ? "visible" : "none"); extCommit(); }
+  function setExtOpacity(id, v) { var l = extById(id); if (!l) return; l.opacity = Math.max(10, Math.min(100, +v || 70)); if (map && map.getLayer(extMapId(l))) map.setPaintProperty(extMapId(l), "raster-opacity", l.opacity / 100); }
+  // Title of a map restored from a link: taken from the geo.admin legend heading; offline the id stays.
+  function resolveExtTitle(l) {
+    l.resolve = false;
+    fetchLegendDoc(l.id).then(function (doc) {
+      var h = doc && doc.querySelector(".bod-title, h1, h2, h3"), t = h && h.textContent.trim();
+      if (t && l.title === l.id) { l.title = t; renderAccordion(); }
+    }).catch(function () {});
+  }
+  var _legendCache = {};
+  // geo.admin legend HTML → sanitized Document (scripts, frames, objects, forms, styles, event handlers and
+  // javascript: URLs removed; links open in a new tab). Cached per layer id.
+  function fetchLegendDoc(id) {
+    if (_legendCache[id]) return _legendCache[id];
+    return (_legendCache[id] = fetch("https://api3.geo.admin.ch/rest/services/api/MapServer/" + encodeURIComponent(id) + "/legend?lang=de")
+      .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.text(); })
+      .then(function (html) {
+        var doc = new DOMParser().parseFromString(html, "text/html");
+        Array.prototype.forEach.call(doc.querySelectorAll("script, iframe, object, embed, form, link, meta, base, style"), function (el) { el.parentNode.removeChild(el); });
+        Array.prototype.forEach.call(doc.querySelectorAll("*"), function (el) {
+          Array.prototype.slice.call(el.attributes).forEach(function (a) { if (/^on/i.test(a.name) || /^\s*javascript:/i.test(a.value)) el.removeAttribute(a.name); });
+        });
+        Array.prototype.forEach.call(doc.querySelectorAll("a[href]"), function (a) { a.setAttribute("target", "_blank"); a.setAttribute("rel", "noopener"); });
+        return doc;
+      }).catch(function (e) { delete _legendCache[id]; throw e; }));
+  }
+
+  // ---- Internal maps (checkbox + info): parcels, labels/clusters, and the data overlays the export carries ----
+  function internalLayerDefs() {
+    var defs = [
+      { key: "parcels", label: "Grundstücke", layers: ["parcels-fill", "parcels-line", "parcels-hl-casing", "parcels-hl", "parcels-sel"] },
+      { key: "labels", label: "Beschriftung & Cluster", layers: ["clusters", "cluster-count", "point", "point-label"] }
+    ];
+    OVERLAY_DEFS.forEach(function (d) { var fc = OVERLAYS[d.key]; if (fc && fc.features && fc.features.length) defs.push({ key: d.key, label: d.label, layers: [d.key + "-fill", d.key + "-line"] }); });
+    return defs;
+  }
+  function setLayerVis(key, on) {
+    layerVis[key] = !!on;
+    if (map && mapReady) applyLayerVis();
+    renderLegend(); renderAccordion();
+  }
+  function applyLayerVis() { internalLayerDefs().forEach(function (d) { d.layers.forEach(function (lid) { if (map.getLayer(lid)) map.setLayoutProperty(lid, "visibility", layerVis[d.key] ? "visible" : "none"); }); }); }
+
+  // ---- Tools accordion (top-left): "Dargestellte Karten" + "Menü schliessen" toggle ----
+  var accEl = null, accOpen = true, menuOpen = !(window.matchMedia && window.matchMedia("(max-width: 900px)").matches); // phones start with the menu closed
+  function AccordionControl() {}
+  AccordionControl.prototype.onAdd = function (m) {
+    this._map = m;
+    accEl = document.createElement("div"); accEl.className = "maplibregl-ctrl acc-wrap";
+    accEl.addEventListener("click", accClick);
+    accEl.addEventListener("change", accChange);
+    renderAccordion();
+    return accEl;
+  };
+  AccordionControl.prototype.onRemove = function () { if (accEl && accEl.parentNode) accEl.parentNode.removeChild(accEl); accEl = null; this._map = undefined; };
+  function lyrRow(o) { // { kind: "int"|"ext", id, label, on, tip }
+    var cid = "lyr-" + o.kind + "-" + String(o.id).replace(/[^a-zA-Z0-9_-]/g, "_");
+    var info = '<button type="button" class="icon-btn lyr-info" data-info="' + o.kind + '" data-id="' + esc(o.id) + '" title="Legende und Informationen" aria-label="Legende und Informationen">' + ICON.sz("info", 18) + '</button>';
+    var x = o.kind === "ext" ? '<button type="button" class="lyr-x" data-ext-x="' + esc(o.id) + '" title="Karte entfernen" aria-label="Karte entfernen">' + ICON.sz("x", 12) + '</button>' : "";
+    return '<div class="lyr-row' + (o.on ? "" : " is-off") + '">' + x +
+      '<input type="checkbox" id="' + cid + '" data-' + o.kind + '="' + esc(o.id) + '"' + (o.on ? " checked" : "") + '>' +
+      '<label class="lyr-t" for="' + cid + '" title="' + esc(o.tip || o.label) + '">' + esc(o.label) + '</label>' + info + '</div>';
+  }
+  function renderAccordion() {
+    if (!accEl) return;
+    accEl.classList.toggle("is-closed", !menuOpen);
+    var nVis = extLayers.filter(function (l) { return l.visible; }).length;
+    accEl.innerHTML = '<aside class="acc-panel" aria-label="Werkzeuge">' +
+      '<button type="button" class="acc-head" data-acc-toggle aria-expanded="' + (accOpen ? "true" : "false") + '"><span class="acc-arrow">' + ICON.sz("chevRight", 18) + '</span><span>Dargestellte Karten</span><span class="acc-meta">' + (nVis ? nVis + " extern" : "") + '</span></button>' +
+      '<div class="acc-body"' + (accOpen ? "" : " hidden") + '>' +
+        '<div class="acc-group">Interne Karten</div>' +
+        internalLayerDefs().map(function (d) { return lyrRow({ kind: "int", id: d.key, label: d.label, on: !!layerVis[d.key] }); }).join("") +
+        '<div class="acc-group sep">Externe Karten</div>' +
+        (extLayers.some(function (l) { return l.rec && !l.visible; }) ? '<div class="acc-hint">Empfohlene Karten sind ausgeblendet. Häkchen setzen zum Einblenden.</div>' : "") +
+        (extLayers.length ? extLayers.map(function (l) { return lyrRow({ kind: "ext", id: l.id, label: l.title, on: l.visible, tip: l.title + " · " + l.id }); }).join("")
+                          : '<div class="acc-empty">Keine externen Karten aktiv.</div>') +
+        '<div class="acc-add"><button type="button" class="btn" data-acc-add>' + ICON.plus + 'Karte hinzufügen</button><div class="acc-hint">Sucht Karten im Geokatalog von swisstopo.</div></div>' +
+      '</div></aside>' +
+      '<button type="button" class="acc-toggle" data-menu-toggle aria-expanded="' + (menuOpen ? "true" : "false") + '"><span class="acc-chev">' + ICON.sz("chevRight", 18) + '</span><span>' + (menuOpen ? "Menü schliessen" : "Menü öffnen") + '</span></button>';
+  }
+  function accClick(e) {
+    var t = e.target;
+    if (t.closest("[data-menu-toggle]")) { menuOpen = !menuOpen; renderAccordion(); return; }
+    if (t.closest("[data-acc-toggle]")) { accOpen = !accOpen; renderAccordion(); return; }
+    if (t.closest("[data-acc-add]")) { openLayerSearch(); return; }
+    var x = t.closest("[data-ext-x]"); if (x) { removeExtLayer(x.getAttribute("data-ext-x")); return; }
+    var i = t.closest("[data-info]"); if (i) { openInfo(i.getAttribute("data-info"), i.getAttribute("data-id")); }
+  }
+  function accChange(e) {
+    var t = e.target; if (!t || t.type !== "checkbox") return;
+    if (t.hasAttribute("data-int")) setLayerVis(t.getAttribute("data-int"), t.checked);
+    else if (t.hasAttribute("data-ext")) setExtVisible(t.getAttribute("data-ext"), t.checked);
+  }
+
+  // ---- Basemap switcher (bottom-right) ----
+  var bmEl = null, bmOpen = false;
+  function BasemapControl() {}
+  BasemapControl.prototype.onAdd = function (m) {
+    this._map = m;
+    bmEl = document.createElement("div"); bmEl.className = "maplibregl-ctrl bm-wrap";
+    bmEl.addEventListener("click", function (e) {
+      var o = e.target.closest("[data-bm]"); if (o) { bmOpen = false; setBasemap(o.getAttribute("data-bm")); return; }
+      if (e.target.closest("[data-bm-toggle]")) { bmOpen = !bmOpen; renderBasemapUI(); }
+    });
+    // composedPath: the panel re-renders on its own click, so e.target may already be detached from the DOM.
+    document.addEventListener("click", function (e) { if (bmOpen && !(e.composedPath && e.composedPath().indexOf(bmEl) >= 0)) { bmOpen = false; renderBasemapUI(); } });
+    document.addEventListener("keydown", function (e) { if (e.key === "Escape" && bmOpen) { bmOpen = false; renderBasemapUI(); } });
+    renderBasemapUI();
+    return bmEl;
+  };
+  BasemapControl.prototype.onRemove = function () { if (bmEl && bmEl.parentNode) bmEl.parentNode.removeChild(bmEl); bmEl = null; this._map = undefined; };
+  function renderBasemapUI() {
+    if (!bmEl) return;
+    var cur = basemapById(basemapId);
+    bmEl.innerHTML = '<div class="popover bm-panel"' + (bmOpen ? "" : " hidden") + ' role="group" aria-label="Hintergrundkarte">' +
+      BASEMAPS.map(function (b) { return '<button type="button" class="bm-opt' + (b.id === basemapId ? " is-active" : "") + '" data-bm="' + b.id + '" title="' + esc(b.name) + '"><img class="bm-thumb" src="' + esc(basemapThumb(b.id)) + '" alt=""><span>' + esc(b.name) + '</span></button>'; }).join("") + '</div>' +
+      '<button type="button" class="bm-btn" data-bm-toggle title="Hintergrund wechseln" aria-haspopup="true" aria-expanded="' + (bmOpen ? "true" : "false") + '"><img class="bm-thumb" src="' + esc(basemapThumb(cur.id)) + '" alt="Aktueller Hintergrund: ' + esc(cur.name) + '"><span class="bm-l">Hintergrund</span></button>';
+  }
+  function styleOptions(b) { return b.hybrid ? { diff: false, transformStyle: composeHybrid } : { diff: false }; }
+  function setBasemap(id) {
+    var b = basemapById(id);
+    if (b.id === basemapId || !map) { basemapId = b.id; renderBasemapUI(); return; }
+    basemapId = b.id; renderBasemapUI(); writeURL();
+    mapReady = false;
+    map.off("style.load", addAppLayers); map.once("style.load", addAppLayers); // rebuild every source + layer on the new style
+    map.setStyle(b.url, styleOptions(b));
+  }
+
+  // ---- Selection bar on the map (bottom-left) ----
+  var selBarEl = null;
+  function SelBarControl() {}
+  SelBarControl.prototype.onAdd = function (m) {
+    this._map = m;
+    selBarEl = document.createElement("div"); selBarEl.className = "maplibregl-ctrl map-selbar"; selBarEl.hidden = true;
+    selBarEl.addEventListener("click", function (e) {
+      if (e.target.closest("[data-sel-clear]")) clearSelection();
+      else if (e.target.closest("[data-sel-pdf]")) openDownload("sel", selRows());
+    });
+    renderSelBar(); return selBarEl;
+  };
+  SelBarControl.prototype.onRemove = function () { if (selBarEl && selBarEl.parentNode) selBarEl.parentNode.removeChild(selBarEl); selBarEl = null; this._map = undefined; };
+  function renderSelBar() {
+    if (!selBarEl) return;
+    var n = selCount(); selBarEl.hidden = n === 0;
+    if (n) selBarEl.innerHTML = '<strong>' + n + ' von max. ' + SEL_MAX + ' ausgewählt</strong><button type="button" class="flink" data-sel-clear>Auswahl aufheben</button><button type="button" class="btn btn-sm btn-primary" data-sel-pdf>PDF-Bericht (' + n + ')</button>';
+  }
+
+  // ---- Layer info dialog (C1): static description + legend for internal maps, geo.admin legend for external ----
+  var INT_INFO = {
+    parcels: { title: "Grundstücke", desc: "Liegenschaften und SDR der aktuellen Auswahl. Folgt den Filtern im Seitenpanel.",
+      legend: [["Grundstück", "rgba(111,138,172,.4)", "1px solid #3b5a7a"], ["Ausgewählt", "#fff", "2px solid #d8232a"], ["Für PDF-Bericht ausgewählt", "#fff", "2px dashed #2f4356"]],
+      rows: function () { return [["Quelle", "Amtliche Vermessung (AV), Liegenschaften (E-GRID) · SAP-Export"], ["Format", "GeoJSON (Polygon, WGS84)"], ["Grundstücke", fmt(lastRows.length) + " von " + fmt(PARCELS.length)], ["Sichtbar ab", "Zoomstufe " + PARCEL_MINZOOM]]; } },
+    labels: { title: "Beschriftung & Cluster", desc: "Grundstücks-ID als Beschriftung. Beim Herauszoomen zu Clustern mit Anzahl gruppiert.",
+      legend: [["Einzelnes Grundstück", "#3b5a7a", "1.5px solid #fff", true], ["Cluster (bis 25)", "#4f6f93", "1.5px solid #fff", true], ["Cluster (25 bis 100)", "#3b5a7a", "1.5px solid #fff", true], ["Cluster (über 100)", "#2e4a68", "1.5px solid #fff", true]],
+      rows: function () { return [["Quelle", "Abgeleitet aus den Grundstücken (visueller Mittelpunkt)"], ["Cluster bis", "Zoomstufe 13"]]; } },
+    landcover: { title: "Bodenbedeckung", desc: "Bodenbedeckungsflächen der Amtlichen Vermessung (AV) je Grundstück, eingefärbt nach Hauptgruppe.",
+      legend: function () { return MAIN_ORDER.map(function (mc) { return [mc, MAIN_COLORS[mc], "none"]; }); },
+      rows: function () { return [["Quelle", "Amtliche Vermessung, DM.01-AV-CH (geodienste.ch)"], ["Sichtbar ab", "Zoomstufe " + OVERLAY_MINZOOM]]; } },
+    bauzonen: { title: "Bauzonen", desc: "Harmonisierte Bauzonen (ARE) je Grundstück.",
+      legend: function () { return Object.keys(BAUZONE_LABELS).map(function (z) { return [BAUZONE_LABELS[z], bzColor(z), "none"]; }); },
+      rows: function () { return [["Quelle", "ARE, ch.are.bauzonen"], ["Sichtbar ab", "Zoomstufe " + OVERLAY_MINZOOM]]; } },
+    habitat: { title: "Lebensräume", desc: "BAFU-Lebensraumkarte (modelliert) je Grundstück, eingefärbt nach TypoCH-Klasse.",
+      legend: function () { return ["1", "2", "3", "4", "5", "6", "7", "8", "9"].map(function (d) { return [typochLabel(d), HABITAT_L1_COLORS[d], "none"]; }); },
+      rows: function () { return [["Quelle", "BAFU, ch.bafu.lebensraumkarte-schweiz"], ["Sichtbar ab", "Zoomstufe " + OVERLAY_MINZOOM]]; } }
+  };
+  var infoReq = 0, openInfoModal;
+  function infoFoot(l) {
+    return '<div class="info-foot"><span>Deckkraft</span><input type="range" min="10" max="100" step="5" value="' + l.opacity + '" data-ext-op="' + esc(l.id) + '" aria-label="Deckkraft"><span class="info-op">' + l.opacity + ' %</span>' +
+      '<a href="https://map.geo.admin.ch/#/map?lang=de&layers=' + encodeURIComponent(l.id) + '" target="_blank" rel="noopener">map.geo.admin.ch' + ICON.sz("extlink", 12) + '</a></div>';
+  }
+  function openInfo(kind, id) {
+    var body = document.getElementById("info-body"), title = document.getElementById("info-title"), req = ++infoReq;
+    if (kind === "int") {
+      var d = INT_INFO[id]; if (!d) return;
+      var lg = typeof d.legend === "function" ? d.legend() : d.legend;
+      title.textContent = d.title;
+      body.innerHTML = '<div class="info-desc">' + esc(d.desc) + '</div><div class="info-legend">' +
+        lg.map(function (r) { return '<div class="info-legend-row"><span class="info-sw' + (r[3] ? " round" : "") + '" style="background:' + r[1] + ';border:' + r[2] + '"></span>' + esc(r[0]) + '</div>'; }).join("") + '</div>' +
+        '<div class="info-h">Informationen</div><table class="info-kv">' + d.rows().map(function (r) { return '<tr><td>' + esc(r[0]) + '</td><td>' + esc(r[1]) + '</td></tr>'; }).join("") + '</table>';
+    } else {
+      var l = extById(id); if (!l) return;
+      title.textContent = l.title;
+      body.innerHTML = '<div class="info-status">Lade Informationen…</div>';
+      fetchLegendDoc(l.id).then(function (doc) {
+        if (req !== infoReq) return;
+        var h = doc.querySelector(".bod-title"); if (h && l.title === l.id && h.textContent.trim()) { l.title = h.textContent.trim(); title.textContent = l.title; renderAccordion(); }
+        body.innerHTML = '<div class="lyr-api">' + (doc.body ? doc.body.innerHTML : "") + '</div>' + infoFoot(l);
+      }).catch(function () {
+        if (req !== infoReq) return;
+        body.innerHTML = '<div class="info-status">Informationen konnten nicht geladen werden (Internetverbindung nötig).</div><table class="info-kv"><tr><td>Layer-ID</td><td>' + esc(l.id) + '</td></tr></table>' + infoFoot(l);
+      });
+    }
+    openInfoModal();
+  }
+  (function () {
+    var modal = document.getElementById("info-modal"), body = document.getElementById("info-body"), lastFocus = null;
+    openInfoModal = function () { lastFocus = document.activeElement; modal.hidden = false; document.getElementById("info-close").focus(); };
+    function close() { infoReq++; modal.hidden = true; if (lastFocus && lastFocus.focus) lastFocus.focus(); }
+    document.getElementById("info-close").addEventListener("click", close);
+    modal.addEventListener("click", function (e) { if (e.target === modal) close(); });
+    document.addEventListener("keydown", function (e) { if (e.key === "Escape" && !modal.hidden) close(); });
+    body.addEventListener("input", function (e) {
+      var id = e.target.getAttribute && e.target.getAttribute("data-ext-op"); if (!id) return;
+      setExtOpacity(id, e.target.value);
+      var o = e.target.parentNode.querySelector(".info-op"), l = extById(id); if (o && l) o.textContent = l.opacity + " %";
+    });
+  })();
+
+  // ---- Parcel popup (map click, table row, search hit) ----
+  function parcelPopupHTML(p) {
+    var pid = String(p.id == null ? "" : p.id), bez = p[NAME_COL] || "";
+    var act = function (a, label, icon) { return '<button type="button" class="mp-act" data-pop="' + a + '" data-id="' + esc(pid) + '">' + ICON.sz(icon, 15) + '<span>' + label + '</span></button>'; };
+    var full = !sel[pid] && selCount() >= SEL_MAX;
+    return '<div class="map-pop"><div class="mp-t">' + esc(p.input_ort || "—") + '</div>' + (bez ? '<div class="mp-s">' + esc(bez) + '</div>' : "") +
+      '<div class="mp-kv"><span>ID</span><span>' + esc(pid || "—") + '</span><span>E-GRID</span><span>' + esc(p.egrid || "—") + '</span><span>Region</span><span>' + esc((p.input_rg || "—") + " · " + (p.input_plz ? p.input_plz + " " : "") + (p.input_ort || "")) + '</span><span>Grundstücksfläche</span><span>' + fmtAreaU(num(p.parcel_area_m2)) + '</span>' +
+      (hasGreeninv ? '<span>Grüninventar</span><span>' + esc(greeninvLabel(p.greeninv)) + '</span>' : "") + '</div>' +
+      '<div class="mp-acts">' + act("zoom", "Hinzoomen", "zoomIn") + act("table", "In Tabelle anzeigen", "funnel") + act("pdf", "PDF-Bericht erstellen", "fileText") +
+      (p.greeninv === "yes" && greenInventoryUrl(p) ? '<a class="mp-act" href="' + esc(greenInventoryUrl(p)) + '" target="_blank" rel="noopener">' + ICON.sz("extlink", 15) + '<span>Im Grüninventar öffnen</span></a>' : "") +
+      '<label class="mp-sel"><input type="checkbox" data-pop-sel="' + esc(pid) + '"' + (sel[pid] ? " checked" : "") + (full ? " disabled" : "") + '> Für PDF-Bericht auswählen' + (full ? " (max. " + SEL_MAX + ")" : "") + '</label></div>' +
+      (pid ? '<a href="#" class="mp-more popup-details-link" data-id="' + esc(pid) + '"><span>Alle Details anzeigen' + ICON.sz("extlink", 12) + '</span></a>' : "") + '</div>';
+  }
+  function openParcelPopup(p, lngLat) {
+    if (!map || !p) return;
+    if (p._pole === undefined) p._pole = poleOfGeom(p._geom);
+    var at = lngLat || p._pole; if (!at) return;
+    showPopup(at, parcelPopupHTML(p));
+  }
+  // Delegated popup actions (the popup DOM is recreated on each open).
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest && e.target.closest("[data-pop]"); if (!b) return;
+    var id = b.getAttribute("data-id"), p = parcelById(id), act = b.getAttribute("data-pop"); if (!p) return;
+    if (act === "zoom") zoomToParcel(id, { zoom: 17.5, noPopup: true });
+    else if (act === "table") {
+      if (_mapPopup) _mapPopup.remove();
+      state.search = id; document.getElementById("tsearch").value = id;
+      showTab("overview"); writeURL(); update();
+      setTimeout(function () { var t = document.getElementById("tsearch"); if (t) t.scrollIntoView({ block: "center", behavior: "smooth" }); }, 50);
+    } else if (act === "pdf") { if (_mapPopup) _mapPopup.remove(); openDownload(null, [p]); }
+  });
+  document.addEventListener("change", function (e) {
+    var k = e.target.getAttribute && e.target.getAttribute("data-pop-sel"); if (k == null) return;
+    setSelected(k, e.target.checked);
+  });
+
+  // ---- Global search (header): Grundstücke (local), Orte and Karten (swisstopo SearchServer) ----
+  var openLayerSearch = function () {}, searchMarker = null, _pendingMapAction = null;
+  function initGlobalSearch() {
+    var input = document.getElementById("gsearch"), dd = document.getElementById("gsearch-dd");
+    var scope = "all", open = false, q = "", loc = [], lay = [], loading = false, err = "", timer = null, ac = null, online = true, active = -1, actions = [];
+    var ORIGIN_LABEL = { kantone: "Kanton", gg25: "Gemeinde", district: "Bezirk", address: "Adresse", parcel: "Grundstück", gazetteer: "Ortsname", zipcode: "PLZ" };
+    var ZOOM = { kantone: 10, gg25: 13, district: 12, address: 17, parcel: 17, gazetteer: 14, zipcode: 13 };
+    function strip(s) { return String(s || "").replace(/<[^>]*>/g, ""); }
+    function place() {
+      var r = input.getBoundingClientRect();
+      dd.style.top = (r.bottom + 4) + "px"; dd.style.right = Math.max(8, window.innerWidth - r.right) + "px"; dd.style.left = "auto"; dd.style.width = Math.max(460, Math.round(r.width)) + "px";
+    }
+    function setOpen(o) { open = o; dd.hidden = !o; input.setAttribute("aria-expanded", o ? "true" : "false"); if (o) { place(); render(); } }
+    function inScope(k) { return scope === "all" || scope === k; }
+    function localHits() {
+      var ql = q.toLowerCase(); if (!ql) return [];
+      return PARCELS.filter(function (p) { return SEARCH_KEYS.some(function (k) { return String(p[k] == null ? "" : p[k]).toLowerCase().indexOf(ql) >= 0; }); });
+    }
+    function runRemote() {
+      clearTimeout(timer); if (ac) ac.abort();
+      if (q.length < 2 || (!inScope("places") && !inScope("maps"))) { loc = []; lay = []; loading = false; err = ""; render(); return; }
+      loading = true; render();
+      timer = setTimeout(function () {
+        ac = new AbortController();
+        var url = function (t) { return "https://api3.geo.admin.ch/rest/services/ech/SearchServer?type=" + t + "&limit=5&sr=4326&lang=de&searchText=" + encodeURIComponent(q); };
+        var get = function (t) { return fetch(url(t), { signal: ac.signal }).then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }).then(function (d) { return d.results || []; }); };
+        Promise.all([inScope("places") ? get("locations") : [], inScope("maps") ? get("layers") : []]).then(function (res) {
+          online = true; loading = false; err = "";
+          loc = res[0].map(function (r) { var a = r.attrs || {}; return { label: strip(a.label), origin: a.origin, lat: +a.lat, lon: +a.lon, box: a.geom_st_box2d }; }).filter(function (x) { return isFinite(x.lat) && isFinite(x.lon); });
+          lay = res[1].map(function (r) { var a = r.attrs || {}; return { id: a.layer, title: strip(a.label) }; }).filter(function (x) { return EXT_ID_RE.test(x.id || ""); });
+          render();
+        }).catch(function (e) { if (e && e.name === "AbortError") return; online = false; loading = false; err = "swisstopo ist nicht erreichbar. Orte und Karten stehen offline nicht zur Verfügung."; loc = []; lay = []; render(); });
+      }, 250);
+    }
+    function row(o) {
+      return '<div class="sd-row" role="option" data-i="' + o.i + '"><span class="sd-mark ' + o.mark + '"></span><span class="sd-txt"><span class="sd-t">' + esc(o.t) + '</span>' + (o.s ? '<span class="sd-s' + (o.mono ? " mono" : "") + '">' + esc(o.s) + '</span>' : "") + '</span>' + (o.meta ? '<span class="sd-meta ' + (o.metaCls || "") + '">' + esc(o.meta) + '</span>' : "") + '</div>';
+    }
+    function render() {
+      if (!open) return;
+      actions = []; var h = "", i = 0;
+      var SC = [["all", "Alle"], ["parcels", "Grundstücke"], ["places", "Orte"], ["maps", "Karten"]];
+      h += '<div class="sd-scopes"><span>Suchen in</span><div class="seg seg-sm" role="group" aria-label="Suchbereich">' + SC.map(function (s) { return '<button type="button" class="seg-btn' + (scope === s[0] ? " is-active" : "") + '" data-scope="' + s[0] + '">' + s[1] + '</button>'; }).join("") + '</div></div>';
+      var mapRow = function (id, title) {
+        var l = extById(id), on = !!(l && l.visible);
+        actions.push(function () { setOpen(false); if (!on) addExtLayer(id, title); });
+        return row({ i: i++, mark: "mark-layer", t: title, s: id, mono: true, meta: on ? "Auf Karte" : "Hinzufügen", metaCls: on ? "on" : "" });
+      };
+      if (q.length >= 1 && inScope("parcels")) {
+        var hits = localHits();
+        if (hits.length) {
+          h += '<div class="sd-sect"><div class="sd-head"><span>Grundstücke</span><span class="sd-src">Datensatz · ' + fmt(hits.length) + ' Treffer</span></div>';
+          hits.slice(0, 5).forEach(function (p) {
+            var pid = String(p.id == null ? "" : p.id);
+            actions.push(function () { setOpen(false); focusParcel(pid); });
+            h += row({ i: i++, mark: "mark-parcel", t: p[NAME_COL] || p.input_ort || pid, s: pid + " · " + (p.input_plz ? p.input_plz + " " : "") + (p.input_ort || "") + (p.input_rg ? " (" + p.input_rg + ")" : ""), meta: fmtAreaU(num(p.parcel_area_m2)), metaCls: "muted" });
+          });
+          actions.push(function () { setOpen(false); state.search = q; document.getElementById("tsearch").value = q; showTab("overview"); writeURL(); update(); });
+          h += '<button type="button" class="flink sd-more" data-i="' + (i++) + '">Alle ' + fmt(hits.length) + ' Treffer in Tabelle filtern</button></div>';
+        }
+      }
+      if (q.length >= 2 && inScope("places") && loc.length) {
+        h += '<div class="sd-sect"><div class="sd-head"><span>Orte</span><span class="sd-src">swisstopo</span></div>';
+        loc.forEach(function (r) { actions.push(function () { setOpen(false); goLocation(r); }); h += row({ i: i++, mark: "mark-place", t: r.label, s: ORIGIN_LABEL[r.origin] || r.origin || "" }); });
+        h += '</div>';
+      }
+      if (q.length >= 2 && inScope("maps") && lay.length) {
+        h += '<div class="sd-sect"><div class="sd-head"><span>Karten</span><span class="sd-src">swisstopo Geokatalog</span></div>';
+        lay.forEach(function (r) { h += mapRow(r.id, r.title); });
+        h += '</div>';
+      }
+      if (q.length < 2 && (scope === "all" || scope === "maps")) {
+        h += '<div class="sd-sect"><div class="sd-head"><span>Häufig verwendete Karten</span><span class="sd-src">swisstopo Geokatalog</span></div>';
+        EXT_SUGGEST.forEach(function (s) { h += mapRow(s[0], s[1]); });
+        h += '</div>';
+      }
+      var status = "";
+      if (q.length >= 2) {
+        if (loading) status = "Suche bei swisstopo…";
+        else if (err) status = err;
+        else if (!actions.length) status = "Keine Treffer für «" + q + "».";
+      } else if (q.length === 1 && !actions.length) status = "Keine Treffer.";
+      if (status) h += '<div class="sd-status">' + esc(status) + '</div>';
+      dd.innerHTML = h; active = -1;
+    }
+    function goLocation(r) {
+      var switched = currentTab !== "map"; if (switched) showTab("map");
+      var go = function () {
+        if (!map) return;
+        if (searchMarker) searchMarker.remove();
+        var m = /BOX\(([-\d.]+) ([-\d.]+),([-\d.]+) ([-\d.]+)\)/.exec(r.box || "");
+        if (m && r.origin !== "address" && r.origin !== "parcel") map.fitBounds([[+m[1], +m[2]], [+m[3], +m[4]]], { padding: 40, maxZoom: 17, duration: 900 });
+        else map.flyTo({ center: [r.lon, r.lat], zoom: ZOOM[r.origin] || 14, duration: 900 });
+        searchMarker = new maplibregl.Marker({ color: "#d8232a" }).setLngLat([r.lon, r.lat]).addTo(map);
+      };
+      if (map && mapReady) { if (switched) setTimeout(go, 80); else go(); } else _pendingMapAction = go;
+    }
+    dd.addEventListener("mousedown", function (e) { e.preventDefault(); }); // keep the focus in the input
+    dd.addEventListener("click", function (e) {
+      var s = e.target.closest("[data-scope]"); if (s) { scope = s.getAttribute("data-scope"); runRemote(); render(); input.focus(); return; }
+      var r = e.target.closest("[data-i]"); if (r) { var a = actions[+r.getAttribute("data-i")]; if (a) a(); }
+    });
+    input.addEventListener("input", function () { q = input.value.trim(); if (!open) setOpen(true); runRemote(); render(); });
+    input.addEventListener("focus", function () { q = input.value.trim(); setOpen(true); runRemote(); });
+    input.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") { setOpen(false); input.blur(); return; }
+      if (!open) { if (e.key === "ArrowDown") setOpen(true); return; }
+      var rows = dd.querySelectorAll("[data-i]");
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault(); if (!rows.length) return;
+        active = e.key === "ArrowDown" ? (active + 1) % rows.length : (active - 1 + rows.length) % rows.length;
+        Array.prototype.forEach.call(rows, function (x, j) { x.classList.toggle("is-active", j === active); });
+        return;
+      }
+      if (e.key === "Enter") { e.preventDefault(); var r = rows[active >= 0 ? active : 0]; if (r) { var a = actions[+r.getAttribute("data-i")]; if (a) a(); } }
+    });
+    document.addEventListener("click", function (e) { var path = e.composedPath ? e.composedPath() : []; if (open && e.target !== input && path.indexOf(dd) < 0) setOpen(false); });
+    window.addEventListener("resize", function () { if (open) place(); });
+    window.addEventListener("scroll", function () { if (open) place(); }, { passive: true });
+    openLayerSearch = function () { scope = "maps"; input.focus(); input.select(); q = input.value.trim(); setOpen(true); runRemote(); render(); };
+  }
+
+  // ---- Map init: controls once, app layers on every (re)load of a style ----
+  var HOVER_LAYERS = ["parcels-fill", "clusters", "point", "landcover-fill", "bauzonen-fill", "habitat-fill"];
   function initMap(el) {
-    map = new maplibregl.Map({ container: el, style: "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json", center: [8.23, 46.82], zoom: 6.4, preserveDrawingBuffer: true, cooperativeGestures: true });
+    var b = basemapById(basemapId);
+    var opts = { container: el, style: b.url, center: [8.23, 46.82], zoom: 6.4, preserveDrawingBuffer: true, cooperativeGestures: true, attributionControl: { compact: true } };
+    if (b.hybrid) opts.transformStyle = composeHybrid;
+    map = new maplibregl.Map(opts);
     map.addControl(new maplibregl.NavigationControl({ showCompass: true }), "top-right"); // compass = north icon; click resets bearing to 0
     map.addControl(new HomeControl(), "top-right");
-    // Fullscreen over the map element itself, so the map controls, legend and popups
-    // (all children of the container) come along. #map has a fixed height, which would
-    // otherwise beat MapLibre's :fullscreen rule — css/styles.css overrides it back.
+    // Fullscreen over the map element itself, so every control, the popup and the dialogs' anchor come along.
     map.addControl(new maplibregl.FullscreenControl(), "top-right");
     map.addControl(new maplibregl.ScaleControl({ maxWidth: 120, unit: "metric" }), "bottom-left");
-    map.on("load", function () {
-      map.addSource("parcels", { type: "geojson", data: rowsToFC(lastRows) });
-      map.addLayer({ id: "parcels-fill", type: "fill", source: "parcels", minzoom: PARCEL_MINZOOM, paint: { "fill-color": PARCEL_COLOR, "fill-opacity": 0.4 } });
-      map.addLayer({ id: "parcels-line", type: "line", source: "parcels", minzoom: PARCEL_MINZOOM, paint: { "line-color": "#3b5a7a", "line-width": 0.7 } });
-      map.addLayer({ id: "parcels-hl-casing", type: "line", source: "parcels", minzoom: PARCEL_MINZOOM, filter: ["==", ["get", "id"], selectedParcelId || " "], paint: { "line-color": "#fff", "line-width": 5, "line-opacity": 0.9 } });
-      map.addLayer({ id: "parcels-hl", type: "line", source: "parcels", minzoom: PARCEL_MINZOOM, filter: ["==", ["get", "id"], selectedParcelId || " "], paint: { "line-color": "#d8232a", "line-width": 2.6 } });
-      addOverlayLayers(); // Bodenbedeckung / Bauzonen / Lebensräume — under the markers, hidden by default
-      map.addSource("points", { type: "geojson", data: rowsToPointsFC(lastRows), cluster: true, clusterRadius: 48, clusterMaxZoom: 13 });
-      map.addLayer({ id: "clusters", type: "circle", source: "points", filter: ["has", "point_count"],
-        paint: { "circle-color": ["step", ["get", "point_count"], "#4f6f93", 25, "#3b5a7a", 100, "#2e4a68"], "circle-radius": ["step", ["get", "point_count"], 14, 25, 18, 100, 24], "circle-stroke-color": "#fff", "circle-stroke-width": 1.5 } });
-      map.addLayer({ id: "cluster-count", type: "symbol", source: "points", filter: ["has", "point_count"],
-        layout: { "text-field": ["get", "point_count_abbreviated"], "text-font": ["Open Sans Regular"], "text-size": 12 }, paint: { "text-color": "#fff" } });
-      map.addLayer({ id: "point", type: "circle", source: "points", filter: ["!", ["has", "point_count"]],
-        paint: { "circle-color": "#3b5a7a", "circle-radius": 4, "circle-stroke-color": "#fff", "circle-stroke-width": 1.2 } });
-      map.addLayer({ id: "point-label", type: "symbol", source: "points", filter: ["!", ["has", "point_count"]],
-        layout: { "text-field": ["get", "id"], "text-font": ["Open Sans Regular"], "text-size": 11, "text-anchor": "bottom", "text-offset": [0, -0.5], "text-optional": true },
-        paint: { "text-color": "#1f2937", "text-halo-color": "#fff", "text-halo-width": 1.4 } });
-      map.addControl(new LayerControl(), "top-left");
-      map.addControl(new Legend(), "bottom-right");
-      initContextMenu();
-      mapReady = true; mapFitted = false; renderMap(lastRows);
-      // One click handler, priority top→bottom: cluster → overlay → parcel.
-      map.on("click", function (e) {
-        if (map.getLayer("clusters")) {
-          var cl = map.queryRenderedFeatures(e.point, { layers: ["clusters"] });
-          if (cl.length) {
-            map.getSource("points").getClusterExpansionZoom(cl[0].properties.cluster_id, function (err, zoom) { if (err) return; map.easeTo({ center: cl[0].geometry.coordinates, zoom: zoom }); });
-            return;
-          }
-        }
-        var order = [["habitat-fill", "habitat"], ["bauzonen-fill", "bauzonen"], ["landcover-fill", "landcover"], ["parcels-fill", "parcel"]];
-        for (var i = 0; i < order.length; i++) {
-          if (!map.getLayer(order[i][0])) continue;
-          var fs = map.queryRenderedFeatures(e.point, { layers: [order[i][0]] });
-          if (!fs.length) continue;
-          var f = fs[0];
-          if (order[i][1] === "parcel") {
-            var pr = f.properties;
-            selectParcel(pr.id); // highlight polygon + select the table row (no scroll)
-            var pInfo = "<strong>" + esc(pr.ort || "—") + "</strong><br>" + esc(pr.id || "") + (pr.egrid ? "<br>" + esc(pr.egrid) : "") + "<br>" + fmtAreaU(pr.area);
-            if (pr.id) pInfo += '<a href="#" class="popup-details-link" data-id="' + esc(pr.id) + '" style="display:inline-block;margin-top:7px;color:#d8232a;font-weight:600;text-decoration:none">Alle Details anzeigen ↗</a>';
-            showPopup(e.lngLat, pInfo);
-          } else {
-            highlightOverlay("ov-" + order[i][1], f.id);
-            showPopup(e.lngLat, overlayPopupHTML(order[i][1], f.properties.art, f.properties.area_m2));
-          }
+    map.addControl(new SelBarControl(), "bottom-left");
+    map.addControl(new AccordionControl(), "top-left");
+    map.addControl(new BasemapControl(), "bottom-right");
+    map.addControl(new Legend(), "bottom-right"); // print only (css); the info dialogs carry the legends on screen
+    initContextMenu();
+    map.on("load", addAppLayers);
+    // One click handler, priority top→bottom: cluster → overlay → parcel.
+    map.on("click", function (e) {
+      if (!mapReady) return;
+      if (map.getLayer("clusters")) {
+        var cl = map.queryRenderedFeatures(e.point, { layers: ["clusters"] });
+        if (cl.length) {
+          var zp = map.getSource("points").getClusterExpansionZoom(cl[0].properties.cluster_id);
+          var go = function (zoom) { map.easeTo({ center: cl[0].geometry.coordinates, zoom: zoom }); };
+          if (zp && typeof zp.then === "function") zp.then(go).catch(function () {}); else map.getSource("points").getClusterExpansionZoom(cl[0].properties.cluster_id, function (err, zoom) { if (!err) go(zoom); });
           return;
         }
-      });
-      ["parcels-fill", "clusters", "point", "landcover-fill", "bauzonen-fill", "habitat-fill"].forEach(function (lid) {
-        if (!map.getLayer(lid)) return;
-        map.on("mouseenter", lid, function () { map.getCanvas().style.cursor = "pointer"; });
-        map.on("mouseleave", lid, function () { map.getCanvas().style.cursor = ""; });
-      });
+      }
+      var order = [["habitat-fill", "habitat"], ["bauzonen-fill", "bauzonen"], ["landcover-fill", "landcover"], ["parcels-fill", "parcel"]];
+      for (var i = 0; i < order.length; i++) {
+        if (!map.getLayer(order[i][0]) || map.getLayoutProperty(order[i][0], "visibility") === "none") continue;
+        var fs = map.queryRenderedFeatures(e.point, { layers: [order[i][0]] });
+        if (!fs.length) continue;
+        var f = fs[0];
+        if (order[i][1] === "parcel") {
+          var p = parcelById(f.properties.id);
+          selectParcel(f.properties.id); // highlight polygon + focus the table row (no scroll)
+          if (p) openParcelPopup(p, e.lngLat);
+        } else {
+          highlightOverlay("ov-" + order[i][1], f.id);
+          showPopup(e.lngLat, overlayPopupHTML(order[i][1], f.properties.art, f.properties.area_m2));
+        }
+        return;
+      }
     });
+    map.on("mousemove", function (e) {
+      if (!mapReady) return;
+      var ls = HOVER_LAYERS.filter(function (l) { return map.getLayer(l) && map.getLayoutProperty(l, "visibility") !== "none"; });
+      var f = ls.length ? map.queryRenderedFeatures(e.point, { layers: ls }) : [];
+      map.getCanvas().style.cursor = f.length ? "pointer" : "";
+    });
+  }
+  // Everything the app draws: runs on the first load and again after every basemap switch (setStyle drops it all).
+  function addAppLayers() {
+    if (map.getSource("parcels")) return; // already built for this style
+    map.addSource("parcels", { type: "geojson", data: rowsToFC(lastRows) });
+    map.addLayer({ id: "parcels-fill", type: "fill", source: "parcels", minzoom: PARCEL_MINZOOM, paint: { "fill-color": PARCEL_COLOR, "fill-opacity": 0.4 } });
+    map.addLayer({ id: "parcels-line", type: "line", source: "parcels", minzoom: PARCEL_MINZOOM, paint: { "line-color": "#3b5a7a", "line-width": 0.7 } });
+    map.addLayer({ id: "parcels-sel", type: "line", source: "parcels", minzoom: PARCEL_MINZOOM, filter: ["in", ["get", "id"], ["literal", selIds()]], paint: { "line-color": "#2f4356", "line-width": 2.2, "line-dasharray": [2, 1.2] } });
+    map.addLayer({ id: "parcels-hl-casing", type: "line", source: "parcels", minzoom: PARCEL_MINZOOM, filter: ["==", ["get", "id"], selectedParcelId || " "], paint: { "line-color": "#fff", "line-width": 5, "line-opacity": 0.9 } });
+    map.addLayer({ id: "parcels-hl", type: "line", source: "parcels", minzoom: PARCEL_MINZOOM, filter: ["==", ["get", "id"], selectedParcelId || " "], paint: { "line-color": "#d8232a", "line-width": 2.6 } });
+    addOverlayLayers(); // Bodenbedeckung / Bauzonen / Lebensräume, under the markers
+    map.addSource("points", { type: "geojson", data: rowsToPointsFC(lastRows), cluster: true, clusterRadius: 48, clusterMaxZoom: 13 });
+    map.addLayer({ id: "clusters", type: "circle", source: "points", filter: ["has", "point_count"],
+      paint: { "circle-color": ["step", ["get", "point_count"], "#4f6f93", 25, "#3b5a7a", 100, "#2e4a68"], "circle-radius": ["step", ["get", "point_count"], 14, 25, 18, 100, 24], "circle-stroke-color": "#fff", "circle-stroke-width": 1.5 } });
+    map.addLayer({ id: "cluster-count", type: "symbol", source: "points", filter: ["has", "point_count"],
+      layout: { "text-field": ["get", "point_count_abbreviated"], "text-font": ["Open Sans Regular"], "text-size": 12 }, paint: { "text-color": "#fff" } });
+    map.addLayer({ id: "point", type: "circle", source: "points", filter: ["!", ["has", "point_count"]],
+      paint: { "circle-color": "#3b5a7a", "circle-radius": 4, "circle-stroke-color": "#fff", "circle-stroke-width": 1.2 } });
+    map.addLayer({ id: "point-label", type: "symbol", source: "points", filter: ["!", ["has", "point_count"]],
+      layout: { "text-field": ["get", "id"], "text-font": ["Open Sans Regular"], "text-size": 11, "text-anchor": "bottom", "text-offset": [0, -0.5], "text-optional": true },
+      paint: { "text-color": "#1f2937", "text-halo-color": "#fff", "text-halo-width": 1.4 } });
+    extLayers.forEach(addExtToMap); syncExtOrder();
+    applyLayerVis();
+    _selOv = null;
+    mapReady = true; renderMap(lastRows); renderLegend(); renderAccordion();
+    if (_pendingZoom) { var z = _pendingZoom; _pendingZoom = null; zoomToParcel(z.id, z.opts); }
+    if (_pendingMapAction) { var a = _pendingMapAction; _pendingMapAction = null; a(); }
   }
   var _mapTried = false;
   function ensureMap() {
@@ -2849,17 +3215,18 @@
     var css = document.createElement("link"); css.rel = "stylesheet"; css.href = "https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css"; document.head.appendChild(css);
     var s = document.createElement("script"); s.src = "https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js";
     s.onload = function () { el.innerHTML = ""; initMap(el); };
-    s.onerror = function () { el.innerHTML = '<div class="map-msg">Karte benötigt eine Internetverbindung (MapLibre + swisstopo).</div>'; };
+    s.onerror = function () { el.innerHTML = '<div class="map-msg">Karte konnte nicht geladen werden (Internetverbindung nötig).</div>'; };
     document.head.appendChild(s);
   }
 
   // ---- Init ----
   var dt0 = document.getElementById("dash-title"); if (dt0 && window.DASHBOARD_TITLE) dt0.textContent = window.DASHBOARD_TITLE;
-  var appliedDefaults = readURL();
+  readURL();            // filters (defaults on a first visit) + navigation params
+  applyNavState();      // basemap + external maps from the URL
   syncDrawer();
-  if (appliedDefaults || urlMigrated) writeURL();   // first (empty) visit → stamp the active defaults; legacy params → their current spelling
+  initGlobalSearch();
   update();
-  ensureMap();
+  showTab(nav.tab);     // Karte is the start view; showTab stamps tab, basemap, ext and the active defaults into the URL
   } // ── end boot() ──
 
   // ── Dispatch: embedded data → dashboard; no data → file picker ──
