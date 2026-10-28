@@ -2,8 +2,8 @@
  * One real parcel for the explainer: Zollikofen (BE), Parzelle 112, EGRID CH834682352690.
  * Boundary: amtliche Vermessung via the swisstopo API; land cover (BBArt) via geodienste.ch WFS —
  * the same services the app uses; figures from processing-cli (--source api). Coordinates are
- * in the explainer's 640 × 300 viewBox of the tight frame (web-mercator excerpt, see the script).
- * Aerial excerpts: SWISSIMAGE, © swisstopo (free geodata; the source is named on the stage). */
+ * in the explainer's 640 × 300 viewBox of the aerial frame (web-mercator excerpt, see the script).
+ * Aerial excerpt: SWISSIMAGE, © swisstopo (free geodata; the source is named on the stage). */
 export const SAMPLE = {
  "egrid": "CH834682352690",
  "label": {
@@ -21,14 +21,8 @@ export const SAMPLE = {
   "pct_green": 50,
   "pct_water": 6
  },
- "zoom": 3.5,
- "origin": [
-  204.1,
-  146.9
- ],
  "images": {
-  "tight": "../assets/explainer/zollikofen-112.jpg",
-  "wide": "../assets/explainer/zollikofen-112-wide.jpg"
+  "tight": "../assets/explainer/zollikofen-112.jpg"
  },
  "parcel": "M 56.7 148.0 L 97.5 110.4 L 99.7 112.4 L 135.1 75.4 L 177.7 35.6 L 194.5 40.1 L 238.2 53.8 L 263.3 61.2 L 296.6 69.7 L 335.5 78.4 L 341.0 89.4 L 343.3 89.9 L 341.5 96.9 L 261.7 245.5 L 224.9 256.0 L 218.8 243.2 L 181.7 260.7 L 177.6 252.0 L 151.4 264.4 L 144.8 249.4 L 141.8 243.5 L 134.8 232.0 L 129.3 224.1 L 125.1 218.8 L 66.1 151.8 L 64.2 150.7 L 59.2 149.7 Z",
  "labels": [

@@ -24,7 +24,7 @@ changing any of the sources and commit the result.
 Builds the material of the web app's explainer («Kurz erklärt»): one real parcel —
 Zollikofen, Parzelle 112, EGRID CH834682352690 — fetched through the CLI's `api` module
 (boundary from swisstopo, land cover from geodienste.ch), the figures from a CLI run, and
-two SWISSIMAGE excerpts from the geo.admin WMS, projected into the explainer's 640 × 300
+a SWISSIMAGE excerpt from the geo.admin WMS, projected into the explainer's 640 × 300
 stage. Writes `processing-web/js/explainer-sample.js` and
 `processing-web/assets/explainer/*.jpg`. Needs network, shapely and Pillow (the CLI's
 dependencies).

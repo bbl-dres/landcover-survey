@@ -218,3 +218,88 @@ was checked with the generator's `--preview` overlay.
 | `scripts/build_explainer_sample.py` | **New** — generator (CLI api module + WMS) |
 | `processing-web/js/i18n.js` | 50 `explainer.*` keys per language, rewritten for the new scenes |
 | `processing-web/css/styles.css` | Halo text, surfaces over the aerial, zoom / pin / typing animations |
+
+---
+
+## Third iteration — the 26-second cut (senior video editor + social-media / communication pass)
+
+**Request (owner):** one more round as a senior video-editing, communication and
+social-media creator expert; "I think it can be explained in 20 seconds, but up to you."
+**Method:** two independent reviewers of the 39 s second iteration. The editor froze every
+CSS animation with `getAnimations()` and captured 208 frame-accurate PNGs at desktop and
+phone width plus real-time frames across the cuts; the communication reviewer captured 62
+frames, counted caption and stage words in all four languages, and injected three mock
+frames into the live stage to test two structural ideas. Both reports are summarised here;
+both concluded that about 25 s carries the message better than 20 s, and that the gain
+comes from editing, not from playing the same film faster.
+
+### Findings (merged, ordered by impact)
+
+| # | Sev. | Finding | Source | Status |
+|---|------|---------|--------|--------|
+| 1 | High | **No hook, no one-line message.** The film opened with a search box being typed into; none of the eight captions said what the app does; the title's question was never answered. The poster was a working frame of scene 2 under a white veil, with scene 2's caption and two timeline segments already filled — it looked half-watched before the first click. | Comm. F1, F2 | Fixed — new scene 1 «Was?»: the boundary draws itself on the aerial and the question «Wie viel ist bebaut, / versiegelt, grün?» stands top-right (27 px, halo); caption «Diese Anwendung rechnet es aus – aus amtlichen Daten.» Its end frame is the poster, under a dark bottom-up gradient instead of the white veil, timeline empty. |
+| 2 | High | **Every cut was a dip to grey and each scene rebuilt what the previous one had built.** `showScene` faded the *new* scene up from the stage background; the boundary re-drew and the surfaces re-faded in scenes 3–5, so the parcel blinked off four times in the one locked shot. 11.4 s (29 %) of static hold. | Editor F1, F2; Comm. F6, F7 | Fixed — a true dissolve: the outgoing scene is cloned, frozen on its end frame and faded out over the new one (300 ms); elements that stay (aerial, boundary, surfaces) carry no entrance animation any more; every scene carries the clip-path definitions so the frozen frame still renders. |
+| 3 | High | **Every word was said twice; FR / IT captions ran 18–19 words.** Stage text duplicated the caption in six scenes (DE 100 caption + 105 stage words in 39 s; FR 135 + 130); the ≤ 14-word rule held only in German. | Editor F2, F3; Comm. F3 | Fixed — one channel per fact: nouns in the picture stay on stage, the caption carries the verb; captions ≤ 10 words (DE) / ≤ 13 (FR, IT, EN), checked per language by the build script; the duplicating stage strings (ways, source lines, step titles, norms gloss, comparison note, CTA sentence) are gone. DE: 69 caption words in 26 s. |
+| 4 | Medium | **The payoff arrived on a blank stage.** After four scenes on the aerial the figures counted up on white, with bars labelled «112 / B / C» and the same split drawn a third time as the donut. | Comm. F4; Editor F7 | Fixed — the figures count up in a panel beside the classified parcel; the comparison stays as one compact beat («Vergleich»: the parcel's row in blue, two example rows A / B); the donut remains in the app-window scene, where it *draws* the real split instead of fading in. |
+| 5 | Medium | **«Klassieren» barely changed the picture** (the result-map palette is nearly the AV palette); a heavy 200 × 226 px panel sat empty for 0.2 s and ended with three 13 px gloss lines (6.8 px on a phone). | Comm. F5 | Fixed — the class colours *wipe* across the clipped surfaces (`clip-path: inset()` animation, safe fallback = fully shown); the panel is replaced by four chips (swatch + word, 16 px); the norm is named once, in the caption. |
+| 6 | Medium | **Metronomic cadence, long setup**: seven scenes within 4–6 s, 11.5 s before any land cover; the zoom landed on a soft 3.5× upsampled frame and the sharp frame popped in through the dip. | Editor F4, F6 | Fixed — 3.0 / 4.0 / 3.5 / 2.5 / 3.0 / 4.5 / 3.0 / 2.5 s (26 s): quick through the process steps, longer on the figures. The zoom is dropped: the hook opens on the parcel, and jumping out to a wide frame and back would have been a visible rewind; the search now plays over the parcel frame. The wide excerpt and its asset are gone. |
+| 7 | Medium | **Scene 2 overloaded** (four text arrivals in three corners), the privacy promise made twice (stage + result caption), the EGRID in two spellings. | Editor F5; Comm. F9 | Fixed — scene 2 keeps the search, the hit (with the search service's spaced EGRID), the place label and one short line «Gesendet wird nur die EGRID.»; the chip and the source line are gone; the result caption no longer repeats the promise. |
+| 8 | Medium | **The ending instructed three times and motivated zero times**; the stage-as-link had no affordance. | Comm. F8 | Fixed — «Jetzt ausprobieren» + three chips «Karte anklicken · Adresse oder EGRID · CSV-Liste» + the arrow; caption «Oben auf dieser Seite – mit einem Grundstück Ihrer Wahl.» |
+| 9 | Low | Nobody sees the poster without scrolling (below the fold on a 1440 × 900 laptop, two screens down on a phone). | Comm. F10 | Fixed — a text link «Kurz erklärt ↓» under the upload card's description scrolls to the poster and focuses it (four languages). |
+| 10 | Low | Phone legibility at the floor for 13 px stage text; the controls row jumped 2–3 px between one- and two-line captions. | Comm. F11; Editor F9 | Fixed — nothing explanatory below 16 px (labels, chips, KPI labels 16 px; headline 27 px; only the credit stays 13 px); caption `min-height: 2.8em`. |
+| 11 | Low | Scene 1 dead air (empty field 0.5 s), the pin's ring ran past the cut. | Editor F8 | Moot — the search scene was rebuilt without the zoom and pin; typing starts at 0.5 s. |
+| 12 | — | Found while verifying: a scene chosen from the timeline **while paused** played its animations but the KPI counters stayed at 0. | own | Fixed — a preview clock drives the counters and the segment fill until the scene is over. |
+
+### What stayed
+
+Click-to-play (no autoplay under the upload card); the halo text; the frame-wide land
+cover in scene 3 and the ghost remainder in the clip (the editor: "what makes the clip
+meaningful"); the proportional, keyboard-accessible timeline; reduced-motion end frames;
+«Luftbild © swisstopo» on every aerial frame; no duration advertised.
+
+### Decisions where the two reviewers differed
+
+- **Hook first vs. zoom first.** The editor kept the search-and-zoom opening (with a
+  sharper landing); the communication reviewer wanted the question on the parcel as the
+  first frame and the poster. The question won: a muted scroller needs the promise in
+  the first frame, and a zoom after the hook would mean jumping out and back.
+- **Comparison bars.** The communication reviewer dropped them; the editor kept them
+  (round one found the "why" unconvincing without a visible comparison). Kept, compact,
+  beside the real figures, with the parcel's own row marked.
+- **20 vs 25 s.** Both argued against 20 s (it costs the comparison, forces ≤ 6-word
+  captions, and FR / IT no longer fit the reading budget). The cut is 26 s.
+
+### The cut
+
+| # | Scene | s | On stage | Caption (DE) |
+|---|-------|---|----------|--------------|
+| 1 | Was? | 3.0 | Aerial; boundary draws 0.3–1.1 s and pulses; headline top-right «Wie viel ist bebaut, / versiegelt, grün?» 1.2 / 1.5 s. **Poster.** | Diese Anwendung rechnet es aus – aus amtlichen Daten. |
+| 2 | Grundstück | 4.0 | Boundary stays; search field 0.3 s, typing 0.5–1.2 s, hit «Zollikofen 112 (CH 8346 8235 2690)» 1.3 s, «Zollikofen · Parzelle 112» 1.8 s, «Gesendet wird nur die EGRID.» 2.6 s | EGRID, Grundstücksnummer oder Adresse – swisstopo liefert die amtliche Grenze. |
+| 3 | Bodenbedeckung | 3.5 | The AV surfaces of the whole frame, group by group 0.3–1.2 s; six labels 1.5–2.5 s | Die amtliche Vermessung kennt jede Fläche – von geodienste.ch. |
+| 4 | Zuschneiden | 2.5 | Surfaces and boundary stay; pulse 0.5 s; outside → 12 % ghost 0.6–1.2 s | Nur was innerhalb der Grenze liegt, zählt. |
+| 5 | Klassieren | 3.0 | Class colours wipe across the clipped surfaces 0.3–1.2 s; chips bebaut · versiegelt · grün · Gewässer 1.0–1.75 s | Jede Fläche bekommt eine Klasse – nach Normen wie SIA 416. |
+| 6 | Kennzahlen | 4.5 | Panel beside the parcel: 44 % · 50 % · 2'542 m² count up 0.3 / 0.7 / 1.1 s; «Vergleich» with rows 112 / A / B 2.0–2.7 s | Für jedes Grundstück des Bundes gleich gerechnet – also vergleichbar. |
+| 7 | Ergebnis | 3.0 | App window 0.25 s; donut draws 0.7–1.3 s; table 1.1 s; Export chips 1.6 s | Karte, Tabelle, Zusammenfassung – Export als Excel, CSV oder GeoJSON. |
+| 8 | Und jetzt? | 2.5 | «Jetzt ausprobieren», three chips, arrow; stage = link to the upload card | Oben auf dieser Seite – mit einem Grundstück Ihrer Wahl. |
+
+### Verification
+
+`run_explainer.js` (eight scenes): poster from scene 1 with all elements drawn, every
+caption after stepping through the timeline, `aria-current`, end state, the CTA click
+focusing the search field, replay / pause / play, FR captions, hidden while a batch runs,
+poster restored after «Neue Analyse», phone width; no page or console errors. Frames
+across the cover → clip cut at +80 / +180 / +320 ms show the outgoing picture dissolving
+(labels still visible) instead of a bare aerial; the classify wipe at 0.7 s; the figures
+panel with the real numbers and the comparison rows; the donut drawn. No frozen clone is
+left in the DOM after a cut.
+
+### Files (third iteration)
+
+| File | Change |
+|------|--------|
+| `processing-web/js/explainer.js` | Eight scenes, 26 s; dissolve with a frozen outgoing frame; static carry-over; wipe; chips; preview clock |
+| `processing-web/js/explainer-sample.js`, `processing-web/assets/explainer/` | Regenerated without the wide frame (one aerial excerpt) |
+| `scripts/build_explainer_sample.py` | One frame |
+| `processing-web/js/i18n.js` | 47 `explainer.*` keys per language; captions ≤ 10 / ≤ 13 words |
+| `processing-web/css/styles.css` | Explainer block: headline, chips, wipe, donut draw, poster gradient, 16 px floor |
+| `processing-web/index.html` | «Kurz erklärt ↓» link under the upload card's description |

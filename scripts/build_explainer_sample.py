@@ -10,11 +10,9 @@ CLI's own api module (parity with the web app), projects everything into the exp
 
   processing-web/js/explainer-sample.js            ES module: parcel path, land-cover surfaces,
                                                    label anchors, figures, frame metadata
-  processing-web/assets/explainer/zollikofen-112-wide.jpg   SWISSIMAGE excerpt, 1.5 km (scene «Wo?»)
-  processing-web/assets/explainer/zollikofen-112.jpg        SWISSIMAGE excerpt, 430 m (every other scene)
+  processing-web/assets/explainer/zollikofen-112.jpg        SWISSIMAGE excerpt, 430 m wide (every scene)
 
-Both frames share one centre, so the wide frame zooms onto the tight one with a plain
-CSS scale. Aerial imagery: swisstopo SWISSIMAGE (free geodata, source to be named:
+Aerial imagery: swisstopo SWISSIMAGE (free geodata, source to be named:
 «© swisstopo»). Figures come from a CLI run (processing-cli/main.py --source api).
 
 Usage (repo root, network required):
@@ -44,9 +42,9 @@ from shapely.ops import unary_union  # noqa: E402
 EGRID = "CH834682352690"
 LABEL = {"gemeinde": "Zollikofen", "kanton": "BE", "nummer": "112"}
 VIEW_W, VIEW_H = 640, 300          # the explainer stage's viewBox
-TIGHT_H_M, WIDE_H_M = 200.0, 700.0 # frame heights on the ground (width = height × 640/300)
+TIGHT_H_M = 200.0                  # frame height on the ground (width = height × 640/300)
 OFFSET_E_M = 80.0                  # frame centre east of the parcel centre → parcel sits left, labels right
-PAD_FRAME = 0.06                   # keep surfaces slightly beyond the tight frame (the zoom never shows them)
+PAD_FRAME = 0.06                   # keep surfaces slightly beyond the frame (dissolves never show them)
 WMS = "https://wms.geo.admin.ch/?"
 ASSETS = ROOT / "processing-web" / "assets" / "explainer"
 OUT_JS = ROOT / "processing-web" / "js" / "explainer-sample.js"
@@ -78,11 +76,11 @@ def main() -> None:
     mcx, mcy = merc(cx, cy)
     mcx += OFFSET_E_M * k                         # shift the frame centre east (ground metres → mercator)
     frames = {}
-    for name, ground_h in (("tight", TIGHT_H_M), ("wide", WIDE_H_M)):
+    for name, ground_h in (("tight", TIGHT_H_M),):
         ground_w = ground_h * VIEW_W / VIEW_H
         hx, hy = ground_w * k / 2, ground_h * k / 2
         frames[name] = (mcx - hx, mcy - hy, mcx + hx, mcy + hy)
-    # raw land cover for the wide frame's bbox in WGS84 (generous: the tight frame is what we keep)
+    # raw land cover for the frame's bbox in WGS84 (slightly padded)
     tx0, ty0, tx1, ty1 = frames["tight"]
     inv = lambda x, y: (math.degrees(x / R), math.degrees(2 * math.atan(math.exp(y / R)) - math.pi / 2))
     lon0, lat0 = inv(tx0 - (tx1 - tx0) * PAD_FRAME, ty0 - (ty1 - ty0) * PAD_FRAME)
@@ -159,13 +157,12 @@ def main() -> None:
         p = biggest.representative_point()
         labels.append({"key": key, "x": round(p.x, 1), "y": round(p.y, 1), "area": round(unary_union(pieces).area, 1)})
     labels.sort(key=lambda l: -l["area"])
-    origin = project(pg).centroid
-    print(f"surfaces kept: {len(surfaces)}, labels: {[l['key'] for l in labels]}, zoom origin: ({origin.x:.0f}, {origin.y:.0f})")
+    print(f"surfaces kept: {len(surfaces)}, labels: {[l['key'] for l in labels]}")
 
     # ── 4. Aerial excerpts (SWISSIMAGE via the geo.admin WMS), resized + recompressed ──
     ASSETS.mkdir(parents=True, exist_ok=True)
     images = {}
-    for name, size, quality, fname in (("tight", (1280, 600), 76, "zollikofen-112.jpg"), ("wide", (960, 450), 70, "zollikofen-112-wide.jpg")):
+    for name, size, quality, fname in (("tight", (1280, 600), 76, "zollikofen-112.jpg"),):
         bb = frames[name]
         q = urllib.parse.urlencode({"SERVICE": "WMS", "VERSION": "1.3.0", "REQUEST": "GetMap", "LAYERS": "ch.swisstopo.swissimage",
                                     "STYLES": "", "CRS": "EPSG:3857", "BBOX": "%f,%f,%f,%f" % bb, "WIDTH": 1280, "HEIGHT": 600,
@@ -181,8 +178,7 @@ def main() -> None:
     # ── 5. The module ──
     sample = {
         "egrid": EGRID, "label": LABEL, "figures": figures,
-        "zoom": round(WIDE_H_M / TIGHT_H_M, 2), "origin": [round(origin.x, 1), round(origin.y, 1)],
-        "images": {"tight": "../assets/explainer/" + images["tight"], "wide": "../assets/explainer/" + images["wide"]},
+        "images": {"tight": "../assets/explainer/" + images["tight"]},
         "parcel": path(pv), "labels": labels, "surfaces": surfaces,
     }
     header = (
@@ -190,8 +186,8 @@ def main() -> None:
         f" * One real parcel for the explainer: {LABEL['gemeinde']} (BE), Parzelle {LABEL['nummer']}, EGRID {EGRID}.\n"
         " * Boundary: amtliche Vermessung via the swisstopo API; land cover (BBArt) via geodienste.ch WFS —\n"
         " * the same services the app uses; figures from processing-cli (--source api). Coordinates are\n"
-        " * in the explainer's 640 × 300 viewBox of the tight frame (web-mercator excerpt, see the script).\n"
-        " * Aerial excerpts: SWISSIMAGE, © swisstopo (free geodata; the source is named on the stage). */\n"
+        " * in the explainer's 640 × 300 viewBox of the aerial frame (web-mercator excerpt, see the script).\n"
+        " * Aerial excerpt: SWISSIMAGE, © swisstopo (free geodata; the source is named on the stage). */\n"
     )
     body = json.dumps(sample, ensure_ascii=False, indent=1)
     OUT_JS.write_text(header + "export const SAMPLE = " + body + ";\n", encoding="utf-8", newline="\n")

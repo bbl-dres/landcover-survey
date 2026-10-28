@@ -41,15 +41,18 @@ The header carries the Confederation lockup with the dashboard title, the
   accordion (top left), map controls (top right), the basemap switcher (bottom
   right) and a selection bar (bottom left) once parcels are selected for the PDF
   report. Zooming out groups the parcels into clusters; click a cluster to expand it,
-  a polygon to open the parcel popup. The page does not scroll here, so the mouse
-  wheel zooms the map directly.
-- **Auswertung**: KPI cards, Teilportfolio and Region tables (area and parcel
-  count), the same map in a fixed-height panel with a simple legend of the visible
-  layers (the Karte-only controls stay away; because this page scrolls, zooming
-  needs Ctrl + wheel, ⌘ on a Mac, as the map's own hint says), the summary tables (VBS, Bauzonen, SIA 416, Versiegelung, AV land cover
-  by type, BAFU habitats) and the parcel table with search, sortable columns, a
-  column picker, a Total row, pagination and the checkbox column for the PDF
-  report.
+  a polygon to open its info card at the top right of the map. The page does not scroll
+  here, so the mouse wheel zooms the map directly.
+- **Auswertung**, top to bottom: KPI cards; the summary tables «Flächenverteilung»
+  (VBS, Bauzonen, SIA 416, Versiegelung, AV land cover by type, BAFU habitats); the
+  same map in a fixed-height panel with a compact layer widget (top left: the app's
+  own layers, same state as the Karte accordion) and a legend of the visible layers
+  (the Karte-only controls stay away; because this page scrolls, zooming needs
+  Ctrl + wheel, ⌘ on a Mac, as the map's own hint says); the parcel table right
+  below it with search, sortable columns, a column picker, a Total row, pagination
+  and the checkbox column for the PDF report (a row click marks the parcel on this
+  map and scrolls the map into view); and the Teilportfolio and Region tables (area
+  and parcel count). Section titles are short and each carries a one-line note.
 - **Datenqualität**: completeness and area-balance rules over the current selection
   (see [docs/CHECKING-RULES.md](../docs/CHECKING-RULES.md)).
 - **Über**: data sources, the counting rule and notes.
@@ -94,24 +97,37 @@ table search is now the «In Tabelle filtern…» field above the table.
   Active external maps travel in the URL as `ext=id1,id2` (a `-` prefix marks a
   hidden map), so shared links and the HTML deliverable restore them. Layer ids are
   validated against `^[a-zA-Z0-9._-]+$`.
-- **Parcel popup**: Ort, Bezeichnung, ID, E-GRID, Region and Grundstücksfläche with
-  the actions **Hinzoomen**, **In Tabelle anzeigen** (switches to Auswertung and
-  filters the table to the parcel), **PDF-Bericht erstellen** and a checkbox to add
-  the parcel to the PDF selection, plus «Alle Details anzeigen» (full attribute page
-  in a new tab).
+- **Info card**: a fixed panel at the top right of the map, left of the control
+  column (both maps), so it never covers the geometry it describes; the zoom-to-parcel
+  fit leaves room beside it (below it on narrow maps). It shows Ort, Bezeichnung, ID,
+  E-GRID, Region and Grundstücksfläche with the actions **Hinzoomen**, **In Tabelle
+  anzeigen** (switches to Auswertung and filters the table to the parcel),
+  **PDF-Bericht erstellen** and a checkbox to add the parcel to the PDF selection,
+  plus «Alle Details anzeigen» (full attribute page in a new tab). A clicked overlay
+  feature (Bodenbedeckung, Bauzone, Lebensraum) opens in the same card.
+- **Marking a parcel**: a click on a polygon, on its ID label or on its point marker
+  marks the parcel (red outline, red inset in the table, info card). A click on empty
+  map, or **Escape**, clears the mark, the overlay highlight and the card; the card's
+  own × only closes the card. A table row click or a search hit marks the parcel and
+  fits the map to it: on the Auswertung tab on that tab's map, elsewhere the Karte
+  tab opens. «Markiert» is
+  the word for this state everywhere (legend, layer info); it is distinct from the
+  report selection below.
 - **Map controls** (top right, in this order): **Vollbild**, zoom, compass (click =
   north up) and **auf Auswahl zoomen** (home), all drawn with the same Lucide icon
   set as the rest of the UI. Fullscreen expands the map element itself, so the
-  accordion, switcher and popups come with it. Right-click opens a context menu
+  accordion, switcher and info card come with it. Right-click opens a context menu
   (copy coordinates, share, report a problem).
 
 ### PDF report for a selection
 
 Select up to **50** parcels with the checkboxes in the table (the header checkbox
-selects the current page), via «Alle n gefilterten auswählen», or in the map popup.
+selects the current page), via «Alle n gefilterten auswählen», or in the map's info card.
 Selected parcels get a slate inset in the table and a dashed outline on the map; the
-table bar and the map bar show «n von max. 50 ausgewählt · Auswahl aufheben» and a
-**PDF-Bericht (n)** button. The report is an A3 PDF with an overview page and one
+table bar and the map bar show «n von max. 50 für den Bericht ausgewählt · Auswahl
+aufheben» and a **PDF-Bericht (n)** button. A parcel that is only *marked* (clicked)
+counts as the selection in the download dialog while no checkbox selection exists, so
+a report for one clicked parcel needs no checkbox. The report is an A3 PDF with an overview page and one
 page per parcel (aerial, land cover and habitat sections with tables, locator map,
 link to map.geo.admin.ch). It needs an internet connection (swisstopo WMS images,
 jsPDF from the CDN). The selection is session state, not part of the URL.
@@ -119,7 +135,8 @@ jsPDF from the CDN). The selection is session state, not part of the URL.
 ### Download dialog
 
 One scope switch **Alle (N) / Aktive Filter (n) / Ausgewählt (k)** (default:
-Ausgewählt if a selection exists, else Aktive Filter) and one list of formats:
+Ausgewählt if a checkbox selection or a marked parcel exists, else Aktive Filter)
+and one list of formats:
 
 | Format | Content |
 |--------|---------|
@@ -196,10 +213,36 @@ Exports produced with the web app option «Grüninventar abgleichen» (or the CL
 parcel is in the [Grünflächeninventar der Bundesgärtnerei](https://github.com/bbl-dres/green-inventory)
 (matched by EGRID, else by the SAP key). The dashboard then shows a **Grüninventar**
 filter group (Erfasst / Nicht erfasst, URL `gi=`), a **Grüninventar** table column, a
-row in the map popup and on the detail page, and for covered parcels a link that
+row in the map's info card, on the detail page and on every parcel page of the PDF
+report, and for covered parcels a link that
 opens the [green inventory app](https://bbl-dres.github.io/green-inventory/prototype-main/)
-centred on the parcel (`center` + `zoom` from the parcel's visual centre). Exports
-without the column show none of this.
+centred on the parcel (`center` + `zoom` from the parcel's visual centre). The column
+travels with every export: the Excel table export always writes **Grüninventar**
+(Erfasst / Nicht erfasst), even when the column is hidden in the table; the GeoJSON
+export keeps the raw `greeninv` property; the Datenqualität workbook's Abweichungen
+sheet carries it as well. Exports without the column show none of this.
+
+### Loading indicator
+
+A full-page spinner (`#app-loading`, static in the HTML so it is on screen from the first
+paint) covers every longer step: opening a saved deliverable (parsing the embedded data and
+building the dashboard), reading and parsing a GeoJSON in the file picker, building the
+dashboard after **Dashboard anzeigen**, and filter passes on datasets of 20'000 parcels or
+more. The map shows its own spinner while MapLibre loads, and the download dialog's hint
+line carries one while an export runs.
+
+### Layout, phones and tokens
+
+The page is a flex column (header · app · footer): the Karte tab fills the viewport at
+any header height and never scrolls; the other tabs scroll the page. Below 900 px the
+filter panel is a drawer (full height, scrolls inside, locks the page while open);
+below 600 px the filter toggle shares the tabs row, «Neue Datei» moves into the gear
+menu, the search dropdown spans the width and the map's selection bar wraps. Dialogs
+trap focus, make the page inert and lock its scroll. Every colour, type size, control
+size, icon size, z-index and map colour comes from `css/tokens.css`; the app script
+reads the map colours from the tokens at boot (`MAP_COLORS`), so the offline
+deliverable carries the same palette. Design review:
+[docs/reviews/2026-10-28-dashboard-ux-review.md](../docs/reviews/2026-10-28-dashboard-ux-review.md).
 
 ### Settings and print
 

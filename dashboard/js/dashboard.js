@@ -16,6 +16,22 @@
   // terminate a JS string literal inside an inline <script> → silent corruption).
   var jsonSafe = function (o) { return JSON.stringify(o).replace(new RegExp("[<" + String.fromCharCode(0x2028, 0x2029) + "]", "g"), function (c) { return String.fromCharCode(92) + "u" + ("000" + c.charCodeAt(0).toString(16)).slice(-4); }); };
   var slug = function (s) { return (String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")) || "landcover-dashboard"; };
+  // Loading overlay (#app-loading, static in index.html so a deliverable's first paint already shows
+  // it). The heavy steps here are synchronous (parsing a 20 MB file, boot, a filter pass over 100k
+  // rows), so withLoading() shows the overlay, lets the browser paint it (a frame + a tick), runs the
+  // work, and hides it again — whatever the work returns or throws.
+  var loadingEl = document.getElementById("app-loading"), loadingMsgEl = document.getElementById("app-loading-msg");
+  var showLoading = function (msg) { if (!loadingEl) return; if (msg) loadingMsgEl.textContent = msg; loadingEl.hidden = false; };
+  var hideLoading = function () { if (loadingEl) loadingEl.hidden = true; };
+  var withLoading = function (msg, fn) {
+    showLoading(msg);
+    return new Promise(function (res, rej) {
+      requestAnimationFrame(function () { setTimeout(function () {
+        var r; try { r = fn(); } catch (e) { hideLoading(); rej(e); return; }
+        hideLoading(); res(r);
+      }, 30); });
+    });
+  };
   var saveBlob = function (data, type, name) {
     var a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([data], { type: type }));
@@ -120,29 +136,32 @@
   // ── Picker: no embedded data → pick a file, allowlist, then render in place ──
   function initPicker() {
     document.body.classList.add("builder-mode"); // .builder-mode shows the picker, hides the dashboard
+    hideLoading();
     var bEl = function (id) { return document.getElementById(id); };
     var fmtN = new Intl.NumberFormat("de-CH");
     var setStatus = function (h) { bEl("b-status").textContent = h; }; // plain text only — avoids injecting a parse-error message containing markup
     var geo = null;
     bEl("b-geojson").addEventListener("change", function (e) {
       var f = e.target.files[0]; if (!f) return;
-      setStatus("GeoJSON wird gelesen…");
-      f.text().then(function (t) {
-        try {
-          geo = readGeojson(t);
-          var ov = geo.overlays, nOv = ov.landcover.features.length + ov.bauzonen.features.length + ov.habitat.features.length;
-          if (!geo.parcels.length) throw new Error("keine Grundstücke (Features mit layer = parcel) in der Datei.");
-          bEl("b-show").disabled = false;
-          setStatus(fmtN.format(geo.parcels.length) + " Grundstücke aus GeoJSON geladen" + (nOv ? " (+ " + fmtN.format(nOv) + " Layer-Features für die Karte)" : "") +
-                    (geo.skipped ? " · " + fmtN.format(geo.skipped) + " Features ohne bekannten Layer übersprungen" : "") + ".");
-        } catch (err) { geo = null; bEl("b-show").disabled = true; setStatus("Fehler beim Lesen der GeoJSON: " + err.message); }
-      });
+      setStatus("GeoJSON wird gelesen…"); bEl("b-show").disabled = true; geo = null;
+      showLoading("GeoJSON wird gelesen…");
+      f.text().then(function (t) { return withLoading("GeoJSON wird gelesen…", function () { return readGeojson(t); }); })
+        .then(function (g) {
+          var ov = g.overlays, nOv = ov.landcover.features.length + ov.bauzonen.features.length + ov.habitat.features.length;
+          if (!g.parcels.length) throw new Error("keine Grundstücke (Features mit layer = parcel) in der Datei.");
+          geo = g; bEl("b-show").disabled = false;
+          setStatus(fmtN.format(g.parcels.length) + " Grundstücke aus GeoJSON geladen" + (nOv ? " (+ " + fmtN.format(nOv) + " Layer-Features für die Karte)" : "") +
+                    (g.skipped ? " · " + fmtN.format(g.skipped) + " Features ohne bekannten Layer übersprungen" : "") + ".");
+        })
+        .catch(function (err) { hideLoading(); setStatus("Fehler beim Lesen der GeoJSON: " + ((err && err.message) || err)); });
     });
     bEl("b-show").addEventListener("click", function () {
       if (!geo) return;
-      var clean = allowlist(geo.parcels).cleaned; // strip PII at import
-      document.body.classList.remove("builder-mode"); // hide the picker, reveal the dashboard
-      boot(clean, geo.overlays);
+      withLoading("Dashboard wird aufgebaut…", function () {
+        var clean = allowlist(geo.parcels).cleaned; // strip PII at import
+        document.body.classList.remove("builder-mode"); // hide the picker, reveal the dashboard
+        boot(clean, geo.overlays);
+      }).catch(function (err) { document.body.classList.add("builder-mode"); setStatus("Fehler beim Aufbau des Dashboards: " + ((err && err.message) || err)); });
     });
   }
 
@@ -193,7 +212,17 @@
   var BAUZONEN = REF.bauzonen, BAUZONE_SLUGS = Object.keys(BAUZONEN);
   function bzLabel(z) { var b = BAUZONEN[z]; return b ? b.label : String(z).replace(/_/g, " "); }
   function bzColor(z) { var b = BAUZONEN[z]; return b ? b.color : "#9e9e9e"; }
-  var PARCEL_COLOR = "#6f8aac";
+  // Map colours come from the design tokens (css/tokens.css; inlined into the deliverable, so this
+  // works offline too). Fallbacks only matter when the stylesheet failed to load.
+  var _rootCss = window.getComputedStyle(document.documentElement);
+  function tok(name, fallback) { var v = _rootCss.getPropertyValue(name); return (v && v.trim()) || fallback; }
+  var MAP_COLORS = {
+    parcel: tok("--parcel", "#6f8aac"), parcelLine: tok("--parcel-line", "#3b5a7a"),
+    active: tok("--map-active", "#d8232a"), checked: tok("--map-checked", "#2f4356"), label: tok("--map-label", "#1f2937"),
+    cluster1: tok("--cluster-1", "#4f6f93"), cluster2: tok("--cluster-2", "#3b5a7a"), cluster3: tok("--cluster-3", "#2e4a68"),
+    surface: tok("--surface", "#fff")
+  };
+  var PARCEL_COLOR = MAP_COLORS.parcel;
   // SAP codes → Klartext labels (display only; the raw code stays the filter key + in exports).
   var TPF_LABELS = { "1": "Allgemeine Bundesverwaltung", "2": "Ausland", "3": "Zoll", "4": "Gerichte", "5": "Forschungsanstalten", "6": "Kunst und Kultur", "7": "Sport", "8": "Repräsentation Inland", "9": "Infrastruktur" };
   var EIGENTUM_LABELS = { "1": "Eigentum Bund", "3": "Anmiete", "5": "Spezialfall" };
@@ -556,8 +585,8 @@
     var sum = 0; items.forEach(function (it) { sum += it.value; });
     var open = _treeOpen[elId] || {};
     function row(it, kind, groupKey) { // kind: flat | open | closed | child | muted
-      var chev = kind === "open" ? '<span class="tree-icon">−</span>'
-               : kind === "closed" ? '<span class="tree-icon">+</span>'
+      var chev = kind === "open" ? '<span class="tree-icon is-open">' + ICON.sz("chevRight", 14) + '</span>'
+               : kind === "closed" ? '<span class="tree-icon">' + ICON.sz("chevRight", 14) + '</span>'
                : kind === "child" ? '<span class="tree-icon tree-spacer"></span>' : "";
       var sw = it.swatch ? '<span class="cat-sw" style="background:' + it.swatch + '"></span>' : "";
       var bar = it.muted ? "" : '<span class="sumbar"><i style="width:' + (it.value / maxVal * 100).toFixed(1) + '%"></i></span>';
@@ -1001,7 +1030,7 @@
     var full = selCount() >= SEL_MAX;
     document.getElementById("tbody").innerHTML = pageRows().map(function (p) {
       var pid = (p.id == null ? "" : String(p.id)), isSel = !!sel[pid];
-      var cls = ((selectedParcelId && pid === selectedParcelId) ? "row-selected " : "") + (isSel ? "row-sel" : "");
+      var cls = ((selectedParcelId && pid === selectedParcelId) ? "row-active " : "") + (isSel ? "row-checked" : "");
       var rs = cls.trim() ? ' class="' + cls.trim() + '"' : "";
       var cb = '<td class="sel-col"><input type="checkbox" data-sel="' + esc(pid) + '" aria-label="Für PDF-Bericht auswählen"' + (isSel ? " checked" : "") + (!isSel && full ? ' disabled title="Maximal ' + SEL_MAX + ' Grundstücke"' : "") + '></td>';
       return '<tr data-id="' + esc(pid) + '" tabindex="0"' + rs + ">" + cb + vis.map(function (c) {
@@ -1055,10 +1084,29 @@
     if (page !== state.page) { state.page = page; renderPager(); }
     renderHead(); renderBody();
   }
-  // Table row click, search hit, popup action → switch to the map tab, select + fly to the parcel.
+  // Nothing under the pointer (or Escape): the active parcel, the overlay highlight and the info card go.
+  function clearMapSelection() {
+    if (selectedParcelId) selectParcel(null);
+    clearOverlayHighlight();
+    hideMapCard();
+  }
+  // Registered before the dialog / menu / drawer listeners: when one of those is open, Escape is theirs.
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== "Escape") return;
+    if (document.querySelector(".modal-backdrop:not([hidden])") || document.querySelector(".map-ctxmenu.show") || document.querySelector(".bm-panel:not([hidden])")) return;
+    var gm = document.getElementById("gear-menu"), cm = document.getElementById("cols-menu"), dd = document.getElementById("gsearch-dd");
+    if ((gm && !gm.hidden) || (cm && cm.classList.contains("open")) || (dd && !dd.hidden) || document.getElementById("app").classList.contains("fp-open")) return;
+    if (selectedParcelId || _selOv) clearMapSelection();
+  });
+  // Table row click, search hit → mark the parcel and fly to it on the map of the current tab: on Auswertung
+  // that tab's own map (scrolled into view; the table sits right below it), elsewhere the Karte tab opens.
   function focusParcel(id, opts) {
     selectParcel(id);
-    if (currentTab !== "map") { showTab("map"); setTimeout(function () { zoomToParcel(id, opts); }, 80); } // let the map resize first
+    if (currentTab === "overview") {
+      ensureMap(); zoomToParcel(id, opts);
+      var slot = document.getElementById("ov-map-panel"); if (slot && slot.scrollIntoView) slot.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+    else if (currentTab !== "map") { showTab("map"); setTimeout(function () { zoomToParcel(id, opts); }, 80); } // let the map resize first
     else zoomToParcel(id, opts);
   }
   // Deep link into the green inventory app at the parcel's visual centre (the app reads center + zoom from its URL).
@@ -1077,13 +1125,13 @@
     if (id == null || id === "") return;
     var p = parcelById(id); if (!p || !p._geom) return;
     if (!map || !mapReady) { _pendingZoom = { id: id, opts: opts }; return; } // the map is still loading: fly once it is ready
+    if (!(opts && opts.noCard)) openParcelCard(p); // first: the fit below measures the open card
     if (opts && opts.zoom) { var pole = poleOfGeom(p._geom); if (pole) map.flyTo({ center: pole, zoom: opts.zoom, duration: 800 }); }
-    else fitMap(rowsToFC([p]), true);
-    if (!(opts && opts.noPopup)) openParcelPopup(p); // anchored at the parcel's visual centre, so it rides along with the camera
+    else fitMap(rowsToFC([p]), true, (opts && opts.noCard) ? 30 : cardPadding()); // the parcel stays clear of the card
   }
   var _pendingZoom = null;
 
-  // ---- PDF-report selection (table checkboxes, map popup) ----
+  // ---- PDF-report selection (table checkboxes, map info card) ----
   function setSelected(id, on) {
     var k = String(id == null ? "" : id); if (!k) return;
     if (on) { if (!sel[k] && selCount() >= SEL_MAX) return; sel[k] = 1; } else delete sel[k];
@@ -1095,7 +1143,7 @@
     renderHead(); renderBody();
     var n = selCount(), info = document.getElementById("sel-info"), lbl = document.getElementById("sel-label"), sf = document.getElementById("sel-filtered"), pb = document.getElementById("pdf-sel-btn");
     if (info) info.hidden = n === 0;
-    if (lbl) lbl.textContent = n + " von max. " + SEL_MAX + " ausgewählt";
+    if (lbl) lbl.textContent = n + " von max. " + SEL_MAX + " für den Bericht ausgewählt";
     if (sf) { var canAll = n === 0 && state.rows.length > 0 && state.rows.length <= SEL_MAX; sf.hidden = !canAll; sf.textContent = "Alle " + state.rows.length + " gefilterten auswählen"; }
     if (pb) { pb.disabled = n === 0; pb.textContent = n ? "PDF-Bericht (" + n + ")" : "PDF-Bericht"; pb.title = n ? "A3-Bericht, eine Seite pro ausgewähltem Grundstück" : "Zuerst Grundstücke über die Checkboxen auswählen (max. " + SEL_MAX + ")"; }
     if (map && mapReady && map.getLayer("parcels-sel")) map.setFilter("parcels-sel", ["in", ["get", "id"], ["literal", selIds()]]);
@@ -1113,8 +1161,7 @@
     if (currentTab === "quality") renderQuality(rows); // skip the costly rule scan unless the Datenqualität tab is open
     renderTable();
     renderMap(rows);
-    var n = activeGroups(), b = document.getElementById("filter-badge");
-    if (b) { b.textContent = n; b.classList.toggle("show", n > 0); }
+    var n = activeGroups();
     var filtered = rows.length < PARCELS.length;
     var fk = document.getElementById("flag-kpi"); if (fk) fk.classList.toggle("show", filtered);
     var fq = document.getElementById("flag-q"); if (fq) fq.classList.toggle("show", filtered);
@@ -1122,7 +1169,10 @@
     renderPills();
     renderSelUI();
   }
-  function commit() { refitMap = true; writeURL(); update(); }
+  // Filter passes over a large dataset take a noticeable moment; below the threshold the overlay
+  // would only flicker.
+  var LOADING_ROWS = 20000;
+  function commit() { refitMap = true; writeURL(); if (PARCELS.length >= LOADING_ROWS) withLoading("Auswertung wird aktualisiert…", update); else update(); }
 
   // ---- Active-filter pills ----
   var _pillActions = [];
@@ -1177,8 +1227,8 @@
   function renderPills() {
     _pillActions = buildPills();
     var row = document.getElementById("pill-row");
-    if (!_pillActions.length) { row.innerHTML = ""; row.style.display = "none"; return; }
-    row.style.display = "flex";
+    if (!_pillActions.length) { row.innerHTML = ""; row.hidden = true; return; }
+    row.hidden = false;
     row.innerHTML = _pillActions.map(function (p, i) {
       return '<span class="pill">' + esc(p.label) + '<button class="pill-x" data-i="' + i + '" aria-label="Filter entfernen">' + ICON.sz("x", 12) + '</button></span>';
     }).join("") + '<button class="pill-reset" id="pill-reset">Alle Filter zurücksetzen</button>';
@@ -1327,6 +1377,10 @@
     e.stopPropagation(); document.getElementById("cols-menu").classList.toggle("open");
   });
   document.addEventListener("click", function () { document.getElementById("cols-menu").classList.remove("open"); });
+  document.addEventListener("keydown", function (e) {
+    var m = document.getElementById("cols-menu");
+    if (e.key === "Escape" && m.classList.contains("open")) { m.classList.remove("open"); document.getElementById("cols-btn").focus(); }
+  });
 
   // ---- Sorting / search / pager ----
   (function () {
@@ -1414,7 +1468,7 @@
   var fExpanded = {};
   function chk(attr, key, label, count, checked) {
     return '<label><input type="checkbox" data-' + attr + '="' + esc(key) + '"' + (checked ? " checked" : "") + '>' +
-           '<span class="nm">' + esc(label) + '</span><span class="cnt">' + (count || 0) + '</span></label>';
+           '<span class="nm" title="' + esc(label) + '">' + esc(label) + '</span><span class="cnt">' + (count || 0) + '</span></label>';
   }
   function capList(id, arr) {
     var el = document.getElementById(id); if (!el) return;
@@ -1525,7 +1579,7 @@
     });
     ["map", "overview", "quality", "about"].forEach(function (n) {
       var panel = document.getElementById("panel-" + n);
-      if (panel) panel.hidden = (n !== name);
+      if (panel) { panel.hidden = (n !== name); panel.setAttribute("role", "tabpanel"); }
     });
     if (name === "quality") renderQuality(state.rows); // gated out of update(); render it on demand with the current filtered set
     document.getElementById("app").classList.toggle("tab-map", name === "map"); // map tab: page fits the viewport, no scrolling
@@ -1552,6 +1606,7 @@
   var fpScrim = document.getElementById("fp-scrim"), fpToggle = document.getElementById("fp-toggle");
   function setFpOpen(open) {
     appEl.classList.toggle("fp-open", open);
+    lockScroll(open);
     if (fpScrim) fpScrim.hidden = !open;
     if (fpToggle) fpToggle.setAttribute("aria-expanded", open ? "true" : "false");
   }
@@ -1613,12 +1668,13 @@
   function exportGeojsonRows(parcels, fname) {
     saveBlob(JSON.stringify({ type: "FeatureCollection", features: parcelFeatures(parcels) }), "application/geo+json", fname);
   }
-  // Excel: the visible table columns, optionally prefixed with extra columns ({label, key, num}).
+  // Excel: the visible table columns, optionally prefixed with extra columns ({label, key, num}). Grüninventar is
+  // written whenever the export carries it, hidden in the table or not, as its label (Erfasst / Nicht erfasst).
   function exportXlsxRows(parcels, fname, sheet, extraCols) {
     return loadXlsx().then(function (XLSX) {
-      var cols = (extraCols || []).concat(COLUMNS.filter(function (c) { return c.visible; }));
+      var cols = (extraCols || []).concat(COLUMNS.filter(function (c) { return c.visible || c.key === "greeninv"; }));
       var aoa = [cols.map(function (c) { return c.label; })];
-      parcels.forEach(function (p) { aoa.push(cols.map(function (c) { return c.num ? num(p[c.key]) : (p[c.key] == null ? "" : String(p[c.key])); })); });
+      parcels.forEach(function (p) { aoa.push(cols.map(function (c) { return c.key === "greeninv" ? greeninvLabel(p.greeninv) : c.num ? num(p[c.key]) : (p[c.key] == null ? "" : String(p[c.key])); })); });
       var wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), sheet);
       XLSX.writeFile(wb, fname);
@@ -1668,11 +1724,12 @@
       var q = qualityDeviationRows(rows);
       var rulesAoa = [["Prüf-ID", "Prüfung", "Beschreibung", "Geprüft", "Bestanden", "Abweichend"]];
       RULE_DEFS.forEach(function (d) { var r = q.rules[d.key]; rulesAoa.push([d.key, d.name, d.tip, r.pass + r.fail, r.pass, r.fail]); });
-      var devAoa = [["Prüf-ID", "Prüfung", "Grundstück-ID", "E-GRID", "Ort", "PLZ", "Kanton", "Bezeichnung", "Ist-Wert", "Soll-Wert", "Abweichung", "Einheit"]];
+      var giCol = hasGreeninv ? ["Grüninventar"] : []; // the join column travels with every export
+      var devAoa = [["Prüf-ID", "Prüfung", "Grundstück-ID", "E-GRID", "Ort", "PLZ", "Kanton", "Bezeichnung"].concat(giCol, ["Ist-Wert", "Soll-Wert", "Abweichung", "Einheit"])];
       q.deviations.forEach(function (x) {
         var p = x.p, v = x.v;
         devAoa.push([x.key, x.name, p.id == null ? "" : String(p.id), p.egrid == null ? "" : String(p.egrid),
-          p.input_ort || "", p.input_plz || "", p.input_rg || "", p[NAME_COL] || "", v.ist, v.soll, v.abw, v.unit]);
+          p.input_ort || "", p.input_plz || "", p.input_rg || "", p[NAME_COL] || ""].concat(hasGreeninv ? [greeninvLabel(p.greeninv)] : [], [v.ist, v.soll, v.abw, v.unit]));
       });
       var wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rulesAoa), "Prüfregeln");
@@ -1936,13 +1993,16 @@
     var area = num(p.parcel_area_m2), green = num(p.greenspace_m2), gp = area ? Math.round(green / area * 100) : 0;
     var L = [["Ort", (p.input_plz ? p.input_plz + " " : "") + (p.input_ort || "-")], ["Kanton", p.input_rg || "-"], ["E-GRID", p.egrid || "-"], ["Nummer", p.nummer || "-"], ["E-GRID-Status", STATUS_LABELS[statusKey(p)] || statusKey(p) || "-"]];
     var R = [["Teilportfolio", tpfLabel(p.input_tpf)], ["Eigentumsart", eigentumLabel(p["input_eigent.art"])], ["Grundstücksfläche", fmtArea(area) + " " + unitLabel()], ["Grünfläche", fmtArea(green) + " " + unitLabel() + " (" + gp + "%)"], ["Datenquelle", p.lc_source === "AV" ? "Amtliche Vermessung (AV)" : p.lc_source === "BAFU" ? "BAFU (modelliert)" : (p.lc_source || "-")]];
+    if (hasGreeninv) R.push(["Grüninventar", greeninvLabel(p.greeninv)]); // sixth row on the right, beside the «Karte» link
     var ty = 35, rowH = 4.8, colW = 108, labW = 30;
-    for (var i = 0; i < 5; i++) {
+    for (var i = 0; i < Math.max(L.length, R.length); i++) {
       var yy = ty + i * rowH;
       pdf.setFont("helvetica", "normal"); pdf.setFontSize(8.5); pdf.setTextColor(120);
-      pdf.text(L[i][0], M, yy); pdf.text(R[i][0], M + colW, yy);
+      if (L[i]) pdf.text(L[i][0], M, yy);
+      if (R[i]) pdf.text(R[i][0], M + colW, yy);
       pdf.setFont("helvetica", "bold"); pdf.setFontSize(9); pdf.setTextColor(40);
-      pdf.text(String(L[i][1]), M + labW, yy, { maxWidth: colW - labW - 4 }); pdf.text(String(R[i][1]), M + colW + labW, yy, { maxWidth: colW - labW - 4 });
+      if (L[i]) pdf.text(String(L[i][1]), M + labW, yy, { maxWidth: colW - labW - 4 });
+      if (R[i]) pdf.text(String(R[i][1]), M + colW + labW, yy, { maxWidth: colW - labW - 4 });
     }
     var ly = ty + 5 * rowH + 0.5, lv = pole ? wgs84ToLv95(pole[0], pole[1]) : null;
     pdf.setFont("helvetica", "normal"); pdf.setFontSize(8.5); pdf.setTextColor(120); pdf.text("Karte", M, ly);
@@ -1995,9 +2055,28 @@
     });
   }
 
+  // ---- Dialog helpers: focus trap, inert background and page scroll lock, shared by both dialogs ----
+  function lockScroll(on) { document.body.classList.toggle("no-scroll", !!on); }
+  function bgInert(on) { // hide the page from AT / Tab while a dialog is open
+    [document.querySelector("header"), document.getElementById("app"), document.querySelector("footer")].forEach(function (el) {
+      if (!el) return; el.inert = on; if (on) el.setAttribute("aria-hidden", "true"); else el.removeAttribute("aria-hidden");
+    });
+  }
+  function trapTab(card) { // simple focus trap so Tab stays inside the dialog
+    card.addEventListener("keydown", function (e) {
+      if (e.key !== "Tab") return;
+      var f = Array.prototype.filter.call(card.querySelectorAll("button, input, a[href], select, textarea, [tabindex]"),
+        function (el) { return !el.disabled && el.offsetParent !== null && el.tabIndex >= 0; });
+      if (!f.length) return;
+      var first = f[0], last = f[f.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    });
+  }
+
   // ---- Download dialog: one scope switch (Alle / Aktive Filter / Ausgewählt), one list of formats ----
   // openDownload(scope, pdfRows): opens the dialog on `scope`; with `pdfRows` it starts the PDF
-  // report for exactly those parcels right away (table bar button, map popup action).
+  // report for exactly those parcels right away (table bar button, map info card action).
   var openDownload;
   (function () {
     var btn = document.getElementById("dl-btn"), modal = document.getElementById("dl-modal"), card = modal.querySelector(".modal-card");
@@ -2009,8 +2088,12 @@
     var titleVal = function () { return (titleInput.value || "Auswertung Bodenbedeckung").trim(); };
     var base = function () { return slug(titleVal()); };
     var SCOPE_FILE = { all: "alle", flt: "gefiltert", sel: "auswahl" };
-    function counts() { return { all: PARCELS.length, flt: state.rows.length, sel: selCount() }; }
-    function scopeRows() { return scope === "sel" ? selRows() : scope === "flt" ? state.rows : PARCELS; }
+    // The parcel marked on the map (red) is the implicit selection while no checkbox selection exists —
+    // the same intent as the info card's own «PDF-Bericht erstellen».
+    function effectiveSel() { var r = selRows(); if (!r.length && selectedParcelId) { var p = parcelById(selectedParcelId); if (p) return [p]; } return r; }
+    function implicitSel() { return !selCount() && !!selectedParcelId && !!parcelById(selectedParcelId); }
+    function counts() { return { all: PARCELS.length, flt: state.rows.length, sel: effectiveSel().length }; }
+    function scopeRows() { return scope === "sel" ? effectiveSel() : scope === "flt" ? state.rows : PARCELS; }
     function setRow(id, ok) { var b = document.getElementById(id); b.disabled = !ok; b.closest(".dl-row").classList.toggle("is-off", !ok); }
     function refresh() {
       var c = counts(), n = c[scope];
@@ -2023,38 +2106,33 @@
       });
       var pdfOk = n > 0 && n <= SEL_MAX && !running;
       setRow("dl-pdf", pdfOk);
-      pdfSub.textContent = running ? "Bericht wird erstellt." : n === 0 ? "Keine Grundstücke im gewählten Umfang." : n > SEL_MAX ? "Maximal " + SEL_MAX + " Grundstücke. Grundstücke in der Tabelle auswählen." : "A3, eine Seite pro Grundstück (" + fmt(n) + ").";
+      pdfSub.textContent = running ? "Bericht wird erstellt."
+        : n === 0 ? "Keine Grundstücke im gewählten Umfang."
+        : n > SEL_MAX ? "Maximal " + SEL_MAX + " Grundstücke – «Ausgewählt» wählen oder die Filter einschränken."
+        : (scope === "sel" && implicitSel()) ? "A3, eine Seite: Grundstück " + selectedParcelId + " (auf der Karte markiert)."
+        : "A3, eine Seite pro Grundstück (" + fmt(n) + ").";
       pdfBtn.textContent = running ? "Läuft…" : "PDF erstellen";
       setRow("dl-xlsx", n > 0); setRow("dl-geo", n > 0); setRow("dl-q", n > 0); setRow("dl-html", true);
     }
-    function bgInert(on) { [document.querySelector("header"), document.getElementById("app"), document.querySelector("footer")].forEach(function (el) { if (!el) return; el.inert = on; if (on) el.setAttribute("aria-hidden", "true"); else el.removeAttribute("aria-hidden"); }); } // hide background from AT/Tab while the dialog is open
     openDownload = function (sc, pdfRows) {
       lastFocus = document.activeElement;
       var c = counts();
       scope = (sc && c[sc]) ? sc : (c.sel ? "sel" : (c.flt ? "flt" : "all"));
-      refresh(); hint.textContent = defHint; modal.hidden = false; bgInert(true);
+      refresh(); hint.textContent = defHint; modal.hidden = false; bgInert(true); lockScroll(true);
       document.getElementById("dl-close").focus();
       if (pdfRows) runPdf(pdfRows);
     };
-    function closeModal() { modal.hidden = true; bgInert(false); if (lastFocus && lastFocus.focus) lastFocus.focus(); }
+    function closeModal() { modal.hidden = true; bgInert(false); lockScroll(false); if (lastFocus && lastFocus.focus) lastFocus.focus(); }
     btn.addEventListener("click", function () { openDownload(null); });
     scopeEl.addEventListener("click", function (e) { var b = e.target.closest(".seg-btn"); if (!b || b.disabled) return; scope = b.getAttribute("data-scope"); refresh(); });
     document.getElementById("dl-close").addEventListener("click", closeModal);
     modal.addEventListener("click", function (e) { if (e.target === modal) closeModal(); }); // click on the backdrop
     document.addEventListener("keydown", function (e) { if (e.key === "Escape" && !modal.hidden) closeModal(); });
-    card.addEventListener("keydown", function (e) { // simple focus trap so Tab stays inside the dialog
-      if (e.key !== "Tab") return;
-      var f = Array.prototype.filter.call(card.querySelectorAll("button, input, [tabindex]"),
-        function (el) { return !el.disabled && el.offsetParent !== null; });
-      if (!f.length) return;
-      var first = f[0], last = f[f.length - 1];
-      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
-      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
-    });
+    trapTab(card);
     // Run an export, surfacing progress / errors in the hint line; the dialog stays open for more downloads.
     function busy(msg, fn) {
-      hint.textContent = msg;
-      var done = function () { hint.textContent = defHint; }, fail = function (err) { hint.textContent = "Fehler: " + ((err && err.message) || err); };
+      hint.textContent = msg; hint.classList.add("is-busy");
+      var done = function () { hint.textContent = defHint; hint.classList.remove("is-busy"); }, fail = function (err) { hint.textContent = "Fehler: " + ((err && err.message) || err); hint.classList.remove("is-busy"); };
       var r; try { r = fn(); } catch (err) { fail(err); return; }
       if (r && typeof r.then === "function") r.then(done, fail); else done();
     }
@@ -2093,8 +2171,7 @@
   })();
 
   // ---- "Neue Datei": reload to a clean URL → file picker (served builder) ----
-  var bn0 = document.getElementById("btn-new");
-  if (bn0) bn0.addEventListener("click", function () { location.href = location.pathname; });
+  document.querySelectorAll("#btn-new, #btn-new-menu").forEach(function (b) { b.addEventListener("click", function () { location.href = location.pathname; }); });
 
   // ---- Settings (gear menu): area unit ha / m², display only; re-renders every area number ----
   (function () {
@@ -2214,11 +2291,12 @@
     });
     return { type: "FeatureCollection", features: out };
   }
-  function fitMap(fc, animate) {
+  // `padding` overrides the default 30px (a single parcel with the info card open needs room beside or below it).
+  function fitMap(fc, animate, padding) {
     var minX = 180, minY = 90, maxX = -180, maxY = -90, any = false;
     function walk(c) { if (typeof c[0] === "number") { if (c[0] < minX) minX = c[0]; if (c[0] > maxX) maxX = c[0]; if (c[1] < minY) minY = c[1]; if (c[1] > maxY) maxY = c[1]; any = true; } else for (var i = 0; i < c.length; i++) walk(c[i]); }
     fc.features.forEach(function (f) { if (f.geometry && f.geometry.coordinates) walk(f.geometry.coordinates); });
-    if (any && map) map.fitBounds([[minX, minY], [maxX, maxY]], { padding: 30, animate: !!animate, duration: 600, maxZoom: 16 });
+    if (any && map) map.fitBounds([[minX, minY], [maxX, maxY]], { padding: padding || 30, animate: !!animate, duration: 600, maxZoom: 16 });
   }
   // Overlay features (Bodenbedeckung / Bauzonen / Lebensräume) bucketed by the SAP
   // parcel id they belong to. Built once per overlay key so clipping the overlays to
@@ -2254,8 +2332,9 @@
     });
     // A selected overlay feature may have just been clipped away (and setData regenerates
     // ids anyway), so drop the stale highlight bookkeeping.
-    if (_selOv && map.getSource(_selOv.source)) map.setFeatureState(_selOv, { selected: false });
-    _selOv = null;
+    clearOverlayHighlight();
+    var emptyEl = map.getContainer().querySelector(".map-empty");
+    if (emptyEl) emptyEl.hidden = polyFC.features.length > 0;
     // Zoom to the (filtered) results: instant on first load, animated on later filter changes.
     if (polyFC.features.length && (refitMap || !mapFitted)) { fitMap(polyFC, mapFitted); mapFitted = true; }
     refitMap = false;
@@ -2299,61 +2378,83 @@
       map.addSource("ov-" + d.key, { type: "geojson", data: fc, generateId: true }); // generateId → feature-state highlight
       map.addLayer({ id: d.key + "-fill", type: "fill", source: "ov-" + d.key, minzoom: OVERLAY_MINZOOM, layout: { visibility: layerVis[d.key] ? "visible" : "none" }, paint: { "fill-color": d.fill, "fill-opacity": d.opacity } });
       map.addLayer({ id: d.key + "-line", type: "line", source: "ov-" + d.key, minzoom: OVERLAY_MINZOOM, layout: { visibility: layerVis[d.key] ? "visible" : "none" }, paint: {
-        "line-color": ["case", ["boolean", ["feature-state", "selected"], false], "#d8232a", d.line],
+        "line-color": ["case", ["boolean", ["feature-state", "selected"], false], MAP_COLORS.active, d.line],
         "line-width": ["case", ["boolean", ["feature-state", "selected"], false], 2.6, 0.4]
       } });
     });
   }
-  // One reusable popup + single-feature highlight, shared by parcels and overlays.
-  var _mapPopup = null, _selOv = null;
-  function showPopup(lngLat, html) {
-    if (!_mapPopup) _mapPopup = new maplibregl.Popup({ closeButton: true, maxWidth: "300px" });
-    _mapPopup.setLngLat(lngLat).setHTML(html).addTo(map);
+  // One info card (fixed at the top right of the map, left of the control column — css .map-card; created in
+  // initMap) + single-feature highlight, shared by parcels and overlays. Fixed rather than anchored, so it never
+  // covers the geometry it describes; the map click handler decides when it closes (an empty spot clears it).
+  var _cardEl = null, _selOv = null;
+  function showMapCard(html) {
+    if (!_cardEl) return;
+    _cardEl.querySelector(".map-card-body").innerHTML = html;
+    _cardEl.hidden = false; _cardEl.scrollTop = 0;
+  }
+  function hideMapCard() { if (_cardEl) _cardEl.hidden = true; }
+  // Fit padding that keeps a parcel clear of the open card: room to its right on wide maps, below it on narrow
+  // ones, and never more than MapLibre can fit (fitBounds throws when the padding exceeds the canvas).
+  function cardPadding() {
+    var c = map.getContainer(), w = c.clientWidth, h = c.clientHeight, pad = { top: 40, bottom: 40, left: 40, right: 40 };
+    if (!_cardEl || _cardEl.hidden) return pad;
+    var cw = _cardEl.offsetWidth + 60, ch = _cardEl.offsetHeight + 20; // + margins and the control column
+    if (w - cw >= Math.max(220, w * 0.45)) pad.right = cw;
+    else if (h - ch >= Math.max(140, h * 0.35)) pad.top = ch;
+    return pad;
+  }
+  function clearOverlayHighlight() {
+    if (_selOv && map && map.getSource(_selOv.source)) map.setFeatureState(_selOv, { selected: false });
+    _selOv = null;
   }
   function highlightOverlay(source, id) {
-    if (_selOv && map.getSource(_selOv.source)) map.setFeatureState(_selOv, { selected: false });
+    clearOverlayHighlight();
     _selOv = { source: source, id: id };
     map.setFeatureState(_selOv, { selected: true });
   }
   var OVERLAY_NAME = { landcover: "Bodenbedeckung", bauzonen: "Bauzone", habitat: "Lebensraum" };
-  function overlayPopupHTML(key, art, area) {
+  function overlayCardHTML(key, art, area) {
     var label = key === "landcover" ? (artLabel(art)) : art;
     return "<strong>" + esc(label || "—") + "</strong><br><span class='pop-sub'>" + esc(OVERLAY_NAME[key] || "") + "</span>" +
            (area ? "<br>" + fmtAreaU(num(area)) : "");
   }
 
-  // ── Parcel detail page (opened in a new tab from the map popup) ────────────
+  // ── Parcel detail page (opened in a new tab from the map's info card) ────────────
   // Renders every available attribute of one parcel, grouped by topic, into a
   // self-contained HTML document opened via a blob URL — so it works offline from
   // the distributed single-file deliverable (no server, no data fetch). Empty
   // topic sections are omitted; a collapsible "Alle Felder" dumps the raw columns.
-  var DETAIL_CSS =
-    "*{box-sizing:border-box}" +
-    "body{margin:0;font-family:'Noto Sans','Helvetica Neue',Arial,sans-serif;color:#1f2937;background:#eef0f2;font-size:14px;line-height:1.45}" +
-    ".head{background:#fff;border-bottom:3px solid #d8232a;padding:16px 24px;overflow:hidden}" +
-    ".head .brand{color:#46596b;font-size:12px;letter-spacing:.02em}" +
-    ".head h1{margin:.25em 0 .1em;font-size:20px;color:#2f4356}" +
-    ".head .sub{color:#5b6b7a;font-size:13px}" +
-    ".head .actions{float:right}" +
-    ".btn{border:1px solid #cbd5e1;background:#f8fafc;border-radius:4px;padding:6px 12px;cursor:pointer;font:inherit;color:#2f4356}" +
-    ".wrap{max-width:980px;margin:20px auto;padding:0 16px;display:flex;flex-direction:column;gap:14px}" +
-    ".grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}" +
-    "@media(max-width:760px){.grid2{grid-template-columns:1fr}}" +
-    ".card{background:#fff;border:1px solid #e3e7eb;border-radius:6px;padding:14px 16px}" +
-    ".card h2{margin:0 0 10px;font-size:13px;color:#d8232a;text-transform:uppercase;letter-spacing:.03em;border-bottom:1px solid #eef0f2;padding-bottom:6px}" +
-    "table{width:100%;border-collapse:collapse}" +
-    ".kv th{text-align:left;font-weight:500;color:#64748b;padding:3px 8px 3px 0;vertical-align:top;width:44%}" +
-    ".kv td{padding:3px 0;color:#1f2937;word-break:break-word}" +
-    ".at th{font-size:12px;color:#64748b;text-align:left;border-bottom:1px solid #e3e7eb;padding:4px 6px}" +
-    ".at td{padding:4px 6px;border-bottom:1px solid #f1f4f6}" +
-    ".at .num{text-align:right;white-space:nowrap}" +
-    ".at .tot td{font-weight:600;border-top:1px solid #cbd5e1;border-bottom:none}" +
-    ".sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:7px;vertical-align:middle}" +
-    ".raw summary{cursor:pointer;color:#2f4356;font-weight:600}" +
-    ".raw table{margin-top:8px}" +
-    ".foot{max-width:980px;margin:6px auto 28px;padding:0 16px;color:#8a97a3;font-size:12px}" +
-    "a{color:#d8232a}" +
-    "@media print{body{background:#fff}.actions{display:none}.card{break-inside:avoid;border-color:#ccc}}";
+  // The detail page is a separate document: it gets the same palette through the token values.
+  var DETAIL_CSS = (function () {
+    var c = { text: tok("--gray-800", "#1f2937"), bg: tok("--gray-100", "#f3f4f6"), red: tok("--primary-600", "#d8232a"), brand: tok("--secondary-500", "#46596b"),
+              h: tok("--secondary-600", "#2f4356"), muted: tok("--gray-500", "#6b7280"), border: tok("--gray-200", "#e5e7eb"), border2: tok("--gray-300", "#d1d5db"), faint: tok("--gray-50", "#f9fafb"), surface: tok("--surface", "#fff") };
+    return "*{box-sizing:border-box}" +
+      "body{margin:0;font-family:'Noto Sans','Helvetica Neue',Arial,sans-serif;color:" + c.text + ";background:" + c.bg + ";font-size:14px;line-height:1.45}" +
+      ".head{background:" + c.surface + ";border-bottom:3px solid " + c.red + ";padding:16px 24px;overflow:hidden}" +
+      ".head .brand{color:" + c.brand + ";font-size:12px;letter-spacing:.02em}" +
+      ".head h1{margin:.25em 0 .1em;font-size:20px;color:" + c.h + "}" +
+      ".head .sub{color:" + c.muted + ";font-size:13px}" +
+      ".head .actions{float:right}" +
+      ".btn{border:1px solid " + c.border2 + ";background:" + c.faint + ";border-radius:4px;padding:6px 12px;cursor:pointer;font:inherit;color:" + c.h + "}" +
+      ".wrap{max-width:980px;margin:20px auto;padding:0 16px;display:flex;flex-direction:column;gap:14px}" +
+      ".grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}" +
+      "@media(max-width:760px){.grid2{grid-template-columns:1fr}}" +
+      ".card{background:" + c.surface + ";border:1px solid " + c.border + ";border-radius:6px;padding:14px 16px}" +
+      ".card h2{margin:0 0 10px;font-size:13px;color:" + c.red + ";text-transform:uppercase;letter-spacing:.03em;border-bottom:1px solid " + c.bg + ";padding-bottom:6px}" +
+      "table{width:100%;border-collapse:collapse}" +
+      ".kv th{text-align:left;font-weight:500;color:" + c.muted + ";padding:3px 8px 3px 0;vertical-align:top;width:44%}" +
+      ".kv td{padding:3px 0;color:" + c.text + ";word-break:break-word}" +
+      ".at th{font-size:12px;color:" + c.muted + ";text-align:left;border-bottom:1px solid " + c.border + ";padding:4px 6px}" +
+      ".at td{padding:4px 6px;border-bottom:1px solid " + c.bg + "}" +
+      ".at .num{text-align:right;white-space:nowrap}" +
+      ".at .tot td{font-weight:600;border-top:1px solid " + c.border2 + ";border-bottom:none}" +
+      ".sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:7px;vertical-align:middle}" +
+      ".raw summary{cursor:pointer;color:" + c.h + ";font-weight:600}" +
+      ".raw table{margin-top:8px}" +
+      ".foot{max-width:980px;margin:6px auto 28px;padding:0 16px;color:" + c.muted + ";font-size:12px}" +
+      "a{color:" + c.red + "}" +
+      "@media print{body{background:" + c.surface + "}.actions{display:none}.card{break-inside:avoid;border-color:" + c.border2 + "}}";
+  })();
 
   function buildParcelDetailHTML(p) {
     function detailKV(rows) {
@@ -2478,7 +2579,7 @@
     window.open(url, "_blank");
     setTimeout(function () { URL.revokeObjectURL(url); }, 60000); // keep alive long enough for the new tab to load
   }
-  // Delegated: the popup's "Alle Details anzeigen" link (the popup DOM is recreated on each open).
+  // Delegated: the card's «Alle Details anzeigen» link (the card body is re-rendered on each open).
   document.addEventListener("click", function (e) {
     var a = e.target.closest && e.target.closest(".popup-details-link"); if (!a) return;
     e.preventDefault(); openParcelDetails(a.getAttribute("data-id"));
@@ -2486,7 +2587,7 @@
   // Legend (bottom-right): swatches for the currently-visible layers only.
   var legendEl = null;
   function legendGroups() {
-    var g = [{ layer: "parcels-fill", title: null, items: [{ color: PARCEL_COLOR, label: "Grundstücke" }, { color: "#d8232a", label: "Ausgewählt", outline: true }] }];
+    var g = [{ layer: "parcels-fill", title: null, items: [{ color: PARCEL_COLOR, label: "Grundstücke" }, { color: MAP_COLORS.active, label: "Markiert", outline: true }] }];
     if (map.getLayer("landcover-fill")) g.push({ layer: "landcover-fill", title: "Bodenbedeckung", items: MAIN_ORDER.map(function (m) { return { color: mainColorOf(m), label: mainLabel(m) }; }) });
     if (map.getLayer("bauzonen-fill")) g.push({ layer: "bauzonen-fill", title: "Bauzonen", items: BAUZONE_SLUGS.map(function (z) { return { color: bzColor(z), label: bzLabel(z) }; }) });
     if (map.getLayer("habitat-fill")) g.push({ layer: "habitat-fill", title: "Lebensräume", items: HABITAT_DIGITS.map(function (d) { return { color: HABITAT_L1_COLORS[d], label: typochName(d) || d }; }) });
@@ -2681,7 +2782,7 @@
   function setLayerVis(key, on) {
     layerVis[key] = !!on;
     if (map && mapReady) applyLayerVis();
-    renderLegend(); renderAccordion();
+    renderLegend(); renderAccordion(); renderLayerWidget();
   }
   function applyLayerVis() { internalLayerDefs().forEach(function (d) { d.layers.forEach(function (lid) { if (map.getLayer(lid)) map.setLayoutProperty(lid, "visibility", layerVis[d.key] ? "visible" : "none"); }); }); }
 
@@ -2736,6 +2837,26 @@
     else if (t.hasAttribute("data-ext")) setExtVisible(t.getAttribute("data-ext"), t.checked);
   }
 
+  // ---- Compact layer widget (top-left; css shows it in overview mode only, where the accordion is hidden):
+  // the app's own layers, read from and written to the same layerVis as the accordion, so both stay in sync. ----
+  var lwEl = null;
+  function LayerWidget() {}
+  LayerWidget.prototype.onAdd = function (m) {
+    this._map = m;
+    lwEl = document.createElement("div"); lwEl.className = "maplibregl-ctrl map-layers";
+    lwEl.setAttribute("role", "group"); lwEl.setAttribute("aria-label", "Karten ein- und ausblenden");
+    lwEl.addEventListener("change", function (e) { var t = e.target; if (t && t.hasAttribute("data-lw")) setLayerVis(t.getAttribute("data-lw"), t.checked); });
+    renderLayerWidget();
+    return lwEl;
+  };
+  LayerWidget.prototype.onRemove = function () { if (lwEl && lwEl.parentNode) lwEl.parentNode.removeChild(lwEl); lwEl = null; this._map = undefined; };
+  function renderLayerWidget() {
+    if (!lwEl) return;
+    lwEl.innerHTML = '<div class="lw-title">Karten</div>' + internalLayerDefs().map(function (d) {
+      return '<label class="lw-row' + (layerVis[d.key] ? "" : " is-off") + '"><input type="checkbox" data-lw="' + esc(d.key) + '"' + (layerVis[d.key] ? " checked" : "") + '><span>' + esc(d.label) + '</span></label>';
+    }).join("");
+  }
+
   // ---- Basemap switcher (bottom-right) ----
   var bmEl = null, bmOpen = false;
   function BasemapControl() {}
@@ -2786,16 +2907,16 @@
   function renderSelBar() {
     if (!selBarEl) return;
     var n = selCount(); selBarEl.hidden = n === 0;
-    if (n) selBarEl.innerHTML = '<strong>' + n + ' von max. ' + SEL_MAX + ' ausgewählt</strong><button type="button" class="flink" data-sel-clear>Auswahl aufheben</button><button type="button" class="btn btn-sm btn-primary" data-sel-pdf>PDF-Bericht (' + n + ')</button>';
+    if (n) selBarEl.innerHTML = '<strong>' + n + ' von max. ' + SEL_MAX + ' für den Bericht ausgewählt</strong><button type="button" class="flink" data-sel-clear>Auswahl aufheben</button><button type="button" class="btn btn-sm btn-primary" data-sel-pdf>PDF-Bericht (' + n + ')</button>';
   }
 
   // ---- Layer info dialog (C1): static description + legend for internal maps, geo.admin legend for external ----
   var INT_INFO = {
     parcels: { title: "Grundstücke", desc: "Liegenschaften und SDR der aktuellen Auswahl. Folgt den Filtern im Seitenpanel.",
-      legend: [["Grundstück", "rgba(111,138,172,.4)", "1px solid #3b5a7a"], ["Ausgewählt", "#fff", "2px solid #d8232a"], ["Für PDF-Bericht ausgewählt", "#fff", "2px dashed #2f4356"]],
+      legend: [["Grundstück", "rgba(111,138,172,.4)", "1px solid " + MAP_COLORS.parcelLine], ["Markiert (angeklickt)", MAP_COLORS.surface, "2px solid " + MAP_COLORS.active], ["Für den Bericht ausgewählt", MAP_COLORS.surface, "2px dashed " + MAP_COLORS.checked]],
       rows: function () { return [["Quelle", "Amtliche Vermessung (AV), Liegenschaften (E-GRID) · SAP-Export"], ["Format", "GeoJSON (Polygon, WGS84)"], ["Grundstücke", fmt(lastRows.length) + " von " + fmt(PARCELS.length)], ["Sichtbar ab", "Zoomstufe " + PARCEL_MINZOOM]]; } },
     labels: { title: "Beschriftung & Cluster", desc: "Grundstücks-ID als Beschriftung. Beim Herauszoomen zu Clustern mit Anzahl gruppiert.",
-      legend: [["Einzelnes Grundstück", "#3b5a7a", "1.5px solid #fff", true], ["Cluster (bis 25)", "#4f6f93", "1.5px solid #fff", true], ["Cluster (25 bis 100)", "#3b5a7a", "1.5px solid #fff", true], ["Cluster (über 100)", "#2e4a68", "1.5px solid #fff", true]],
+      legend: [["Einzelnes Grundstück", MAP_COLORS.parcelLine, "1.5px solid " + MAP_COLORS.surface, true], ["Cluster (bis 25)", MAP_COLORS.cluster1, "1.5px solid " + MAP_COLORS.surface, true], ["Cluster (25 bis 100)", MAP_COLORS.cluster2, "1.5px solid " + MAP_COLORS.surface, true], ["Cluster (über 100)", MAP_COLORS.cluster3, "1.5px solid " + MAP_COLORS.surface, true]],
       rows: function () { return [["Quelle", "Abgeleitet aus den Grundstücken (visueller Mittelpunkt)"], ["Cluster bis", "Zoomstufe 13"]]; } },
     landcover: { title: "Bodenbedeckung", desc: "Bodenbedeckungsflächen der Amtlichen Vermessung (AV) je Grundstück, eingefärbt nach Hauptgruppe.",
       legend: function () { return MAIN_ORDER.map(function (m) { return [mainLabel(m), mainColorOf(m), "none"]; }); },
@@ -2838,8 +2959,9 @@
   }
   (function () {
     var modal = document.getElementById("info-modal"), body = document.getElementById("info-body"), lastFocus = null;
-    openInfoModal = function () { lastFocus = document.activeElement; modal.hidden = false; document.getElementById("info-close").focus(); };
-    function close() { infoReq++; modal.hidden = true; if (lastFocus && lastFocus.focus) lastFocus.focus(); }
+    openInfoModal = function () { lastFocus = document.activeElement; modal.hidden = false; bgInert(true); lockScroll(true); document.getElementById("info-close").focus(); };
+    function close() { infoReq++; modal.hidden = true; bgInert(false); lockScroll(false); if (lastFocus && lastFocus.focus) lastFocus.focus(); }
+    trapTab(modal.querySelector(".modal-card"));
     document.getElementById("info-close").addEventListener("click", close);
     modal.addEventListener("click", function (e) { if (e.target === modal) close(); });
     document.addEventListener("keydown", function (e) { if (e.key === "Escape" && !modal.hidden) close(); });
@@ -2850,8 +2972,8 @@
     });
   })();
 
-  // ---- Parcel popup (map click, table row, search hit) ----
-  function parcelPopupHTML(p) {
+  // ---- Parcel info card (map click, table row, search hit) ----
+  function parcelCardHTML(p) {
     var pid = String(p.id == null ? "" : p.id), bez = p[NAME_COL] || "";
     var act = function (a, label, icon) { return '<button type="button" class="mp-act" data-pop="' + a + '" data-id="' + esc(pid) + '">' + ICON.sz(icon, 15) + '<span>' + label + '</span></button>'; };
     var full = !sel[pid] && selCount() >= SEL_MAX;
@@ -2863,23 +2985,18 @@
       '<label class="mp-sel"><input type="checkbox" data-pop-sel="' + esc(pid) + '"' + (sel[pid] ? " checked" : "") + (full ? " disabled" : "") + '> Für PDF-Bericht auswählen' + (full ? " (max. " + SEL_MAX + ")" : "") + '</label></div>' +
       (pid ? '<a href="#" class="mp-more popup-details-link" data-id="' + esc(pid) + '"><span>Alle Details anzeigen' + ICON.sz("extlink", 12) + '</span></a>' : "") + '</div>';
   }
-  function openParcelPopup(p, lngLat) {
-    if (!map || !p) return;
-    if (p._pole === undefined) p._pole = poleOfGeom(p._geom);
-    var at = lngLat || p._pole; if (!at) return;
-    showPopup(at, parcelPopupHTML(p));
-  }
-  // Delegated popup actions (the popup DOM is recreated on each open).
+  function openParcelCard(p) { if (map && p) showMapCard(parcelCardHTML(p)); }
+  // Delegated card actions (the card body is re-rendered on each open).
   document.addEventListener("click", function (e) {
     var b = e.target.closest && e.target.closest("[data-pop]"); if (!b) return;
     var id = b.getAttribute("data-id"), p = parcelById(id), act = b.getAttribute("data-pop"); if (!p) return;
-    if (act === "zoom") zoomToParcel(id, { zoom: 17.5, noPopup: true });
+    if (act === "zoom") zoomToParcel(id, { zoom: 17.5, noCard: true });
     else if (act === "table") {
-      if (_mapPopup) _mapPopup.remove();
+      hideMapCard();
       state.search = id; document.getElementById("tsearch").value = id;
       showTab("overview"); writeURL(); update();
       setTimeout(function () { var t = document.getElementById("tsearch"); if (t) t.scrollIntoView({ block: "center", behavior: "smooth" }); }, 50);
-    } else if (act === "pdf") { if (_mapPopup) _mapPopup.remove(); openDownload(null, [p]); }
+    } else if (act === "pdf") { hideMapCard(); openDownload(null, [p]); }
   });
   document.addEventListener("change", function (e) {
     var k = e.target.getAttribute && e.target.getAttribute("data-pop-sel"); if (k == null) return;
@@ -2896,7 +3013,9 @@
     function strip(s) { return String(s || "").replace(/<[^>]*>/g, ""); }
     function place() {
       var r = input.getBoundingClientRect();
-      dd.style.top = (r.bottom + 4) + "px"; dd.style.right = Math.max(8, window.innerWidth - r.right) + "px"; dd.style.left = "auto"; dd.style.width = Math.max(460, Math.round(r.width)) + "px";
+      dd.style.top = (r.bottom + 4) + "px";
+      if (window.innerWidth <= 600) { dd.style.right = ""; dd.style.left = ""; dd.style.width = ""; return; } // phone: full width via CSS
+      dd.style.right = Math.max(8, window.innerWidth - r.right) + "px"; dd.style.left = "auto"; dd.style.width = Math.max(460, Math.round(r.width)) + "px";
     }
     function setOpen(o) { open = o; dd.hidden = !o; input.setAttribute("aria-expanded", o ? "true" : "false"); if (o) { place(); render(); } }
     function inScope(k) { return scope === "all" || scope === k; }
@@ -2921,7 +3040,7 @@
       }, 250);
     }
     function row(o) {
-      return '<div class="sd-row" role="option" data-i="' + o.i + '"><span class="sd-mark ' + o.mark + '"></span><span class="sd-txt"><span class="sd-t">' + esc(o.t) + '</span>' + (o.s ? '<span class="sd-s' + (o.mono ? " mono" : "") + '">' + esc(o.s) + '</span>' : "") + '</span>' + (o.meta ? '<span class="sd-meta ' + (o.metaCls || "") + '">' + esc(o.meta) + '</span>' : "") + '</div>';
+      return '<div class="sd-row" role="option" id="sd-opt-' + o.i + '" data-i="' + o.i + '"><span class="sd-mark ' + o.mark + '"></span><span class="sd-txt"><span class="sd-t">' + esc(o.t) + '</span>' + (o.s ? '<span class="sd-s' + (o.mono ? " mono" : "") + '">' + esc(o.s) + '</span>' : "") + '</span>' + (o.meta ? '<span class="sd-meta ' + (o.metaCls || "") + '">' + esc(o.meta) + '</span>' : "") + '</div>';
     }
     function render() {
       if (!open) return;
@@ -2968,7 +3087,7 @@
         else if (!actions.length) status = "Keine Treffer für «" + q + "».";
       } else if (q.length === 1 && !actions.length) status = "Keine Treffer.";
       if (status) h += '<div class="sd-status">' + esc(status) + '</div>';
-      dd.innerHTML = h; active = -1;
+      dd.innerHTML = h; active = -1; input.removeAttribute("aria-activedescendant");
     }
     function goLocation(r) {
       var switched = currentTab !== "map"; if (switched) showTab("map");
@@ -2978,7 +3097,7 @@
         var m = /BOX\(([-\d.]+) ([-\d.]+),([-\d.]+) ([-\d.]+)\)/.exec(r.box || "");
         if (m && r.origin !== "address" && r.origin !== "parcel") map.fitBounds([[+m[1], +m[2]], [+m[3], +m[4]]], { padding: 40, maxZoom: 17, duration: 900 });
         else map.flyTo({ center: [r.lon, r.lat], zoom: ZOOM[r.origin] || 14, duration: 900 });
-        searchMarker = new maplibregl.Marker({ color: "#d8232a" }).setLngLat([r.lon, r.lat]).addTo(map);
+        searchMarker = new maplibregl.Marker({ color: MAP_COLORS.active }).setLngLat([r.lon, r.lat]).addTo(map);
       };
       if (map && mapReady) { if (switched) setTimeout(go, 80); else go(); } else _pendingMapAction = go;
     }
@@ -2996,7 +3115,8 @@
       if (e.key === "ArrowDown" || e.key === "ArrowUp") {
         e.preventDefault(); if (!rows.length) return;
         active = e.key === "ArrowDown" ? (active + 1) % rows.length : (active - 1 + rows.length) % rows.length;
-        Array.prototype.forEach.call(rows, function (x, j) { x.classList.toggle("is-active", j === active); });
+        Array.prototype.forEach.call(rows, function (x, j) { x.classList.toggle("is-active", j === active); x.setAttribute("aria-selected", j === active ? "true" : "false"); });
+        if (rows[active].id) input.setAttribute("aria-activedescendant", rows[active].id);
         return;
       }
       if (e.key === "Enter") { e.preventDefault(); var r = rows[active >= 0 ? active : 0]; if (r) { var a = actions[+r.getAttribute("data-i")]; if (a) a(); } }
@@ -3008,7 +3128,7 @@
   }
 
   // ---- Map init: controls once, app layers on every (re)load of a style ----
-  var HOVER_LAYERS = ["parcels-fill", "clusters", "point", "landcover-fill", "bauzonen-fill", "habitat-fill"];
+  var HOVER_LAYERS = ["parcels-fill", "clusters", "point", "point-label", "landcover-fill", "bauzonen-fill", "habitat-fill"];
   function initMap(el) {
     var b = basemapById(basemapId);
     // No cooperative gestures here: the Karte tab fits the viewport (the page does not
@@ -3026,20 +3146,29 @@
     if (b.hybrid) opts.transformStyle = composeHybrid;
     map = new maplibregl.Map(opts);
     if (mapMode === "overview") map.cooperativeGestures.enable(); // created while the Auswertung tab is open
+    if (window.ResizeObserver) new ResizeObserver(function () { if (map) map.resize(); }).observe(el); // the map fills a flex box
+    var emptyNote = document.createElement("div"); emptyNote.className = "map-empty"; emptyNote.hidden = true;
+    emptyNote.textContent = "Keine Grundstücke entsprechen den Filtern."; el.appendChild(emptyNote);
+    _cardEl = document.createElement("div"); _cardEl.className = "map-card"; _cardEl.hidden = true;
+    _cardEl.setAttribute("role", "region"); _cardEl.setAttribute("aria-label", "Details zum angeklickten Objekt");
+    _cardEl.innerHTML = '<button type="button" class="icon-btn map-card-x" title="Schliessen" aria-label="Schliessen">' + ICON.sz("x", 16) + '</button><div class="map-card-body"></div>';
+    _cardEl.querySelector(".map-card-x").addEventListener("click", hideMapCard); // closes the card, keeps the mark
+    el.appendChild(_cardEl);
     // Control stack (top-right), fullscreen always first; the built-in buttons use the
     // same Lucide icon set as the custom controls (css: .maplibregl-ctrl-icon masks).
-    // Fullscreen over the map element itself, so every control, the popup and the dialogs' anchor come along.
+    // Fullscreen over the map element itself, so every control, the info card and the dialogs' anchor come along.
     map.addControl(new maplibregl.FullscreenControl(), "top-right");
     map.addControl(new maplibregl.NavigationControl({ showCompass: true }), "top-right"); // compass = north arrow; click resets bearing to 0
     map.addControl(new HomeControl(), "top-right");
     map.addControl(new maplibregl.ScaleControl({ maxWidth: 120, unit: "metric" }), "bottom-left");
     map.addControl(new SelBarControl(), "bottom-left");
     map.addControl(new AccordionControl(), "top-left");
+    map.addControl(new LayerWidget(), "top-left"); // overview mode only (css), where the accordion is hidden
     map.addControl(new BasemapControl(), "bottom-right");
     map.addControl(new Legend(), "bottom-right"); // print only (css); the info dialogs carry the legends on screen
     initContextMenu();
     map.on("load", addAppLayers);
-    // One click handler, priority top→bottom: cluster → overlay → parcel.
+    // One click handler, priority top→bottom: cluster → label / marker → overlay → parcel → nothing (clear).
     map.on("click", function (e) {
       if (!mapReady) return;
       if (map.getLayer("clusters")) {
@@ -3051,6 +3180,15 @@
           return;
         }
       }
+      // ID labels and point markers are drawn on top of everything: they select their parcel.
+      var ptLayers = ["point-label", "point"].filter(function (l) { return map.getLayer(l) && map.getLayoutProperty(l, "visibility") !== "none"; });
+      var pts = ptLayers.length ? map.queryRenderedFeatures(e.point, { layers: ptLayers }) : [];
+      if (pts.length) {
+        var pid = pts[0].properties.id, pp = parcelById(pid);
+        selectParcel(pid);
+        if (pp) { if (map.getZoom() < PARCEL_MINZOOM) zoomToParcel(pid); else openParcelCard(pp); }
+        return;
+      }
       var order = [["habitat-fill", "habitat"], ["bauzonen-fill", "bauzonen"], ["landcover-fill", "landcover"], ["parcels-fill", "parcel"]];
       for (var i = 0; i < order.length; i++) {
         if (!map.getLayer(order[i][0]) || map.getLayoutProperty(order[i][0], "visibility") === "none") continue;
@@ -3060,13 +3198,14 @@
         if (order[i][1] === "parcel") {
           var p = parcelById(f.properties.id);
           selectParcel(f.properties.id); // highlight polygon + focus the table row (no scroll)
-          if (p) openParcelPopup(p, e.lngLat);
+          if (p) openParcelCard(p);
         } else {
           highlightOverlay("ov-" + order[i][1], f.id);
-          showPopup(e.lngLat, overlayPopupHTML(order[i][1], f.properties.art, f.properties.area_m2));
+          showMapCard(overlayCardHTML(order[i][1], f.properties.art, f.properties.area_m2));
         }
         return;
       }
+      clearMapSelection(); // nothing under the pointer
     });
     map.on("mousemove", function (e) {
       if (!mapReady) return;
@@ -3080,25 +3219,25 @@
     if (map.getSource("parcels")) return; // already built for this style
     map.addSource("parcels", { type: "geojson", data: rowsToFC(lastRows) });
     map.addLayer({ id: "parcels-fill", type: "fill", source: "parcels", minzoom: PARCEL_MINZOOM, paint: { "fill-color": PARCEL_COLOR, "fill-opacity": 0.4 } });
-    map.addLayer({ id: "parcels-line", type: "line", source: "parcels", minzoom: PARCEL_MINZOOM, paint: { "line-color": "#3b5a7a", "line-width": 0.7 } });
-    map.addLayer({ id: "parcels-sel", type: "line", source: "parcels", minzoom: PARCEL_MINZOOM, filter: ["in", ["get", "id"], ["literal", selIds()]], paint: { "line-color": "#2f4356", "line-width": 2.2, "line-dasharray": [2, 1.2] } });
-    map.addLayer({ id: "parcels-hl-casing", type: "line", source: "parcels", minzoom: PARCEL_MINZOOM, filter: ["==", ["get", "id"], selectedParcelId || " "], paint: { "line-color": "#fff", "line-width": 5, "line-opacity": 0.9 } });
-    map.addLayer({ id: "parcels-hl", type: "line", source: "parcels", minzoom: PARCEL_MINZOOM, filter: ["==", ["get", "id"], selectedParcelId || " "], paint: { "line-color": "#d8232a", "line-width": 2.6 } });
+    map.addLayer({ id: "parcels-line", type: "line", source: "parcels", minzoom: PARCEL_MINZOOM, paint: { "line-color": MAP_COLORS.parcelLine, "line-width": 0.7 } });
+    map.addLayer({ id: "parcels-sel", type: "line", source: "parcels", minzoom: PARCEL_MINZOOM, filter: ["in", ["get", "id"], ["literal", selIds()]], paint: { "line-color": MAP_COLORS.checked, "line-width": 2.2, "line-dasharray": [2, 1.2] } });
+    map.addLayer({ id: "parcels-hl-casing", type: "line", source: "parcels", minzoom: PARCEL_MINZOOM, filter: ["==", ["get", "id"], selectedParcelId || " "], paint: { "line-color": MAP_COLORS.surface, "line-width": 5, "line-opacity": 0.9 } });
+    map.addLayer({ id: "parcels-hl", type: "line", source: "parcels", minzoom: PARCEL_MINZOOM, filter: ["==", ["get", "id"], selectedParcelId || " "], paint: { "line-color": MAP_COLORS.active, "line-width": 2.6 } });
     addOverlayLayers(); // Bodenbedeckung / Bauzonen / Lebensräume, under the markers
     map.addSource("points", { type: "geojson", data: rowsToPointsFC(lastRows), cluster: true, clusterRadius: 48, clusterMaxZoom: 13 });
     map.addLayer({ id: "clusters", type: "circle", source: "points", filter: ["has", "point_count"],
-      paint: { "circle-color": ["step", ["get", "point_count"], "#4f6f93", 25, "#3b5a7a", 100, "#2e4a68"], "circle-radius": ["step", ["get", "point_count"], 14, 25, 18, 100, 24], "circle-stroke-color": "#fff", "circle-stroke-width": 1.5 } });
+      paint: { "circle-color": ["step", ["get", "point_count"], MAP_COLORS.cluster1, 25, MAP_COLORS.cluster2, 100, MAP_COLORS.cluster3], "circle-radius": ["step", ["get", "point_count"], 14, 25, 18, 100, 24], "circle-stroke-color": MAP_COLORS.surface, "circle-stroke-width": 1.5 } });
     map.addLayer({ id: "cluster-count", type: "symbol", source: "points", filter: ["has", "point_count"],
-      layout: { "text-field": ["get", "point_count_abbreviated"], "text-font": ["Open Sans Regular"], "text-size": 12 }, paint: { "text-color": "#fff" } });
+      layout: { "text-field": ["get", "point_count_abbreviated"], "text-font": ["Noto Sans Regular", "Open Sans Regular"], "text-size": 12 }, paint: { "text-color": MAP_COLORS.surface } });
     map.addLayer({ id: "point", type: "circle", source: "points", filter: ["!", ["has", "point_count"]],
-      paint: { "circle-color": "#3b5a7a", "circle-radius": 4, "circle-stroke-color": "#fff", "circle-stroke-width": 1.2 } });
+      paint: { "circle-color": MAP_COLORS.parcelLine, "circle-radius": 4, "circle-stroke-color": MAP_COLORS.surface, "circle-stroke-width": 1.2 } });
     map.addLayer({ id: "point-label", type: "symbol", source: "points", filter: ["!", ["has", "point_count"]],
-      layout: { "text-field": ["get", "id"], "text-font": ["Open Sans Regular"], "text-size": 11, "text-anchor": "bottom", "text-offset": [0, -0.5], "text-optional": true },
-      paint: { "text-color": "#1f2937", "text-halo-color": "#fff", "text-halo-width": 1.4 } });
+      layout: { "text-field": ["get", "id"], "text-font": ["Noto Sans Regular", "Open Sans Regular"], "text-size": 11, "text-anchor": "bottom", "text-offset": [0, -0.5], "text-optional": true },
+      paint: { "text-color": MAP_COLORS.label, "text-halo-color": MAP_COLORS.surface, "text-halo-width": 1.4 } });
     extLayers.forEach(addExtToMap); syncExtOrder();
     applyLayerVis();
     _selOv = null;
-    mapReady = true; renderMap(lastRows); renderLegend(); renderAccordion();
+    mapReady = true; renderMap(lastRows); renderLegend(); renderAccordion(); renderLayerWidget();
     if (_pendingZoom) { var z = _pendingZoom; _pendingZoom = null; zoomToParcel(z.id, z.opts); }
     if (_pendingMapAction) { var a = _pendingMapAction; _pendingMapAction = null; a(); }
   }
@@ -3106,7 +3245,7 @@
   function ensureMap() {
     var el = document.getElementById("map"); if (!el || _mapTried) return; _mapTried = true;
     if (window.maplibregl) { initMap(el); return; }
-    el.innerHTML = '<div class="map-msg">Karte wird geladen…</div>';
+    el.innerHTML = '<div class="map-msg"><span class="spinner spinner-sm" aria-hidden="true"></span>Karte wird geladen…</div>';
     var css = document.createElement("link"); css.rel = "stylesheet"; css.href = "https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css"; document.head.appendChild(css);
     var s = document.createElement("script"); s.src = "https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js";
     s.onload = function () { el.innerHTML = ""; initMap(el); };
@@ -3130,7 +3269,9 @@
     initPicker();
   } else {
     if (window.DASHBOARD_TITLE) { try { document.title = window.DASHBOARD_TITLE; } catch (e) {} }
-    boot(__embedded, window.OVERLAYS || {});
-    var bnE = document.getElementById("btn-new"); if (bnE) bnE.style.display = "none";
+    withLoading("Dashboard wird geladen…", function () {
+      boot(__embedded, window.OVERLAYS || {});
+      document.querySelectorAll("#btn-new, #btn-new-menu").forEach(function (b) { b.hidden = true; });
+    }).catch(function (err) { console.error(err); loadingMsgEl.textContent = "Fehler beim Laden: " + ((err && err.message) || err); loadingEl.hidden = false; });
   }
 })();
