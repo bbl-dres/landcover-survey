@@ -1,81 +1,49 @@
 /**
  * Core processing: EGRID → Parcel Geometry → WFS Land Cover → Turf.js Clip → Area
  *
+ * This module clips, classifies and aggregates; every live request lives in
+ * geoapi.js (mirrored by python/api.py) and this file is mirrored step for step by
+ * python/processor_web.py — keep the two in lock-step, the cross-check
+ * (python/compare.py) depends on it.
+ *
  * Performance strategy:
- * - Parallel EGRID lookups (batched, max CONCURRENCY at once)
- * - Parallel WFS queries (fired as soon as parcel geometry arrives)
+ * - Parallel parcels (bounded, max CONCURRENCY at once)
  * - Turf.js clipping runs synchronously per parcel (CPU-bound, fast)
- * - Exponential backoff on 429/5xx errors
- * - EGRID dedup cache avoids redundant API calls
- * - AbortController timeout on all fetch calls
+ * - Exponential backoff on 429/5xx errors, EGRID dedup cache (geoapi.js)
  */
-import { API, SLIVER_THRESHOLD, STATUS, classify, classifyBafu, typochToBBArt, isFound, fetchWithTimeout,
-         BAFU_LAYER_ID, VBS_KATEGORIE_LABELS, VBS_PRODUKTIV_LABELS, VBS_TYP_LABELS,
+import { SLIVER_THRESHOLD, STATUS, SIA416, classify, classifyBafu, typochToBBArt, isFound,
+         VBS_KATEGORIE_LABELS, VBS_PRODUKTIV_LABELS, VBS_TYP_LABELS,
          ERR_MSG, ERR_RUNTIME_PREFIX, bauzoneAreaKey, isBauzoneAreaKey,
          ensureTypoch, typochL1Label, typochL2Label, typochL3Label, typochCodeAtLevel,
-         habitatAreaKeyL1, habitatAreaKeyL2, isHabitatAreaKey, GREEN_INVENTORY } from "./config.js";
+         habitatAreaKeyL1, habitatAreaKeyL2, isHabitatAreaKey } from "./config.js";
+import { setCancelled, isCancelled, fetchParcelGeometry, fetchLandCover, fetchLandCoverBAFU,
+         fetchBauzonen, loadGreenInventory, greenInventoryFlag } from "./geoapi.js";
 
 // Parcels processed in parallel. Each parcel makes two sequential requests to
 // two different hosts (swisstopo find + geodienste WFS), both HTTP/2, so a
 // moderate bump over the old value of 5 improves throughput. The 429/5xx
-// exponential backoff below absorbs the occasional rate-limit response.
+// exponential backoff in geoapi.js absorbs the occasional rate-limit response.
 const CONCURRENCY = 8;
-/** Land-cover WFS page size (GetFeature COUNT) and the total safety cap across all
- *  pages — we page with STARTINDEX until a short page, so the cap is just a backstop. */
-const WFS_PAGE = 1000;
-const WFS_MAX_FEATURES = 10000;
-const FETCH_TIMEOUT_MS = 15000;
-const MAX_RETRIES = 3;
-const BASE_DELAY_MS = 500;
 /** Below this fraction of AV land-cover coverage a parcel counts as "no AV", and
  *  (if BAFU data exists) its land cover is synthesized from BAFU — see TYPOCH_BBART. */
 const MIN_AV_COVER_FRAC = 0.05;
-
-let cancelled = false;
-
-/** EGRID → parcel geometry cache (survives across runs within same session) */
-const egridCache = new Map();
-
-/** Green inventory parcel index ({ byEgrid, byErp } Maps), fetched at most once per
- *  session; resolves to null when the file could not be loaded (the join then stays
- *  empty and the caller reports it). */
-let greenInventoryPromise = null;
-function loadGreenInventory() {
-  if (!greenInventoryPromise) {
-    greenInventoryPromise = fetchWithTimeout(GREEN_INVENTORY.PARCELS_URL, { timeoutMs: 30000 })
-      .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
-      .then((fc) => {
-        const byEgrid = new Map(), byErp = new Map();
-        for (const f of fc.features || []) {
-          const pr = f.properties || {};
-          if (pr.egrid) byEgrid.set(String(pr.egrid).toUpperCase(), pr);
-          if (pr.erp_id) byErp.set(String(pr.erp_id), pr);
-        }
-        return { byEgrid, byErp };
-      })
-      .catch((err) => { console.warn("Green inventory unavailable:", err.message); greenInventoryPromise = null; return null; });
-  }
-  return greenInventoryPromise;
-}
-/** "yes" when the parcel is in the green inventory (by EGRID, else by the SAP key = id),
- *  "no" otherwise, "" without an index. */
-function greenInventoryFlag(index, id, egrid) {
-  if (!index) return "";
-  if (egrid && index.byEgrid.has(String(egrid).toUpperCase())) return "yes";
-  if (id && index.byErp.has(String(id))) return "yes";
-  return "no";
-}
+/** Min zone-free area (m²) before we emit an "Ohne Bauzone" remainder row — keeps
+ *  the zones summing to the parcel area without adding sub-m² sliver rows. */
+const OHNE_BAUZONE_MIN_AREA = 1;
+/** Min share of the parcel a dropped (null-geometry) habitat feature must cover
+ *  before we gap-fill it — below this it's sliver noise, not a missing big feature. */
+const HABITAT_GAP_MIN_FRAC = 0.01;
 
 export function cancelProcessing() {
-  cancelled = true;
+  setCancelled(true);
 }
 
 /**
  * Process all rows from the CSV.
- * Returns { parcels: [...], landcover: [...] }
+ * Returns { parcels, landcover, bauzonen, habitat, greeninvFailed }
  */
 export async function processRows(rows, onProgress, options = {}) {
-  cancelled = false;
+  setCancelled(false);
   // Load the shared TypoCH name reference once up front (memoized, fail-soft) so the
   // per-parcel habitat labelling below can resolve level-1/2/3 names synchronously.
   if (options.habitat) await ensureTypoch();
@@ -91,8 +59,8 @@ export async function processRows(rows, onProgress, options = {}) {
     onProgress({ processed: completed, total, succeeded, failed: completed - succeeded });
   };
 
-  const processOne = async (row, index) => {
-    if (cancelled) return null;
+  const processOne = async (row) => {
+    if (isCancelled()) return null;
 
     const id = row.id || "";
     const egrid = row.egrid || "";
@@ -123,6 +91,7 @@ export async function processRows(rows, onProgress, options = {}) {
 
       // Step 3: Clip AV land cover to the parcel + aggregate.
       let { results: clipped, skipped } = clipLandCover(parcelGeom, lcResult.features, id, egrid);
+      const avRows = clipped; // the authoritative AV pieces, kept for the bfsnr even if synthesized below
       let agg = aggregateLandCover(clipped);
       let lcSource = "AV", lcSynthetic = false;
 
@@ -175,7 +144,10 @@ export async function processRows(rows, onProgress, options = {}) {
         id,
         egrid,
         nummer: parcelResult.properties.number || "",
-        bfsnr: parcelResult.properties.bfsnr || "",
+        // BFS municipality number: carried by the AV land-cover surfaces (the find
+        // service has none) — the number covering the largest share of the parcel.
+        bfsnr: dominantBfsnr(avRows),
+        nbident: parcelResult.properties.nbident || "",
         status: "found",
         check_egrid: merged ? STATUS.MERGED : STATUS.FOUND,
         check_wfs: lcResult.error ? "wfs_error" : (lcResult.truncated ? "truncated" : "ok"),
@@ -198,7 +170,7 @@ export async function processRows(rows, onProgress, options = {}) {
       // Optional overlay layers (default on). Each clips an extra geo.admin.ch
       // layer to the parcel, producing first-class detail rows (with geometry,
       // for the map + table + export) plus aggregated columns on the parcel.
-      // One extra Identify call per parcel each; failures are non-fatal.
+      // Failures are non-fatal.
       let bauzonenRows = [];
       let habitatRows = [];
 
@@ -302,9 +274,9 @@ export async function processRows(rows, onProgress, options = {}) {
   const workers = [];
 
   const runNext = async () => {
-    while (queue.length > 0 && !cancelled) {
+    while (queue.length > 0 && !isCancelled()) {
       const { row, index } = queue.shift();
-      const result = await processOne(row, index);
+      const result = await processOne(row);
       results[index] = result;
       completed++;
       if (result && isFound(result.parcel.check_egrid)) succeeded++;
@@ -393,6 +365,7 @@ function makeErrorParcel(id, egrid, row, message) {
     egrid,
     nummer: "",
     bfsnr: "",
+    nbident: "",
     status: "not_found",
     check_egrid: message,
     check_wfs: "",
@@ -413,250 +386,7 @@ function makeErrorParcel(id, egrid, row, message) {
   return parcel;
 }
 
-/* ── Fetch with retry and timeout ── */
-
-/**
- * Fetch with AbortController timeout and exponential backoff retry.
- * Retries on 429, 500, 502, 503, 504 and network errors.
- */
-async function fetchWithRetry(url, opts = {}) {
-  let lastError;
-
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    if (cancelled) throw new Error("Cancelled");
-
-    let resp;
-    try {
-      resp = await fetchWithTimeout(url, { ...opts, timeoutMs: FETCH_TIMEOUT_MS });
-    } catch (err) {
-      lastError = err.name === "AbortError" ? new Error("Request timeout") : err;
-      // Retry on network errors and timeouts
-      if (attempt < MAX_RETRIES) {
-        await sleep(BASE_DELAY_MS * Math.pow(2, attempt));
-        continue;
-      }
-      break;
-    }
-
-    if (resp.ok) return resp;
-    lastError = new Error(`HTTP ${resp.status}`);
-
-    // Retry only on rate-limit or server errors; other statuses fail fast.
-    if (resp.status !== 429 && resp.status < 500) break;
-    if (attempt >= MAX_RETRIES) break;
-    const retryAfter = parseInt(resp.headers.get("Retry-After"), 10);
-    const delay = Number.isFinite(retryAfter)
-      ? Math.min(retryAfter * 1000, 10000)
-      : BASE_DELAY_MS * Math.pow(2, attempt);
-    await sleep(delay);
-  }
-
-  throw lastError;
-}
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-/* ── API calls ── */
-
-/** Fetch parcel geometry by EGRID (with dedup cache).
- *  The returned object is treated as read-only downstream (turf operations and
- *  MapLibre copy their inputs), so we can hand back the cached object directly
- *  instead of deep-cloning it on every hit. */
-async function fetchParcelGeometry(egrid) {
-  // Check cache first (value may be null = negative cache for "not found")
-  if (egridCache.has(egrid)) {
-    return egridCache.get(egrid);
-  }
-
-  const params = new URLSearchParams({
-    layer: "ch.kantone.cadastralwebmap-farbe",
-    searchText: egrid,
-    searchField: "egris_egrid",
-    returnGeometry: "true",
-    geometryFormat: "geojson",
-    sr: "4326",
-  });
-
-  const resp = await fetchWithRetry(`${API.PARCEL_FIND}?${params}`);
-  const data = await resp.json();
-
-  const feats = (data.results || []).filter((r) => r.geometry);
-  if (feats.length === 0) {
-    egridCache.set(egrid, null);
-    return null;
-  }
-
-  // A single EGRID can map to multiple features (ongoing mutations, overlapping
-  // SDR / Baurecht). Union all matching geometries into one polygon so the
-  // parcel area and its land-cover clip aren't under-counted — this mirrors the
-  // Python pipeline's "dissolve by EGRID" step (DATAMODEL.md §Duplicate EGRIDs).
-  let geom = feats[0].geometry;
-  const mergedCount = feats.length;
-  if (feats.length > 1) {
-    try {
-      const unioned = turf.union(turf.featureCollection(feats.map((r) => turf.feature(r.geometry))));
-      if (unioned?.geometry) geom = unioned.geometry;
-    } catch (err) {
-      console.warn(`Union failed for ${egrid} (${feats.length} parts), using first:`, err.message);
-    }
-  }
-
-  const props = feats[0].properties || feats[0].attributes || {};
-
-  const result = {
-    type: "Feature",
-    geometry: geom,
-    properties: {
-      egrid: egrid,
-      number: props.number || "",
-      bfsnr: props.identnd || "",
-      area: "",
-      mergedCount,
-    },
-  };
-
-  egridCache.set(egrid, result);
-  return result;
-}
-
-/**
- * Fetch land cover features via WFS.
- * Returns { features: [...], error: boolean } so callers can distinguish
- * "no land cover" from "WFS failed".
- */
-async function fetchLandCover(bbox) {
-  const [minLon, minLat, maxLon, maxLat] = bbox;
-  const maxPages = Math.max(1, Math.ceil(WFS_MAX_FEATURES / WFS_PAGE));
-  const features = [];
-  let truncated = false;
-
-  try {
-    for (let page = 0; page < maxPages; page++) {
-      const params = new URLSearchParams({
-        SERVICE: "WFS",
-        REQUEST: "GetFeature",
-        VERSION: "2.0.0",
-        TYPENAMES: "ms:LCSF",
-        BBOX: `${minLat},${minLon},${maxLat},${maxLon},urn:ogc:def:crs:EPSG::4326`,
-        SRSNAME: "urn:ogc:def:crs:EPSG::4326",
-        OUTPUTFORMAT: "geojson",
-        COUNT: String(WFS_PAGE),
-        STARTINDEX: String(page * WFS_PAGE),
-      });
-      const resp = await fetchWithRetry(`${API.WFS_AV}?${params}`);
-      const data = await resp.json();
-      const batch = data.features || [];
-      features.push(...batch);
-      // A short page means the bbox is drained; a full page means more may follow.
-      if (batch.length < WFS_PAGE) break;
-      // Still a full page at the safety cap → genuinely more features remain.
-      if (page === maxPages - 1) truncated = true;
-    }
-    return { features, error: false, truncated };
-  } catch (err) {
-    console.warn("WFS fetch failed after retries:", err.message);
-    return { features: [], error: true, truncated: false };
-  }
-}
-
-/* ── geo.admin.ch Identify (shared by the BAFU fallback + Bauzonen) ── */
-
-/** Identify per-request page size — the server's documented hard max is 200
- *  (default 50, max 200); we page past it with `offset`. */
-const IDENTIFY_PAGE = 200;
-
-/** Fetch ALL features of `layerId` intersecting a parcel's bbox via the Identify
- *  endpoint. Pages with `offset` past the 200-per-request cap until a short page (or
- *  the `maxFeatures` safety cap) is reached — so a per-parcel bbox is fetched whole
- *  instead of truncated at the first 200. Returns { features, dropped, total,
- *  truncated }. Features are deduped by featureId because a layer backed by several
- *  underlying tables can return overlapping pages. May throw. */
-async function fetchIdentify(layerId, parcelGeom, maxFeatures) {
-  const [minLon, minLat, maxLon, maxLat] = turf.bbox(parcelGeom);
-  const envelope = `${minLon},${minLat},${maxLon},${maxLat}`;
-  const maxPages = Math.max(1, Math.ceil((maxFeatures || IDENTIFY_PAGE) / IDENTIFY_PAGE));
-  const seen = new Set();
-  // geo.admin.ch returns `geometry: null` for features whose geometry exceeds a
-  // server-side size cap (e.g. city-scale "Asphalt- und Betonstrasse"). Keep those
-  // aside (type only) so callers can account for them instead of silently losing them.
-  const features = [], dropped = [];
-  let total = 0, truncated = false;
-  for (let page = 0; page < maxPages; page++) {
-    const params = new URLSearchParams({
-      geometry: envelope,
-      geometryType: "esriGeometryEnvelope",
-      geometryFormat: "geojson",
-      layers: `all:${layerId}`,
-      sr: "4326",
-      tolerance: "0",
-      mapExtent: envelope,
-      imageDisplay: "100,100,96",
-      returnGeometry: "true",
-      limit: String(IDENTIFY_PAGE),
-      offset: String(page * IDENTIFY_PAGE),
-      lang: "de",
-    });
-    const resp = await fetchWithRetry(`${API.IDENTIFY}?${params}`);
-    const data = await resp.json();
-    const results = data.results || [];
-    let fresh = 0;
-    for (const r of results) {
-      const id = r.featureId ?? r.id;
-      if (seen.has(String(id))) continue; // overlap across pages (multi-table layers)
-      seen.add(String(id)); fresh++;
-      const properties = r.properties || r.attributes || {};
-      if (r.geometry) features.push({ geometry: r.geometry, properties, id });
-      else dropped.push({ properties, id });
-    }
-    total += fresh;
-    // A short page (or a page with nothing new) means the bbox is drained.
-    if (results.length < IDENTIFY_PAGE || fresh === 0) break;
-    // Still a full page at the safety cap → genuinely more features remain.
-    if (page === maxPages - 1) truncated = true;
-  }
-  return { features, dropped, total, truncated };
-}
-
-/** Safety cap on total BAFU habitat features fetched per parcel across Identify
- *  pages (paged 200 at a time). A backstop, not the page size. */
-const BAFU_MAX_FEATURES = 5000;
-
-/** Min share of the parcel a dropped (null-geometry) habitat feature must cover
- *  before we gap-fill it — below this it's sliver noise, not a missing big feature. */
-const HABITAT_GAP_MIN_FRAC = 0.01;
-
-/**
- * Fetch BAFU Lebensraumkarte (habitat) features for a parcel — fallback where AV
- * land cover is unavailable. Same { features, error, truncated } shape as fetchLandCover().
- */
-async function fetchLandCoverBAFU(parcelGeom) {
-  try {
-    const { features, dropped, truncated } = await fetchIdentify(BAFU_LAYER_ID, parcelGeom, BAFU_MAX_FEATURES);
-    return { features, dropped, error: false, truncated };
-  } catch (err) {
-    console.warn("BAFU identify failed after retries:", err.message);
-    return { features: [], dropped: [], error: true, truncated: false };
-  }
-}
-
-/* ── Bauzonen (building zones) — optional per-parcel intersection ── */
-
-const BAUZONEN_LAYER_ID = "ch.are.bauzonen";
-const BAUZONEN_MAX_FEATURES = 2000; // safety cap across paged identify requests
-
-/** Min zone-free area (m²) before we emit an "Ohne Bauzone" remainder row — keeps
- *  the zones summing to the parcel area without adding sub-m² sliver rows. */
-const OHNE_BAUZONE_MIN_AREA = 1;
-
-/** Fetch building-zone features intersecting a parcel bbox (geo.admin.ch Identify). */
-async function fetchBauzonen(parcelGeom) {
-  // A dropped (null-geometry) zone would inflate the "Ohne Bauzone" remainder, so the
-  // caller flags those parcels rather than trusting the computed zone-free area.
-  const { features, dropped, truncated } = await fetchIdentify(BAUZONEN_LAYER_ID, parcelGeom, BAUZONEN_MAX_FEATURES);
-  return { features, dropped, truncated };
-}
+/* ── Clipping ── */
 
 /** Clip each `features` item to `parcelGeom` and call `onPiece(feature, geometry,
  *  area)` for every intersection above the sliver threshold. Returns the count of
@@ -679,12 +409,68 @@ function clipFeatures(parcelGeom, features, onPiece) {
   return skipped;
 }
 
-/** Clip Bauzonen (building zones) to a parcel — one detail row per clipped piece.
- *  `art` holds the zone name (the generic "type" field shared by all overlay
- *  layers, so the map/table/summary treat it uniformly). */
+/* ── Row builders (one per output layer; mirrored by processor_web.py) ── */
+
+/** VBS classification codes → the stable English output labels (blank Typ when none). */
+function vbsLabels(cls) {
+  return {
+    vbs_kategorie: VBS_KATEGORIE_LABELS[cls.vbsKategorie] || "",
+    vbs_produktiv: VBS_PRODUKTIV_LABELS[cls.vbsProduktiv] || "",
+    vbs_typ: cls.vbsTyp ? (VBS_TYP_LABELS[cls.vbsTyp] || "") : "",
+  };
+}
+
+/** BBArt values outside the known domain are classified with the fallbacks
+ *  (UUF / UF / not green / kat_d / unproduktiv) — warn once per value per session
+ *  so a data-model change (e.g. the DMAV migration) is noticed, not silently absorbed. */
+const warnedArts = new Set();
+function warnUnknownArt(art) {
+  if (Object.prototype.hasOwnProperty.call(SIA416, art) || warnedArts.has(art)) return;
+  warnedArts.add(art);
+  console.warn(`Unknown land-cover Art "${art}" — classified with the fallback categories`);
+}
+
+/** Build one land-cover detail row — an AV clip (lcSource "AV") or a synthetic
+ *  piece derived from BAFU (lcSource "BAFU", `typoch` keeps the source habitat label
+ *  for traceability). Same shape either way so aggregateLandCover treats them alike. */
+export function makeLandcoverRow(id, egrid, art, { fid = "", bfsnr = "", gwrEgid = "", lcSource = "AV", prob = "", typoch } = {}, area, geometry) {
+  warnUnknownArt(art);
+  const cls = classify(art);
+  const row = { id, egrid, fid, art };
+  if (typoch !== undefined) row.typoch = typoch; // provenance of a synthetic row (GeoJSON only; not a CSV/XLSX header)
+  Object.assign(row, {
+    bfsnr,
+    gwr_egid: gwrEgid,
+    check_greenspace: cls.greenSpace,
+    // VBS classification — stable English output values (translated for display).
+    // Typ is only assigned within biologically productive area; blank otherwise.
+    ...vbsLabels(cls),
+    lc_source: lcSource,
+    prob,
+    area_m2: round2(area),
+    _rawArea: area, // unrounded — summed by aggregateLandCover to avoid rounding drift
+    _geometry: geometry,
+    _sia416: cls.sia416,
+    _din277: cls.din277,
+    _sealed: cls.sealed,
+    _vbsKategorie: cls.vbsKategorie,
+    _vbsProduktiv: cls.vbsProduktiv,
+    _vbsTyp: cls.vbsTyp,
+  });
+  return row;
+}
+
+/** Build one SYNTHETIC AV land-cover row from a BAFU habitat piece: `art` is the
+ *  inferred BBArt, geometry the real (clipped) habitat polygon. */
+function makeSynthLandcoverRow(id, egrid, art, typoch, area, geometry) {
+  return makeLandcoverRow(id, egrid, art, { lcSource: "BAFU", typoch }, area, geometry);
+}
+
 /** Build one Bauzonen detail row. Shared by the clip and the "Ohne Bauzone"
- *  remainder (which passes name "Ohne Bauzone", no code, and a best-effort geometry). */
-function makeBauzoneRow(id, egrid, name, code, fid, area, geometry) {
+ *  remainder (which passes name "Ohne Bauzone", no code, and a best-effort geometry).
+ *  `art` holds the zone name (the generic "type" field shared by all overlay layers,
+ *  so the map/table/summary treat it uniformly). */
+export function makeBauzoneRow(id, egrid, name, code, fid, area, geometry) {
   return {
     id, egrid, fid,
     art: name,
@@ -694,6 +480,75 @@ function makeBauzoneRow(id, egrid, name, code, fid, area, geometry) {
     _rawArea: area,
     _geometry: geometry,
   };
+}
+
+/** Build one BAFU habitat detail row. `art` holds the TypoCH label; SIA 416 / DIN 277
+ *  / sealed are `null` (a modeled habitat map can't supply them). Shared by the clip
+ *  and the gap-fill — the gap-fill passes `geometry: null` (the dropped feature whose
+ *  geometry the Identify endpoint won't serve), so the row carries area but can't be drawn. */
+export function makeHabitatRow(id, egrid, typoch, prob, fid, area, geometry) {
+  const cls = classifyBafu(typoch);
+  return {
+    id,
+    egrid,
+    fid,
+    art: typoch, // TypoCH habitat label as served, deepest level, e.g. "6.3.1 Buchenwald"
+    // Full TypoCH hierarchy split into its three levels ("<code> <name>"); typoch_l3 is
+    // "" where the layer only resolved the feature to level-2. Names come from the shared
+    // data/typoch.json reference (loaded by ensureTypoch()).
+    typoch_l1: typochL1Label(typoch),
+    typoch_l2: typochL2Label(typoch),
+    typoch_l3: typochL3Label(typoch),
+    bfsnr: "",
+    gwr_egid: "",
+    check_greenspace: cls.greenSpace,
+    ...vbsLabels(cls),
+    lc_source: "BAFU",
+    prob,
+    area_m2: round2(area),
+    _rawArea: area,
+    _geometry: geometry,
+    _sia416: null, // not derivable from a modeled habitat map
+    _din277: null,
+    _sealed: null,
+    _vbsKategorie: cls.vbsKategorie,
+    _vbsProduktiv: cls.vbsProduktiv,
+    _vbsTyp: cls.vbsTyp,
+  };
+}
+
+/** Clip AV land cover features to a parcel and classify each piece. */
+function clipLandCover(parcelGeom, lcFeatures, id, egrid) {
+  const results = [];
+  const skipped = clipFeatures(parcelGeom, lcFeatures, (lc, geometry, area) => {
+    const art = lc.properties?.art || lc.properties?.Art || lc.properties?.ART || "";
+    const fid = lc.id || lc.properties?.fid || "";
+    const bfsnr = lc.properties?.bfsnr || lc.properties?.BFSNr || "";
+    const gwrEgid = lc.properties?.gwr_egid || lc.properties?.GWR_EGID || "";
+    results.push(makeLandcoverRow(id, egrid, art, { fid, bfsnr, gwrEgid }, area, geometry));
+  });
+  return { results, skipped };
+}
+
+/** Clip BAFU habitat features to a parcel and classify via TypoCH. */
+function clipHabitat(parcelGeom, bafuFeatures, id, egrid) {
+  const results = [];
+  const skipped = clipFeatures(parcelGeom, bafuFeatures, (lc, geometry, area) => {
+    results.push(makeHabitatRow(id, egrid, lc.properties?.typoch_de || "", lc.properties?.prob_de || "", lc.id || lc.properties?.polyid || "", area, geometry));
+  });
+  return { results, skipped };
+}
+
+/** Clip Bauzonen (building zones) to a parcel — one detail row per clipped piece. */
+function clipBauzonen(parcelGeom, features, id, egrid) {
+  const results = [];
+  const skipped = clipFeatures(parcelGeom, features, (bz, geometry, area) => {
+    const name = bz.properties?.ch_bez_d || bz.properties?.bz_bezeichnung || "?";
+    const code = bz.properties?.ch_code_hn || bz.properties?.bz_nutzung || "";
+    const fid = bz.id || bz.properties?.fid || "";
+    results.push(makeBauzoneRow(id, egrid, name, code, fid, area, geometry));
+  });
+  return { results, skipped };
 }
 
 /** Best-effort geometry for the zone-free remainder: parcel minus the union of the
@@ -711,21 +566,30 @@ function ohneBauzoneGeometry(parcelGeom, zoneRows) {
   }
 }
 
-function clipBauzonen(parcelGeom, features, id, egrid) {
-  const results = [];
-  const skipped = clipFeatures(parcelGeom, features, (bz, geometry, area) => {
-    const name = bz.properties?.ch_bez_d || bz.properties?.bz_bezeichnung || "?";
-    const code = bz.properties?.ch_code_hn || bz.properties?.bz_nutzung || "";
-    const fid = bz.id || bz.properties?.fid || "";
-    results.push(makeBauzoneRow(id, egrid, name, code, fid, area, geometry));
-  });
-  return { results, skipped };
+/* ── Aggregation ── */
+
+/** BFS municipality number of a parcel from its AV land-cover pieces: the `bfsnr`
+ *  value whose pieces cover the largest area (ties → the smaller value), keeping the
+ *  value as served (number or string). "" when no piece carries one. */
+export function dominantBfsnr(rows) {
+  const area = new Map(), value = new Map(); // key → summed area / original value
+  for (const r of rows) {
+    const key = String(r.bfsnr ?? "").trim();
+    if (!key) continue;
+    if (!area.has(key)) value.set(key, r.bfsnr);
+    area.set(key, (area.get(key) || 0) + r._rawArea);
+  }
+  let best = "", bestArea = -1;
+  for (const [key, a] of area) {
+    if (a > bestArea || (a === bestArea && key < best)) { best = key; bestArea = a; }
+  }
+  return best ? value.get(best) : "";
 }
 
 /** Aggregate Bauzonen detail rows into the parcel columns: semicolon-joined
  *  `bauzonen` (names) + `bauzonen_m2` (areas) + a `zones` map, largest first —
  *  mirrors the Python `--bauzonen` output. */
-function aggregateBauzonen(rows) {
+export function aggregateBauzonen(rows) {
   const byZone = new Map(); // zone name → area m²
   for (const r of rows) byZone.set(r.art, (byZone.get(r.art) || 0) + (r._rawArea ?? r.area_m2));
 
@@ -745,7 +609,7 @@ function aggregateBauzonen(rows) {
  *  classified to level 1). Returns the readable level-2 label summary
  *  (`habitat` / `habitat_m2`, largest first) plus `typesL1` / `typesL2` (code → area)
  *  that become `habitat_l1_<code>_m2` / `habitat_l2_<code>_m2` columns. */
-function aggregateHabitat(rows) {
+export function aggregateHabitat(rows) {
   const byL1 = new Map(), byL2 = new Map(), l2Label = new Map(); // code → area; l2 code → label
   for (const r of rows) {
     const area = r._rawArea ?? r.area_m2;
@@ -770,125 +634,8 @@ function aggregateHabitat(rows) {
   };
 }
 
-/** Clip AV land cover features to a parcel and classify each piece. */
-function clipLandCover(parcelGeom, lcFeatures, id, egrid) {
-  const results = [];
-  const skipped = clipFeatures(parcelGeom, lcFeatures, (lc, geometry, area) => {
-    const art = lc.properties?.art || lc.properties?.Art || lc.properties?.ART || "";
-    const fid = lc.id || lc.properties?.fid || "";
-    const bfsnr = lc.properties?.bfsnr || lc.properties?.BFSNr || "";
-    const gwrEgid = lc.properties?.gwr_egid || lc.properties?.GWR_EGID || "";
-    const cls = classify(art);
-    results.push({
-      id,
-      egrid,
-      fid,
-      art,
-      bfsnr,
-      gwr_egid: gwrEgid,
-      check_greenspace: cls.greenSpace,
-      // VBS classification — stable English output values (translated for display).
-      // Typ is only assigned within biologically productive area; blank otherwise.
-      vbs_kategorie: VBS_KATEGORIE_LABELS[cls.vbsKategorie] || "",
-      vbs_produktiv: VBS_PRODUKTIV_LABELS[cls.vbsProduktiv] || "",
-      vbs_typ: cls.vbsTyp ? (VBS_TYP_LABELS[cls.vbsTyp] || "") : "",
-      lc_source: "AV",
-      prob: "",
-      area_m2: round2(area),
-      _rawArea: area, // unrounded — summed by aggregateLandCover to avoid rounding drift
-      _geometry: geometry,
-      _sia416: cls.sia416,
-      _din277: cls.din277,
-      _sealed: cls.sealed,
-      _vbsKategorie: cls.vbsKategorie,
-      _vbsProduktiv: cls.vbsProduktiv,
-      _vbsTyp: cls.vbsTyp,
-    });
-  });
-  return { results, skipped };
-}
-
-/** Clip BAFU habitat features to a parcel and classify via TypoCH. `art` holds the
- *  TypoCH label; SIA 416 / DIN 277 / sealed are `null` (a modeled habitat map can't
- *  supply them) so aggregation/summary skip them via the null check. */
-/** Build one BAFU habitat detail row. Shared by the clip and the gap-fill — the
- *  gap-fill passes `geometry: null` (the dropped feature whose geometry the Identify
- *  endpoint won't serve), so the row carries area but can't be drawn. */
-function makeHabitatRow(id, egrid, typoch, prob, fid, area, geometry) {
-  const cls = classifyBafu(typoch);
-  return {
-    id,
-    egrid,
-    fid,
-    art: typoch, // TypoCH habitat label as served, deepest level, e.g. "6.3.1 Buchenwald"
-    // Full TypoCH hierarchy split into its three levels ("<code> <name>"); typoch_l3 is
-    // "" where the layer only resolved the feature to level-2. Names come from the shared
-    // data/typoch.json reference (loaded by ensureTypoch()).
-    typoch_l1: typochL1Label(typoch),
-    typoch_l2: typochL2Label(typoch),
-    typoch_l3: typochL3Label(typoch),
-    bfsnr: "",
-    gwr_egid: "",
-    check_greenspace: cls.greenSpace,
-    vbs_kategorie: VBS_KATEGORIE_LABELS[cls.vbsKategorie] || "",
-    vbs_produktiv: VBS_PRODUKTIV_LABELS[cls.vbsProduktiv] || "",
-    vbs_typ: cls.vbsTyp ? (VBS_TYP_LABELS[cls.vbsTyp] || "") : "",
-    lc_source: "BAFU",
-    prob,
-    area_m2: round2(area),
-    _rawArea: area,
-    _geometry: geometry,
-    _sia416: null, // not derivable from a modeled habitat map
-    _din277: null,
-    _sealed: null,
-    _vbsKategorie: cls.vbsKategorie,
-    _vbsProduktiv: cls.vbsProduktiv,
-    _vbsTyp: cls.vbsTyp,
-  };
-}
-
-function clipHabitat(parcelGeom, bafuFeatures, id, egrid) {
-  const results = [];
-  const skipped = clipFeatures(parcelGeom, bafuFeatures, (lc, geometry, area) => {
-    results.push(makeHabitatRow(id, egrid, lc.properties?.typoch_de || "", lc.properties?.prob_de || "", lc.id || lc.properties?.polyid || "", area, geometry));
-  });
-  return { results, skipped };
-}
-
-/** Build one SYNTHETIC AV land-cover row from a BAFU habitat piece. Same shape as a
- *  clipLandCover() row (so aggregateLandCover treats it identically), but lc_source
- *  is "BAFU", `art` is the inferred BBArt, and `typoch` keeps the source TypoCH for
- *  traceability. Geometry is the real (clipped) habitat polygon. */
-function makeSynthLandcoverRow(id, egrid, art, typoch, area, geometry) {
-  const cls = classify(art);
-  return {
-    id,
-    egrid,
-    fid: "",
-    art,
-    typoch, // provenance: the BAFU TypoCH this BBArt was derived from
-    bfsnr: "",
-    gwr_egid: "",
-    check_greenspace: cls.greenSpace,
-    vbs_kategorie: VBS_KATEGORIE_LABELS[cls.vbsKategorie] || "",
-    vbs_produktiv: VBS_PRODUKTIV_LABELS[cls.vbsProduktiv] || "",
-    vbs_typ: cls.vbsTyp ? (VBS_TYP_LABELS[cls.vbsTyp] || "") : "",
-    lc_source: "BAFU",
-    prob: "",
-    area_m2: round2(area),
-    _rawArea: area,
-    _geometry: geometry,
-    _sia416: cls.sia416,
-    _din277: cls.din277,
-    _sealed: cls.sealed,
-    _vbsKategorie: cls.vbsKategorie,
-    _vbsProduktiv: cls.vbsProduktiv,
-    _vbsTyp: cls.vbsTyp,
-  };
-}
-
 /** Aggregate clipped land cover into summary columns */
-function aggregateLandCover(clippedFeatures) {
+export function aggregateLandCover(clippedFeatures) {
   // Aggregation columns — all lowercase, namespaced by classification scheme
   // (sia416_/din277_/vbs_) or imperviousness/green. Raw per-Art areas are added
   // below as av_<art>_m2 (source = AV land cover).
@@ -959,6 +706,6 @@ function aggregateLandCover(clippedFeatures) {
   return { ...agg, ...artAreas };
 }
 
-function round2(n) {
+export function round2(n) {
   return Math.round(n * 100) / 100;
 }

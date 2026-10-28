@@ -211,7 +211,7 @@ datasets locally rather than hitting the API per parcel.
 
 - `geopandas` — GeoPackage reading, spatial ops (clip, dissolve, area)
 - `pandas` — tabular data, CSV/Excel I/O
-- `shapely` (>= 2.0) — geometry ops (`make_valid()`, intersection)
+- `shapely` (>= 2.1) — geometry ops (`make_valid()`, intersection; the `api` source needs `make_valid(method="structure")` to clip self-intersecting polygons exactly like Turf)
 - `openpyxl` — Excel (.xlsx) input
 
 ### Module responsibilities
@@ -223,8 +223,14 @@ datasets locally rather than hitting the API per parcel.
 | `geometry.py` | `clean_geometries()` (deaggregate → dissolve → make_valid) and `filter_clip_results()` (drop non-polygons + slivers) |
 | `data_io.py` | All file I/O; validates `ID`/`EGRID` and EGRID format before SQL |
 | `pipeline.py` | Orchestrates Mode 1/2, clipping, aggregation, layer analyses |
-| `swisstopo.py` | Generic geo.admin.ch Identify client (fetch, cache, intersect) |
+| `swisstopo.py` | Generic geo.admin.ch Identify client (quadtree-tiled fetch, intersect) |
 | `bauzonen.py` / `habitat.py` | Thin `LayerConfig` wrappers around `swisstopo.py` |
+| `api.py` | `api` source: the live requests of the web app, mirrored from `web/js/geoapi.js` (find, WFS paged until empty, Identify quadtree, green inventory) |
+| `processor_web.py` | `api` source: per-parcel pipeline mirrored from `web/js/processor.js` (clip, classify, aggregate, flags) |
+| `geom_wgs84.py` / `fdlibm.py` | `api` source: bit-exact port of Turf 7's spherical area (incl. the JavaScript engine's `sin`) and the Turf-equivalent clip / union / difference in EPSG:4326 |
+| `classify_web.py` / `export_web.py` / `user_input.py` | `api` source: web classifier port, GeoJSON / Excel / CSV writers, the shared input reader |
+| `compare.py` | Cross-check a web export against an `api` export (`--rtol 0 --atol 0` = bit-identical) |
+| `tests/` | pytest suites incl. the web-parity tests (`js_dump.mjs` evaluates the browser modules with Node) |
 
 ### Performance & scale
 
@@ -279,14 +285,21 @@ for the contrast with the CLI.
    (driven by the map picker, search box, or an uploaded CSV row).
 2. **Fetch land cover** — `ms:LCSF` surfaces overlapping the parcel **bbox** from the
    geodienste.ch AV WFS (GetFeature, GeoJSON), **paged with `STARTINDEX`** (1000/page)
-   past the per-request cap so dense bboxes aren't truncated.
+   **until an empty page** and deduplicated: the server applies `COUNT` to its
+   spatial-index candidates before the exact bbox test, so a non-final page is
+   routinely short and pages can overlap — a short page is *not* the end of the
+   results (see [docs/reviews](reviews/2026-10-28-processing-code-review.md), F2).
 3. **Clip & area** — Turf.js intersects each surface with the exact parcel boundary
    and sums `area_m2`; classification is identical to the CLI ([Shared core](#shared-core)).
 4. **Fill AV gaps** — if the parcel has essentially no AV cover, synthesize land cover
    from the BAFU habitat polygons (see
    [Synthetic AV land cover](#synthetic-av-land-cover-fallback-where-av-is-missing)).
-5. **Overlays** — Bauzonen + BAFU habitat are fetched and analysed in parallel (below);
-   the BAFU fetch is paged (Identify `offset`, 200/page) and shared with step 4.
+5. **Overlays** — Bauzonen + BAFU habitat are fetched and analysed (below); the
+   BAFU fetch is shared with step 4. Identify returns at most 200 results per
+   request and its `offset` paging is lossy (client-dependent order), so the
+   parcel bbox is **tiled as a quadtree** — a tile that returns a full page is
+   split into four — until every request is a single complete page; results are
+   deduplicated by feature id and sorted by id (F1 in the review).
 
 Calls are fired per parcel with an `AbortController` timeout and retries; a failed
 WFS fetch flags the parcel as "land cover unavailable" rather than silently zero.

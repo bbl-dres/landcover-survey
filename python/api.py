@@ -1,17 +1,19 @@
-"""Live-service clients — the exact requests the web app fires (web/js/processor.js).
+"""Live-service clients — the exact requests the web app fires (web/js/geoapi.js).
 
 Three anonymous, read-only geo.admin.ch / geodienste.ch endpoints, all in
 **EPSG:4326** so the geometry matches the web byte-for-byte:
 
 - :func:`fetch_parcel_geometry` — geo.admin.ch ``find`` (parcel by EGRID, duplicates
   unioned);
-- :func:`fetch_landcover` — geodienste.ch WFS ``ms:LCSF`` (paged via ``STARTINDEX``);
-- :func:`fetch_identify` — geo.admin.ch ``identify`` (paged via ``offset``, keeps the
-  null-geometry "dropped" features the server omits above a size cap).
+- :func:`fetch_landcover` — geodienste.ch WFS ``ms:LCSF``, paged via ``STARTINDEX``
+  until an **empty** page (the only reliable end signal) and deduplicated;
+- :func:`fetch_identify` — geo.admin.ch ``identify``, bbox **quadtree** so that every
+  request is a single page (``offset`` paging is lossy on this endpoint); keeps the
+  null-geometry "dropped" features the server omits above a size cap.
 
 These are pure fetch functions returning shapely geometries; caching and the
-per-parcel pipeline live in :mod:`processor_web`. Requests, params, page sizes, and
-retry/backoff mirror the web constants so results cross-check.
+per-parcel pipeline live in :mod:`processor_web`. Requests, params, page sizes,
+tiling, dedupe and sort order mirror the web constants so results cross-check.
 """
 
 from __future__ import annotations
@@ -35,10 +37,11 @@ IDENTIFY = "https://api3.geo.admin.ch/rest/services/all/MapServer/identify"
 # web app pins this endpoint too (web/js/config.js API.WFS_AV).
 WFS_AV = "https://geodienste.ch/db/av_0/deu"
 
-# --- Tunables (mirror web/js/processor.js) ---
+# --- Tunables (mirror web/js/geoapi.js) ---
 WFS_PAGE = 1000
 WFS_MAX_FEATURES = 10000
 IDENTIFY_PAGE = 200              # geo.admin.ch documented hard max per request
+IDENTIFY_MAX_DEPTH = 8           # quadtree depth cap (never reached in practice)
 BAFU_LAYER_ID = "ch.bafu.lebensraumkarte-schweiz"
 BAUZONEN_LAYER_ID = "ch.are.bauzonen"
 BAFU_MAX_FEATURES = 5000
@@ -95,10 +98,21 @@ def _fetch_json(url: str) -> dict:
 
 
 def _norm_feature(f: dict) -> dict:
-    """GeoJSON feature → ``{geometry: shapely|None, properties: dict, id}``."""
+    """GeoJSON feature → ``{geometry: shapely|None, properties: dict, id}``.
+
+    A geometry that cannot be parsed becomes ``None``: the clip then counts the
+    feature as skipped (``check_geom``), exactly as the web does when Turf throws on
+    it — one malformed surface must not turn the whole WFS result into an error.
+    """
     g = f.get("geometry")
+    shp = None
+    if g:
+        try:
+            shp = geom.from_geojson(g)
+        except Exception as e:  # noqa: BLE001 — malformed GeoJSON geometry
+            logger.debug("Unparseable land-cover geometry %s: %s", f.get("id"), e)
     return {
-        "geometry": geom.from_geojson(g) if g else None,
+        "geometry": shp,
         "properties": f.get("properties") or {},
         "id": f.get("id"),
     }
@@ -114,7 +128,7 @@ def fetch_parcel_geometry(egrid: str) -> dict | None:
     A single EGRID can map to several features (mutations, overlapping SDR /
     Baurecht); all matching geometries are unioned into one polygon (mirrors the
     Python GeoPackage "dissolve by EGRID"). Returns
-    ``{geometry, properties: {egrid, number, bfsnr, area, mergedCount}}``.
+    ``{geometry, properties: {egrid, number, nbident, area, mergedCount}}``.
     """
     params = urllib.parse.urlencode({
         "layer": "ch.kantone.cadastralwebmap-farbe",
@@ -146,9 +160,10 @@ def fetch_parcel_geometry(egrid: str) -> dict | None:
         "properties": {
             "egrid": egrid,
             "number": props.get("number") or "",
-            # Mirrors the web verbatim: it reads `identnd` for the bfsnr field
-            # (the find service doesn't return the true BFSNr), so we do too.
-            "bfsnr": props.get("identnd") or "",
+            # The find service returns the cadastral numbering-area id (NBIdent, e.g.
+            # "BE0200000042"), not the BFS municipality number — the parcel's bfsnr
+            # is derived from its AV land cover in processor_web.
+            "nbident": props.get("identnd") or "",
             "area": "",  # find doesn't return Flaechenmass → empty, as in the web
             "mergedCount": merged_count,
         },
@@ -159,15 +174,27 @@ def fetch_parcel_geometry(egrid: str) -> dict | None:
 # Land cover — geodienste.ch WFS ms:LCSF (fetchLandCover)
 # ---------------------------------------------------------------------------
 
+def _landcover_key(f: dict) -> str:
+    """Dedupe key of a raw WFS feature (the layer serves no ids): geometry + attributes."""
+    return json.dumps([f.get("geometry"), f.get("properties")], sort_keys=True, separators=(",", ":"))
+
+
 def fetch_landcover(bbox: list) -> dict:
     """Fetch AV land-cover surfaces in *bbox* = ``[minLon, minLat, maxLon, maxLat]``.
 
-    Paged with ``STARTINDEX`` (1000/page) up to the 10'000 safety cap. Returns
+    Paged with ``STARTINDEX`` (1000/page) until an **empty** page, up to the 10'000
+    safety cap. An empty page is the only reliable end signal: the server applies
+    ``COUNT`` to its spatial-index candidates before the exact bbox test, so a
+    non-final page routinely holds fewer than ``COUNT`` features (observed: 923 of
+    1000 with five more pages behind it) and consecutive pages can overlap by a few
+    features. Paging until empty and deduplicating by (geometry, properties)
+    reproduces the server's own ``numberMatched`` exactly. Returns
     ``{features, error, truncated}`` so callers distinguish "no land cover" from
     "WFS failed".
     """
     min_lon, min_lat, max_lon, max_lat = bbox
     max_pages = max(1, math.ceil(WFS_MAX_FEATURES / WFS_PAGE))
+    seen: set[str] = set()
     raw: list[dict] = []
     truncated = False
     try:
@@ -186,10 +213,15 @@ def fetch_landcover(bbox: list) -> dict:
             })
             data = _fetch_json(f"{WFS_AV}?{params}")
             batch = data.get("features") or []
-            raw.extend(batch)
-            if len(batch) < WFS_PAGE:      # short page → bbox drained
+            if not batch:                  # drained
                 break
-            if page == max_pages - 1:      # still full at the cap → more remain
+            for f in batch:
+                key = _landcover_key(f)
+                if key in seen:
+                    continue
+                seen.add(key)
+                raw.append(f)
+            if page == max_pages - 1:      # still receiving features at the cap → more may remain
                 truncated = True
         return {"features": [_norm_feature(f) for f in raw], "error": False, "truncated": truncated}
     except Exception as e:  # noqa: BLE001
@@ -201,25 +233,42 @@ def fetch_landcover(bbox: list) -> dict:
 # Overlays — geo.admin.ch identify (fetchIdentify)
 # ---------------------------------------------------------------------------
 
+def _identify_key(r: dict) -> str:
+    """Dedupe/sort key of an identify result: its feature id as a string, else the
+    serialized geometry + attributes (an id-less result can't be deduped by id)."""
+    fid = r.get("featureId")
+    if fid is None:
+        fid = r.get("id")
+    if fid is not None:
+        return str(fid)
+    return json.dumps([r.get("geometry"), r.get("properties") or r.get("attributes") or None],
+                      sort_keys=True, separators=(",", ":"))
+
+
 def fetch_identify(layer_id: str, parcel_geom, max_features: int) -> dict:
     """Fetch all *layer_id* features intersecting the parcel bbox via identify.
 
-    Pages with ``offset`` past the 200-per-request cap until a short/empty page (or
-    ``max_features``). Dedupes by ``featureId`` (multi-table layers return
-    overlapping pages) and keeps null-geometry features aside in ``dropped`` — the
-    server omits geometry for oversized features (e.g. city-scale roads), which
-    callers account for. Returns ``{features, dropped, total, truncated}``. May raise.
+    The endpoint caps a request at 200 results, and paging past that with
+    ``offset`` is **not** reliable: the server returns results in a client-dependent
+    order, so consecutive pages overlap and omit features (observed: 475 of 556 from
+    Node, 544 from Python, for the same bbox). Instead the bbox is tiled as a
+    quadtree — a tile that returns a full page is split into four — so every request
+    is a single page that is complete by construction. Results are deduplicated by
+    feature id (a feature on a tile boundary is returned by both tiles) and sorted
+    by id so the output is independent of tile order and server order. Null-geometry
+    features (the server omits geometry above a size cap, e.g. city-scale roads) are
+    kept aside in ``dropped``. Returns ``{features, dropped, total, truncated}``. May raise.
     """
-    min_lon, min_lat, max_lon, max_lat = geom.bbox(parcel_geom)
-    envelope = f"{min_lon},{min_lat},{max_lon},{max_lat}"
-    max_pages = max(1, math.ceil((max_features or IDENTIFY_PAGE) / IDENTIFY_PAGE))
     seen: set[str] = set()
     features: list[dict] = []
     dropped: list[dict] = []
     total = 0
     truncated = False
+    stack: list[tuple[list, int]] = [(geom.bbox(parcel_geom), 0)]
 
-    for page in range(max_pages):
+    while stack:
+        (min_lon, min_lat, max_lon, max_lat), depth = stack.pop()
+        envelope = f"{min_lon},{min_lat},{max_lon},{max_lat}"
         params = urllib.parse.urlencode({
             "geometry": envelope,
             "geometryType": "esriGeometryEnvelope",
@@ -231,32 +280,44 @@ def fetch_identify(layer_id: str, parcel_geom, max_features: int) -> dict:
             "imageDisplay": "100,100,96",
             "returnGeometry": "true",
             "limit": str(IDENTIFY_PAGE),
-            "offset": str(page * IDENTIFY_PAGE),
+            "offset": "0",
             "lang": "de",
         })
         data = _fetch_json(f"{IDENTIFY}?{params}")
         results = data.get("results") or []
-        fresh = 0
+
+        if len(results) >= IDENTIFY_PAGE:
+            if depth < IDENTIFY_MAX_DEPTH:
+                # Full page → the tile may hold more than one page: subdivide instead.
+                mid_lon, mid_lat = (min_lon + max_lon) / 2, (min_lat + max_lat) / 2
+                stack.append(([min_lon, min_lat, mid_lon, mid_lat], depth + 1))
+                stack.append(([mid_lon, min_lat, max_lon, mid_lat], depth + 1))
+                stack.append(([min_lon, mid_lat, mid_lon, max_lat], depth + 1))
+                stack.append(([mid_lon, mid_lat, max_lon, max_lat], depth + 1))
+                continue
+            truncated = True  # depth cap reached while still full — keep this page's results
+
         for r in results:
+            key = _identify_key(r)
+            if key in seen:
+                continue
+            seen.add(key)
+            total += 1
             fid = r.get("featureId")
             if fid is None:
                 fid = r.get("id")
-            if str(fid) in seen:
-                continue
-            seen.add(str(fid))
-            fresh += 1
             props = r.get("properties") or r.get("attributes") or {}
             g = r.get("geometry")
             if g:
-                features.append({"geometry": geom.from_geojson(g), "properties": props, "id": fid})
+                features.append({"key": key, "geometry": geom.from_geojson(g), "properties": props, "id": fid})
             else:
-                dropped.append({"properties": props, "id": fid})
-        total += fresh
-        if len(results) < IDENTIFY_PAGE or fresh == 0:  # bbox drained
-            break
-        if page == max_pages - 1:                       # still full at cap → more remain
+                dropped.append({"key": key, "properties": props, "id": fid})
+        if total >= max_features:
             truncated = True
+            break
 
+    features.sort(key=lambda f: f["key"])
+    dropped.sort(key=lambda f: f["key"])
     return {"features": features, "dropped": dropped, "total": total, "truncated": truncated}
 
 

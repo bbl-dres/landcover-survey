@@ -3,7 +3,7 @@
  * reader for the raw SAP "Dynamische Listenausgabe" .txt export (see parseSAP), so
  * an SAP dump can be uploaded as-is without a manual clean-up first.
  */
-import { loadScript } from "./config.js";
+import { loadScript, normalizeEgrid } from "./config.js";
 import { t } from "./i18n.js";
 import { initParcelPicker, resetParcelPicker } from "./parcelpicker.js";
 
@@ -153,12 +153,14 @@ async function handleFile(file) {
       return;
     }
 
-    // Normalize headers to lowercase
+    // Normalize headers to lowercase, trim every cell (Excel cells arrive untrimmed),
+    // and canonicalise the EGRID — the same contract as python/user_input.py.
     parsedData.rows = parsedData.rows.map((row) => {
       const normalized = {};
       parsedData.headers.forEach((h) => {
-        normalized[h.toLowerCase().trim()] = row[h] ?? "";
+        normalized[h.toLowerCase().trim()] = String(row[h] ?? "").trim();
       });
+      normalized.egrid = normalizeEgrid(normalized.egrid);
       return normalized;
     });
     parsedData.headers = parsedData.headers.map((h) => h.toLowerCase().trim());

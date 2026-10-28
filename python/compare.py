@@ -7,14 +7,17 @@ Usage
 Both files are the combined ``FeatureCollection`` (features tagged ``layer``).
 The check has two levels:
 
-1. **Parcels** — matched by ``egrid``; every property compared, area/``_m2`` fields
-   within tolerance, everything else exact. This is the primary acceptance test:
-   all per-parcel KPIs and flags must agree.
+1. **Parcels** — matched by ``id`` + ``egrid``; every property compared, area/``_m2``
+   fields within tolerance, everything else exact. This is the primary acceptance
+   test: all per-parcel KPIs and flags must agree.
 2. **Detail layers** — landcover / bauzonen / habitat aggregated per parcel
-   (feature count + summed ``area_m2`` per ``art``), so a different piece-splitting
-   between GEOS and Turf doesn't cause false diffs while a real area/label
-   difference still does.
+   (feature count + summed ``area_m2`` per ``art``, and per feature ``fid`` where the
+   layer serves ids), so a different piece-splitting between GEOS and Turf doesn't
+   cause false diffs while a real area/label difference still does — and a missing
+   or differently clipped feature is named.
 
+The default tolerance absorbs floating-point noise; ``--rtol 0 --atol 0`` demands
+bit-identical numbers (the acceptance level python/tests/test_live_parity.py uses).
 Exit code 0 = match within tolerance, 1 = differences (printed).
 """
 
@@ -60,21 +63,32 @@ def _norm_str(v):
     return str(v)
 
 
+def _pkey(p):
+    """Parcel key: ``id`` + ``egrid`` (several input rows can share an EGRID — or an
+    invalid placeholder like ``0000000000``)."""
+    return f"{p.get('id', '')}|{p.get('egrid', '')}"
+
+
 def _parcels(feats):
-    return {f["properties"].get("egrid"): f["properties"]
+    return {_pkey(f["properties"]): f["properties"]
             for f in feats if f["properties"].get("layer") == "parcel"}
 
 
 def _detail(feats, layer):
-    """Per-egrid aggregate for a detail layer: {egrid: {"count": n, "by_art": {art: area}}}."""
-    out = defaultdict(lambda: {"count": 0, "by_art": defaultdict(float)})
+    """Per-parcel aggregate for a detail layer:
+    ``{key: {"count": n, "by_art": {art: area}, "by_fid": {fid: area}}}``."""
+    out = defaultdict(lambda: {"count": 0, "by_art": defaultdict(float), "by_fid": defaultdict(float)})
     for f in feats:
         p = f["properties"]
         if p.get("layer") != layer:
             continue
-        e = p.get("egrid")
+        e = _pkey(p)
+        area = _num(p.get("area_m2")) or 0.0
         out[e]["count"] += 1
-        out[e]["by_art"][p.get("art", "")] += _num(p.get("area_m2")) or 0.0
+        out[e]["by_art"][p.get("art", "")] += area
+        fid = _norm_str(p.get("fid"))
+        if fid:
+            out[e]["by_fid"][fid] += area
     return out
 
 
@@ -116,6 +130,15 @@ def compare_detail(web_feats, py_feats, layer, rtol, atol):
             aw, ap = w["by_art"].get(art, 0.0), p["by_art"].get(art, 0.0)
             if not _close(aw, ap, rtol, atol):
                 diffs.append(f"{layer} {e} art={art!r}: area web={aw:.2f} python={ap:.2f} (Δ={ap - aw:+.2f})")
+        # Per feature (where the layer serves ids): names the missing / differently clipped pieces.
+        for fid in sorted(set(w["by_fid"]) | set(p["by_fid"])):
+            if fid not in w["by_fid"]:
+                diffs.append(f"{layer} {e} fid={fid}: present in PYTHON only ({p['by_fid'][fid]:.2f} m²)")
+            elif fid not in p["by_fid"]:
+                diffs.append(f"{layer} {e} fid={fid}: present in WEB only ({w['by_fid'][fid]:.2f} m²)")
+            elif not _close(w["by_fid"][fid], p["by_fid"][fid], rtol, atol):
+                diffs.append(f"{layer} {e} fid={fid}: area web={w['by_fid'][fid]:.2f} python={p['by_fid'][fid]:.2f} "
+                             f"(Δ={p['by_fid'][fid] - w['by_fid'][fid]:+.2f})")
     return diffs
 
 

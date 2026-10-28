@@ -14,6 +14,7 @@ official Amtliche Vermessung (AV) data.
 | **Understand the dashboard's data-quality checks** | **[CHECKING-RULES.md](CHECKING-RULES.md)** — Datenqualität rules, scope + tolerances |
 | **Understand the former survey-prioritisation method / sampling** | **[PRIORITIZATION.md](PRIORITIZATION.md)** — the Priorisierung ranking that the dashboard offered until October 2026 (replaced by a parcel selection with PDF report), kept as a method reference |
 | **Find other land cover / land use / habitat data sources** | **[RESEARCH-LANDCOVER.md](RESEARCH-LANDCOVER.md)** — screening reference (global → EU → DACH → CH); **[RESEARCH-NEAR-NATURAL.md](RESEARCH-NEAR-NATURAL.md)** for near-natural / VBS |
+| **Know why web and Python results are identical, and what was fixed to get there** | **[reviews/2026-10-28-processing-code-review.md](reviews/2026-10-28-processing-code-review.md)** — processing code review: findings, fixes, parity verification, test layer |
 
 > ★ Most people are here for the **AV layer mappings** — start with
 > [CLASSIFICATION.md](CLASSIFICATION.md).

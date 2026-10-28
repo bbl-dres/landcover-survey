@@ -1,7 +1,8 @@
 """Per-parcel pipeline — a faithful port of ``processRows`` in web/js/processor.js.
 
 For each EGRID it reproduces the web app's exact steps, in EPSG:4326 with the Turf
-area port (:mod:`geom_wgs84`):
+area port (:mod:`geom_wgs84`); the live requests live in :mod:`api` (the port of
+web/js/geoapi.js):
 
 1. resolve parcel geometry (:mod:`api`, duplicate EGRIDs unioned);
 2. clip AV land cover, classify + aggregate (:mod:`classify_web`);
@@ -26,6 +27,7 @@ import api
 import classify_web as C
 import geom_wgs84 as geom
 from config import (
+    SIA416,
     SLIVER_THRESHOLD,
     VBS_KATEGORIE_LABELS,
     VBS_PRODUKTIV_LABELS,
@@ -100,8 +102,47 @@ def _vbs_labels(cls: dict) -> dict:
     }
 
 
+# BBArt values outside the known domain are classified with the fallbacks (UUF / UF /
+# not green / kat_d / unproduktiv) — warned once per value per run, as in the web, so a
+# data-model change (e.g. the DMAV migration) is noticed rather than silently absorbed.
+_warned_arts: set[str] = set()
+_warn_lock = threading.Lock()
+
+
+def _warn_unknown_art(art) -> None:
+    if art in SIA416:
+        return
+    with _warn_lock:
+        if art in _warned_arts:
+            return
+        _warned_arts.add(art)
+    logger.warning('Unknown land-cover Art "%s" — classified with the fallback categories', art)
+
+
+def _dominant_bfsnr(rows):
+    """BFS municipality number of a parcel from its AV land-cover pieces: the ``bfsnr``
+    value whose pieces cover the largest area (ties → the smaller value), keeping the
+    value as served (int or str). ``""`` when no piece carries one. Mirror of
+    the web's dominantBfsnr()."""
+    area: dict[str, float] = {}
+    value: dict[str, object] = {}
+    for r in rows:
+        key = str(r.get("bfsnr") if r.get("bfsnr") is not None else "").strip()
+        if not key:
+            continue
+        if key not in area:
+            value[key] = r["bfsnr"]
+        area[key] = area.get(key, 0.0) + r["_rawArea"]
+    best, best_area = "", -1.0
+    for key, a in area.items():
+        if a > best_area or (a == best_area and key < best):
+            best, best_area = key, a
+    return value[best] if best else ""
+
+
 def _lc_row(id_, egrid, art, bfsnr, gwr_egid, fid, area, geometry, cls, *, lc_source="AV", prob="", typoch=None):
-    """Build one land-cover detail row (AV clip or synthetic), matching clipLandCover."""
+    """Build one land-cover detail row (AV clip or synthetic), matching makeLandcoverRow."""
+    _warn_unknown_art(art)
     vbs = _vbs_labels(cls)
     row = {
         "id": id_, "egrid": egrid, "fid": fid, "art": art,
@@ -151,7 +192,7 @@ def _make_habitat_row(id_, egrid, typoch, prob, fid, area, geometry):
 
 def _make_error_parcel(id_, egrid, row, message):
     parcel = {
-        "id": id_, "egrid": egrid, "nummer": "", "bfsnr": "",
+        "id": id_, "egrid": egrid, "nummer": "", "bfsnr": "", "nbident": "",
         "status": "not_found", "check_egrid": message,
         "check_wfs": "", "check_geom": "", "errors": [_egrid_error_message(message)],
         "lc_source": "", "lc_synthetic": "", "flaeche": "", "parcel_area_m2": "",
@@ -396,6 +437,7 @@ def _process_one(row, options):
 
         clip = _clip_landcover(parcel_geom, lc_result["features"], id_, egrid)
         clipped = clip["results"]
+        av_rows = clipped  # the authoritative AV pieces, kept for the bfsnr even if synthesized below
         skipped = clip["skipped"]
         agg = _aggregate_landcover(clipped)
         lc_source, lc_synthetic = "AV", False
@@ -440,7 +482,10 @@ def _process_one(row, options):
             "id": id_,
             "egrid": egrid,
             "nummer": parcel_result["properties"].get("number") or "",
-            "bfsnr": parcel_result["properties"].get("bfsnr") or "",
+            # BFS municipality number: carried by the AV land-cover surfaces (the find
+            # service has none) — the number covering the largest share of the parcel.
+            "bfsnr": _dominant_bfsnr(av_rows),
+            "nbident": parcel_result["properties"].get("nbident") or "",
             "status": "found",
             "check_egrid": STATUS["MERGED"] if merged else STATUS["FOUND"],
             "check_wfs": "wfs_error" if lc_result["error"] else ("truncated" if lc_result["truncated"] else "ok"),

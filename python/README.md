@@ -15,8 +15,9 @@ Command-line tool that computes per-parcel land cover areas. Two data sources:
 ## Requirements
 
 - Python >= 3.10
-- `api` source: `shapely >= 2.0` (+ `pandas`, `openpyxl` for `--input` / Excel export). Internet access.
-- `gpkg` source: `geopandas`, `pandas`, `shapely >= 2.0`, `openpyxl`, and an AV GeoPackage (`av_2056.gpkg`) from [geodienste.ch](https://www.geodienste.ch/services/av).
+- `api` source: `shapely >= 2.1` (+ `pandas`, `openpyxl` for `--input` / Excel export). Internet access.
+- `gpkg` source: `geopandas`, `pandas`, `shapely >= 2.1`, `openpyxl`, and an AV GeoPackage (`av_2056.gpkg`) from [geodienste.ch](https://www.geodienste.ch/services/av).
+- tests: `pytest` (and Node.js for the web-parity tests).
 
 ## Install
 
@@ -77,10 +78,32 @@ the same parcels:
 python compare.py web.geojson out/<python>.geojson --rtol 1e-4 --atol 0.02
 ```
 
-It matches parcels by EGRID (every KPI / flag), then the detail layers per parcel
-(feature count + area per `art`), reporting any difference above tolerance. Exit 0 =
-match. Because the `api` source ports `turf.area` exactly and clips in the same CRS,
-parcel areas agree to floating-point precision for typical parcels.
+It matches parcels by `id` + `egrid` (every KPI / flag), then the detail layers per
+parcel (feature count, area per `art`, area per feature `fid`), reporting any
+difference above tolerance. Exit 0 = match. The `api` source fires the same
+requests (same paging and tiling), ports `turf.area` statement for statement —
+including the JavaScript engine's own `sin` (`fdlibm.py`) — and clips in the same
+CRS with the same geometry repair, so parcel columns and feature areas are
+identical to the last exported digit; `--rtol 0 --atol 0` is the acceptance level
+used by `tests/test_live_parity.py`. The remaining full-precision difference is
+the clipper itself (GEOS vs Turf's polyclip-ts: ~1e-8 relative on clipped pieces);
+see [docs/reviews/2026-10-28-processing-code-review.md](../docs/reviews/2026-10-28-processing-code-review.md).
+
+## Tests
+
+```bash
+cd python
+python -m pytest -q                      # unit + web-parity tests (Node.js needed for the latter)
+LANDCOVER_LIVE=1 python -m pytest -q tests/test_live_parity.py   # live services: reproduce a web export bit for bit
+cd .. && npm test                        # web/tests (node:test, no dependencies)
+```
+
+`tests/test_parity_js.py` evaluates the browser modules (`web/js/config.js`,
+`processor.js`) with Node on `tests/fixtures/parity_cases.json` and compares every
+table, classifier, label, number format, row shape and aggregation with the Python
+modules. `tests/fixtures/live/` holds a web export of eight parcels (overlays on,
+green inventory off) for the end-to-end check; re-export it from the web app when
+the cadastral data behind it changes.
 
 ## Outputs
 
@@ -92,7 +115,8 @@ parcel areas agree to floating-point precision for typical parcels.
 3. **CSV** (`{prefix}parcels_{ts}.csv`, `{prefix}landcover_{ts}.csv`) — semicolon-delimited,
    UTF-8 BOM, matching the web export. Skip with `--no-csv`.
 
-**`gpkg` source** (written next to the input file, timestamped):
+**`gpkg` source** (written next to the input file, timestamped; semicolon-delimited,
+UTF-8 BOM — the same CSV dialect as the web / `api` export):
 
 1. **Parcels** (`{input}_parcels_{ts}.csv`) — one row per parcel. Disable with `--no-parcels`.
 2. **Land Cover** (`{input}_landcover_{ts}.csv`) — one row per clipped piece. Disable with `--no-landcover`.

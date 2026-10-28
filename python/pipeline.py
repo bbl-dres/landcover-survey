@@ -1110,12 +1110,13 @@ def _run_layer_analysis(
 
 def _aggregate_layer_results(
     raw: DataFrame,
-    group_key: str,
+    group_key: str | list[str],
     name_col: str,
     label: str,
     name_fn=None,
 ) -> DataFrame:
-    """Aggregate intersection results into semicolon-separated arrays per parcel.
+    """Aggregate intersection results into semicolon-separated arrays per parcel
+    (*group_key* ``"EGRID"``) or per green-space land cover (``["EGRID", "fid"]``).
 
     Names are first mapped through *name_fn* (e.g. the habitat TypoCH→level-1
     grouping; identity for Bauzonen), then **deduplicated and area-summed per
@@ -1124,18 +1125,19 @@ def _aggregate_layer_results(
     - ``{label}`` — semicolon-separated group names
     - ``{label}_m2`` — semicolon-separated summed areas
     """
+    keys = [group_key] if isinstance(group_key, str) else list(group_key)
     if raw.empty:
-        return DataFrame(columns=[group_key, label, f"{label}_m2"])
+        return DataFrame(columns=keys + [label, f"{label}_m2"])
 
-    df = raw[[group_key, name_col, "intersection_area_m2"]].copy()
+    df = raw[keys + [name_col, "intersection_area_m2"]].copy()
     if name_fn is not None:
         df[name_col] = df[name_col].map(name_fn)
     # Sum area per (parcel, group name), largest first.
     by = (
-        df.groupby([group_key, name_col])["intersection_area_m2"]
+        df.groupby(keys + [name_col])["intersection_area_m2"]
         .sum()
         .reset_index()
-        .sort_values([group_key, "intersection_area_m2"], ascending=[True, False])
+        .sort_values(keys + ["intersection_area_m2"], ascending=[True] * len(keys) + [False])
     )
 
     def _join_names(s):
@@ -1144,7 +1146,7 @@ def _aggregate_layer_results(
     def _join_areas(s):
         return "; ".join(to_fixed_1(v) for v in s)
 
-    grouped = by.groupby(group_key, sort=False).agg(
+    grouped = by.groupby(keys, sort=False).agg(
         **{
             label: (name_col, _join_names),
             f"{label}_m2": ("intersection_area_m2", _join_areas),
