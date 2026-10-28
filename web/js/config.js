@@ -400,6 +400,13 @@ export function isFound(code) {
   return code === STATUS.FOUND || code === STATUS.MERGED;
 }
 
+/** Canonical EGRID spelling: trimmed and upper-cased (" ch4277… " → "CH4277…").
+ *  Mirrored by python/user_input.py normalize_egrid() — applied at every input
+ *  boundary so the same list resolves identically in the browser and the CLI. */
+export function normalizeEgrid(s) {
+  return String(s ?? "").trim().toUpperCase();
+}
+
 /** Translate a status code for display */
 export function statusLabel(code) {
   const map = {

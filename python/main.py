@@ -153,7 +153,9 @@ def _build_rows(args, logger) -> list[dict]:
             rows = rows[:args.limit]
         return rows
 
-    egrids = [e.strip() for e in args.egrid.split(",") if e.strip()]
+    from user_input import normalize_egrid
+
+    egrids = [normalize_egrid(e) for e in args.egrid.split(",") if e.strip()]
     if args.limit is not None:
         egrids = egrids[:args.limit]
     return [{"id": e, "egrid": e} for e in egrids]

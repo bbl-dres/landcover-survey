@@ -9,7 +9,8 @@ browser works identically in both CLI paths:
 - UTF-8 with optional BOM;
 - **required ``id`` + ``egrid`` columns, matched case-insensitively**; all
   headers lowercased + trimmed (a duplicate lowercased header keeps the last
-  column, matching the web's row normalisation); cell values trimmed;
+  column, matching the web's row normalisation); cell values trimmed; the EGRID
+  normalised (trimmed + upper-cased, :func:`normalize_egrid`);
 - Excel cells stringified like the web (SheetJS ``String()``): an
   integer-valued numeric cell becomes ``"123"``, never ``"123.0"``.
 
@@ -93,6 +94,19 @@ def _cell(v) -> str:
     return "" if pd.isna(v) else str(v).strip()
 
 
+def normalize_egrid(s) -> str:
+    """Canonical EGRID spelling: trimmed and upper-cased (``" ch4277… "`` → ``"CH4277…"``).
+    Mirrors the web's normalizeEgrid() — applied at every input boundary so the same
+    list resolves identically in the browser and the CLI."""
+    return "" if s is None or (isinstance(s, float) and pd.isna(s)) else str(s).strip().upper()
+
+
+def _normalize_row(row: dict) -> dict:
+    if "egrid" in row:
+        row["egrid"] = normalize_egrid(row["egrid"])
+    return row
+
+
 def read_rows(path: str | Path) -> list[dict]:
     """Read a parcel list as web-shaped rows: lowercased keys, trimmed string
     values — ``[{"id": …, "egrid": …, <extra>: …}]``."""
@@ -101,7 +115,7 @@ def read_rows(path: str | Path) -> list[dict]:
     for _, r in df.iterrows():
         # lowercased header → trimmed value; a duplicate lowercased header lets
         # the last column win, matching the web's row-object normalisation.
-        rows.append({low: _cell(r[raw]) for raw, low in zip(df.columns, lower)})
+        rows.append(_normalize_row({low: _cell(r[raw]) for raw, low in zip(df.columns, lower)}))
     return rows
 
 
@@ -110,7 +124,7 @@ def read_dataframe(path: str | Path) -> pd.DataFrame:
     ``ID`` / ``EGRID`` columns, every other column under its lowercased id."""
     df, lower = _read_raw(path)
     headers = list(dict.fromkeys(lower))  # dedupe, first-seen order
-    rows = [{low: _cell(r[raw]) for raw, low in zip(df.columns, lower)}
+    rows = [_normalize_row({low: _cell(r[raw]) for raw, low in zip(df.columns, lower)})
             for _, r in df.iterrows()]
     out = pd.DataFrame(rows, columns=headers)
     return out.rename(columns={"id": "ID", "egrid": "EGRID"})

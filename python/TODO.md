@@ -6,7 +6,10 @@
 > remainder, habitat gap-fill, all `check_*` flags) and exports GeoJSON + Excel.
 > `compare.py` cross-checks it against a web export. **The tasks below remain only
 > for the offline `--source gpkg` path**, which still reads a local GeoPackage and
-> has not been brought to parity.
+> has not been brought to parity. (2026-10-28: the gpkg path's Identify fetching
+> now uses the same bbox quadtree as the web / api — `offset` paging lost features —
+> and its overlay run no longer crashes on green-space land covers; see
+> `docs/reviews/2026-10-28-processing-code-review.md`.)
 
 Bring the Python **GeoPackage** pipeline to parity with the web app's overlay
 data-quality handling. The web app (`web/js/processor.js`) is the reference

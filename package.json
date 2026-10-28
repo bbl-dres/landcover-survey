@@ -1,0 +1,9 @@
+{
+  "name": "landcover-survey",
+  "private": true,
+  "type": "module",
+  "description": "Unit tests for the web app's processing modules (node:test, no dependencies). The Python tests live in python/tests.",
+  "scripts": {
+    "test": "node --test \"web/tests/*.test.mjs\""
+  }
+}

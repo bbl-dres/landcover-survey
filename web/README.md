@@ -57,8 +57,8 @@ Or deploy the repo to any static hosting (GitHub Pages, Cloudflare Pages, etc.);
 | **Data source** | Live API queries per parcel | Local GeoPackage (all cantons at once) |
 | **Throughput** | ~8 parcels in parallel, rate-limited | Bulk vectorised processing |
 | **Invalid geometries** | Skipped (no repair; flagged as `check_geom`) | Repaired with `make_valid()` |
-| **Land cover per parcel** | Paged (WFS `STARTINDEX`, 1000/page) up to a 10'000-feature safety cap; only then `check_wfs = truncated` | Unbounded |
-| **Habitat per parcel** | Paged (Identify `offset`, 200/page) up to a 5'000-feature safety cap; only then `check_habitat = truncated` | Unbounded |
+| **Land cover per parcel** | Paged (WFS `STARTINDEX`, 1000/page) until an empty page, deduplicated, up to a 10'000-feature safety cap; only then `check_wfs = truncated` | Unbounded |
+| **Habitat per parcel** | Bbox tiled as a quadtree so every Identify request is a single complete page (its `offset` paging is lossy), up to a 5'000-feature safety cap; only then `check_habitat = truncated` | Unbounded |
 | **Bauzonen analysis** | Layer overlay only | `--bauzonen` flag |
 | **Habitat analysis** | Layer overlay only | `--habitat` flag with area intersection |
 | **Offline** | Requires internet | Fully offline with local GeoPackage |
@@ -67,7 +67,8 @@ The Parcels output carries QA columns so you can spot where web results may diff
 from the authoritative Python run:
 
 - `check_egrid` — `found`, `merged` (one EGRID matched several features, geometries unioned), `not_found`, `invalid`, or an error message
-- `check_wfs` — `ok`, `truncated` (still more features past the 10'000-feature paging safety cap — totals may be incomplete), or `wfs_error`
+- `check_wfs` — `ok`, `truncated` (still receiving features at the 10'000-feature paging safety cap — totals may be incomplete), or `wfs_error`
+- `bfsnr` — the BFS municipality number carried by the parcel's AV surfaces (empty where none carry one); `nbident` — the cadastral numbering-area id the `find` service returns
 - `check_geom` — `ok` or `<n>_skipped` (land-cover features whose clip failed on invalid geometry and were dropped)
 - `lc_source` — `AV` (authoritative cadastral land cover) or `BAFU` (synthetic, derived from the habitat map where AV is missing)
 - `lc_synthetic` — `yes` when the land cover was synthesized from BAFU Lebensräume (see [CLASSIFICATION.md §Synthetic AV](../docs/CLASSIFICATION.md)); blank otherwise
@@ -94,8 +95,11 @@ css/
   styles.css    Component styles + responsive breakpoints
 js/
   main.js       State machine (upload → processing → results)
-  upload.js     CSV/XLSX parsing with auto-delimiter detection
-  processor.js  EGRID lookup + WFS query + Turf.js clipping (8x parallel)
+  upload.js     CSV/XLSX parsing with auto-delimiter detection, EGRID normalisation
+  geoapi.js     Live requests: EGRID lookup, WFS land cover (paged until empty), Identify
+                overlays (bbox quadtree), green inventory — mirrored by python/api.py
+  processor.js  Clip (Turf.js) + classify + aggregate, 8 parcels in parallel — mirrored by
+                python/processor_web.py
   map.js        MapLibre map, controls, popups, layer management
   table.js      Table widget (tabs, sorting, pagination, column toggle)
   search.js     Header search (parcels + locations + layers)
@@ -103,6 +107,7 @@ js/
   config.js     BBArt mappings (SIA 416, DIN 277, green space, sealed, VBS)
   export.js     CSV/XLSX/GeoJSON export
   i18n.js       Translations (DE, FR, IT, EN)
+tests/          node:test unit tests for geoapi.js + processor.js (`npm test` from the repo root)
 ```
 
 ## Tech stack
@@ -110,7 +115,7 @@ js/
 | Library | Version | Purpose |
 |---------|---------|---------|
 | [MapLibre GL JS](https://maplibre.org) | 4.7.1 | Interactive vector map rendering |
-| [Turf.js](https://turfjs.org) | 7.x | Spatial operations (intersect, area, bbox, centroid) |
+| [Turf.js](https://turfjs.org) | 7.4.0 (pinned) | Spatial operations (intersect, area, bbox, centroid). Pinned because `python/geom_wgs84.py` ports this version's area formula bit for bit — bump both together |
 | [SheetJS (xlsx)](https://sheetjs.com) | 0.18.5 | Excel import/export (loaded on demand) |
 | [CARTO Basemaps](https://carto.com/basemaps) | — | Positron, Voyager, Dark Matter tiles |
 | [swisstopo APIs](https://api3.geo.admin.ch) | — | Parcel lookup, search, WMTS/WMS tiles |

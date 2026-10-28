@@ -199,8 +199,10 @@ def get_bfsnr_list(gpkg_path: str | Path) -> list[int]:
 # ---------------------------------------------------------------------------
 
 def write_csv(df: DataFrame, path: str | Path) -> None:
-    """Write *df* to a CSV file."""
+    """Write *df* to a CSV file — semicolon-delimited, UTF-8 with BOM, the same
+    dialect the web app and the ``api`` source export (opens correctly in a Swiss /
+    German-locale Excel without an import wizard)."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    df.to_csv(path, index=False)
+    df.to_csv(path, index=False, sep=";", encoding="utf-8-sig")
     logger.info("Wrote %d rows to %s", len(df), path.name)

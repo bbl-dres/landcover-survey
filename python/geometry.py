@@ -57,7 +57,7 @@ def clean_geometries(gdf: GeoDataFrame, group_col: str) -> GeoDataFrame:
     return result
 
 
-def _extract_polygons(geom: BaseGeometry) -> BaseGeometry | None:
+def extract_polygons(geom: BaseGeometry) -> BaseGeometry | None:
     """Extract only Polygon/MultiPolygon parts from a geometry.
 
     Handles GeometryCollections that result from clip operations
@@ -83,6 +83,9 @@ def _extract_polygons(geom: BaseGeometry) -> BaseGeometry | None:
         else:
             flat.append(p)
     return MultiPolygon(flat)
+
+
+_extract_polygons = extract_polygons  # backwards-compatible alias
 
 
 def filter_clip_results(

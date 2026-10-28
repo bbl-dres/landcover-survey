@@ -10,15 +10,25 @@ requires-python = ">=3.10"
 dependencies = [
     "geopandas>=0.14",
     "pandas>=2.0",
-    "shapely>=2.0",
+    "shapely>=2.1",   # make_valid(method="structure") — needed for Turf-identical clipping
     "openpyxl",
 ]
+
+[project.optional-dependencies]
+test = ["pytest>=7"]
 
 [tool.setuptools]
 packages = []
 py-modules = [
     "main", "config", "data_io", "geometry", "pipeline",
     "swisstopo", "bauzonen", "habitat",
+    "api", "processor_web", "geom_wgs84", "fdlibm", "classify_web", "export_web", "user_input", "compare",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "live: hits the live geo.admin.ch / geodienste.ch services (set LANDCOVER_LIVE=1 to run)",
 ]
 
 [tool.setuptools.package-dir]

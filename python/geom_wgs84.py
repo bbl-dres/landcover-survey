@@ -21,6 +21,8 @@ from __future__ import annotations
 import math
 
 import shapely
+
+import fdlibm
 from shapely.geometry import MultiPolygon, Polygon, shape
 from shapely.geometry.base import BaseGeometry
 
@@ -28,6 +30,11 @@ from shapely.geometry.base import BaseGeometry
 # @turf/helpers `earthRadius = 6371008.8` (mean radius) — NOT the WGS84 equatorial
 # 6378137 that older Turf used. Getting this wrong biases every area by ~0.22%.
 _RADIUS = 6371008.8
+# Turf 7 precomputes both constants and multiplies by them — the *order* of the
+# floating-point operations is part of the port (a mathematically equal
+# `x * pi / 180` rounds differently at the 1e-12 level, enough to flip a 2-dp area).
+_FACTOR = _RADIUS * _RADIUS / 2
+_PI_OVER_180 = math.pi / 180
 
 
 def from_geojson(geom_dict: dict) -> BaseGeometry:
@@ -39,30 +46,36 @@ def from_geojson(geom_dict: dict) -> BaseGeometry:
 # turf.area — spherical polygon area (port of @turf/area)
 # ---------------------------------------------------------------------------
 
-def _rad(deg: float) -> float:
-    return deg * math.pi / 180.0
-
-
 def _ring_area(ring: list) -> float:
-    """Signed spherical area of one ring — direct port of turf's ``ringArea``.
+    """Signed spherical area of one ring — statement-for-statement port of
+    ``ringArea`` in @turf/area 7.x (7.2.0 … 7.4.0 are identical):
+
+    - ``coordsLength = coords.length - 1`` (the closing vertex is skipped),
+    - ``middle`` / ``upper`` wrap modulo ``coordsLength``,
+    - degrees → radians by multiplying with the precomputed ``PI_OVER_180``,
+    - ``sin`` is the JavaScript engine's own (:mod:`fdlibm`), not the platform libm —
+      the two differ by an ulp on ~3 % of inputs, enough to move a summed area by
+      ~1e-6 m² and flip the last exported decimal now and then,
+    - the sum is scaled by the precomputed ``FACTOR = R² / 2``.
 
     ``ring`` is a list of ``[lon, lat]`` positions (a closed GeoJSON ring, i.e.
     first == last). Winding order determines the sign; callers take ``abs()``.
     """
+    n = len(ring) - 1
+    if n <= 2:
+        return 0.0
     total = 0.0
-    n = len(ring)
-    if n > 2:
-        for i in range(n):
-            if i == n - 2:
-                lower, middle, upper = n - 2, n - 1, 0
-            elif i == n - 1:
-                lower, middle, upper = n - 1, 0, 1
-            else:
-                lower, middle, upper = i, i + 1, i + 2
-            p1, p2, p3 = ring[lower], ring[middle], ring[upper]
-            total += (_rad(p3[0]) - _rad(p1[0])) * math.sin(_rad(p2[1]))
-        total = total * _RADIUS * _RADIUS / 2.0
-    return total
+    i = 0
+    while i < n:
+        lower = ring[i]
+        middle = ring[0 if i + 1 == n else i + 1]
+        upper = ring[(i + 2) % n if i + 2 >= n else i + 2]
+        lower_x = lower[0] * _PI_OVER_180
+        middle_y = middle[1] * _PI_OVER_180
+        upper_x = upper[0] * _PI_OVER_180
+        total += (upper_x - lower_x) * fdlibm.sin(middle_y)  # V8's Math.sin, not the platform libm
+        i += 1
+    return total * _FACTOR
 
 
 def _polygon_area_coords(rings: list) -> float:
@@ -139,15 +152,19 @@ def polygons_only(geom: BaseGeometry | None) -> BaseGeometry | None:
 def intersect(a: BaseGeometry, b: BaseGeometry) -> BaseGeometry | None:
     """Polygonal intersection of *a* and *b*, or ``None`` — mirrors ``turf.intersect``.
 
-    Both inputs are repaired with ``make_valid`` first. Turf's polygon clipper
-    resolves self-intersections internally, so to match it GEOS needs an explicit
-    repair: without it, ``shapely.intersection`` on a self-intersecting ring can
-    return garbage — e.g. a clipped area *larger* than the input feature (observed
-    on BAFU "Naturstrasse" road polygons). Repairing an already-valid geometry is a
-    no-op, so this leaves the clean parcels bit-identical. May raise
-    ``GEOSException``; the caller counts the feature as skipped.
+    Both inputs are repaired with ``make_valid(method="structure")`` first. Turf's
+    polygon clipper resolves self-intersections internally, so to match it GEOS
+    needs an explicit repair: without it, ``shapely.intersection`` on a
+    self-intersecting ring can raise or return garbage (a clipped area *larger* than
+    the input feature, observed on BAFU "Naturstrasse" road polygons). The
+    ``structure`` method reproduces Turf's result exactly (a self-intersecting BAFU
+    road piece clipped to 12912.2662 m² in both; the default ``linework`` method
+    gave 12912.2525). Repairing an already-valid geometry is a no-op, so clean
+    parcels stay bit-identical. May raise ``GEOSException``; the caller counts the
+    feature as skipped.
     """
-    return polygons_only(shapely.intersection(shapely.make_valid(a), shapely.make_valid(b)))
+    return polygons_only(shapely.intersection(shapely.make_valid(a, method="structure"),
+                                              shapely.make_valid(b, method="structure")))
 
 
 def union(geoms: list) -> BaseGeometry | None:

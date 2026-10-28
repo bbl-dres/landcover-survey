@@ -98,6 +98,7 @@ classDiagram
         +varchar egrid
         +varchar nummer
         +integer bfsnr
+        +varchar nbident
         +varchar status
         +varchar check_egrid
         +varchar check_wfs
@@ -208,8 +209,9 @@ Aggregation columns are included by default (Python: `--no-aggregate` to omit).
 > lowercase `snake_case`, namespaced by classification scheme (`sia416_`, `din277_`,
 > `vbs_`) or source layer (`av_` AV land cover, `bauzonen_` ARE zones, `habitat_`
 > BAFU). Coded *values* keep their domain casing (e.g. `lc_source` = `AV`, the `art`
-> value = `Gebaeude`). The web app's `status` / `errors` / `check_wfs` / `check_geom`
-> / `lc_source` columns are web-only; `check_egrid` carries the same short codes
+> value = `Gebaeude`). The `status` / `errors` / `check_wfs` / `check_geom` /
+> `lc_source` / `nbident` columns are produced by the web app and the CLI `api`
+> source (not by the `gpkg` path); `check_egrid` carries the same short codes
 > (`found` / `merged` / `not_found`) in every implementation.
 
 | Attribute | Format | Description |
@@ -217,11 +219,12 @@ Aggregation columns are included by default (Python: `--no-aggregate` to omit).
 | `id` | `varchar` | User-defined identifier (Mode 1) or generated from AV (Mode 2) |
 | `egrid` | `varchar(14)` | Federal parcel identifier |
 | `nummer` | `varchar` | Official parcel number from AV |
-| `bfsnr` | `integer` | Federal municipality number |
+| `bfsnr` | `integer` | Federal municipality number (BFS-Nr). `gpkg`: from the parcel layer. Web app + CLI `api`: the geo.admin.ch `find` service carries none, so it is taken from the parcel's AV land-cover surfaces (the number covering the largest share); **empty** where no AV surface carries one (synthetic-AV parcels, canton TI) |
+| `nbident` | `varchar` | Cadastral numbering-area identifier (NBIdent, e.g. `BE0200000042`) as served by the `find` service. Web app + CLI `api` source only |
 | `status` | `varchar` | Parcel resolution — `found` / `not_found` |
 | `check_egrid` | `varchar` | EGRID-resolution detail — `found` / `merged` / `not_found` / `invalid` / `error:<msg>` (see enum below) |
-| `check_wfs`, `check_geom` | `varchar` | Land-cover retrieval / clipping status (see enums below). Web app only |
-| `check_bauzonen`, `check_habitat` | `varchar` | Overlay retrieval status; present when that overlay ran. Web app only |
+| `check_wfs`, `check_geom` | `varchar` | Land-cover retrieval / clipping status (see enums below). Web app + CLI `api` source |
+| `check_bauzonen`, `check_habitat` | `varchar` | Overlay retrieval status; present when that overlay ran. Web app + CLI `api` source |
 | `errors` | `varchar` | Error message(s) for the parcel; empty when none |
 | `lc_source` | `varchar` | Land-cover source — `AV` for resolved parcels, `BAFU` when the land cover was synthesized from the habitat map (see `lc_synthetic`), **empty** when the parcel has no land cover. The Bauzonen / BAFU overlays are **separate** layers, not the parcel's source |
 | `lc_synthetic` | `varchar` | `yes` when AV land cover was essentially absent (< 5 % of the parcel) and the land cover was synthesized from the BAFU habitat polygons (`lc_source` = `BAFU`); empty otherwise. Web app + CLI `api` source |
@@ -346,32 +349,32 @@ to the output; **EN** / **DE** = the labels the web app shows for it.
 | `invalid` | Invalid EGRID | EGRID ungültig | Malformed EGRID (does not start with `CH`). Web app only. |
 | `error:<msg>` | Error: \<msg\> | Fehler: \<msg\> | Unexpected processing error, message appended. Web app only. |
 
-### `check_wfs` (Parcels — web app only)
+### `check_wfs` (Parcels — web app + CLI `api` source)
 
 | Code | EN | DE | Description |
 |------|----|----|-------------|
-| `ok` | OK | OK | Land cover retrieved successfully |
-| `truncated` | Truncated | Abgeschnitten | WFS hit the feature cap (1000); the result may be incomplete |
+| `ok` | OK | OK | Land cover retrieved successfully (paged until an empty page, deduplicated) |
+| `truncated` | Truncated | Abgeschnitten | Paging reached the 10'000-feature safety cap while still receiving features; the result may be incomplete |
 | `wfs_error` | WFS error | WFS-Fehler | WFS request failed after retries; no land cover for this parcel |
 
-### `check_geom` (Parcels — web app only)
+### `check_geom` (Parcels — web app + CLI `api` source)
 
 | Code | EN | DE | Description |
 |------|----|----|-------------|
 | `ok` | OK | OK | All land cover features clipped successfully |
 | `N_skipped` | N skipped | N übersprungen | N features could not be clipped (invalid geometry) and were dropped |
 
-### `check_bauzonen` / `check_habitat` (Parcels — web app only)
+### `check_bauzonen` / `check_habitat` (Parcels — web app + CLI `api` source)
 
 Present when the matching overlay was analysed (both on by default in the web app).
 
 | Code | EN | DE | Description |
 |------|----|----|-------------|
-| `ok` | OK | OK | Overlay features retrieved and clipped |
-| `truncated` | Truncated | Abgeschnitten | Identify hit the per-bbox feature cap (200); the result may be incomplete |
+| `ok` | OK | OK | Overlay features retrieved (the parcel bbox is tiled so every identify request is a single, complete page) and clipped |
+| `truncated` | Truncated | Abgeschnitten | The fetch reached its safety cap (5'000 habitat / 2'000 Bauzonen features per parcel) or a tile was still full at the tiling depth cap; the result may be incomplete |
 | `error` | Error | Fehler | Identify request failed; no overlay data for this parcel |
 
-### `lc_source` (Parcels & Land Cover — web app only)
+### `lc_source` (Parcels & Land Cover — web app + CLI `api` source)
 
 | Code | EN | DE | Description |
 |------|----|----|-------------|

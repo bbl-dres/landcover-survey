@@ -29,7 +29,9 @@
   <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js" crossorigin="anonymous"></script>
 
   <!-- Turf.js -->
-  <script src="https://unpkg.com/@turf/turf@7/turf.min.js" crossorigin="anonymous"></script>
+  <!-- Pinned: python/geom_wgs84.py ports this exact version's area formula (7.x changed
+       the floating-point order of ringArea); bump both together. -->
+  <script src="https://unpkg.com/@turf/turf@7.4.0/turf.min.js" crossorigin="anonymous"></script>
 
   <!-- App CSS -->
   <link rel="stylesheet" href="css/tokens.css">
