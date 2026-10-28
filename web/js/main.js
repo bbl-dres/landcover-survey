@@ -281,6 +281,7 @@ async function onStartProcessing(parsedData) {
     processedResults = await processRows(parsedData.rows, (progress) => {
       updateProgress(progress, startTime);
     }, parsedData.options);
+    if (processedResults && processedResults.greeninvFailed) showToast(t("toast.greeninv.failed"));
 
     if (!processedResults || !processedResults.parcels.length) {
       showState("upload");

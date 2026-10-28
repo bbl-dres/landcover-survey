@@ -31,6 +31,7 @@ Multilingual — German (DE), French (FR), Italian (IT), and English (EN) via th
 - **Summary Panel** — Parcel status, area analysis with donut chart, and key metrics. Aggregation dropdown switches between land cover, SIA 416, DIN 277, green space, imperviousness, VBS Kategorie, VBS Produktivität, and VBS Typ — updating chart, legend, and map colors
 - **Context Menu** — Right-click to copy coordinates, share, or report issues
 - **External Layers** — Toggle official survey and habitat map overlays, or add any swisstopo layer via Geokatalog/search
+- **Green inventory** — Optional join («Grüninventar abgleichen», off by default) that marks parcels covered by the [Bundesgärtnerei green inventory](https://github.com/bbl-dres/green-inventory) (`greeninv` = `yes` / `no`, matched by EGRID, else by the SAP key); the parcel popup links into the inventory app at that position
 - **Export** — Parcels CSV, Land Cover CSV, Excel (one sheet per layer), GeoJSON (all analysed layers in one FeatureCollection, each feature tagged with a `layer` property), and a self-contained HTML report (single file with results embedded — opens straight into the results view)
 - **Privacy** — All data stays in the browser. Only EGRID and bounding box are sent to public APIs
 - **Responsive & accessible** — Map-first layout on tablet/mobile; ARIA roles, keyboard navigation, `<noscript>` fallback

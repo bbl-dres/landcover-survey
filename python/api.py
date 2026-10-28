@@ -43,6 +43,9 @@ BAFU_LAYER_ID = "ch.bafu.lebensraumkarte-schweiz"
 BAUZONEN_LAYER_ID = "ch.are.bauzonen"
 BAFU_MAX_FEATURES = 5000
 BAUZONEN_MAX_FEATURES = 2000
+# Green inventory (Grünflächeninventar der Bundesgärtnerei): the public parcel list the
+# optional --green-inventory join reads (web/js/config.js GREEN_INVENTORY.PARCELS_URL).
+GREEN_INVENTORY_URL = "https://bbl-dres.github.io/green-inventory/prototype-main/data/land_parcels.geojson"
 
 FETCH_TIMEOUT_S = 15
 MAX_RETRIES = 3
@@ -271,3 +274,44 @@ def fetch_bauzonen(parcel_geom) -> dict:
     """Building-zone features for a parcel — ``{features, dropped, truncated}``. May raise."""
     r = fetch_identify(BAUZONEN_LAYER_ID, parcel_geom, BAUZONEN_MAX_FEATURES)
     return {"features": r["features"], "dropped": r["dropped"], "truncated": r["truncated"]}
+
+
+# ---------------------------------------------------------------------------
+# Green inventory — parcel list keyed by EGRID + ERP id (loadGreenInventory)
+# ---------------------------------------------------------------------------
+
+def fetch_green_inventory(source: str | None = None) -> dict:
+    """Load the green inventory parcel list → ``{"by_egrid": {...}, "by_erp": {...}}``.
+
+    *source* is a URL or a local GeoJSON path; ``None`` reads the public file
+    (``GREEN_INVENTORY_URL``). Raises on network / parse errors; the callers degrade
+    to an empty ``greeninv`` column.
+    """
+    src = source or GREEN_INVENTORY_URL
+    if src.startswith(("http://", "https://")):
+        fc = _fetch_json(src)
+    else:
+        with open(src, encoding="utf-8") as f:
+            fc = json.load(f)
+    by_egrid: dict[str, dict] = {}
+    by_erp: dict[str, dict] = {}
+    for feat in fc.get("features") or []:
+        pr = feat.get("properties") or {}
+        if pr.get("egrid"):
+            by_egrid[str(pr["egrid"]).upper()] = pr
+        if pr.get("erp_id"):
+            by_erp[str(pr["erp_id"])] = pr
+    logger.debug("Green inventory: %d parcels (%d with ERP id)", len(by_egrid), len(by_erp))
+    return {"by_egrid": by_egrid, "by_erp": by_erp}
+
+
+def green_inventory_flag(index: dict | None, id_: str, egrid: str) -> str:
+    """``yes`` when the parcel is in the inventory (by EGRID, else by the SAP key = id),
+    ``no`` otherwise, ``""`` without an index (join not run / list unreachable)."""
+    if not index:
+        return ""
+    if egrid and str(egrid).upper() in index["by_egrid"]:
+        return "yes"
+    if id_ and str(id_) in index["by_erp"]:
+        return "yes"
+    return "no"

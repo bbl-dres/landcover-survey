@@ -13,7 +13,7 @@ import { API, SLIVER_THRESHOLD, STATUS, classify, classifyBafu, typochToBBArt, i
          BAFU_LAYER_ID, VBS_KATEGORIE_LABELS, VBS_PRODUKTIV_LABELS, VBS_TYP_LABELS,
          ERR_MSG, ERR_RUNTIME_PREFIX, bauzoneAreaKey, isBauzoneAreaKey,
          ensureTypoch, typochL1Label, typochL2Label, typochL3Label, typochCodeAtLevel,
-         habitatAreaKeyL1, habitatAreaKeyL2, isHabitatAreaKey } from "./config.js";
+         habitatAreaKeyL1, habitatAreaKeyL2, isHabitatAreaKey, GREEN_INVENTORY } from "./config.js";
 
 // Parcels processed in parallel. Each parcel makes two sequential requests to
 // two different hosts (swisstopo find + geodienste WFS), both HTTP/2, so a
@@ -36,6 +36,36 @@ let cancelled = false;
 /** EGRID → parcel geometry cache (survives across runs within same session) */
 const egridCache = new Map();
 
+/** Green inventory parcel index ({ byEgrid, byErp } Maps), fetched at most once per
+ *  session; resolves to null when the file could not be loaded (the join then stays
+ *  empty and the caller reports it). */
+let greenInventoryPromise = null;
+function loadGreenInventory() {
+  if (!greenInventoryPromise) {
+    greenInventoryPromise = fetchWithTimeout(GREEN_INVENTORY.PARCELS_URL, { timeoutMs: 30000 })
+      .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+      .then((fc) => {
+        const byEgrid = new Map(), byErp = new Map();
+        for (const f of fc.features || []) {
+          const pr = f.properties || {};
+          if (pr.egrid) byEgrid.set(String(pr.egrid).toUpperCase(), pr);
+          if (pr.erp_id) byErp.set(String(pr.erp_id), pr);
+        }
+        return { byEgrid, byErp };
+      })
+      .catch((err) => { console.warn("Green inventory unavailable:", err.message); greenInventoryPromise = null; return null; });
+  }
+  return greenInventoryPromise;
+}
+/** "yes" when the parcel is in the green inventory (by EGRID, else by the SAP key = id),
+ *  "no" otherwise, "" without an index. */
+function greenInventoryFlag(index, id, egrid) {
+  if (!index) return "";
+  if (egrid && index.byEgrid.has(String(egrid).toUpperCase())) return "yes";
+  if (id && index.byErp.has(String(id))) return "yes";
+  return "no";
+}
+
 export function cancelProcessing() {
   cancelled = true;
 }
@@ -49,6 +79,8 @@ export async function processRows(rows, onProgress, options = {}) {
   // Load the shared TypoCH name reference once up front (memoized, fail-soft) so the
   // per-parcel habitat labelling below can resolve level-1/2/3 names synchronously.
   if (options.habitat) await ensureTypoch();
+  // Optional green-inventory join: one public parcel file, fetched once, keyed by EGRID + SAP id.
+  const greenIndex = options.greeninv ? await loadGreenInventory() : null;
   const total = rows.length;
   let completed = 0;
   let succeeded = 0;
@@ -335,13 +367,15 @@ export async function processRows(rows, onProgress, options = {}) {
       if (!("check_habitat" in r.parcel)) r.parcel.check_habitat = "";
       for (const k of habitatKeys) if (!(k in r.parcel)) r.parcel[k] = 0;
     }
+    // One column, on every parcel (incl. error rows, which can still match by SAP id).
+    if (options.greeninv) r.parcel.greeninv = greenInventoryFlag(greenIndex, r.parcel.id, r.parcel.egrid);
     parcels.push(r.parcel);
     landcover.push(...r.landcover);
     if (r.bauzonen) bauzonen.push(...r.bauzonen);
     if (r.habitat) habitat.push(...r.habitat);
   }
 
-  return { parcels, landcover, bauzonen, habitat };
+  return { parcels, landcover, bauzonen, habitat, greeninvFailed: !!(options.greeninv && !greenIndex) };
 }
 
 /** Map an EGRID-resolution failure code to a stable English error message. */

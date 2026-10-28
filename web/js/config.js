@@ -188,6 +188,20 @@ export const BAFU_TYPOCH_L1 = {
 /** geo.admin.ch layer id of the BAFU habitat map (own layer + legacy fallback). */
 export const BAFU_LAYER_ID = "ch.bafu.lebensraumkarte-schweiz";
 
+/** Green inventory (Grünflächeninventar der Bundesgärtnerei, github.com/bbl-dres/green-inventory):
+ *  the public parcel list the optional "Grüninventar abgleichen" join reads (GitHub Pages, CORS
+ *  open; keyed by EGRID and by the SAP key `erp_id`), and the app that parcel links open. */
+export const GREEN_INVENTORY = {
+  PARCELS_URL: "https://bbl-dres.github.io/green-inventory/prototype-main/data/land_parcels.geojson",
+  APP_URL: "https://bbl-dres.github.io/green-inventory/prototype-main/",
+};
+/** Deep link into the green inventory app at a WGS84 position ([lng, lat]); the app
+ *  reads `center` and `zoom` from its URL on load. */
+export function greenInventoryUrl(lngLat, zoom = 17.5) {
+  if (!lngLat || !isFinite(lngLat[0]) || !isFinite(lngLat[1])) return "";
+  return `${GREEN_INVENTORY.APP_URL}?center=${lngLat[0].toFixed(5)},${lngLat[1].toFixed(5)}&zoom=${zoom}`;
+}
+
 /** TypoCH level-1 digit of a habitat label ("6.3.1 Buchenwald" → "6"). */
 export function typochL1(typochDe) {
   return String(typochDe || "").trim().charAt(0);

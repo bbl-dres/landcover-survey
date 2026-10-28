@@ -2,7 +2,7 @@
  * MapLibre GL JS map with parcel polygons, land cover overlay,
  * Home/3D controls, and thumbnail basemap selector
  */
-import { API, ART_COLORS, CATEGORY_COLORS, ART_LABELS, MAP_STYLES, MAP_DEFAULT, greenSpaceLabel, esc, fmtNum, habitatColor, typochL2Label, bauzoneColor, BRAND, fmtArea } from "./config.js";
+import { API, ART_COLORS, CATEGORY_COLORS, ART_LABELS, MAP_STYLES, MAP_DEFAULT, greenSpaceLabel, esc, fmtNum, habitatColor, typochL2Label, bauzoneColor, BRAND, fmtArea, greenInventoryUrl } from "./config.js";
 import { setMap, readdSwisstopoLayers, loadGeokatalog, addSwisstopoLayer, removeSwisstopoLayer, activeSwisstopoLayers } from "./swisstopo.js";
 import { t, getLang } from "./i18n.js";
 import { poleOfInaccessibility } from "./polylabel.js";
@@ -653,7 +653,7 @@ export function plotResults(results) {
     if (!p._geometry) return;
     parcelFeatures.push({
       type: "Feature", geometry: p._geometry,
-      properties: { index: i, id: p.id, egrid: p.egrid, nummer: p.nummer, label: p.id, area: p.parcel_area_m2 },
+      properties: { index: i, id: p.id, egrid: p.egrid, nummer: p.nummer, label: p.id, area: p.parcel_area_m2, greeninv: p.greeninv || "" },
     });
     for (const lc of p._landcover) {
       if (!lc._geometry) continue;
@@ -702,7 +702,7 @@ export function plotResults(results) {
   const clusterPoints = parcelFeatures.map((f) => ({
     type: "Feature",
     geometry: { type: "Point", coordinates: parcelMarkerPoint(f) },
-    properties: { index: f.properties.index, id: f.properties.id, egrid: f.properties.egrid, nummer: f.properties.nummer, label: f.properties.label, area: f.properties.area },
+    properties: { index: f.properties.index, id: f.properties.id, egrid: f.properties.egrid, nummer: f.properties.nummer, label: f.properties.label, area: f.properties.area, greeninv: f.properties.greeninv || "" },
   }));
   currentClusterData = { type: "FeatureCollection", features: clusterPoints };
   map.getSource("parcels-clusters").setData(currentClusterData);
@@ -776,6 +776,10 @@ export function fitAllParcels() {
 }
 
 function showParcelPopup(lngLat, props) {
+  // Green inventory (opt-in join): coverage row + a link into the inventory app at the clicked point.
+  const gi = props.greeninv === "yes" || props.greeninv === "no"
+    ? `<tr><td>${esc(t("col.greeninv"))}</td><td>${esc(t(props.greeninv === "yes" ? "greeninv.yes" : "greeninv.no"))}</td></tr>` : "";
+  const giUrl = props.greeninv === "yes" ? greenInventoryUrl([lngLat.lng, lngLat.lat]) : "";
   popup.setLngLat(lngLat).setHTML(`
     <div class="map-popup">
       <div class="popup-layer">${esc(t("popup.parcel"))}</div>
@@ -783,7 +787,9 @@ function showParcelPopup(lngLat, props) {
       <div class="popup-sub">${esc(t("col.nummer"))} ${esc(props.nummer)}</div>
       <table class="popup-table">
         <tr><td>${esc(t("popup.area"))}</td><td>${fmtArea(props.area)}</td></tr>
+        ${gi}
       </table>
+      ${giUrl ? `<a class="popup-link" href="${esc(giUrl)}" target="_blank" rel="noopener">${esc(t("popup.greeninv"))} <span class="material-symbols-outlined" aria-hidden="true">open_in_new</span></a>` : ""}
     </div>
   `).addTo(map);
 }
