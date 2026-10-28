@@ -16,6 +16,7 @@ export function getUploadOptions() {
   return {
     bauzonen: !!document.getElementById("opt-bauzonen")?.checked,
     habitat: !!document.getElementById("opt-habitat")?.checked,
+    greeninv: !!document.getElementById("opt-greeninv")?.checked,
   };
 }
 
@@ -93,14 +94,17 @@ function setMode(mode) {
 }
 
 /** Return the upload view to its default state: default tab, default parcel
- *  re-selected, and the analysis options back to their defaults (both on). */
+ *  re-selected, and the analysis options back to their defaults (overlays on, green
+ *  inventory off). */
 export function resetUploadView() {
   resetParcelPicker();
   setMode(DEFAULT_MODE);
   const bz = document.getElementById("opt-bauzonen");
   const hb = document.getElementById("opt-habitat");
+  const gi = document.getElementById("opt-greeninv");
   if (bz) bz.checked = true;
   if (hb) hb.checked = true;
+  if (gi) gi.checked = false;
 }
 
 async function loadDemoFile() {

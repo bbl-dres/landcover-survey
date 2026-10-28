@@ -4,9 +4,11 @@ What goes in, what comes out. For *how* each land cover type is classified, see
 **[CLASSIFICATION.md](CLASSIFICATION.md)**; for *how* the processing works, see
 **[ARCHITECTURE.md](ARCHITECTURE.md)**.
 
-All geometry is in **EPSG:2056** (CH1903+ / LV95). Outputs are alphanumeric only —
-no geometry column is exported (it is used internally for clipping and area
-calculation, then dropped).
+The GeoPackage path works in **EPSG:2056** (CH1903+ / LV95) with exact planar areas;
+the web app and the CLI `api` source work in **EPSG:4326** (WGS84) with spherical
+areas. The CSV / Excel outputs are alphanumeric (geometry is used internally for
+clipping and area calculation, then dropped); only the GeoJSON export of the web app
+and the `api` source carries the WGS84 geometries.
 
 ---
 
@@ -104,6 +106,7 @@ classDiagram
         +varchar check_habitat
         +varchar errors
         +varchar lc_source
+        +varchar lc_synthetic
         +integer flaeche
         +float parcel_area_m2
         +float sia416_ggf_m2
@@ -128,6 +131,7 @@ classDiagram
         +varchar habitat
         +float habitat_m2
         +float habitat_GRP_m2
+        +varchar greeninv
         +varchar input_COL
     }
     class LandCover {
@@ -189,6 +193,8 @@ classDiagram
   - `habitat_GRP_m2` → `habitat_<slug>_m2` — one per TypoCH **level-2** group present (~34) (opt-in).
   - `input_COL` → `input_<name>` — passthrough user columns.
 - **Bauzone** and **Habitat** layers are **opt-in** (on by default in the web app).
+- `greeninv` is the **opt-in** green-inventory join (web «Grüninventar abgleichen», CLI
+  `--green-inventory`; **off** by default): one column, no extra layer.
 - Full per-column detail is in the per-layer tables below.
 
 ---
@@ -217,7 +223,8 @@ Aggregation columns are included by default (Python: `--no-aggregate` to omit).
 | `check_wfs`, `check_geom` | `varchar` | Land-cover retrieval / clipping status (see enums below). Web app only |
 | `check_bauzonen`, `check_habitat` | `varchar` | Overlay retrieval status; present when that overlay ran. Web app only |
 | `errors` | `varchar` | Error message(s) for the parcel; empty when none |
-| `lc_source` | `varchar` | Land-cover source — `AV` for resolved parcels, **empty** when the parcel has no land cover. The Bauzonen / BAFU overlays are **separate** layers, not the parcel's source |
+| `lc_source` | `varchar` | Land-cover source — `AV` for resolved parcels, `BAFU` when the land cover was synthesized from the habitat map (see `lc_synthetic`), **empty** when the parcel has no land cover. The Bauzonen / BAFU overlays are **separate** layers, not the parcel's source |
+| `lc_synthetic` | `varchar` | `yes` when AV land cover was essentially absent (< 5 % of the parcel) and the land cover was synthesized from the BAFU habitat polygons (`lc_source` = `BAFU`); empty otherwise. Web app + CLI `api` source |
 | `flaeche` | `integer` | Legal area from AV (may be missing) |
 | `parcel_area_m2` | `float` | Calculated 2D planar area of the cleaned parcel polygon |
 | `sia416_ggf_m2` | `float` | Building footprint area (SIA 416 GGF) |
@@ -235,6 +242,7 @@ Aggregation columns are included by default (Python: `--no-aggregate` to omit).
 | `bauzonen_{slug}_m2` | `float` | One column per building-zone type: `bauzonen_` + the slugified (lowercase) zone name (e.g. `bauzonen_wohnzonen_m2`, `bauzonen_zonen_fuer_oeffentliche_nutzungen_m2`); 0 where the zone is absent. A parcel can span several zones (opt-in) |
 | `habitat`, `habitat_m2` | `varchar` | BAFU habitat group labels + areas intersecting the parcel, semicolon-joined, grouped by **TypoCH level-2** (Lebensraumgruppe, `«code» «name»`) (opt-in) |
 | `habitat_{slug}_m2` | `float` | One column per TypoCH level-2 habitat group: `habitat_` + the slugified (lowercase) group label (e.g. `habitat_6_3_andere_laubwaelder_m2`, `habitat_4_5_fettwiesen_und_weiden_m2`); 0 where absent. Up to ~34 groups (opt-in) |
+| `greeninv` | `varchar` | Green-inventory coverage — `yes` when the parcel is in the Bundesgärtnerei green inventory ([green-inventory](https://github.com/bbl-dres/green-inventory) `prototype-main/data/land_parcels.geojson`, matched by EGRID, else by the SAP key = `id`), `no` otherwise; empty when the join did not run or the file was unreachable. Opt-in: web «Grüninventar abgleichen» (off by default), CLI `--green-inventory` |
 | `input_*` | *(varies)* | User-provided columns, prefixed `input_` (Mode 1) |
 
 > The sum of `sia416_ggf_m2 + sia416_buf_m2 + sia416_uuf_m2` (= the classified
@@ -368,8 +376,25 @@ Present when the matching overlay was analysed (both on by default in the web ap
 | Code | EN | DE | Description |
 |------|----|----|-------------|
 | `AV` | AV | AV | Amtliche Vermessung land cover (authoritative cadastral surface) |
-| `BAFU` | BAFU | BAFU | BAFU Lebensraumkarte (modeled habitat) — the web app's optional **habitat overlay layer** (not an AV fallback). Only green space + VBS derived; SIA 416 / DIN 277 / sealed blank. See [CLASSIFICATION.md](CLASSIFICATION.md) §BAFU Lebensraumkarte |
+| `BAFU` | BAFU | BAFU | BAFU Lebensraumkarte (modeled habitat): the rows of the optional **habitat overlay layer**, and on a parcel the **synthetic land-cover fallback** where AV cover is essentially absent (`lc_synthetic` = `yes`). In the habitat layer only green space + VBS are derived; SIA 416 / DIN 277 / sealed blank. See [CLASSIFICATION.md](CLASSIFICATION.md) §BAFU Lebensraumkarte |
 | `Bauzonen` | Bauzonen | Bauzonen | Harmonised building zones (`ch.are.bauzonen`) — the web app's optional **building-zone overlay layer**; `art` holds the zone name |
+
+### `lc_synthetic` (Parcels — web app + CLI `api` source)
+
+| Code | EN | DE | Description |
+|------|----|----|-------------|
+| `yes` | Synthetic | Synthetisch | The parcel's land cover was synthesized from BAFU habitat polygons because AV land cover was essentially absent (< 5 % of the parcel); the areas are modelled estimates (`lc_source` = `BAFU`) |
+| *(blank)* | — | — | Authoritative AV land cover, or no land cover at all |
+
+### `greeninv` (Parcels — opt-in join)
+
+Present when the green-inventory join ran (web «Grüninventar abgleichen», CLI `--green-inventory`).
+
+| Code | EN | DE | Description |
+|------|----|----|-------------|
+| `yes` | Covered | Erfasst | The parcel is in the [green inventory](https://github.com/bbl-dres/green-inventory) parcel list (matched by EGRID, else by the SAP key = `id`) |
+| `no` | Not covered | Nicht erfasst | The parcel is not in the list |
+| *(blank)* | — | — | The join did not run, or the list could not be loaded |
 
 ### `check_greenspace` (Land Cover)
 

@@ -1,5 +1,11 @@
 # Survey Prioritisation — Implemented Method & Sampling Properties
 
+> **Status (October 2026):** the dashboard's **Priorisierung** tab was removed in the
+> redesign described in `docs/wireframes/261026_Dashboard Background Maps.html`.
+> Users now select up to 50 parcels in the table or map popup and export them as a PDF
+> report. This document is kept as a reference for the ranking method that the tab
+> implemented; the code it cites no longer exists in `dashboard/js/dashboard.js`.
+
 Reference for the dashboard's **Priorisierung** tab: exactly how the current code
 turns the parcel dataset into a ranked shortlist of survey candidates, what every
 slider does, and — for readers evaluating it as a **sampling method** — the precise

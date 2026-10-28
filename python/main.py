@@ -64,6 +64,11 @@ def main(argv: list[str] | None = None) -> None:
         "--limit", type=int, default=None,
         help="Process only the first N rows (api / gpkg Mode 1) or N municipalities (gpkg Mode 2)",
     )
+    parser.add_argument(
+        "--green-inventory", dest="green_inventory", nargs="?", const=True, default=False, metavar="URL|FILE",
+        help="Add a greeninv column (yes/no): match parcels against the green inventory parcel list "
+             "(default: the public file on GitHub Pages; pass a URL or local GeoJSON to override)",
+    )
 
     # --- GeoPackage source options ---
     parser.add_argument(
@@ -181,9 +186,11 @@ def _run_api(args, output_dir: Path, ts: str, prefix: str, logger) -> None:
         "bauzonen": not args.no_bauzonen,
         "habitat": not args.no_habitat,
         "synthLandcover": not args.no_synthetic,
+        "greeninv": bool(args.green_inventory),
+        "greeninv_source": args.green_inventory if isinstance(args.green_inventory, str) else None,
     }
-    logger.info("Processing %d parcel(s) via live services (bauzonen=%s, habitat=%s, synthetic=%s)",
-                len(rows), options["bauzonen"], options["habitat"], options["synthLandcover"])
+    logger.info("Processing %d parcel(s) via live services (bauzonen=%s, habitat=%s, synthetic=%s, greeninv=%s)",
+                len(rows), options["bauzonen"], options["habitat"], options["synthLandcover"], options["greeninv"])
 
     def on_progress(p):
         if p["processed"] % 25 == 0 or p["processed"] == p["total"]:
@@ -227,6 +234,7 @@ def _run_gpkg(args, output_dir: Path, ts: str) -> None:
         export_landcover=not args.no_landcover,
         bauzonen=args.bauzonen,
         habitat=args.habitat,
+        greeninv=args.green_inventory,
     )
 
 

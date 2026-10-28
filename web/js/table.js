@@ -26,6 +26,7 @@ let container = null;
 // instead of rescanning every parcel on each render/sort/keystroke.
 let hasBauzonen = false;
 let hasHabitat = false;
+let hasGreeninv = false; // the opt-in green-inventory join column is present
 let bauzonenCols = [];
 let habitatCols = [];
 
@@ -38,6 +39,8 @@ const tabState = {
 };
 
 /* ── Column definitions ── */
+
+function greeninvLabel(v) { return v === "yes" ? t("greeninv.yes") : v === "no" ? t("greeninv.no") : ""; }
 
 function getParcelCols() {
   const cols = [
@@ -66,6 +69,8 @@ function getParcelCols() {
     cols.push({ key: "habitat", label: t("col.habitat_group"), cls: "col-p-habitat" });
     cols.push(...habitatCols);
   }
+  // Green inventory is opt-in; one joined column (yes / no).
+  if (hasGreeninv) cols.push({ key: "greeninv", label: t("col.greeninv"), cls: "col-p-greeninv", fmt: greeninvLabel });
   return cols;
 }
 
@@ -164,6 +169,7 @@ export function populateTable(parcels, landcover, bauzonen, habitat) {
   // not just on whether the option ran — an empty layer gets no tab.
   hasBauzonen = bauzonenData.length > 0;
   hasHabitat = habitatData.length > 0;
+  hasGreeninv = parcelsData.some((p) => p.greeninv === "yes" || p.greeninv === "no");
   bauzonenCols = computeBauzonenCols(parcelsData);
   habitatCols = computeHabitatCols(parcelsData);
   for (const st of Object.values(tabState)) { st.page = 1; st.search = ""; }

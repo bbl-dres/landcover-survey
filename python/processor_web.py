@@ -546,6 +546,14 @@ def process_rows(rows, options=None, on_progress=None):
     (0-filled across every parcel) so exports have a uniform header.
     """
     options = options or {}
+    # Optional green-inventory join: one parcel file (public URL or a local path), loaded
+    # once; unreachable → the greeninv column stays empty on every parcel.
+    green_index = None
+    if options.get("greeninv"):
+        try:
+            green_index = api.fetch_green_inventory(options.get("greeninv_source"))
+        except Exception as e:  # network / parse error: degrade, do not abort the run
+            logging.getLogger(__name__).warning("Green inventory unavailable (%s): the greeninv column stays empty", e)
     total = len(rows)
     results: list[dict | None] = [None] * total
     completed = 0
@@ -599,6 +607,8 @@ def process_rows(rows, options=None, on_progress=None):
             p.setdefault("check_habitat", "")
             for k in habitat_keys:
                 p.setdefault(k, 0)
+        if options.get("greeninv"):
+            p["greeninv"] = api.green_inventory_flag(green_index, p.get("id") or "", p.get("egrid") or "")
         parcels.append(p)
         landcover.extend(r.get("landcover") or [])
         bauzonen.extend(r.get("bauzonen") or [])

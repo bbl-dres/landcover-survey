@@ -35,6 +35,7 @@ python main.py --egrid CH427760110057                       # single parcel
 python main.py --egrid CH427760110057,CH690292570744        # a few parcels
 python main.py --input ../data/example.csv --output-dir ./out   # CSV/Excel list of ID,EGRID
 python main.py --egrid CH427760110057 --no-bauzonen --no-habitat  # AV land cover only
+python main.py --input ../data/example.csv --green-inventory         # + greeninv column (yes/no)
 
 # --- gpkg source: offline, from a local GeoPackage ---
 python main.py --source gpkg --input ../data/example.csv        # Mode 1: parcel list
@@ -55,6 +56,7 @@ one or more comma-separated EGRIDs, so no input file is needed.
 |--|-----------------|--------|
 | Parcel + land cover | geo.admin.ch `find` + geodienste.ch WFS `ms:LCSF` | Local AV GeoPackage (`resf` / `lcsf`) |
 | Overlays | Bauzonen + BAFU habitat, **on by default** (per-parcel `identify`) | `--bauzonen` / `--habitat` (opt-in) |
+| Green inventory join | `--green-inventory` (opt-in): `greeninv` = `yes` / `no` by EGRID, else SAP key | same flag, same column |
 | Synthetic-AV fallback | on by default (`--no-synthetic` to disable) | none |
 | Geometry / area | Shapely in EPSG:4326, **Turf-spherical** area | Shapely in EPSG:2056, exact planar area |
 | Coverage | 20 of 26 cantons via public WFS | all cantons |
@@ -105,6 +107,7 @@ parcel areas agree to floating-point precision for typical parcels.
 | `--input PATH` | — | CSV/Excel with `ID`,`EGRID` (api: optional; gpkg Mode 1: required) |
 | `--output-dir PATH` | *(input dir, else ./data)* | Output directory |
 | `--limit N` | *(all)* | First N parcels (api / gpkg Mode 1) or N municipalities (gpkg Mode 2) |
+| `--green-inventory [URL\|FILE]` | off | Add `greeninv` (`yes` / `no`): parcel in the [green inventory](https://github.com/bbl-dres/green-inventory) parcel list, matched by EGRID, else by the SAP key (`id`). Default source: the public file on GitHub Pages |
 | `--no-bauzonen` / `--no-habitat` | off | (api) disable an overlay |
 | `--no-synthetic` | off | (api) disable the synthetic-AV fallback |
 | `--no-geojson` / `--no-xlsx` / `--no-csv` | off | (api) skip an output format |

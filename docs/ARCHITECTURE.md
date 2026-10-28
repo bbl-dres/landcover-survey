@@ -26,6 +26,7 @@ square meters directly.
 | **Geometry engine** | Shapely / GeoPandas | Turf.js |
 | **Scale** | Up to ~3.5M parcels (batched by municipality) | Interactive, a few parcels at a time |
 | **Bauzonen / BAFU habitat** | Optional (`--bauzonen` / `--habitat`) | Always analysed, as separate overlay layers |
+| **Green inventory join** | Optional (`--green-inventory`, both sources): `greeninv` = `yes` / `no` by EGRID, else SAP key | Optional («Grüninventar abgleichen», off by default); same column, link into the inventory app |
 | **Missing-AV fallback** | None — gaps stay empty | Synthetic AV land cover from BAFU, flagged `lc_synthetic` |
 | **Output** | Parcels CSV + Land Cover CSV | CSV · Excel · GeoJSON · HTML report |
 

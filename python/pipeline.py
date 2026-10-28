@@ -92,6 +92,7 @@ def run(
     export_landcover: bool = True,
     bauzonen: bool = False,
     habitat: bool = False,
+    greeninv: bool | str = False,
 ) -> None:
     """Run the landcover survey pipeline.
 
@@ -123,6 +124,10 @@ def run(
         If True, intersect parcels and green spaces with Swisstopo Bauzonen.
     habitat : bool
         If True, intersect parcels and green spaces with BAFU Lebensraumkarte.
+    greeninv : bool | str
+        If truthy, add a ``greeninv`` column (``yes`` / ``no``) by matching parcels
+        against the green inventory parcel list: ``True`` reads the public file, a
+        string is a URL or local GeoJSON path.
     """
     t0 = time.time()
     output_dir = Path(output_dir)
@@ -186,6 +191,10 @@ def run(
     # Lowercase the static identifier / QA columns to the final output schema.
     parcels_out = _lowercase_schema(parcels_out)
     lc_out = _lowercase_schema(lc_out)
+
+    # Optional green-inventory join: one column, greeninv = yes / no (EGRID first, else the SAP key = id).
+    if greeninv:
+        parcels_out = _join_green_inventory(parcels_out, None if greeninv is True else str(greeninv))
 
     # Export final results (drop geometry columns before CSV export)
     logger.info("Exporting final results")
@@ -636,6 +645,26 @@ def _clip_single_parcel(
 # ---------------------------------------------------------------------------
 # Output helpers
 # ---------------------------------------------------------------------------
+
+def _join_green_inventory(df: DataFrame, source: str | None) -> DataFrame:
+    """Add ``greeninv`` (``yes`` / ``no``) by matching ``egrid`` then ``id`` against the
+    green inventory parcel list (public URL by default, or a URL / local GeoJSON).
+    The column stays empty when the list cannot be loaded."""
+    import api
+
+    try:
+        index = api.fetch_green_inventory(source)
+    except Exception as e:  # network / parse error: degrade, do not abort the run
+        logger.warning("Green inventory unavailable (%s): the greeninv column stays empty", e)
+        df["greeninv"] = ""
+        return df
+    blank = pd.Series([""] * len(df), index=df.index)
+    ids = df["id"].fillna("").astype(str) if "id" in df.columns else blank
+    egs = df["egrid"].fillna("").astype(str) if "egrid" in df.columns else blank
+    df["greeninv"] = [api.green_inventory_flag(index, i, e) for i, e in zip(ids, egs)]
+    logger.info("Green inventory: %d of %d parcels covered", int((df["greeninv"] == "yes").sum()), len(df))
+    return df
+
 
 def _lowercase_schema(df: DataFrame) -> DataFrame:
     """Final output schema: lowercase every column id except passthrough ``input_*``.

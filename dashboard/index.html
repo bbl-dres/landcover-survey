@@ -18,7 +18,7 @@
 <div id="builder-screen">
   <div class="builder-card">
     <h1>Daten laden</h1>
-    <p class="b-lead">Wählen Sie einen <code>landcover-parcels.geojson</code>-Export. Die Daten werden lokal im Browser ausgewertet — kein Server, keine Installation. Herunterladen (Dashboard als HTML / Excel) können Sie anschliessend oben rechts.</p>
+    <p class="b-lead">Wählen Sie einen <code>landcover-parcels.geojson</code>-Export. Die Daten werden lokal im Browser ausgewertet, ohne Server und ohne Installation. Herunterladen (Dashboard als HTML, Excel, PDF) können Sie anschliessend oben rechts.</p>
     <label class="b-field"><span>GeoJSON-Export <em>(erforderlich)</em></span><input id="b-geojson" type="file" accept=".geojson,.json"></label>
     <div class="b-actions">
       <button class="btn b-primary" id="b-show" disabled>Dashboard anzeigen</button>
@@ -28,56 +28,86 @@
   </div>
 </div>
 <header>
-  <a class="logo-lockup" href="https://www.bbl.admin.ch" aria-label="Schweizerische Eidgenossenschaft — Bundesamt für Bauten und Logistik BBL">
+  <a class="logo-lockup" href="https://www.bbl.admin.ch" aria-label="Schweizerische Eidgenossenschaft, Bundesamt für Bauten und Logistik BBL">
     <svg class="signet" viewBox="0 0 259 64" xmlns="http://www.w3.org/2000/svg" role="img" aria-hidden="true"><g clip-rule="evenodd" fill-rule="evenodd"><path d="m49.6 10.9c.5.4 1.1.5 1.9.5 1.1 0 1.9-.5 1.9-1.8 0-1.7-4-1.9-4-4.2 0-1.4 1.2-2.3 2.7-2.3.5 0 1.1.1 1.7.3l-.2.8c-.4-.3-.9-.4-1.6-.4-.9 0-1.9.4-1.9 1.5 0 1.7 4 1.7 4 4.3 0 1.7-1.5 2.5-2.8 2.5-.8 0-1.5-.2-2-.4z"/><path d="m61.1 6.5c-.5-.2-.9-.4-1.4-.4-1.6 0-2.4 1.1-2.4 2.6s.9 2.6 2.3 2.6c.5 0 1-.1 1.5-.3l.1.7c-.5.2-1 .2-1.6.2-2 0-3-1.5-3-3.4 0-2 1.3-3.4 3.1-3.4.7 0 1.3.2 1.6.3z"/><path d="m63.5 2.6h.8v4.1c.4-.7 1-1.2 2-1.2 1.7 0 2.2 1.2 2.2 2.7v3.8h-.8v-3.7c0-1.1-.2-2.1-1.5-2.1-1.4 0-1.9 1.4-1.9 2.5v3.5h-.8z"/><path d="m77.9 12.1h-.9l-1.7-5.5-1.8 5.5h-.9l-2-6.4h.8l1.6 5.5 1.7-5.5h.9l1.6 5.5 1.8-5.5h.8z"/><path d="m85.9 8.5c0-1.1-.5-2.2-1.6-2.2-1.2 0-1.8 1.2-1.8 2.2zm.3 3.3c-.5.2-1.3.4-1.8.4-2.1 0-2.9-1.5-2.9-3.4s1.1-3.4 2.7-3.4c1.8 0 2.6 1.5 2.6 3.2v.4h-4.4c0 1.4.7 2.5 2.1 2.5.5 0 1.4-.3 1.7-.5z"/><path d="m89.2 12.1h.8v-6.4h-.8zm0-8.1h.8v-1.1h-.8z"/><path d="m92.3 11.4 3.8-5h-3.7v-.8h4.6v.6l-3.8 5h3.8v.8h-4.8z"/><path d="m103.3 8.5c0-1.1-.5-2.2-1.6-2.2-1.2 0-1.8 1.2-1.8 2.2zm.4 3.3c-.5.2-1.3.4-1.8.4-2.1 0-2.9-1.5-2.9-3.4s1.1-3.4 2.7-3.4c1.8 0 2.6 1.5 2.6 3.2v.4h-4.4c0 1.4.7 2.5 2.1 2.5.5 0 1.4-.3 1.7-.5z"/><path d="m106.6 7.1c0-.7 0-1-.1-1.5h.8v1.2c.3-.7.8-1.4 1.6-1.4.2 0 .4 0 .5.1v.8c-.2-.1-.4-.1-.5-.1-1.3 0-1.6 1.4-1.6 2.5v3.3h-.8z"/><path d="m111.7 12.1h.8v-6.4h-.8zm0-8.1h.8v-1.1h-.8z"/><path d="m115 11.1c.5.3 1 .4 1.6.4.7 0 1.4-.5 1.4-1.2 0-1.5-3-1.3-3-3.1 0-1.3 1-1.7 2.1-1.7.4 0 1 .1 1.6.3l-.1.7c-.4-.2-1-.3-1.4-.3-.8 0-1.4.3-1.4 1.1 0 1.2 3.1 1 3.1 3.1 0 1.4-1.3 1.8-2.2 1.8-.6 0-1.2-.1-1.7-.3z"/><path d="m125.4 6.5c-.5-.2-.9-.4-1.4-.4-1.6 0-2.4 1.1-2.4 2.6s.9 2.6 2.3 2.6c.5 0 .9-.1 1.5-.3l.1.7c-.5.2-1 .2-1.6.2-2 0-3-1.5-3-3.4 0-2 1.3-3.4 3.1-3.4.7 0 1.3.2 1.6.3z"/><path d="m127.8 2.6h.8v4.1c.4-.7 1-1.2 2-1.2 1.7 0 2.2 1.2 2.2 2.7v3.8h-.8v-3.7c0-1.1-.2-2.1-1.5-2.1-1.4 0-1.9 1.4-1.9 2.5v3.5h-.8z"/><path d="m139.5 8.5c0-1.1-.5-2.2-1.6-2.2-1.2 0-1.8 1.2-1.8 2.2zm.4 3.3c-.5.2-1.3.4-1.8.4-2.1 0-2.9-1.5-2.9-3.4s1.1-3.4 2.7-3.4c1.8 0 2.6 1.5 2.6 3.2v.4h-4.5c0 1.4.7 2.5 2.1 2.5.5 0 1.4-.3 1.7-.5z"/><path d="m147 3.4h4.3v.7h-3.4v3.1h3.2v.7h-3.2v3.4h3.6v.8h-4.4z"/><path d="m154.1 12.1h.8v-6.4h-.8zm0-8.1h.8v-1.1h-.8z"/><path d="m160.2 11.5c1.4 0 1.9-1.5 1.9-2.6 0-1.2-.5-2.6-1.9-2.6s-1.9 1.5-1.9 2.6c.1 1.2.4 2.6 1.9 2.6zm2.6.6h-.8v-1c-.5.8-1.1 1.2-2 1.2-1.7 0-2.7-1.5-2.7-3.4s.7-3.4 2.7-3.4c1.3 0 1.8.9 2 1.2v-4.1h.8z"/><path d="m168 11.4c1.5 0 1.9-1.4 1.9-2.5 0-1.5-.5-2.6-1.9-2.6s-1.9 1.5-1.9 2.6c.1 1.2.6 2.5 1.9 2.5zm2.8.1c0 1.8-.8 3.2-3 3.2-.8 0-1.6-.3-1.9-.4l.1-.8c.5.3 1.2.5 1.8.5 2 0 2.2-1.5 2.2-3.3-.5.9-1.1 1.3-1.9 1.3-2 0-2.7-1.8-2.7-3.2 0-1.9.7-3.4 2.7-3.4.8 0 1.4.1 2 .9v-.7h.8z"/><path d="m177.5 8.5c0-1.1-.5-2.2-1.6-2.2-1.2 0-1.8 1.2-1.8 2.2zm.4 3.3c-.5.2-1.3.4-1.8.4-2.1 0-2.9-1.5-2.9-3.4s1.1-3.4 2.7-3.4c1.8 0 2.6 1.5 2.6 3.2v.4h-4.5c0 1.4.7 2.5 2.1 2.5.5 0 1.4-.3 1.7-.5z"/><path d="m180.8 7.2c0-.5 0-1-.1-1.5h.7v1.2c.3-.5.7-1.3 2-1.3 1.6 0 2.2 1.1 2.2 2.5v4.1h-.8v-4c0-1.2-.5-2-1.5-2-1.5 0-1.9 1.3-1.9 2.4v3.5h-.8v-4.9z"/><path d="m191.2 11.5c1.4 0 2.1-1.2 2.1-2.6 0-1.5-.7-2.6-2.1-2.6s-2.1 1.2-2.1 2.6c0 1.5.7 2.6 2.1 2.6zm0-6c2 0 2.9 1.6 2.9 3.4 0 1.7-.9 3.4-2.9 3.4s-2.9-1.6-2.9-3.4.9-3.4 2.9-3.4z"/><path d="m196.1 11.1c.5.3 1 .4 1.6.4.7 0 1.4-.5 1.4-1.2 0-1.5-3-1.3-3-3.1 0-1.3 1-1.7 2.1-1.7.4 0 1 .1 1.6.3l-.1.7c-.4-.2-1-.3-1.4-.3-.8 0-1.4.3-1.4 1.1 0 1.2 3.1 1 3.1 3.1 0 1.4-1.3 1.8-2.2 1.8-.6 0-1.2-.1-1.7-.3z"/><path d="m202 11.1c.5.3 1 .4 1.6.4.7 0 1.4-.5 1.4-1.2 0-1.5-3-1.3-3-3.1 0-1.3 1-1.7 2.1-1.7.4 0 1 .1 1.6.3l-.1.7c-.4-.2-1-.3-1.4-.3-.8 0-1.4.3-1.4 1.1 0 1.2 3.1 1 3.1 3.1 0 1.4-1.3 1.8-2.2 1.8-.6 0-1.2-.1-1.7-.3z"/><path d="m212.1 8.5c0-1.1-.5-2.2-1.6-2.2-1.2 0-1.8 1.2-1.8 2.2zm.4 3.3c-.5.2-1.3.4-1.8.4-2.1 0-2.9-1.5-2.9-3.4s1.1-3.4 2.7-3.4c1.8 0 2.6 1.5 2.6 3.2v.4h-4.4c0 1.4.7 2.5 2.1 2.5.5 0 1.4-.3 1.7-.5z"/><path d="m215.4 7.2c0-.5 0-1-.1-1.5h.7v1.2c.3-.5.7-1.3 2-1.3 1.6 0 2.2 1.1 2.2 2.5v4.1h-.8v-4c0-1.2-.5-2-1.5-2-1.5 0-1.9 1.3-1.9 2.4v3.5h-.8v-4.9z"/><path d="m222.8 11.1c.5.3 1 .4 1.6.4.7 0 1.4-.5 1.4-1.2 0-1.5-3-1.3-3-3.1 0-1.3 1-1.7 2.1-1.7.4 0 1 .1 1.6.3l-.1.7c-.4-.2-1-.3-1.4-.3-.8 0-1.4.3-1.4 1.1 0 1.2 3.1 1 3.1 3.1 0 1.4-1.3 1.8-2.2 1.8-.6 0-1.2-.1-1.7-.3z"/><path d="m233.2 6.5c-.5-.2-.9-.4-1.4-.4-1.6 0-2.4 1.1-2.4 2.6s.9 2.6 2.3 2.6c.5 0 .9-.1 1.5-.3l.1.7c-.5.2-1 .2-1.6.2-2 0-3-1.5-3-3.4 0-2 1.3-3.4 3.1-3.4.7 0 1.3.2 1.6.3z"/><path d="m235.6 2.6h.8v4.1c.4-.7 1-1.2 2-1.2 1.7 0 2.2 1.2 2.2 2.7v3.8h-.8v-3.7c0-1.1-.2-2.1-1.5-2.1-1.4 0-1.9 1.4-1.9 2.5v3.5h-.8z"/><path d="m247 8.8h-.2c-1.4 0-3 .2-3 1.5 0 .8.6 1.2 1.3 1.2 1.8 0 1.9-1.6 1.9-2.3zm.1 2.2c-.4.7-1.3 1.2-2 1.2-1.8 0-2.1-1.2-2.1-1.8 0-2.2 2.3-2.3 3.9-2.3h.2v-.4c0-1.1-.4-1.6-1.5-1.6-.6 0-1.3.2-1.8.5v-.6c.5-.3 1.3-.5 1.8-.5 1.6 0 2.2.7 2.2 2.4v2.8c0 .5 0 .9.1 1.4h-.7z"/><path d="m251.2 6.4h-1.2v-.8h1.3v-.4c0-1.4.1-2.7 1.6-2.7.3 0 .5 0 .7.1l-.1.7c-.2-.1-.4-.2-.6-.2-1.1 0-.9 1.2-.9 1.9v.5h1.5v.6h-1.5v5.9h-.8z"/><path d="m258.6 6.4h-1.5v4.1c0 .5.2 1.1.8 1.1.3 0 .5-.1.7-.2l.1.6c-.2.1-.5.2-.9.2-1.4 0-1.5-1-1.5-2.1v-3.7h-1.3v-.8h1.3v-1.4l.8-.3v1.8h1.5z"/><path d="m55.7 21.5c-.5-.3-1.4-.4-1.9-.4-2.3 0-3.6 1.6-3.6 3.7 0 2.2 1.2 3.7 3.6 3.7.5 0 1.5-.1 1.9-.4l.1.7c-.5.3-1.5.4-2 .4-2.7 0-4.4-1.8-4.4-4.5 0-2.6 1.7-4.5 4.4-4.5.5 0 1.6.1 2 .4z"/><path d="m61.1 28.8c1.4 0 2.1-1.2 2.1-2.6 0-1.5-.7-2.6-2.1-2.6s-2.1 1.2-2.1 2.6.7 2.6 2.1 2.6zm0-6c2 0 2.9 1.6 2.9 3.4s-.9 3.4-2.9 3.4-2.9-1.6-2.9-3.4.9-3.4 2.9-3.4z"/><path d="m66.6 24.5c0-.5 0-1-.1-1.5h.7v1.2c.3-.5.7-1.3 2-1.3 1.6 0 2.2 1.1 2.2 2.5v4.1h-.8v-3.9c0-1.2-.5-2-1.5-2-1.5 0-1.9 1.3-1.9 2.4v3.5h-.8v-4.9z"/><path d="m75 23.6h-1.3v-.6h1.3v-.5c0-1.4.1-2.7 1.6-2.7.3 0 .5 0 .7.1l-.1.7c-.2-.1-.4-.2-.6-.2-1.1 0-.9 1.2-.9 1.9v.5h1.5v.6h-1.5v5.7h-.7z"/><path d="m82.1 20.5h1l-1.6 1.8h-.5zm1.3 5.1c0-1.1-.5-2.2-1.6-2.2s-1.8 1.2-1.8 2.2zm.3 3.5c-.5.2-1.3.4-1.8.4-2.1 0-2.9-1.5-2.9-3.4s1.1-3.4 2.7-3.4c1.8 0 2.6 1.5 2.6 3.2v.4h-4.4c0 1.4.7 2.5 2.1 2.5.5 0 1.4-.3 1.7-.5z"/><path d="m89.1 28.8c1.4 0 1.9-1.5 1.9-2.6 0-1.2-.5-2.6-1.9-2.6-1.5 0-1.9 1.5-1.9 2.6 0 1.2.4 2.6 1.9 2.6zm2.6.5h-.8v-1c-.5.8-1.1 1.2-2 1.2-1.7 0-2.7-1.5-2.7-3.4s.7-3.4 2.7-3.4c1.3 0 1.8.9 2 1.2v-4.1h.8z"/><path d="m97.2 20.5h1l-1.6 1.8h-.6zm1.3 5.1c0-1.1-.5-2.2-1.6-2.2-1.2 0-1.8 1.2-1.8 2.2zm.3 3.5c-.5.2-1.3.4-1.8.4-2.1 0-2.9-1.5-2.9-3.4s1.1-3.4 2.7-3.4c1.8 0 2.6 1.5 2.6 3.2v.4h-4.4c0 1.4.7 2.5 2.1 2.5.5 0 1.4-.3 1.7-.5z"/><path d="m101.8 24.4c0-.7 0-1-.1-1.5h.8v1.2c.3-.7.8-1.4 1.6-1.4.2 0 .4 0 .5.1v.8c-.2-.1-.4-.1-.5-.1-1.3 0-1.6 1.4-1.6 2.5v3.2h-.8z"/><path d="m110.4 26.1h-.2c-1.4 0-3 .2-3 1.5 0 .8.6 1.2 1.3 1.2 1.8 0 1.9-1.6 1.9-2.3zm.1 2.2c-.4.7-1.3 1.2-2 1.2-1.8 0-2.1-1.2-2.1-1.8 0-2.2 2.3-2.3 3.9-2.3h.2v-.4c0-1.1-.4-1.6-1.5-1.6-.6 0-1.3.2-1.8.5v-.7c.5-.3 1.3-.5 1.8-.5 1.6 0 2.2.7 2.2 2.4v2.8c0 .5 0 .9.1 1.4h-.7z"/><path d="m116.8 23.6h-1.5v4.1c0 .5.2 1.1.8 1.1.3 0 .5-.1.7-.2l.1.6c-.2.1-.5.2-.9.2-1.4 0-1.5-1-1.5-2.1v-3.7h-1.3v-.6h1.3v-1.5l.8-.3v1.8h1.5z"/><path d="m119.2 29.3h.8v-6.4h-.8zm0-8.1h.8v-1.1h-.8z"/><path d="m125.4 28.8c1.4 0 2.1-1.2 2.1-2.6 0-1.5-.7-2.6-2.1-2.6s-2.1 1.2-2.1 2.6.8 2.6 2.1 2.6zm0-6c2 0 2.9 1.6 2.9 3.4s-.9 3.4-2.9 3.4-2.9-1.6-2.9-3.4.8-3.4 2.9-3.4z"/><path d="m130.8 24.5c0-.5 0-1-.1-1.5h.7v1.2c.3-.5.7-1.3 2-1.3 1.6 0 2.2 1.1 2.2 2.5v4.1h-.8v-3.9c0-1.2-.5-2-1.5-2-1.5 0-1.9 1.3-1.9 2.4v3.5h-.8v-4.9z"/><path d="m142.5 28.4c.5.3 1 .4 1.6.4.7 0 1.4-.5 1.4-1.2 0-1.5-3-1.3-3-3.1 0-1.3 1-1.7 2.1-1.7.4 0 1 .1 1.6.3l-.1.7c-.4-.2-1-.3-1.4-.3-.8 0-1.4.3-1.4 1.1 0 1.2 3.1 1 3.1 3.1 0 1.4-1.3 1.8-2.2 1.8-.6 0-1.2-.1-1.7-.3z"/><path d="m153.8 27.8c0 .5 0 1 .1 1.5h-.7v-1.2c-.3.5-.7 1.3-2 1.3-1.6 0-2.2-1.1-2.2-2.5v-4.1h.8v3.9c0 1.2.5 2 1.5 2 1.5 0 1.9-1.3 1.9-2.4v-3.5h.8v4.9h-.2z"/><path d="m156.7 29.3h.8v-6.4h-.8zm0-8.1h.8v-1.1h-.8z"/><path d="m160 28.4c.5.3 1 .4 1.6.4.7 0 1.4-.5 1.4-1.2 0-1.5-3-1.3-3-3.1 0-1.3 1-1.7 2.1-1.7.4 0 1 .1 1.6.3l-.1.7c-.4-.2-1-.3-1.4-.3-.8 0-1.4.3-1.4 1.1 0 1.2 3.1 1 3.1 3.1 0 1.4-1.3 1.8-2.2 1.8-.6 0-1.2-.1-1.7-.3z"/><path d="m165.9 28.4c.5.3 1 .4 1.6.4.7 0 1.4-.5 1.4-1.2 0-1.5-3-1.3-3-3.1 0-1.3 1-1.7 2.1-1.7.4 0 1 .1 1.6.3l-.1.7c-.4-.2-1-.3-1.4-.3-.8 0-1.4.3-1.4 1.1 0 1.2 3.1 1 3.1 3.1 0 1.4-1.3 1.8-2.2 1.8-.6 0-1.2-.1-1.7-.3z"/><path d="m176 25.6c0-1.1-.5-2.2-1.6-2.2-1.2 0-1.8 1.2-1.8 2.2zm.4 3.5c-.5.2-1.3.4-1.8.4-2.1 0-2.9-1.5-2.9-3.4s1.1-3.4 2.7-3.4c1.8 0 2.6 1.5 2.6 3.2v.4h-4.4c0 1.4.7 2.5 2.1 2.5.5 0 1.4-.3 1.7-.5z"/><path d="m55.7 38.8c-.5-.3-1.4-.4-1.9-.4-2.3 0-3.6 1.6-3.6 3.7 0 2.2 1.2 3.7 3.6 3.7.5 0 1.5-.1 1.9-.4l.1.7c-.5.3-1.5.4-2 .4-2.7 0-4.4-1.8-4.4-4.5 0-2.6 1.7-4.5 4.4-4.5.5 0 1.6.1 2 .4z"/><path d="m61.1 46c1.4 0 2.1-1.2 2.1-2.6 0-1.5-.7-2.6-2.1-2.6s-2.1 1.2-2.1 2.6.7 2.6 2.1 2.6zm0-6c2 0 2.9 1.6 2.9 3.4 0 1.7-.9 3.4-2.9 3.4s-2.9-1.6-2.9-3.4c-.1-1.8.9-3.4 2.9-3.4z"/><path d="m66.6 41.6c0-.5 0-1-.1-1.5h.7v1.2c.3-.5.7-1.3 2-1.3 1.6 0 2.2 1.1 2.2 2.5v4.1h-.8v-3.9c0-1.2-.5-2-1.5-2-1.5 0-1.9 1.3-1.9 2.4v3.5h-.8v-4.9h.2z"/><path d="m75 40.8h-1.3v-.6h1.3v-.5c0-1.4.1-2.7 1.6-2.7.3 0 .5 0 .7.1l-.1.7c-.2-.1-.4-.2-.6-.2-1.1 0-.9 1.2-.9 1.9v.5h1.5v.6h-1.5v5.7h-.7z"/><path d="m83.4 42.9c0-1.1-.5-2.2-1.6-2.2s-1.8 1.2-1.8 2.2zm.3 3.5c-.5.2-1.3.4-1.8.4-2.1 0-2.9-1.5-2.9-3.4s1.1-3.4 2.7-3.4c1.8 0 2.6 1.5 2.6 3.2v.4h-4.4c0 1.4.7 2.5 2.1 2.5.5 0 1.4-.3 1.7-.5z"/><path d="m89.1 46c1.4 0 1.9-1.5 1.9-2.6 0-1.2-.5-2.6-1.9-2.6-1.5 0-1.9 1.5-1.9 2.6 0 1.2.4 2.6 1.9 2.6zm2.6.5h-.8v-1c-.5.8-1.1 1.2-2 1.2-1.7 0-2.7-1.5-2.7-3.4s.7-3.4 2.7-3.4c1.3 0 1.8.9 2 1.2v-4.1h.8z"/><path d="m98.5 42.9c0-1.1-.5-2.2-1.6-2.2-1.2 0-1.8 1.2-1.8 2.2zm.3 3.5c-.5.2-1.3.4-1.8.4-2.1 0-2.9-1.5-2.9-3.4s1.1-3.4 2.7-3.4c1.8 0 2.6 1.5 2.6 3.2v.4h-4.4c0 1.4.7 2.5 2.1 2.5.5 0 1.4-.3 1.7-.5z"/><path d="m101.8 41.6c0-.7 0-1-.1-1.5h.8v1.2c.3-.7.8-1.4 1.6-1.4.2 0 .4 0 .5.1v.8c-.2-.1-.4-.1-.5-.1-1.3 0-1.6 1.4-1.6 2.5v3.2h-.8z"/><path d="m110.4 43.4h-.2c-1.4 0-3 .2-3 1.5 0 .8.6 1.2 1.3 1.2 1.8 0 1.9-1.6 1.9-2.3zm.1 2.1c-.4.7-1.3 1.2-2 1.2-1.8 0-2.1-1.2-2.1-1.8 0-2.2 2.3-2.3 3.9-2.3h.2v-.4c0-1.1-.4-1.6-1.5-1.6-.6 0-1.3.2-1.8.5v-.7c.5-.3 1.3-.5 1.8-.5 1.6 0 2.2.7 2.2 2.4v2.8c0 .5 0 .9.1 1.4h-.7z"/><path d="m113.6 45.9 3.8-5h-3.7v-.6h4.6v.6l-3.8 5h3.8v.6h-4.8v-.6z"/><path d="m120.6 46.5h.8v-6.4h-.8zm0-8h.8v-1.1h-.8z"/><path d="m126.8 46c1.4 0 2.1-1.2 2.1-2.6 0-1.5-.7-2.6-2.1-2.6s-2.1 1.2-2.1 2.6.7 2.6 2.1 2.6zm0-6c2 0 2.9 1.6 2.9 3.4 0 1.7-.9 3.4-2.9 3.4s-2.9-1.6-2.9-3.4.9-3.4 2.9-3.4z"/><path d="m132.2 41.6c0-.5 0-1-.1-1.5h.7v1.2c.3-.5.7-1.3 2-1.3 1.6 0 2.2 1.1 2.2 2.5v4.1h-.8v-3.9c0-1.2-.5-2-1.5-2-1.5 0-1.9 1.3-1.9 2.4v3.5h-.8v-4.9h.2z"/><path d="m144 42.9c0-1.1-.5-2.2-1.6-2.2-1.2 0-1.8 1.2-1.8 2.2zm.4 3.5c-.5.2-1.3.4-1.8.4-2.1 0-2.9-1.5-2.9-3.4s1.1-3.4 2.7-3.4c1.8 0 2.6 1.5 2.6 3.2v.4h-4.4c0 1.4.7 2.5 2.1 2.5.5 0 1.4-.3 1.7-.5z"/><path d="m151.5 45.5c.5.4 1.1.5 1.9.5 1.1 0 1.9-.5 1.9-1.8 0-1.7-4-1.9-4-4.2 0-1.4 1.2-2.3 2.7-2.3.5 0 1.1.1 1.7.3l-.1.8c-.4-.2-1-.4-1.6-.4-.9 0-1.9.4-1.9 1.5 0 1.7 4 1.7 4 4.3 0 1.7-1.5 2.5-2.8 2.5-.8 0-1.5-.2-2-.4z"/><path d="m161 46.5h-.9l-2.2-6.4h.8l1.7 5.5 1.8-5.5h.8z"/><path d="m165.3 46.5h.8v-6.4h-.8zm0-8h.8v-1.1h-.8z"/><path d="m168.5 45.9 3.8-5h-3.7v-.6h4.6v.6l-3.8 5h3.8v.6h-4.8v-.6z"/><path d="m175 45.9 3.8-5h-3.7v-.6h4.6v.6l-3.8 5h3.8v.6h-4.7z"/><path d="m185.9 42.9c0-1.1-.5-2.2-1.6-2.2-1.2 0-1.8 1.2-1.8 2.2zm.4 3.5c-.5.2-1.3.4-1.8.4-2.1 0-2.9-1.5-2.9-3.4s1.1-3.4 2.7-3.4c1.8 0 2.6 1.5 2.6 3.2v.4h-4.4c0 1.4.7 2.5 2.1 2.5.5 0 1.4-.3 1.7-.5z"/><path d="m189.3 41.6c0-.7 0-1-.1-1.5h.8v1.2c.3-.7.8-1.4 1.6-1.4.2 0 .4 0 .5.1v.8c-.2-.1-.4-.1-.5-.1-1.3 0-1.6 1.4-1.6 2.5v3.2h-.8v-4.8z"/><path d="m197.9 43.4h-.2c-1.4 0-3 .2-3 1.5 0 .8.6 1.2 1.3 1.2 1.8 0 1.9-1.6 1.9-2.3zm.1 2.1c-.4.7-1.3 1.2-2 1.2-1.8 0-2.1-1.2-2.1-1.8 0-2.2 2.3-2.3 3.9-2.3h.2v-.4c0-1.1-.4-1.6-1.5-1.6-.6 0-1.3.2-1.8.5v-.7c.5-.3 1.3-.5 1.8-.5 1.6 0 2.2.7 2.2 2.4v2.8c0 .5 0 .9.1 1.4h-.7z"/><path d="m55.7 56.1c-.5-.3-1.4-.4-1.9-.4-2.3 0-3.6 1.6-3.6 3.7 0 2.2 1.2 3.7 3.6 3.7.5 0 1.5-.1 1.9-.4l.1.7c-.5.3-1.5.4-2 .4-2.7 0-4.4-1.8-4.4-4.5 0-2.6 1.7-4.5 4.4-4.5.5 0 1.6.1 2 .4z"/><path d="m61.1 63.3c1.4 0 2.1-1.2 2.1-2.6s-.8-2.7-2.1-2.7c-1.4 0-2.1 1.2-2.1 2.6s.7 2.7 2.1 2.7zm0-6c2 0 2.9 1.6 2.9 3.4s-.9 3.3-2.9 3.3-2.9-1.6-2.9-3.4.9-3.3 2.9-3.3z"/><path d="m66.6 58.9c0-.5 0-1-.1-1.5h.7v1.2c.3-.5.7-1.3 2-1.3 1.6 0 2.2 1.1 2.2 2.5v4.1h-.8v-3.9c0-1.2-.5-2-1.5-2-1.5 0-1.9 1.3-1.9 2.4v3.5h-.8v-4.9h.2z"/><path d="m75 58.1h-1.3v-.6h1.3v-.5c0-1.4.1-2.7 1.6-2.7.3 0 .5 0 .7.1l-.1.7c-.2-.1-.4-.2-.6-.2-1.1 0-.9 1.2-.9 1.9v.5h1.5v.7h-1.5v5.7h-.7z"/><path d="m83.4 60.2c0-1.1-.5-2.2-1.6-2.2s-1.8 1.2-1.8 2.2zm.3 3.4c-.5.2-1.3.4-1.8.4-2.1 0-2.9-1.5-2.9-3.4s1.1-3.4 2.7-3.4c1.8 0 2.6 1.5 2.6 3.2v.4h-4.4c0 1.4.7 2.5 2.1 2.5.5 0 1.4-.3 1.7-.5z"/><path d="m89.1 63.3c1.4 0 1.9-1.5 1.9-2.6 0-1.2-.5-2.6-1.9-2.6-1.5 0-1.9 1.5-1.9 2.6s.4 2.6 1.9 2.6zm2.6.5h-.8v-1c-.5.8-1.1 1.2-2 1.2-1.7 0-2.7-1.5-2.7-3.4s.7-3.4 2.7-3.4c1.3 0 1.8.9 2 1.2v-4.1h.8z"/><path d="m98.5 60.2c0-1.1-.5-2.2-1.6-2.2-1.2 0-1.8 1.2-1.8 2.2zm.3 3.4c-.5.2-1.2.4-1.8.4-2.1 0-2.9-1.5-2.9-3.4s1.1-3.4 2.7-3.4c1.8 0 2.6 1.5 2.6 3.2v.4h-4.4c0 1.4.7 2.5 2.1 2.5.5 0 1.4-.3 1.7-.5z"/><path d="m101.8 58.8c0-.7 0-1-.1-1.5h.8v1.2c.3-.7.8-1.4 1.6-1.4.2 0 .4 0 .5.1v.8c-.2-.1-.4-.1-.5-.1-1.3 0-1.6 1.4-1.6 2.5v3.2h-.8z"/><path d="m110.4 60.5h-.2c-1.4 0-3 .2-3 1.5 0 .8.6 1.2 1.3 1.2 1.8 0 1.9-1.6 1.9-2.3zm.1 2.3c-.4.7-1.3 1.2-2 1.2-1.8 0-2.1-1.2-2.1-1.8 0-2.2 2.3-2.3 3.9-2.3h.2v-.4c0-1.1-.4-1.6-1.5-1.6-.6 0-1.3.2-1.8.5v-.7c.5-.3 1.3-.5 1.8-.5 1.6 0 2.2.7 2.2 2.4v2.8c0 .5 0 .9.1 1.4h-.7z"/><path d="m175.3 60.5h-.2c-1.4 0-3 .2-3 1.5 0 .8.6 1.2 1.3 1.2 1.8 0 1.9-1.6 1.9-2.3zm.1 2.3c-.4.7-1.3 1.2-2 1.2-1.8 0-2.1-1.2-2.1-1.8 0-2.2 2.3-2.3 3.9-2.3h.2v-.4c0-1.1-.4-1.6-1.5-1.6-.6 0-1.3.2-1.8.5v-.7c.5-.3 1.3-.5 1.8-.5 1.6 0 2.2.7 2.2 2.4v2.8c0 .5 0 .9.1 1.4h-.7z"/><path d="m113.6 63.2 3.8-5h-3.7v-.6h4.6v.6l-3.8 5h3.8v.6h-4.8v-.6z"/><path d="m120.6 63.8h.8v-6.4h-.8zm0-8.1h.8v-1.1h-.8z"/><path d="m129.3 62.3c0 .5 0 1 .1 1.5h-.7v-1.2c-.3.5-.7 1.3-2 1.3-1.6 0-2.2-1.1-2.2-2.5v-4.1h.8v3.9c0 1.2.5 2 1.5 2 1.5 0 1.9-1.3 1.9-2.4v-3.5h.8v4.9h-.2z"/><path d="m132.2 58.9c0-.5 0-1-.1-1.5h.7v1.2c.3-.5.7-1.3 2-1.3 1.6 0 2.2 1.1 2.2 2.5v4.1h-.8v-3.9c0-1.2-.5-2-1.5-2-1.5 0-1.9 1.3-1.9 2.4v3.5h-.8v-4.9h.2z"/><path d="m143.9 62.9c.5.3 1 .4 1.6.4.7 0 1.4-.5 1.4-1.2 0-1.5-3-1.3-3-3.1 0-1.3 1-1.7 2.1-1.7.4 0 1 .1 1.6.3l-.1.7c-.4-.2-1-.3-1.4-.3-.8 0-1.4.3-1.4 1.1 0 1.2 3.1 1 3.1 3.1 0 1.4-1.3 1.8-2.2 1.8-.6 0-1.2-.1-1.7-.3z"/><path d="m152.4 63.8h-.9l-2.2-6.4h.8l1.7 5.5 1.8-5.5h.8z"/><path d="m156.7 63.8h.8v-6.4h-.8zm0-8.1h.8v-1.1h-.8z"/><path d="m159.9 63.2 3.8-5h-3.7v-.6h4.6v.6l-3.8 5h3.8v.6h-4.8v-.6z"/><path d="m166.9 58.8c0-.7 0-1-.1-1.5h.8v1.2c.3-.7.8-1.4 1.6-1.4.2 0 .4 0 .5.1v.8c-.2-.1-.4-.1-.5-.1-1.3 0-1.6 1.4-1.6 2.5v3.2h-.8v-4.8z"/><path d="m35.3 2.9s-6.6-2.9-17.6-2.9c-11 0-17.6 2.9-17.6 2.9s-.7 12.8 1.9 20.1c4.4 12.7 15.7 16.4 15.7 16.4s11.3-3.6 15.7-16.4c2.4-7.3 1.9-20.1 1.9-20.1z" fill="#ff0000"/><path d="m29.3 14v7.1h-8.2v8.3h-7v-8.3h-8.3v-7.1h8.2v-8.3h7v8.3z" fill="#fffffe"/></g></svg>
     <span class="logo-sep" aria-hidden="true"></span>
-    <span class="logo-title"><span class="org">Bundesamt für Bauten und Logistik BBL</span><span class="app">Liegenschaftsinventar</span></span>
+    <span class="logo-title"><span class="org">Bundesamt für Bauten und Logistik BBL</span><span class="app">Liegenschaftsinventar</span><span class="dash-title" id="dash-title">Auswertung Bodenbedeckung</span></span>
   </a>
   <span class="spacer"></span>
+  <div class="gsearch" id="gsearch-wrap">
+    <svg class="gsearch-ic" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+    <input id="gsearch" type="search" placeholder="Grundstück, Ort oder Karte suchen…" aria-label="Grundstück, Ort oder Karte suchen" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="gsearch-dd" aria-haspopup="listbox">
+  </div>
+  <div class="gear-wrap">
+    <button class="icon-btn icon-btn-md" id="gear-btn" type="button" title="Einstellungen" aria-label="Einstellungen" aria-haspopup="true" aria-expanded="false"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
+    <div class="popover gear-menu" id="gear-menu" hidden>
+      <div class="sect-label">Flächeneinheit</div>
+      <label class="pop-row"><input type="radio" name="unit" value="ha" id="unit-ha"><span>Hektaren</span><span class="pop-meta">ha</span></label>
+      <label class="pop-row"><input type="radio" name="unit" value="m2" id="unit-m2"><span>Quadratmeter</span><span class="pop-meta">m²</span></label>
+    </div>
+  </div>
   <button class="hbtn hbtn-light" id="btn-new" title="Andere GeoJSON laden">Neue Datei</button>
-  <span class="dl-wrap"><button class="hbtn" id="dl-btn" type="button" aria-haspopup="dialog">Herunterladen</button></span>
+  <button class="hbtn" id="dl-btn" type="button" aria-haspopup="dialog">Herunterladen</button>
 </header>
 
-<!-- Download modal: offline HTML deliverable + GeoJSON/Excel per scope -->
+<!-- Global search results (fixed popover under the header search field) -->
+<div class="popover gsearch-dd" id="gsearch-dd" role="listbox" aria-label="Suchergebnisse" hidden></div>
+
+<!-- Download dialog: one scope switch, one list of formats -->
 <div class="modal-backdrop" id="dl-modal" hidden>
-  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="dl-modal-title">
+  <div class="modal-card modal-sm" role="dialog" aria-modal="true" aria-labelledby="dl-modal-title">
     <div class="modal-head">
       <h2 id="dl-modal-title">Herunterladen</h2>
-      <button class="modal-x" id="dl-close" type="button" aria-label="Schliessen">&times;</button>
+      <button class="icon-btn modal-x" id="dl-close" type="button" aria-label="Schliessen"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
     </div>
-    <label class="dl-title">Titel<input id="dl-title" type="text" value="Auswertung Bodenbedeckung"></label>
-    <div class="dl-sect-label">Dokumente</div>
-    <button class="dl-item dl-doc" id="dl-html" type="button"><span class="dl-doc-t">Dashboard (HTML)</span><span class="dl-doc-s">interaktive Auswertung als eigenständige Datei zum Weitergeben</span></button>
-    <button class="dl-item dl-doc" id="dl-pdf" type="button"><span class="dl-doc-t">Priorisierte Grundstücke (PDF)</span><span class="dl-doc-s">A3-Bericht, eine Seite pro Grundstück (Karte &amp; Kennzahlen)</span></button>
-    <div class="dl-progress" id="dl-progress" hidden>
-      <div class="dl-progress-row"><div class="dl-progress-track"><i id="dl-progress-bar"></i></div><button class="dl-abort" id="dl-abort" type="button">Abbrechen</button></div>
-      <span class="dl-progress-txt" id="dl-progress-txt"></span>
+    <div class="modal-body">
+      <div class="sect-title">Grundstücke</div>
+      <div class="seg" id="dl-scope" role="radiogroup" aria-label="Grundstücke">
+        <button type="button" class="seg-btn" role="radio" aria-checked="false" data-scope="all"><span class="seg-l">Alle</span><span class="seg-n" id="dl-n-all"></span></button>
+        <button type="button" class="seg-btn" role="radio" aria-checked="false" data-scope="flt"><span class="seg-l">Aktive Filter</span><span class="seg-n" id="dl-n-flt"></span></button>
+        <button type="button" class="seg-btn" role="radio" aria-checked="false" data-scope="sel"><span class="seg-l">Ausgewählt</span><span class="seg-n" id="dl-n-sel"></span></button>
+      </div>
+      <label class="dl-title">Titel<input id="dl-title" type="text" value="Auswertung Bodenbedeckung"></label>
+      <div class="sect-title">Format</div>
+      <div class="dl-rows">
+        <div class="dl-row" id="dl-row-pdf">
+          <div class="dl-row-main"><div class="dl-row-t">PDF-Bericht</div><div class="dl-row-s" id="dl-pdf-sub">A3, eine Seite pro Grundstück.</div></div>
+          <button class="btn btn-primary dl-act" id="dl-pdf" type="button">PDF erstellen</button>
+        </div>
+        <div class="dl-progress" id="dl-progress" hidden>
+          <div class="dl-progress-row"><div class="dl-progress-track"><i id="dl-progress-bar"></i></div><button class="btn btn-sm" id="dl-abort" type="button">Abbrechen</button></div>
+          <span class="dl-progress-txt" id="dl-progress-txt"></span>
+        </div>
+        <div class="dl-row">
+          <div class="dl-row-main"><div class="dl-row-t">Excel</div><div class="dl-row-s">Tabelle mit den sichtbaren Spalten.</div></div>
+          <button class="btn btn-primary dl-act" id="dl-xlsx" type="button">Herunterladen</button>
+        </div>
+        <div class="dl-row">
+          <div class="dl-row-main"><div class="dl-row-t">GeoJSON</div><div class="dl-row-s">Parzellengeometrie (WGS84) mit Attributen.</div></div>
+          <button class="btn btn-primary dl-act" id="dl-geo" type="button">Herunterladen</button>
+        </div>
+        <div class="dl-row">
+          <div class="dl-row-main"><div class="dl-row-t">Datenqualität</div><div class="dl-row-s" id="dl-q-sub">Prüfregeln und Abweichungen (Excel, 2 Blätter).</div></div>
+          <button class="btn btn-primary dl-act" id="dl-q" type="button">Herunterladen</button>
+        </div>
+        <div class="dl-row">
+          <div class="dl-row-main"><div class="dl-row-t">Dashboard (HTML)</div><div class="dl-row-s">Interaktive Datei zum Weitergeben, enthält immer alle Grundstücke.</div></div>
+          <button class="btn btn-primary dl-act" id="dl-html" type="button">Herunterladen</button>
+        </div>
+      </div>
+      <div class="dl-hint" id="dl-hint">Karte und PDF benötigen eine Internetverbindung.</div>
     </div>
-    <div class="dl-sect-label">Datenqualität</div>
-    <button class="dl-item dl-doc" id="dl-q-all-xlsx" type="button"><span class="dl-doc-t">Alle Grundstücke <span class="dl-scope-n" id="dl-n-q-all"></span></span><span class="dl-doc-s">Prüfregeln &amp; Abweichungen je Prüfung/Grundstück · ganzer Datensatz (Excel, 2 Blätter)</span></button>
-    <button class="dl-item dl-doc" id="dl-q-flt-xlsx" type="button"><span class="dl-doc-t">Gefiltert <span class="dl-scope-n" id="dl-n-q-flt"></span></span><span class="dl-doc-s">Prüfregeln &amp; Abweichungen je Prüfung/Grundstück · aktuelle Auswahl (Excel, 2 Blätter)</span></button>
-    <div class="dl-sect-label">Daten exportieren</div>
-    <div class="dl-grid">
-      <div class="dl-scope">
-        <div class="dl-scope-name">Alle Grundstücke <span class="dl-scope-n" id="dl-n-all"></span></div>
-        <div class="dl-scope-sub">vollständiger Datensatz</div>
-      </div>
-      <button class="dl-fmt" id="dl-all-geo" type="button">GeoJSON</button>
-      <button class="dl-fmt" id="dl-all-xlsx" type="button">Excel</button>
-      <div class="dl-scope">
-        <div class="dl-scope-name">Gefiltert <span class="dl-scope-n" id="dl-n-flt"></span></div>
-        <div class="dl-scope-sub">aktive Filter im Seitenpanel</div>
-      </div>
-      <button class="dl-fmt" id="dl-flt-geo" type="button">GeoJSON</button>
-      <button class="dl-fmt" id="dl-flt-xlsx" type="button">Excel</button>
-      <div class="dl-scope">
-        <div class="dl-scope-name">Priorisiert <span class="dl-scope-n" id="dl-n-prio"></span></div>
-        <div class="dl-scope-sub">Top-N aus der Priorisierung (+ Rang/Score/Segment)</div>
-      </div>
-      <button class="dl-fmt" id="dl-prio-geo" type="button">GeoJSON</button>
-      <button class="dl-fmt" id="dl-prio-xlsx" type="button">Excel</button>
+  </div>
+</div>
+
+<!-- Layer info dialog (legend and information for internal and external maps) -->
+<div class="modal-backdrop" id="info-modal" hidden>
+  <div class="modal-card modal-md" role="dialog" aria-modal="true" aria-labelledby="info-title">
+    <div class="modal-head">
+      <h2 id="info-title">Information</h2>
+      <button class="icon-btn modal-x" id="info-close" type="button" aria-label="Schliessen"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
     </div>
-    <div class="dl-hint" id="dl-hint">GeoJSON enthält die Parzellengeometrie (WGS84) · Excel nutzt die sichtbaren Tabellenspalten · PDF-Bericht benötigt eine Internetverbindung (Kartenbilder).</div>
+    <div class="modal-body info-body" id="info-body"></div>
   </div>
 </div>
 
@@ -85,20 +115,20 @@
   <aside id="filter-panel" aria-label="Filter">
     <div class="fp-head">
       <span class="fp-title">Filter</span>
-      <button class="fp-collapse" id="fp-collapse" aria-label="Filter einklappen" title="Einklappen">‹</button>
+      <button class="icon-btn fp-collapse" id="fp-collapse" aria-label="Filter einklappen" title="Einklappen"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button>
     </div>
     <div class="fp-body">
       <div id="pill-row" class="pill-row"></div>
       <div class="fgroup">
-        <div class="fgroup-head"><span class="ftitle">Ausschliessen (Bezeichnung)<span class="ftip" data-tip="Standardmässig ausgeschlossen. Häkchen entfernen, um die Grundstücke wieder einzublenden.">ⓘ</span></span><button class="flink" data-toggle="exclude">alle / keine</button></div>
+        <div class="fgroup-head"><span class="ftitle">Ausschliessen (Bezeichnung)<span class="ftip" data-tip="Standardmässig ausgeschlossen. Häkchen entfernen, um die Grundstücke wieder einzublenden."></span></span><button class="flink" data-toggle="exclude">alle / keine</button></div>
         <div class="checklist single" id="f-exclude"></div>
       </div>
       <div class="fgroup">
-        <div class="fgroup-head"><span class="ftitle">E-GRID-Status<span class="ftip" data-tip="Standardmässig nur Grundstücke mit gefundenem E-GRID. Ungültige/nicht gefundene haben keine Bodenbedeckungsdaten.">ⓘ</span></span><button class="flink" data-toggle="status">alle / keine</button></div>
+        <div class="fgroup-head"><span class="ftitle">E-GRID-Status<span class="ftip" data-tip="Ungültige oder nicht gefundene E-GRID haben keine Bodenbedeckungsdaten."></span></span><button class="flink" data-toggle="status">alle / keine</button></div>
         <div class="checklist single" id="f-status"></div>
       </div>
       <div class="fgroup">
-        <div class="fgroup-head"><span class="ftitle">Bodenbedeckung<span class="ftip" data-tip="Keine oder beide Häkchen = alle Grundstücke.">ⓘ</span></span><button class="flink" data-toggle="coverage">alle / keine</button></div>
+        <div class="fgroup-head"><span class="ftitle">Bodenbedeckung<span class="ftip" data-tip="Keine oder beide Häkchen = alle Grundstücke."></span></span><button class="flink" data-toggle="coverage">alle / keine</button></div>
         <div class="checklist single" id="f-coverage"></div>
       </div>
       <div class="fgroup">
@@ -106,11 +136,11 @@
         <div class="checklist single" id="f-eigentum"></div>
       </div>
       <div class="fgroup">
-        <div class="fgroup-head"><span class="ftitle">Teilportfolio<span class="ftip" data-tip="Teilportfolio-Code aus SAP.">ⓘ</span></span><button class="flink" data-toggle="tpf">alle / keine</button></div>
+        <div class="fgroup-head"><span class="ftitle">Teilportfolio<span class="ftip" data-tip="Teilportfolio-Code aus SAP."></span></span><button class="flink" data-toggle="tpf">alle / keine</button></div>
         <div class="checklist single" id="f-tpf"></div>
       </div>
       <div class="fgroup">
-        <div class="fgroup-head"><span class="ftitle">Land<span class="ftip" data-tip="Land des Grundstücks (ISO-Ländercode aus SAP). Standardmässig nur die Schweiz (CH); ausländische Objekte sind Vertretungen im Ausland.">ⓘ</span></span><button class="flink" data-toggle="countries">alle / keine</button></div>
+        <div class="fgroup-head"><span class="ftitle">Land<span class="ftip" data-tip="Land des Grundstücks (ISO-Ländercode aus SAP). Standardmässig nur die Schweiz (CH); ausländische Objekte sind Vertretungen im Ausland."></span></span><button class="flink" data-toggle="countries">alle / keine</button></div>
         <div class="checklist single" id="f-countries"></div>
       </div>
       <div class="fgroup">
@@ -118,61 +148,65 @@
         <div class="checklist single" id="f-cantons"></div>
       </div>
       <div class="fgroup">
-        <div class="fgroup-head"><span class="ftitle">Enthält Bodenbedeckungsart<span class="ftip" data-tip="Wählt Grundstücke, die diese Art enthalten. Die Auswertung zeigt weiterhin die gesamte Bodenbedeckung dieser Grundstücke.">ⓘ</span></span><button class="flink" data-toggle="arts">alle / keine</button></div>
+        <div class="fgroup-head"><span class="ftitle">Enthält Bodenbedeckungsart<span class="ftip" data-tip="Wählt Grundstücke, die diese Art enthalten. Die Auswertung zeigt weiterhin die gesamte Bodenbedeckung dieser Grundstücke."></span></span><button class="flink" data-toggle="arts">alle / keine</button></div>
         <div class="checklist single" id="f-arts"></div>
       </div>
       <div class="fgroup">
-        <div class="fgroup-head"><span class="ftitle">Enthält Bauzone<span class="ftip" data-tip="Wählt Grundstücke, die diese Bauzone (ARE-harmonisiert) enthalten. Die Auswertung zeigt weiterhin alle Zonen dieser Grundstücke.">ⓘ</span></span><button class="flink" data-toggle="bauzonen">alle / keine</button></div>
+        <div class="fgroup-head"><span class="ftitle">Enthält Bauzone<span class="ftip" data-tip="Wählt Grundstücke, die diese Bauzone (ARE-harmonisiert) enthalten. Die Auswertung zeigt weiterhin alle Zonen dieser Grundstücke."></span></span><button class="flink" data-toggle="bauzonen">alle / keine</button></div>
         <div class="checklist single" id="f-bauzonen"></div>
       </div>
       <div class="fgroup" id="fg-vbsprod">
-        <div class="fgroup-head"><span class="ftitle">VBS Produktivität<span class="ftip" data-tip="VBS-/arImmo-Klassierung: Wählt Grundstücke, die biologisch produktive bzw. unproduktive Fläche enthalten. Die Auswertung zeigt weiterhin die gesamte Fläche dieser Grundstücke.">ⓘ</span></span><button class="flink" data-toggle="vbsprod">alle / keine</button></div>
+        <div class="fgroup-head"><span class="ftitle">VBS Produktivität<span class="ftip" data-tip="VBS-/arImmo-Klassierung. Wählt Grundstücke, bei denen die Kategorie mindestens 10 % der Grundstücksfläche ausmacht."></span></span><button class="flink" data-toggle="vbsprod">alle / keine</button></div>
         <div class="checklist single" id="f-vbsprod"></div>
       </div>
       <div class="fgroup" id="fg-vbstyp">
-        <div class="fgroup-head"><span class="ftitle">VBS Typ<span class="ftip" data-tip="Untergliederung der biologisch produktiven Fläche: Typ 1 + Typ 2 ergeben zusammen die produktive Fläche. Wählt Grundstücke, die solche Flächen enthalten.">ⓘ</span></span><button class="flink" data-toggle="vbstyp">alle / keine</button></div>
+        <div class="fgroup-head"><span class="ftitle">VBS Typ<span class="ftip" data-tip="Untergliederung der biologisch produktiven Fläche. Typ 1 und Typ 2 ergeben zusammen die produktive Fläche. Zählt ab 10 % der Grundstücksfläche."></span></span><button class="flink" data-toggle="vbstyp">alle / keine</button></div>
         <div class="checklist single" id="f-vbstyp"></div>
+      </div>
+      <div class="fgroup" id="fg-greeninv" hidden>
+        <div class="fgroup-head"><span class="ftitle">Grüninventar<span class="ftip" data-tip="Grundstücke, die im Grüninventar der Bundesgärtnerei erfasst sind. Abgleich über E-GRID und SAP-Schlüssel bei der Verarbeitung (Option «Grüninventar abgleichen»)."></span></span><button class="flink" data-toggle="greeninv">alle / keine</button></div>
+        <div class="checklist single" id="f-greeninv"></div>
       </div>
     </div>
   </aside>
-  <button class="fp-expand" id="fp-expand" title="Filter anzeigen">Filter ›</button>
+  <button class="fp-expand" id="fp-expand" title="Filter anzeigen"><span>Filter</span><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
   <div class="fp-scrim" id="fp-scrim" hidden></div>
 
   <main id="main" tabindex="-1">
-    <div class="main-head">
-      <button class="hbtn hbtn-light fp-toggle" id="fp-toggle" type="button" aria-label="Filter ein-/ausblenden" aria-expanded="false">☰ Filter</button>
-      <h1 class="dash-title" id="dash-title">Auswertung Bodenbedeckung</h1>
-      <span class="spacer"></span>
-      <span class="search-box">
-        <svg class="search-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input id="search" type="search" placeholder="Grundstück suchen…" aria-label="Grundstück suchen" autocomplete="off" />
-      </span>
-      <div class="unit-toggle" id="unit-toggle" role="group" aria-label="Flächeneinheit">
-        <button type="button" class="unit-btn is-active" data-unit="ha">ha</button>
-        <button type="button" class="unit-btn" data-unit="m2">m²</button>
+    <div class="tabs-bar">
+      <button class="hbtn hbtn-light fp-toggle" id="fp-toggle" type="button" aria-label="Filter ein-/ausblenden" aria-expanded="false"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h16"/><path d="M4 18h16"/><path d="M4 6h16"/></svg>Filter</button>
+      <div class="tabs" role="tablist">
+        <button class="tab" id="tab-map" data-tab="map" role="tab" aria-controls="panel-map" aria-selected="false" tabindex="-1">Karte</button>
+        <button class="tab" id="tab-overview" data-tab="overview" role="tab" aria-controls="panel-overview" aria-selected="false" tabindex="-1">Auswertung</button>
+        <button class="tab" id="tab-quality" data-tab="quality" role="tab" aria-controls="panel-quality" aria-selected="false" tabindex="-1">Datenqualität</button>
+        <button class="tab" id="tab-about" data-tab="about" role="tab" aria-controls="panel-about" aria-selected="false" tabindex="-1">Über</button>
       </div>
     </div>
-    <div class="tabs" role="tablist">
-      <button class="tab is-active" id="tab-overview" data-tab="overview" role="tab" aria-controls="panel-overview" aria-selected="true">Übersicht</button>
-      <button class="tab" id="tab-quality" data-tab="quality" role="tab" aria-controls="panel-quality" aria-selected="false" tabindex="-1">Datenqualität</button>
-      <button class="tab" id="tab-priority" data-tab="priority" role="tab" aria-controls="panel-priority" aria-selected="false" tabindex="-1">Priorisierung</button>
-      <button class="tab" id="tab-about" data-tab="about" role="tab" aria-controls="panel-about" aria-selected="false" tabindex="-1">Über</button>
-    </div>
 
-    <section class="tab-panel" id="panel-overview" aria-labelledby="tab-overview">
+    <section class="tab-panel panel-map" id="panel-map" aria-labelledby="tab-map" hidden>
+      <div class="map-panel" id="map-panel">
+        <div id="map"></div>
+        <!-- Basemap thumbnails: real files in assets/basemaps, inlined as data URIs in the offline deliverable. -->
+        <div id="basemap-thumbs" hidden>
+          <img data-bm="positron" src="assets/basemaps/positron.png" alt="">
+          <img data-bm="voyager" src="assets/basemaps/voyager.png" alt="">
+          <img data-bm="swissimage" src="assets/basemaps/swissimage.png" alt="">
+          <img data-bm="swissimage-labels" src="assets/basemaps/swissimage.png" alt="">
+          <img data-bm="dark-matter" src="assets/basemaps/dark-matter.png" alt="">
+        </div>
+      </div>
+    </section>
+
+    <section class="tab-panel" id="panel-overview" aria-labelledby="tab-overview" hidden>
       <h2 class="section-title">Kennzahlen</h2>
       <div class="kpis" id="kpis"></div>
 
       <h2 class="section-title">Grundstücksfläche nach Teilportfolio &amp; Region</h2>
-      <div class="chart-note">Grundstücksfläche der aktuellen Auswahl. Region ist als Code dargestellt.</div>
+      <div class="chart-note">Grundstücksfläche und Anzahl Grundstücke der aktuellen Auswahl. Region ist als Code dargestellt.</div>
       <div class="charts">
         <div class="panel"><h3>Teilportfolio</h3><div id="tbl-tpf"></div></div>
         <div class="panel"><h3>Region</h3><div id="tbl-rg"></div></div>
       </div>
-
-      <h2 class="section-title">Karte</h2>
-      <div class="chart-note">Parzellen der aktuellen Auswahl auf der Grundkarte (CARTO / OpenStreetMap, benötigt eine Internetverbindung). Herauszoomen gruppiert die Punkte; Polygon oder Cluster anklicken.</div>
-      <div class="panel map-panel" id="ov-map-panel"><div id="map"></div></div>
 
       <h2 class="section-title">Auswertungen</h2>
       <div class="summary-tables">
@@ -181,7 +215,7 @@
             <button type="button" class="ctab is-active" data-ctab="vbsprod" aria-pressed="true">VBS Produktiv &amp; Typ</button>
             <button type="button" class="ctab" data-ctab="vbskat" aria-pressed="false">VBS Kategorien</button>
           </div>
-          <div class="ctab-pane" data-pane="vbsprod"><div id="tbl-vbsprod"></div></div>
+          <div class="ctab-pane" data-pane="vbsprod"><div id="tbl-vbsprod"></div><p class="panel-note">Grundstücke zählen ab 10 % der Grundstücksfläche. Mehrfachzählung möglich.</p></div>
           <div class="ctab-pane" data-pane="vbskat" hidden><div id="tbl-vbs"></div></div>
         </div>
         <div class="panel card-tabs">
@@ -195,17 +229,24 @@
           <div class="ctab-pane" data-pane="vers" hidden><div id="tbl-gsv"></div></div>
         </div>
         <div class="panel"><div class="panel-head"><h3>AV Bodenbedeckung nach Art</h3><span class="tree-all-ctrl"><button class="flink" data-tree-all="tbl-art" data-open="1">alle ausklappen</button><button class="flink" data-tree-all="tbl-art" data-open="0">einklappen</button></span></div><div id="tbl-art"></div><p class="panel-note" id="note-art" hidden></p></div>
-        <div class="panel"><div class="panel-head"><h3>BAFU Lebensräume</h3><span class="tree-all-ctrl"><button class="flink" data-tree-all="tbl-habitat" data-open="1">alle ausklappen</button><button class="flink" data-tree-all="tbl-habitat" data-open="0">einklappen</button></span></div><div id="tbl-habitat"></div><p class="panel-note">Quelle: BAFU-Lebensraumkarte Schweiz — eine <strong>modellierte</strong> (probabilistische) Karte. Die Flächen sind Schätzwerte, keine amtliche Vermessung, und summieren sich nicht zwingend zur Grundstücksfläche.</p></div>
+        <div class="panel"><div class="panel-head"><h3>BAFU Lebensräume</h3><span class="tree-all-ctrl"><button class="flink" data-tree-all="tbl-habitat" data-open="1">alle ausklappen</button><button class="flink" data-tree-all="tbl-habitat" data-open="0">einklappen</button></span></div><div id="tbl-habitat"></div><p class="panel-note">Quelle: BAFU-Lebensraumkarte Schweiz, eine <strong>modellierte</strong> Karte. Die Flächen sind Schätzwerte und ergeben nicht zwingend die Grundstücksfläche.</p></div>
       </div>
 
       <h2 class="section-title">Grundstücke</h2>
       <div class="table-bar">
         <span class="count" id="row-count"></span>
+        <span class="sel-info" id="sel-info" hidden><strong id="sel-label"></strong><button class="flink" id="sel-clear" type="button">Auswahl aufheben</button></span>
+        <button class="flink" id="sel-filtered" type="button" hidden></button>
         <span class="spacer"></span>
+        <span class="tsearch-box">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          <input id="tsearch" type="search" placeholder="In Tabelle filtern…" aria-label="In Tabelle filtern" autocomplete="off">
+        </span>
         <div class="dropdown">
-          <button class="btn" id="cols-btn">Spalten ▾</button>
-          <div class="dropdown-menu" id="cols-menu"></div>
+          <button class="btn" id="cols-btn" type="button">Spalten<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+          <div class="popover dropdown-menu" id="cols-menu"></div>
         </div>
+        <button class="btn btn-primary" id="pdf-sel-btn" type="button" disabled>PDF-Bericht</button>
       </div>
       <div class="table-wrap">
         <div class="table-scroll">
@@ -217,9 +258,9 @@
         </div>
         <div class="pager">
           <span class="spacer"></span>
-          <button class="btn" id="prev">◀ Zurück</button>
+          <button class="btn" id="prev" type="button"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>Zurück</button>
           <span id="page-info"></span>
-          <button class="btn" id="next">Weiter ▶</button>
+          <button class="btn" id="next" type="button">Weiter<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
           <span class="spacer"></span>
           <label>Zeilen: <select id="page-size"><option>25</option><option>50</option><option>100</option></select></label>
         </div>
@@ -229,7 +270,7 @@
 
     <section class="tab-panel" id="panel-quality" aria-labelledby="tab-quality" hidden>
       <h2 class="section-title">Datenqualität <span id="flag-q" class="filtered-flag">Gefilterte Auswahl</span></h2>
-      <div class="chart-note">Bezieht sich auf die aktuelle Auswahl (dieselbe wie in der Übersicht).</div>
+      <div class="chart-note">Bezieht sich auf die aktuelle Auswahl (dieselbe wie in der Auswertung).</div>
       <div class="kpis" id="q-kpis"></div>
       <div class="summary-tables">
         <div class="panel"><h3>E-GRID-Status</h3><div id="q-egrid"></div></div>
@@ -245,61 +286,11 @@
         </div>
         <div class="pager">
           <span class="spacer"></span>
-          <button class="btn" id="q-prev">◀ Zurück</button>
+          <button class="btn" id="q-prev" type="button"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>Zurück</button>
           <span id="q-page-info"></span>
-          <button class="btn" id="q-next">Weiter ▶</button>
+          <button class="btn" id="q-next" type="button">Weiter<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
           <span class="spacer"></span>
           <label>Zeilen: <select id="q-page-size"><option>25</option><option>50</option><option>100</option></select></label>
-        </div>
-      </div>
-    </section>
-
-    <section class="tab-panel" id="panel-priority" aria-labelledby="tab-priority" hidden>
-      <h2 class="section-title">Priorisierung — Begehungs-Kandidaten</h2>
-      <div class="chart-note">Triage des Bundes-Portfolios: welche Grundstücke zuerst vor Ort begehen (Natur &amp; Wirtschaft)? Eingrenzen, Signale gewichten, Top-N wählen. Eigene Eingrenzung — die Filter links wirken hier nicht.</div>
-      <div class="kpis" id="pr-kpis"></div>
-      <div class="prio-grid">
-        <div class="panel">
-          <h3>Auswahl-Trichter <span class="ftip" data-tip="Harte Vorfilter — nur Grundstücke, die alle aktiven Kriterien erfüllen, gelangen in die Bewertung.">ⓘ</span></h3>
-          <label class="prio-chk"><input type="checkbox" id="pr-federal" checked> <span class="prio-chk-body">Nur Bund (Eigentumsart 1) <span class="ftip" data-tip="Behält nur Grundstücke im Bundeseigentum (Eigentumsart = 1).">ⓘ</span></span></label>
-          <label class="prio-chk"><input type="checkbox" id="pr-sap" checked> <span class="prio-chk-body">Reale Grundstücke (ohne Parkplätze, Löschvermerke, Abgänge) <span class="ftip" data-tip="Schliesst per Bezeichnung ausgeschlossene Objekte aus: Abgänge (ABGA), Löschvermerke (LÖVM) und Parkplätze (PP) — gleiche Regeln wie der Bezeichnungs-Filter.">ⓘ</span></span></label>
-          <div class="prio-rng"><label for="pr-uf">Umgebungsfläche UF ≥ <strong id="pr-uf-val">1000</strong> m² <span class="ftip" data-tip="Mindest-Umgebungsfläche (SIA 416 BUF + UUF = Grundstück ohne Gebäudegrundfläche). Schliesst kleine Restflächen aus.">ⓘ</span></label><input type="range" id="pr-uf" min="0" max="5000" step="100" value="1000"></div>
-          <label class="prio-chk"><input type="checkbox" id="pr-bauzone" checked> <span class="prio-chk-body">In Bauzone (Anteil ≥ <strong id="pr-bz-val">50</strong> %) <span class="ftip" data-tip="Mindestanteil der Grundstücksfläche, der in einer Bauzone (ARE-harmonisiert) liegt.">ⓘ</span></span></label>
-          <div class="prio-rng"><input type="range" id="pr-bz" min="0" max="100" step="5" value="50" aria-label="Mindest-Bauzonenanteil in Prozent"></div>
-        </div>
-        <div class="panel">
-          <h3>Gewichtung <span class="ftip" data-tip="Relative Bedeutung der 6 Bewertungssignale für den Score. Werden normalisiert — nur das Verhältnis zählt.">ⓘ</span> <button class="pill-reset" id="pr-reset-w" type="button">Standard</button></h3>
-          <div id="pr-weights"></div>
-          <div class="prio-wnote">Gewichte werden normalisiert — nur das Verhältnis zählt.</div>
-        </div>
-        <div class="panel">
-          <h3>Auswahl <span class="ftip" data-tip="Anzahl der bestbewerteten Grundstücke — mit optionalen Obergrenzen zur Streuung über Kantone und Teilportfolios.">ⓘ</span></h3>
-          <div class="prio-rng"><label for="pr-topn">Top-N: <strong id="pr-topn-val">100</strong> <span class="ftip" data-tip="Anzahl auszuwählender Grundstücke mit dem höchsten Score.">ⓘ</span></label><input type="range" id="pr-topn" min="10" max="300" step="10" value="100"></div>
-          <label class="prio-chk"><input type="checkbox" id="pr-cap" checked> <span class="prio-chk-body">max <input type="number" id="pr-cap-n" value="20" min="1" max="100" aria-label="Maximale Anzahl pro Kanton"> pro Kanton <span class="ftip" data-tip="Obergrenze pro Kanton — verteilt die Auswahl, statt sie auf wenige Kantone zu konzentrieren.">ⓘ</span></span></label>
-          <label class="prio-chk"><input type="checkbox" id="pr-tcap" checked> <span class="prio-chk-body">max <input type="number" id="pr-tcap-n" value="30" min="1" max="200" aria-label="Maximale Anzahl pro Teilportfolio"> pro Teilportfolio <span class="ftip" data-tip="Obergrenze pro Teilportfolio — verhindert Klumpung in einem einzelnen Teilportfolio.">ⓘ</span></span></label>
-        </div>
-      </div>
-      <div class="summary-tables">
-        <div class="panel"><h3>Kantone der Auswahl</h3><div id="pr-rg"></div></div>
-        <div class="panel"><h3>Teilportfolio der Auswahl</h3><div id="pr-tpf"></div></div>
-      </div>
-      <h2 class="section-title">Karte der Auswahl</h2>
-      <div class="panel map-panel" id="pr-map-panel"></div>
-      <h2 class="section-title">Rangliste <span class="count" id="pr-count"></span><span style="flex:1"></span><button class="hbtn hbtn-light" id="pr-export" type="button">Bericht herunterladen</button></h2>
-      <div class="table-wrap">
-        <div class="table-scroll">
-          <table id="pr-table">
-            <thead><tr id="pr-thead-row"></tr></thead>
-            <tbody id="pr-tbody"></tbody>
-          </table>
-        </div>
-        <div class="pager">
-          <span class="spacer"></span>
-          <button class="btn" id="pr-prev">◀ Zurück</button>
-          <span id="pr-page-info"></span>
-          <button class="btn" id="pr-next">Weiter ▶</button>
-          <span class="spacer"></span>
-          <label>Zeilen: <select id="pr-page-size"><option>25</option><option>50</option><option>100</option></select></label>
         </div>
       </div>
     </section>
@@ -307,19 +298,32 @@
     <section class="tab-panel" id="panel-about" aria-labelledby="tab-about" hidden>
       <div class="about">
         <h2 class="section-title">Über diese Auswertung</h2>
-        <p>Diese Auswertung zeigt pro Schweizer Grundstück (Liegenschaft / SDR), wie sich die Grundstücksfläche auf <strong>Bodenbedeckungsarten</strong>, <strong>Bauzonen</strong> und <strong>BAFU-Lebensräume</strong> verteilt. Die Daten sind in diese Datei eingebettet; Auswertung, Tabellen, Diagramme und Filter laufen ohne Server direkt im Browser. Die interaktive Karte und der Excel-Export benötigen eine Internetverbindung.</p>
+        <p>Diese Auswertung zeigt pro Schweizer Grundstück (Liegenschaft / SDR), wie sich die Grundstücksfläche auf <strong>Bodenbedeckungsarten</strong>, <strong>Bauzonen</strong> und <strong>BAFU-Lebensräume</strong> verteilt. Die Daten sind in diese Datei eingebettet; Auswertung, Tabellen, Diagramme und Filter laufen ohne Server direkt im Browser. Die interaktive Karte, die Suche nach Orten und Karten, der Excel-Export und der PDF-Bericht benötigen eine Internetverbindung.</p>
         <h2 class="section-title">Datengrundlagen</h2>
         <ul>
-          <li><strong>Bodenbedeckung</strong> — Amtliche Vermessung (AV), DM.01-AV-CH · <a href="https://www.geodienste.ch/services/av" target="_blank" rel="noopener">geodienste.ch</a> · <a href="https://www.cadastre-manual.admin.ch/de/informationsebene-bodenbedeckung-and-einzelobjekte" target="_blank" rel="noopener">Informationsebene «Bodenbedeckung» &amp; «Einzelobjekte»</a></li>
-          <li><strong>Grundstücke</strong> — Amtliche Vermessung, Liegenschaften (E-GRID) · <a href="https://map.geo.admin.ch/#/map?lang=de&amp;bgLayer=ch.swisstopo.pixelkarte-grau&amp;layers=ch.kantone.cadastralwebmap-farbe" target="_blank" rel="noopener">map.geo.admin.ch</a></li>
-          <li><strong>Bauzonen</strong> — ARE, harmonisiert · <code>ch.are.bauzonen</code> · <a href="https://map.geo.admin.ch/#/map?lang=de&amp;bgLayer=ch.swisstopo.pixelkarte-grau&amp;layers=ch.are.bauzonen" target="_blank" rel="noopener">map.geo.admin.ch</a></li>
-          <li><strong>Lebensräume</strong> — BAFU Lebensraumkarte · <code>ch.bafu.lebensraumkarte-schweiz</code> · <a href="https://map.geo.admin.ch/#/map?lang=de&amp;center=2622715,1205155.21&amp;z=1.921&amp;topic=ech&amp;layers=ch.bafu.lebensraumkarte-schweiz&amp;bgLayer=void" target="_blank" rel="noopener">map.geo.admin.ch</a> · <a href="https://www.infoflora.ch/en/habitats/typoch-(delarze-et-al.).html" target="_blank" rel="noopener">Lebensraumtypologie TypoCH</a></li>
+          <li><strong>Bodenbedeckung</strong> · Amtliche Vermessung (AV), DM.01-AV-CH · <a href="https://www.geodienste.ch/services/av" target="_blank" rel="noopener">geodienste.ch</a> · <a href="https://www.cadastre-manual.admin.ch/de/informationsebene-bodenbedeckung-and-einzelobjekte" target="_blank" rel="noopener">Informationsebene «Bodenbedeckung» &amp; «Einzelobjekte»</a></li>
+          <li><strong>Grundstücke</strong> · Amtliche Vermessung, Liegenschaften (E-GRID) · <a href="https://map.geo.admin.ch/#/map?lang=de&amp;bgLayer=ch.swisstopo.pixelkarte-grau&amp;layers=ch.kantone.cadastralwebmap-farbe" target="_blank" rel="noopener">map.geo.admin.ch</a></li>
+          <li><strong>Bauzonen</strong> · ARE, harmonisiert · <code>ch.are.bauzonen</code> · <a href="https://map.geo.admin.ch/#/map?lang=de&amp;bgLayer=ch.swisstopo.pixelkarte-grau&amp;layers=ch.are.bauzonen" target="_blank" rel="noopener">map.geo.admin.ch</a></li>
+          <li><strong>Lebensräume</strong> · BAFU Lebensraumkarte · <code>ch.bafu.lebensraumkarte-schweiz</code> · <a href="https://map.geo.admin.ch/#/map?lang=de&amp;center=2622715,1205155.21&amp;z=1.921&amp;topic=ech&amp;layers=ch.bafu.lebensraumkarte-schweiz&amp;bgLayer=void" target="_blank" rel="noopener">map.geo.admin.ch</a> · <a href="https://www.infoflora.ch/en/habitats/typoch-(delarze-et-al.).html" target="_blank" rel="noopener">Lebensraumtypologie TypoCH</a></li>
+          <li><strong>Hintergrundkarten</strong> · CARTO (Light, Standard, Dark; © CARTO, © OpenStreetMap-Mitwirkende) · SWISSIMAGE (© swisstopo) · Esri World Imagery und Hybrid Reference Layer (Esri, Maxar, Earthstar Geographics, TomTom, Garmin, FAO, NOAA, USGS, © OpenStreetMap contributors, and the GIS User Community)</li>
+          <li><strong>Externe Karten</strong> · Geokatalog von map.geo.admin.ch, gerendert über <code>wms.geo.admin.ch</code> (© swisstopo und Datenherren)</li>
         </ul>
         <p class="muted">Metadaten-Katalog: <a href="https://www.geocat.ch/geonetwork/srv/ger/catalog.search#/home" target="_blank" rel="noopener">geocat.ch</a> · © swisstopo / Kantone (AV) · ARE · BAFU</p>
+        <h2 class="section-title">Zählung der Grundstücke</h2>
+        <p>Flächen werden summiert. Grundstücke werden je Kategorie gezählt, wenn die Kategorie mindestens <strong>10 % der Grundstücksfläche</strong> ausmacht.</p>
+        <ul>
+          <li>Ein Grundstück kann in mehreren Kategorien zählen. Die Summe der Zählungen ist daher grösser als die Anzahl Grundstücke.</li>
+          <li>Kleinere Anteile fliessen in die Fläche ein, zählen das Grundstück aber nicht.</li>
+          <li>Die gleiche Regel gilt für die Filter «VBS Produktivität» und «VBS Typ».</li>
+          <li>Teilportfolio und Region zählen jedes Grundstück genau einmal.</li>
+          <li>Grundstücke ohne Bodenbedeckung werden separat ausgewiesen.</li>
+        </ul>
+        <div class="about-example">Beispiel: Ein Grundstück mit 2'000 m² Fläche, 400 m² Typ 1 (20 %) und 60 m² Typ 2 (3 %) zählt als <strong>Typ 1</strong>, nicht als Typ 2.</div>
         <h2 class="section-title">Hinweise</h2>
         <ul>
           <li>Die berechnete Grundstücksfläche entspricht <em>nicht</em> dem amtlichen Flächenmass.</li>
           <li>Benutzerdefinierte Felder werden beim Erstellen der Datei automatisch entfernt.</li>
+          <li>Der PDF-Bericht umfasst bis zu 50 Grundstücke. Grundstücke in der Tabelle oder im Kartenpopup auswählen.</li>
         </ul>
         <h2 class="section-title">Weiterführende Informationen</h2>
         <ul class="about-links">
