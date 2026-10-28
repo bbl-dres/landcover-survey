@@ -5,8 +5,8 @@ satellite embeddings in Google Earth Engine — an alternative, machine-learning
 approach to the geometry-based aggregation used elsewhere in this repo.
 
 > [!NOTE]
-> This is an **experimental / research** track. Unlike the [`web/`](../web/),
-> [`python/`](../python/), and [`fme/`](../fme/) solutions — which compute exact
+> This is an **experimental / research** track. Unlike the [`processing-web/`](../processing-web/),
+> [`processing-cli/`](../processing-cli/), and [`processing-fme/`](../processing-fme/) solutions — which compute exact
 > per-parcel areas by clipping official AV land-cover polygons — this approach
 > *predicts* a land-cover class per parcel from learned satellite features. The
 > two are complementary: AV gives authoritative areas; AlphaEarth gives a
@@ -81,7 +81,7 @@ The end-to-end Earth Engine workflow lives in
 
 ## Relationship to the rest of this repo
 
-| | This folder (AlphaEarth) | `web/` · `python/` · `fme/` |
+| | This folder (AlphaEarth) | `processing-web/` · `processing-cli/` · `processing-fme/` |
 |---|---|---|
 | Method | ML classification of learned embeddings | Geometric clipping of AV polygons |
 | Output | Predicted dominant class per parcel | Exact m² per land-cover type |

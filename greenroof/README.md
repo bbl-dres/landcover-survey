@@ -22,7 +22,7 @@ EGRID ─▶ parcel polygon (geo.admin.ch find, LV95)
 ```
 
 Everything runs client-side in the browser, in LV95 (EPSG:2056) — same
-zero-backend model as [`web/`](../web/).
+zero-backend model as [`processing-web/`](../processing-web/).
 
 ## The NIR situation (verified 2026-07-03)
 
@@ -116,7 +116,7 @@ numbers; the defaults are conservative starting points.
 | `greenroof.js` | The whole pipeline (fetch, COG window read, index, mask, stats, export) |
 | `RESEARCH-NIR-IMAGERY.md` | Dataset screening: NIR imagery sources (CH federal/cantonal, EU), ground truth, verification log |
 
-Dependencies (CDN, pinned like `web/`): Turf.js 7 (parcel/building clipping),
+Dependencies (CDN, pinned like `processing-web/`): Turf.js 7 (parcel/building clipping),
 geotiff.js 2 (COG reader), d3-contour 4 (mask → polygon).
 
 ## Caveats

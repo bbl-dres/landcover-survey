@@ -225,8 +225,8 @@ datasets locally rather than hitting the API per parcel.
 | `pipeline.py` | Orchestrates Mode 1/2, clipping, aggregation, layer analyses |
 | `swisstopo.py` | Generic geo.admin.ch Identify client (quadtree-tiled fetch, intersect) |
 | `bauzonen.py` / `habitat.py` | Thin `LayerConfig` wrappers around `swisstopo.py` |
-| `api.py` | `api` source: the live requests of the web app, mirrored from `web/js/geoapi.js` (find, WFS paged until empty, Identify quadtree, green inventory) |
-| `processor_web.py` | `api` source: per-parcel pipeline mirrored from `web/js/processor.js` (clip, classify, aggregate, flags) |
+| `api.py` | `api` source: the live requests of the web app, mirrored from `processing-web/js/geoapi.js` (find, WFS paged until empty, Identify quadtree, green inventory) |
+| `processor_web.py` | `api` source: per-parcel pipeline mirrored from `processing-web/js/processor.js` (clip, classify, aggregate, flags) |
 | `geom_wgs84.py` / `fdlibm.py` | `api` source: bit-exact port of Turf 7's spherical area (incl. the JavaScript engine's `sin`) and the Turf-equivalent clip / union / difference in EPSG:4326 |
 | `classify_web.py` / `export_web.py` / `user_input.py` | `api` source: web classifier port, GeoJSON / Excel / CSV writers, the shared input reader |
 | `compare.py` | Cross-check a web export against an `api` export (`--rtol 0 --atol 0` = bit-identical) |
@@ -319,7 +319,7 @@ geo.admin.ch Identify endpoint, clipped to the parcel and exported as its own Ge
   because a modeled habitat map can't resolve building footprints. Category names come
   from the shared [`data/typoch.json`](../data/typoch.json); the green/VBS mapping lives
   in `BAFU_TYPOCH_L1` (level-1 defaults) + `BAFU_TYPOCH_REFINE` (level-2/3 overrides,
-  most-specific-first) in [web/js/config.js](../web/js/config.js); rules and caveats are
+  most-specific-first) in [processing-web/js/config.js](../processing-web/js/config.js); rules and caveats are
   in [CLASSIFICATION.md](CLASSIFICATION.md) §BAFU Lebensraumkarte.
 
 The habitat **overlay** above stays a parallel layer (TypoCH categories, green + VBS
@@ -350,7 +350,7 @@ than the sparse AV it supersedes.
 Synthetic cover is **flagged, never silently substituted**: `lc_source = BAFU` and
 `lc_synthetic = yes` at parcel level, and each synthetic feature keeps its source
 TypoCH in a `typoch` column for traceability. The crosswalk and its ⚠ judgment calls
-live in `TYPOCH_BBART` ([web/js/config.js](../web/js/config.js)); rationale and the full
+live in `TYPOCH_BBART` ([processing-web/js/config.js](../processing-web/js/config.js)); rationale and the full
 table are in [CLASSIFICATION.md](CLASSIFICATION.md) §Synthetic AV land cover.
 
 > This re-introduces a fallback the web app had previously dropped (AV stayed pure AV;

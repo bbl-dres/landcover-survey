@@ -2,8 +2,9 @@
   "name": "landcover-survey",
   "private": true,
   "type": "module",
-  "description": "Unit tests for the web app's processing modules (node:test, no dependencies). The Python tests live in python/tests.",
+  "description": "Unit tests for the web app's processing modules and the dashboard's generated reference tables (node:test, no dependencies). The Python tests live in processing-cli/tests.",
   "scripts": {
-    "test": "node --test \"web/tests/*.test.mjs\""
+    "test": "node --test \"processing-web/tests/*.test.mjs\" \"dashboard/tests/*.test.mjs\"",
+    "build:dashboard-data": "node scripts/build_dashboard_data.mjs"
   }
 }

@@ -1,10 +1,10 @@
 {
  "_meta": {
   "name": "AV Bodenbedeckung (land cover) type reference — BBArt (DE/FR/IT + INTERLIS hierarchy)",
-  "purpose": "Authoritative Art→name + main-group/subgroup lookup for the official Amtliche Vermessung land cover (ms:LCSF / lcsf). Reused by the web app (web/js/config.js) and the Python CLI (python/config.py) so BBArt names are not hardcoded twice. Classification (SIA 416 / DIN 277 / green space / sealed / VBS) stays in code, keyed on `key`.",
+  "purpose": "Authoritative Art→name + main-group/subgroup lookup for the official Amtliche Vermessung land cover (ms:LCSF / lcsf). Reused by the web app (processing-web/js/config.js) and the Python CLI (processing-cli/config.py) so BBArt names are not hardcoded twice. Classification (SIA 416 / DIN 277 / green space / sealed / VBS) stays in code, keyed on `key`.",
   "data_model": "DM.01-AV-CH — Informationsebene «Bodenbedeckung und Einzelobjekte»; BBArt domain per TVAV (SR 211.432.21, Art. 14–19). Replaced by DMAV by 2027-12-31.",
   "source_url": "https://www.cadastre-manual.admin.ch/de/informationsebene-bodenbedeckung-and-einzelobjekte",
-  "key_note": "`key` is the Art enumeration value the classifier keys on (e.g. `geschlossener_Wald`, `Gewaesser_stehendes`) — matches web/js/config.js and python/config.py exactly. The web AV WFS is pinned to the German (`deu`) geodienste.ch endpoint so these values are not translated at source.",
+  "key_note": "`key` is the Art enumeration value the classifier keys on (e.g. `geschlossener_Wald`, `Gewaesser_stehendes`) — matches processing-web/js/config.js and processing-cli/config.py exactly. The web AV WFS is pinned to the German (`deu`) geodienste.ch endpoint so these values are not translated at source.",
   "lang_note": "`de` is authoritative (the app's display labels). `fr`/`it` follow the DM.01-AV-CH Objektkatalog terminology and are provided for reference; verify against the Objektkatalog before relying on exact wording.",
   "count": 26,
   "extracted": "2026-07-10",

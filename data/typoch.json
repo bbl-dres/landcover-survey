@@ -1,7 +1,7 @@
 {
  "_meta": {
   "name": "TypoCH habitat typology — code/name reference (levels 1–4, DE/FR/IT)",
-  "purpose": "Authoritative code→name lookup for the BAFU Lebensraumkarte (ch.bafu.lebensraumkarte-schweiz) habitat overlay. Reused by the web app (web/js/config.js) and the Python CLI (python/) so habitat category names are not hardcoded twice.",
+  "purpose": "Authoritative code→name lookup for the BAFU Lebensraumkarte (ch.bafu.lebensraumkarte-schweiz) habitat overlay. Reused by the web app (processing-web/js/config.js) and the Python CLI (processing-cli/) so habitat category names are not hardcoded twice.",
   "typology": "Delarze R., Gonseth Y., Eggenberg S., Vust M. (2015): Lebensräume der Schweiz. Ökologie – Gefährdung – Kennarten. 3. Aufl.",
   "source_list": "InfoFlora — Artenliste TypoCH / Liste des espèces / Lista delle specie (workbook, 2024-05-29), sheet 'TypoCH'.",
   "source_url": "https://www.infoflora.ch/en/habitats/typoch-(delarze-et-al.).html",
@@ -12,7 +12,8 @@
    "1": "Hauptlebensraumtyp (main class)",
    "2": "Lebensraumgruppe (group)",
    "3": "Lebensraumtyp (type)",
-   "4": "Subtyp (subtype)"
+   "4": "Subtyp (subtype)",
+    "5": "Variante (variant; only 4.2.1.1.1 / 4.2.1.1.2, numbered by their ids 42111 / 42112)"
   },
   "map_layer_depth": "The Lebensraumkarte resolves to level-2 at minimum, level-3 where possible; it does not emit level-4.",
   "extracted": "2026-07-10",
@@ -648,7 +649,7 @@
    "code": "3.1",
    "id": 31,
    "level": 2,
-   "de": "Gletscher, Firn- und Schneefleder",
+   "de": "Gletscher, Firn- und Schneefelder",
    "fr": "Glaciers, névés",
    "it": "Ghiacciai e nevai",
    "color": "#FFFEED"
@@ -1131,18 +1132,18 @@
    "color": "#FCA957"
   },
   {
-   "code": "4.2.1.1",
+   "code": "4.2.1.1.1",
    "id": 42111,
-   "level": 4,
+   "level": 5,
    "de": "Inneralpine Felsensteppe der Westalpen",
    "fr": "Pelouse steppique des Alpes occidentales",
    "it": "Praterie steppiche tipiche delle Alpi occidentali",
    "color": "#FCA957"
   },
   {
-   "code": "4.2.1.1",
+   "code": "4.2.1.1.2",
    "id": 42112,
-   "level": 4,
+   "level": 5,
    "de": "Inneralpine Felsensteppe der Ostalpen",
    "fr": "Pelouse steppique des Alpes orientales",
    "it": "Praterie steppiche tipiche delle Alpi orientali",
@@ -1737,7 +1738,7 @@
    "code": "5.4.1.2",
    "id": 5412,
    "level": 4,
-   "de": "Subatlantsiche Heide, nicht auf Torf",
+   "de": "Subatlantische Heide, nicht auf Torf",
    "fr": "Lande subatlantique sur sol non tourbeux",
    "it": "Brughiera subatlantica su suolo non torboso",
    "color": "#F0F050"
@@ -2826,7 +2827,7 @@
    "code": "9.2.5.2",
    "id": 9252,
    "level": 4,
-   "de": "Kriche",
+   "de": "Kirche",
    "fr": "Église",
    "it": "Chiesa",
    "color": "#000000"
@@ -2943,7 +2944,7 @@
    "code": "9.4",
    "id": 94,
    "level": 2,
-   "de": "Versiegeleter Sportplatz, Parkplatz etc.",
+   "de": "Versiegelter Sportplatz, Parkplatz etc.",
    "fr": "Terrain de sport revêtu, place de parc",
    "it": "Campi sportivi, parcheggi pavimentati ecc.",
    "color": "#696969"

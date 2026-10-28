@@ -9,7 +9,7 @@
 > **Alpha software for research and demonstration, not production use.** The web
 > app depends on external services with known coverage and response limits; validate
 > results before use. The local Python workflow can use a full GeoPackage. See the
-> [user guide](docs/MANUAL.md) and [current CLI limitations](python/TODO.md).
+> [user guide](docs/MANUAL.md) and [current CLI limitations](processing-cli/TODO.md).
 
 Tools for calculating land-cover area per Swiss cadastral parcel from official
 survey data (Amtliche Vermessung), with browser, command-line, and specialist
@@ -30,9 +30,9 @@ The repository root opens the browser implementation.
 
 | Implementation | Status and purpose | Demo | Details |
 |---|---|---|---|
-| Web App | Alpha; interactive parcel and batch analysis | [Open app](https://bbl-dres.github.io/landcover-survey/web/) | [README](web/README.md) |
-| Python CLI | Local processing with exact LV95 areas and local data | Local only | [README](python/README.md) |
-| FME workspace | Original local workflow; requires a commercial FME Form licence | Local only | [README](fme/README.md) |
+| Web App | Alpha; interactive parcel and batch analysis | [Open app](https://bbl-dres.github.io/landcover-survey/processing-web/) | [README](processing-web/README.md) |
+| Python CLI | Local processing with exact LV95 areas and local data | Local only | [README](processing-cli/README.md) |
+| FME workspace | Original local workflow; requires a commercial FME Form licence | Local only | [README](processing-fme/README.md) |
 | Offline Dashboard | Builds a self-contained dashboard from GeoJSON | [Open app](https://bbl-dres.github.io/landcover-survey/dashboard/) | [README](dashboard/README.md) |
 | Green Roof | Experimental browser-based vegetation analysis | [Open app](https://bbl-dres.github.io/landcover-survey/greenroof/) | [README](greenroof/README.md) |
 | AlphaEarth | Experimental Earth Engine classification research | Local only | [README](alphaearth/README.md) |
@@ -54,7 +54,7 @@ tools are available at their paths shown above.
 - [User guide and data coverage](docs/MANUAL.md)
 - [Architecture, processing pipeline, and limitations](docs/ARCHITECTURE.md)
 - [Classification](docs/CLASSIFICATION.md) and [data model](docs/DATAMODEL.md)
-- [Current Python parity and API-limit work](python/TODO.md)
+- [Current Python parity and API-limit work](processing-cli/TODO.md)
 
 Related project: [Green Inventory](https://github.com/bbl-dres/green-inventory).
 

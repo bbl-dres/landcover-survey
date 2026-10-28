@@ -5,7 +5,7 @@
   // carries a clean shell with data swapped into the PARCEL-DATA markers.
   var TEMPLATE_HTML = "<!doctype html>\n" + document.documentElement.outerHTML;
   // PII allowlist (mirrors the old build_dashboard.py): keep every non-input_
-  // column; of input_ keep only these six. The rest never reach a saved file.
+  // column; of input_ keep only these seven. The rest never reach a saved file.
   var KEEP_INPUT = { "input_ort":1, "input_plz":1, "input_rg":1, "input_bez. grundstück":1, "input_eigent.art":1, "input_tpf":1, "input_l/r":1 };
   // Anything that looks like personal data is dropped even outside the input_ namespace
   // (defence-in-depth: an alternate/future export schema could carry PII without the prefix).
@@ -39,14 +39,17 @@
   // `layer` (parcel/landcover/bauzonen/habitat). Parcel rows carry the data
   // (tables/filters/parcel map layer); the other layers are kept as map overlays
   // (geometry + `art` type only — no PII). Legacy parcels-only exports have no
-  // `layer` and yield empty overlays.
+  // `layer` and yield empty overlays. Features of any other layer, and overlay features
+  // without a geometry, are counted in `skipped` so the picker can say so.
   var emptyOverlays = function () {
     return { landcover: { type: "FeatureCollection", features: [] }, bauzonen: { type: "FeatureCollection", features: [] }, habitat: { type: "FeatureCollection", features: [] } };
   };
   var readGeojson = function (text) {
-    var feats = ((JSON.parse(text) || {}).features || []);
+    var doc = JSON.parse(text);
+    var feats = doc && doc.type === "Feature" ? [doc] : doc && doc.features;
+    if (!Array.isArray(feats)) throw new Error("keine GeoJSON-FeatureCollection.");
     var hasLayer = feats.some(function (f) { return f && f.properties && "layer" in f.properties; });
-    var parcels = [], overlays = emptyOverlays();
+    var parcels = [], overlays = emptyOverlays(), skipped = 0;
     feats.forEach(function (f) {
       var pr = (f && f.properties) || {};
       var layer = hasLayer ? pr.layer : "parcel";
@@ -56,9 +59,11 @@
         parcels.push(o);
       } else if (overlays[layer] && f && f.geometry) {
         overlays[layer].features.push({ type: "Feature", geometry: f.geometry, properties: { id: pr.id || "", art: pr.art || pr.Art || pr.bauzone_code || "", area_m2: +pr.area_m2 || 0 } });
+      } else {
+        skipped++;
       }
     });
-    return { parcels: parcels, overlays: overlays };
+    return { parcels: parcels, overlays: overlays, skipped: skipped };
   };
   // Strip non-allowlisted (PII) columns → { cleaned, dropped }.
   var allowlist = function (rows) {
@@ -126,8 +131,10 @@
         try {
           geo = readGeojson(t);
           var ov = geo.overlays, nOv = ov.landcover.features.length + ov.bauzonen.features.length + ov.habitat.features.length;
+          if (!geo.parcels.length) throw new Error("keine Grundstücke (Features mit layer = parcel) in der Datei.");
           bEl("b-show").disabled = false;
-          setStatus(fmtN.format(geo.parcels.length) + " Grundstücke aus GeoJSON geladen" + (nOv ? " (+ " + fmtN.format(nOv) + " Layer-Features für die Karte)" : "") + ".");
+          setStatus(fmtN.format(geo.parcels.length) + " Grundstücke aus GeoJSON geladen" + (nOv ? " (+ " + fmtN.format(nOv) + " Layer-Features für die Karte)" : "") +
+                    (geo.skipped ? " · " + fmtN.format(geo.skipped) + " Features ohne bekannten Layer übersprungen" : "") + ".");
         } catch (err) { geo = null; bEl("b-show").disabled = true; setStatus("Fehler beim Lesen der GeoJSON: " + err.message); }
       });
     });
@@ -139,55 +146,37 @@
     });
   }
 
-  // German labels for BBArt land cover types
-  var ART_LABELS = {
-    Gebaeude:"Gebäude", Strasse_Weg:"Strasse/Weg", Trottoir:"Trottoir", Verkehrsinsel:"Verkehrsinsel",
-    Bahn:"Bahn", Flugplatz:"Flugplatz", Wasserbecken:"Wasserbecken", uebrige_befestigte:"Übrige befestigte",
-    Acker_Wiese_Weide:"Acker/Wiese/Weide", Reben:"Reben", uebrige_Intensivkultur:"Übrige Intensivkultur",
-    Gartenanlage:"Gartenanlage", Hoch_Flachmoor:"Hoch-/Flachmoor", uebrige_humusierte:"Übrige humusierte",
-    Wytweide_dicht:"Wytweide (dicht)", Wytweide_offen:"Wytweide (offen)", Gewaesser_stehendes:"Stehendes Gewässer",
-    Gewaesser_fliessendes:"Fliessendes Gewässer", Schilfguertel:"Schilfgürtel", geschlossener_Wald:"Geschlossener Wald",
-    uebrige_bestockte:"Übrige bestockte", Fels:"Fels", Gletscher_Firn:"Gletscher/Firn", Geroell_Sand:"Geröll/Sand",
-    Abbau_Deponie:"Abbau/Deponie", uebrige_vegetationslose:"Übrige vegetationslose"
-  };
-  // AV main category (Hauptgruppe) per BBArt type — DM.01-AV-CH, shown as a prefix
-  // in the "Bodenbedeckung nach Art" chart to make the AV structure legible.
-  var ART_MAIN = {
-    Gebaeude:"Gebäude",
-    Strasse_Weg:"Befestigt", Trottoir:"Befestigt", Verkehrsinsel:"Befestigt", Bahn:"Befestigt",
-    Flugplatz:"Befestigt", Wasserbecken:"Befestigt", uebrige_befestigte:"Befestigt",
-    Acker_Wiese_Weide:"Humusiert", Reben:"Humusiert", uebrige_Intensivkultur:"Humusiert",
-    Gartenanlage:"Humusiert", Hoch_Flachmoor:"Humusiert", uebrige_humusierte:"Humusiert",
-    Gewaesser_stehendes:"Gewässer", Gewaesser_fliessendes:"Gewässer", Schilfguertel:"Gewässer",
-    geschlossener_Wald:"Bestockt", Wytweide_dicht:"Bestockt", Wytweide_offen:"Bestockt", uebrige_bestockte:"Bestockt",
-    Fels:"Vegetationslos", Gletscher_Firn:"Vegetationslos", Geroell_Sand:"Vegetationslos",
-    Abbau_Deponie:"Vegetationslos", uebrige_vegetationslose:"Vegetationslos"
-  };
-  // The 26 canonical BBArt land-cover types (allowlist for the "by type" chart),
-  // derived from ART_LABELS so new aggregate columns in an export can never be
-  // mistaken for a land-cover type.
-  var ART_KEYS = Object.keys(ART_LABELS);
-  // AV land-cover area column for a BBArt value: av_<art>_m2 (lowercase). The
-  // ART_* maps stay keyed by the BBArt code (e.g. "Gebaeude"); only the geojson
-  // column id is lowercased + av_-prefixed.
+  // ---- Reference tables (js/data.js, generated by scripts/build_dashboard_data.mjs) ----
+  // Labels and colours come from the shared references (data/landcover.json, data/typoch.json,
+  // data/countries.json, processing-web/js/config.js) through one generated file that loads
+  // before this script and is inlined into the deliverable like every other local script.
+  // Nothing in here is a hand-copied table: `npm run build:dashboard-data` regenerates it and
+  // `npm test` fails while it is stale.
+  var REF = window.DASHBOARD_DATA;
+  if (!REF) throw new Error("js/data.js fehlt – mit `npm run build:dashboard-data` erzeugen.");
+  // BBArt land-cover types: key → { label, main } (main = AV main-group slug). The 26 canonical
+  // types are the allowlist for the "by type" chart, so new aggregate columns in an export can
+  // never be mistaken for a land-cover type.
+  var ART_TYPES = REF.landcover.types, ART_KEYS = Object.keys(ART_TYPES);
+  function artLabel(a) { var t = ART_TYPES[a]; return t ? t.label : String(a); }
+  function artMain(a) { var t = ART_TYPES[a]; return t ? t.main : ""; }
+  // AV land-cover area column for a BBArt value: av_<art>_m2 (lowercase). ART_TYPES stays keyed
+  // by the BBArt code (e.g. "Gebaeude"); only the geojson column id is lowercased + av_-prefixed.
   function artCol(a) { return "av_" + String(a).toLowerCase() + "_m2"; }
 
   // ---- Shared layer colours (map fills + map legend + table category swatches) ----
-  // Land cover collapses to the 6 AV main categories (Hauptgruppen) so the map +
-  // legend stay legible; each BBArt row's swatch uses its main-category colour.
-  // Values mirror data/landcover.json `maingroups[].color` (aligned to the official
-  // BAFU habitat colour families) — keep in sync with it.
-  var MAIN_COLORS = {
-    "Gebäude": "#333333", "Befestigt": "#808080", "Humusiert": "#FC8C1D",
-    "Bestockt": "#62AF39", "Gewässer": "#0D74FC", "Vegetationslos": "#9AAAB3"
-  };
-  var MAIN_ORDER = ["Gebäude", "Befestigt", "Humusiert", "Bestockt", "Gewässer", "Vegetationslos"];
-  function mainColor(a) { return MAIN_COLORS[ART_MAIN[a]] || "#94a3b8"; }
-  // Habitat by TypoCH level-1 (digit → colour). Official BAFU Lebensraumkarte mid-tone
-  // family reps; mirrors data/typoch.json `l1_colors` and web/js/config.js BAFU_TYPOCH_L1.
-  var HABITAT_L1_COLORS = { "1":"#0D74FC", "2":"#12DEFF", "3":"#9AAAB3", "4":"#FC8C1D", "5":"#F0F000", "6":"#62AF39", "7":"#C89646", "8":"#E673E4", "9":"#505050" };
-  // TypoCH level-1 classes 1–7 are naturnah; 8 (Kulturen) & 9 (Bauten/Anlagen) are not.
-  var HABITAT_NAT_DIGIT = { "1":1, "2":1, "3":1, "4":1, "5":1, "6":1, "7":1 };
+  // Land cover collapses to the 6 AV main categories (Hauptgruppen) so the map + legend stay
+  // legible; each BBArt row's swatch uses its main-category colour (data/landcover.json, aligned
+  // to the official BAFU habitat colour families).
+  var MAIN_GROUPS = REF.landcover.main, MAIN_ORDER = REF.landcover.mainOrder;
+  function mainLabel(m) { var g = MAIN_GROUPS[m]; return g ? g.label : "—"; }
+  function mainColorOf(m) { var g = MAIN_GROUPS[m]; return g ? g.color : "#94a3b8"; }
+  function mainColor(a) { return mainColorOf(artMain(a)); }
+  // "Hauptgruppe · BBArt" for the detail views (just the type where the group carries the same name).
+  function artFullLabel(a) { var m = mainLabel(artMain(a)), l = artLabel(a); return m !== "—" && m !== l ? m + " · " + l : l; }
+  // Habitat by TypoCH level-1 (digit → colour): the official BAFU Lebensraumkarte mid-tone family
+  // representatives (data/typoch.json `l1_colors`).
+  var HABITAT_L1_COLORS = REF.typoch.l1Colors, HABITAT_DIGITS = Object.keys(HABITAT_L1_COLORS);
   // Legacy level-1 name-slugs (older exports collapsed habitat to level-1).
   var HABITAT_SLUG_DIGIT = {
     gewaesser:"1", ufer_feuchtgebiete:"2", gletscher_fels_schutt_geroell:"3", gruenland:"4",
@@ -199,127 +188,19 @@
   // level-1 name-slugs ("waelder") map via HABITAT_SLUG_DIGIT.
   function habDigit(slug) { return /^[1-9]/.test(slug) ? String(slug).charAt(0) : (HABITAT_SLUG_DIGIT[slug] || ""); }
   function habColor(slug) { return HABITAT_L1_COLORS[habDigit(slug)] || "#8e7cc3"; }
-  // (TypoCH class/group names come from the embedded TYPOCH_NAMES via typochLabel — see above.)
-  // Harmonised Bauzonen use (ch.are.bauzonen ch_code_hn) → colour, keyed by slug.
-  // Mirrors web/js/config.js BAUZONEN_HN_COLORS so a use gets the same colour in
-  // the web app, this map, the table swatches and the legend.
-  var BAUZONE_COLORS = {
-    wohnzonen: "#f4c430", arbeitszonen: "#8e8e8e", mischzonen: "#e08a3c", zentrumszonen: "#b5651d",
-    zonen_fuer_oeffentliche_nutzungen: "#6fa8dc", eingeschraenkte_bauzonen: "#7cb342",
-    tourismus_und_freizeitzonen: "#c2549d", verkehrszonen_innerhalb_der_bauzonen: "#5d6d7e",
-    weitere_bauzonen: "#9e9e9e", ohne_bauzone: "#cbd5e1"
-  };
-  function bzColor(z) { return BAUZONE_COLORS[z] || "#9e9e9e"; }
+  // Harmonised Bauzonen use (ARE, ch.are.bauzonen) slug → { label, color }, incl. the zone-free
+  // remainder the processing emits as "Ohne Bauzone"; the same colours as the web app (config.js).
+  var BAUZONEN = REF.bauzonen, BAUZONE_SLUGS = Object.keys(BAUZONEN);
+  function bzLabel(z) { var b = BAUZONEN[z]; return b ? b.label : String(z).replace(/_/g, " "); }
+  function bzColor(z) { var b = BAUZONEN[z]; return b ? b.color : "#9e9e9e"; }
   var PARCEL_COLOR = "#6f8aac";
   // SAP codes → Klartext labels (display only; the raw code stays the filter key + in exports).
   var TPF_LABELS = { "1": "Allgemeine Bundesverwaltung", "2": "Ausland", "3": "Zoll", "4": "Gerichte", "5": "Forschungsanstalten", "6": "Kunst und Kultur", "7": "Sport", "8": "Repräsentation Inland", "9": "Infrastruktur" };
   var EIGENTUM_LABELS = { "1": "Eigentum Bund", "3": "Anmiete", "5": "Spezialfall" };
-  // ISO 3166-1 alpha-2 → German country name (input_l/r). Derived from data/countries.json;
-  // inlined so the self-contained offline file needs no fetch. Unknown codes fall back to the code.
-  var COUNTRY_LABELS = {
-    "AD":"Andorra", "AE":"Vereinigte Arabische Emirate", "AF":"Afghanistan", "AG":"Antigua und Barbuda", "AI":"Anguilla", "AL":"Albanien",
-    "AM":"Armenien", "AO":"Angola", "AQ":"Antarktis", "AR":"Argentinien", "AS":"Amerikanisch-Samoa", "AT":"Österreich",
-    "AU":"Australien", "AW":"Aruba", "AX":"Åland", "AZ":"Aserbaidschan", "BA":"Bosnien und Herzegowina", "BB":"Barbados",
-    "BD":"Bangladesch", "BE":"Belgien", "BF":"Burkina Faso", "BG":"Bulgarien", "BH":"Bahrain", "BI":"Burundi",
-    "BJ":"Benin", "BL":"Saint-Barthélemy", "BM":"Bermuda", "BN":"Brunei", "BO":"Bolivien", "BQ":"Bonaire",
-    "BR":"Brasilien", "BS":"Bahamas", "BT":"Bhutan", "BV":"Bouvetinsel", "BW":"Botswana", "BY":"Belarus",
-    "BZ":"Belize", "CA":"Kanada", "CC":"Kokosinseln", "CD":"Kongo (Dem. Rep.)", "CF":"Zentralafrikanische Republik", "CG":"Kongo (Rep.)",
-    "CH":"Schweiz", "CI":"Côte d’Ivoire", "CK":"Cookinseln", "CL":"Chile", "CM":"Kamerun", "CN":"China",
-    "CO":"Kolumbien", "CR":"Costa Rica", "CU":"Kuba", "CV":"Cabo Verde", "CW":"Curaçao", "CX":"Weihnachtsinsel",
-    "CY":"Zypern", "CZ":"Tschechien", "DE":"Deutschland", "DJ":"Dschibuti", "DK":"Dänemark", "DM":"Dominica",
-    "DO":"Dominikanische Republik", "DZ":"Algerien", "EC":"Ecuador", "EE":"Estland", "EG":"Ägypten", "EH":"Westsahara",
-    "ER":"Eritrea", "ES":"Spanien", "ET":"Äthiopien", "FI":"Finnland", "FJ":"Fidschi", "FK":"Falklandinseln",
-    "FM":"Mikronesien", "FO":"Färöer", "FR":"Frankreich", "GA":"Gabun", "GB":"Vereinigtes Königreich", "GD":"Grenada",
-    "GE":"Georgien", "GF":"Französisch-Guayana", "GG":"Guernsey", "GH":"Ghana", "GI":"Gibraltar", "GL":"Grönland",
-    "GM":"Gambia", "GN":"Guinea", "GP":"Guadeloupe", "GQ":"Äquatorialguinea", "GR":"Griechenland", "GS":"Südgeorgien und die Südlichen Sandwichinseln",
-    "GT":"Guatemala", "GU":"Guam", "GW":"Guinea-Bissau", "GY":"Guyana", "HK":"Hongkong", "HM":"Heard und McDonaldinseln",
-    "HN":"Honduras", "HR":"Kroatien", "HT":"Haiti", "HU":"Ungarn", "ID":"Indonesien", "IE":"Irland",
-    "IL":"Israel", "IM":"Insel Man", "IN":"Indien", "IO":"Britisches Territorium im Indischen Ozean", "IQ":"Irak", "IR":"Iran",
-    "IS":"Island", "IT":"Italien", "JE":"Jersey", "JM":"Jamaika", "JO":"Jordanien", "JP":"Japan",
-    "KE":"Kenia", "KG":"Kirgisistan", "KH":"Kambodscha", "KI":"Kiribati", "KM":"Komoren", "KN":"St. Kitts und Nevis",
-    "KP":"Nordkorea", "KR":"Südkorea", "KW":"Kuwait", "KY":"Kaimaninseln", "KZ":"Kasachstan", "LA":"Laos",
-    "LB":"Libanon", "LC":"St. Lucia", "LI":"Liechtenstein", "LK":"Sri Lanka", "LR":"Liberia", "LS":"Lesotho",
-    "LT":"Litauen", "LU":"Luxemburg", "LV":"Lettland", "LY":"Libyen", "MA":"Marokko", "MC":"Monaco",
-    "MD":"Moldau", "ME":"Montenegro", "MF":"Saint-Martin (frz.)", "MG":"Madagaskar", "MH":"Marshallinseln", "MK":"Nordmazedonien",
-    "ML":"Mali", "MM":"Myanmar", "MN":"Mongolei", "MO":"Macau", "MP":"Nördliche Marianen", "MQ":"Martinique",
-    "MR":"Mauretanien", "MS":"Montserrat", "MT":"Malta", "MU":"Mauritius", "MV":"Malediven", "MW":"Malawi",
-    "MX":"Mexiko", "MY":"Malaysia", "MZ":"Mosambik", "NA":"Namibia", "NC":"Neukaledonien", "NE":"Niger",
-    "NF":"Norfolkinsel", "NG":"Nigeria", "NI":"Nicaragua", "NL":"Niederlande", "NO":"Norwegen", "NP":"Nepal",
-    "NR":"Nauru", "NU":"Niue", "NZ":"Neuseeland", "OM":"Oman", "PA":"Panama", "PE":"Peru",
-    "PF":"Französisch-Polynesien", "PG":"Papua-Neuguinea", "PH":"Philippinen", "PK":"Pakistan", "PL":"Polen", "PM":"Saint-Pierre und Miquelon",
-    "PN":"Pitcairninseln", "PR":"Puerto Rico", "PS":"Palästina", "PT":"Portugal", "PW":"Palau", "PY":"Paraguay",
-    "QA":"Katar", "RE":"Réunion", "RO":"Rumänien", "RS":"Serbien", "RU":"Russland", "RW":"Ruanda",
-    "SA":"Saudi-Arabien", "SB":"Salomonen", "SC":"Seychellen", "SD":"Sudan", "SE":"Schweden", "SG":"Singapur",
-    "SH":"St. Helena", "SI":"Slowenien", "SJ":"Svalbard und Jan Mayen", "SK":"Slowakei", "SL":"Sierra Leone", "SM":"San Marino",
-    "SN":"Senegal", "SO":"Somalia", "SR":"Suriname", "SS":"Südsudan", "ST":"São Tomé und Príncipe", "SV":"El Salvador",
-    "SX":"Sint Maarten", "SY":"Syrien", "SZ":"Eswatini", "TC":"Turks- und Caicosinseln", "TD":"Tschad", "TF":"Französische Süd- und Antarktisgebiete",
-    "TG":"Togo", "TH":"Thailand", "TJ":"Tadschikistan", "TK":"Tokelau", "TL":"Timor-Leste", "TM":"Turkmenistan",
-    "TN":"Tunesien", "TO":"Tonga", "TR":"Türkei", "TT":"Trinidad und Tobago", "TV":"Tuvalu", "TW":"Taiwan",
-    "TZ":"Tansania", "UA":"Ukraine", "UG":"Uganda", "UM":"Kleinere Amerikanische Überseeinseln", "US":"Vereinigte Staaten", "UY":"Uruguay",
-    "UZ":"Usbekistan", "VA":"Vatikanstadt", "VC":"St. Vincent und die Grenadinen", "VE":"Venezuela", "VG":"Britische Jungferninseln", "VI":"Amerikanische Jungferninseln",
-    "VN":"Vietnam", "VU":"Vanuatu", "WF":"Wallis und Futuna", "WS":"Samoa", "XK":"Kosovo", "YE":"Jemen",
-    "YT":"Mayotte", "ZA":"Südafrika", "ZM":"Sambia", "ZW":"Simbabwe"
-  };
-  function countryLabel(c) { if (c == null || c === "") return "—"; var k = String(c).toUpperCase(); return COUNTRY_LABELS[k] || String(c); }
-  // TypoCH code -> German name (levels 1-4), embedded from data/typoch.json so the
-  // self-contained dashboard needs no fetch. Consistent habitat labels for the pivot.
-  var TYPOCH_NAMES = {
-    "1":"Gewässer", "1.1":"Stehende Gewässer", "1.1.0":"Stehendes Gewässer ohne Vegetation", "1.1.0.1":"Tiefgründiges Gewässer (Freiwasserzone)", "1.1.0.2":"Seichtes Gewässer (Litoral, inkl. Tümpel)", "1.1.1":"Armleuchteralgengesellschaft",
-    "1.1.2":"Laichkrautgesellschaften", "1.1.3":"Wasserlinsengesellschaften", "1.1.3.1":"Froschbissgesellschaften", "1.1.3.2":"Wasserschlauchgesellschaften", "1.1.4":"Schwimmblattgesellschaft", "1.1.4.1":"Wasserhahnenfussgesellschaft",
-    "1.1.4.2":"Wasserfedergesellschaft", "1.2":"Fliessgewässer", "1.2.1":"Brachsmen- und Barbenregion (Epipotamon)", "1.2.1.1":"Breites Fliessgewässer des Flachlands", "1.2.1.2":"Langsam fliessender Bach im Flachland", "1.2.2":"Äschenregion (Hyporhithron)",
-    "1.2.2.0":"Äschenregion ohne Vegetation", "1.2.2.1":"Äschenregion mit Vegetation", "1.2.3":"Untere Forellenregion (Metarhithron)", "1.2.4":"Obere Forellenregion (Epirhithron)", "1.2.5":"Temporärer Wasserlauf", "1.2.6":"Zone der Gletscherbäche (Kryal)",
-    "1.3":"Quellen und Quellfluren", "1.3.0":"Überrieselte Fläche, Quelle ohne Vegetation", "1.3.0.1":"Auenquelle, Giesse", "1.3.1":"Wärmeliebende Quellflur", "1.3.2":"Kalkreiche Quellflur", "1.3.3":"Kalkarme Quellflur",
-    "1.4":"Unterirdische Gewässer", "1.4.1":"Porengrundwasser", "1.4.2":"Kluftgrundwasser", "1.4.3":"Höhlenbach", "1.4.4":"Höhlensee", "2":"Ufer und Feuchtgebiete",
-    "2.0":"Künstliche Ufer", "2.0.0":"Künstliche Ufer ohne Vegetation", "2.0.1":"Künstliche Ufer mit Vegetation", "2.1":"Ufer mit Vegetation", "2.1.1":"Moortümpelgesellschaft", "2.1.2":"Röhricht",
-    "2.1.2.1":"Stillwasser-Röhricht", "2.1.2.2":"Flussufer- und Landröhricht", "2.1.3":"Strandlingsgesellschaften", "2.1.4":"Bachröhricht", "2.2":"Flachmoore", "2.2.1":"Grossseggenried",
-    "2.2.1.1":"Grossseggenried", "2.2.1.2":"Schneidbinsenried", "2.2.2":"Kalkarmes Kleinseggenried (Braunseggenried)", "2.2.3":"Kalkreiches Kleinseggenried (Davallseggenried)", "2.2.4":"Übergangsmoor", "2.2.5":"Schwemmufervegetation alpiner Wildbäche",
-    "2.3":"Feuchtwiesen", "2.3.1":"Pfeifengraswiese", "2.3.2":"Nährstoffreiche Feuchtwiesen (Sumpfdotterblumenwiese)", "2.3.3":"Feuchte Hochstaudenflur (Spierstaudenflur)", "2.4":"Hochmoore", "2.4.1":"Offene Hochmoore",
-    "2.5":"Wechselfeuchte Pionierfluren", "2.5.0":"Wechselfeuchte Pionierfluren ohne Vegetation", "2.5.1":"Einjährige Schlammflur (Zwergbinsenflur)", "2.5.1.1":"Zwergbinsen-Annuellenflur mit Sumpfbinsen", "2.5.1.2":"Zwergbinsen-Annuellenflur mit Zypergräsern", "2.5.1.3":"Annuellenflur feuchter Böden mit Zwergkräutern",
-    "2.5.2":"Mehrjährige Schlammflur (Zweizahnflur)", "3":"Gletscher, Fels, Schutt und Geröll", "3.1":"Gletscher, Firn- und Schneefleder", "3.1.1":"Gletscher", "3.1.2":"Blockgletscher", "3.1.3":"Firnfeld (Sommer)",
-    "3.1.4":"Schneefeld (Frühling)", "3.2":"Alluvionen und Moränen", "3.2.1":"Alluvionen (Schwemmland)", "3.2.1.0":"Alluvionen ohne Vegetation", "3.2.1.1":"Alluvionen mit krautiger Pioniervegetation", "3.2.2":"Moräne",
-    "3.2.2.0":"Moräne ohne Vegetation", "3.2.2.1":"Moräne mit Pioniervegetation", "3.3":"Steinschutt- und Geröllfluren", "3.3.1":"Kalkschutt", "3.3.1.1":"Kalkschutthalde ohne Gefässpflanzen", "3.3.1.2":"Alpine Kalkblockflur",
-    "3.3.1.3":"Alpine Kalkschieferflur", "3.3.1.4":"Feinerdereiche Kalkschuttflur", "3.3.1.5":"Trockenwarme Kalkschuttflur", "3.3.2":"Silikatschutt", "3.3.2.1":"Silikatschutthalde ohne Gefässpflanzen", "3.3.2.2":"Alpine Silikatschuttflur",
-    "3.3.2.3":"Trockenwarme Silikatschuttflur", "3.4":"Felsen", "3.4.1":"Kalkfelsen", "3.4.1.1":"Kalkfels ohne Gefässpflanzen", "3.4.1.2":"Trockene Kalkfelsflur", "3.4.1.3":"Schattige Kalkfelsflur",
-    "3.4.2":"Silikat- oder Serpentinfelsen", "3.4.2.1":"Silikatfels ohne Gefässpflanzen", "3.4.2.2":"Silikatfelsflur", "3.4.2.3":"Serpentingesteinsflur", "3.5":"Höhlen", "3.5.1":"Kleine Felsspalten, Halbhöhlen: endogäische Fauna (\"Fauna der Steinunterseite\")",
-    "3.5.2":"Bau von Tieren", "3.5.3":"Höhleneingang", "3.5.4":"Guanohaufen", "3.5.5":"Künstliche Höhlung (Minen, Tunnel, etc.)", "3.5.6":"Unterirdische Lehmablagerung", "3.5.7":"Unterirdische Felswand",
-    "4":"Grünland (Naturrasen, Wiesen und Weiden)", "4.0":"Kunstrasen", "4.0.1":"Kunstwiese auf Fruchtfolgefläche", "4.0.2":"Kunstrasen auf Sportplätzen, im Siedlungsraum, etc.", "4.0.3":"Begrünung in Tieflagen (Strassenböchungen, etc.)", "4.0.4":"Begrünung in Hochlagen (Skipisten, etc.)",
-    "4.1":"Pionierfluren auf Felsböden (Felsgrusfluren)", "4.1.1":"Wärmeliebende Kalkfels-Pionierflur", "4.1.2":"Kalkfels-Pionierflur des Gebirges (Karstfluren)", "4.1.3":"Wärmeliebende Silikatfels-Pionierflur", "4.1.4":"Silikatfelsgrusflur des Gebirges", "4.2":"Wärmeliebende Trockenrasen",
-    "4.2.1":"Wärmeliebende Trockenrasen (Kontinentaler Trockenrasen; Innerwallis, Graubünden)", "4.2.1.1":"Inneralpine Felsensteppe", "4.2.1.1":"Inneralpine Felsensteppe der Westalpen", "4.2.1.1":"Inneralpine Felsensteppe der Ostalpen", "4.2.1.2":"Kontinentaler Halbtrockenrasen", "4.2.2":"Mitteleuropäischer Trockenrasen",
-    "4.2.3":"Insubrischer Trockenrasen", "4.2.4":"Mitteleuropäischer Halbtrockenrasen", "4.3":"Gebirgs-Magerrasen", "4.3.1":"Blaugrashalde", "4.3.1.1":"Blaugrashalde s.str.", "4.3.1.2":"Blaugrashalde der südlichen Kalkalpen",
-    "4.3.2":"Polsterseggenrasen", "4.3.3":"Rostseggenhalde", "4.3.4":"Windkantenrasen (Nacktriedrasen)", "4.3.5":"Borstgrasrasen", "4.3.6":"Buntschwingelhalde", "4.3.6.1":"Buntschwingelhalde s.str.",
-    "4.3.6.2":"Violettschwingelrasen", "4.3.6.3":"Goldschwingelrasen", "4.3.7":"Krummseggenrasen", "4.4":"Schneetälchen", "4.4.1":"Kalkreiches Schneetälchen", "4.4.2":"Kalkarmes Schneetälchen",
-    "4.5":"Fettwiesen und -weiden", "4.5.1":"Talfettwiesen (Fromentalwiese)", "4.5.1.1":"Knaulgraswiesen", "4.5.1.2":"Typische Fromentalwiese", "4.5.1.3":"Trockene Fromentalwiese", "4.5.1.4":"Feuchte Fuchschwanzwiese",
-    "4.5.2":"Bergfettwiese (Goldhaferwiese)", "4.5.3":"Talfettweide (Kammgrasweide)", "4.5.4":"Bergfettweide (Milchkrautweide)", "4.6":"Grasbrachen", "4.6.1":"Queckenbrache", "4.6.2":"Fiederzwenckenbrache",
-    "4.6.3":"Fromentalbrache", "4.6.4":"Pfeifengrasbrache", "4.6.5":"Reitgrasbrache", "5":"Krautsäume, Hochstaudenfluren und Gebüsche", "5.1":"Krautsäume", "5.1.0":"Atypische Saumgesellschaft",
-    "5.1.1":"Trockenwarmer Krautsaum", "5.1.2":"Mesophiler Krautsaum", "5.1.3":"Feuchter Krautsaum (Tieflagen)", "5.1.4":"Feuchter Krautsaum (höheren Lagen)", "5.1.5":"Nährstoffreicher Krautsaum", "5.2":"Hochstauden- und Schlagfluren",
-    "5.2.1":"Kalkreiche Schlagflur", "5.2.2":"Kalkarme Schlagflur", "5.2.3":"Hochgrasflur des Gebirges", "5.2.4":"Hochstaudenflur des Gebirges", "5.2.5":"Adlerfarnflur", "5.3":"Gebüsche",
-    "5.3.0":"Naturferne Pflanzung", "5.3.0.1":"Naturferne Pflanzung mit sommergrünen Arten", "5.3.0.2":"Naturferne Pflanzung mit immergrünen Arten", "5.3.1":"Besenginster-Gebüsche", "5.3.2":"Trockenwarmes Gebüsch", "5.3.3":"Mesophiles Gebüsch",
-    "5.3.4":"Brombeergestrüpp", "5.3.5":"Gebüschreiche Vorwaldgesellschaften", "5.3.6":"Auen-Weidengebüsch", "5.3.7":"Moor-Weidengebüsch", "5.3.8":"Gebirgs-Weidengebüsch", "5.3.9":"Grünerlengebüsche",
-    "5.4":"Zwergstrauchheiden", "5.4.1":"Subatlantische Zwergstrauchheide (Ginsterheide)", "5.4.1.1":"Subatlantische Heide auf Torf", "5.4.1.2":"Subatlantsiche Heide, nicht auf Torf", "5.4.2":"Kontinentale Zwergstrauchheide (Sefistrauchheide)", "5.4.3":"Subalpine Kalkheide (Erikaheide)",
-    "5.4.4":"Trockene subalpine Zwergstrauchheide (Zwergwacholderheide)", "5.4.5":"Mesophile subalpine Zwergstrauchheide (Alpenrosenheide)", "5.4.6":"Alpine Windheide", "6":"Wälder", "6.0":"Forstpflanzungen", "6.0.1":"Aufforstung mit Laubgehölzen",
-    "6.0.2":"Aufforstung mit Nadelgehölzen", "6.0.3":"Einzelbaum", "6.1":"Bruch- und Auenwälder", "6.1.1":"Erlen-Bruchwald", "6.1.2":"Weichholz-Auenwald", "6.1.3":"Grauerlen-Auenwald",
-    "6.1.3.1":"Alpen-Weidenauenwald", "6.1.4":"Hartholz-Auenwald", "6.2":"Buchenwälder", "6.2.1":"Orchideen-Buchenwald", "6.2.2":"Hainsimsen-Buchenwald", "6.2.3":"Waldmeister-Buchenwald",
-    "6.2.3.1":"Atlantischer Buchenwald", "6.2.4":"Zahnwurz-Buchenwald", "6.2.5":"Tannen-Buchenwald", "6.3":"Andere Laubwälder", "6.3.1":"Ahorn-Schluchtwald", "6.3.2":"Linden-Mischwald",
-    "6.3.3":"Eichen- Hainbuchenwald", "6.3.4":"Flaumeichenwald", "6.3.5":"Hopfenbuchenwald", "6.3.6":"Saurer Eichenmischwald", "6.3.7":"Kastanienwald", "6.3.8":"Laubwald mit immergrünen Sträuchern",
-    "6.3.9":"Robinienwald", "6.4":"Wärmeliebende Föhrenwälder", "6.4.1":"Pfeifengras-Föhrenwald", "6.4.2":"Subkontinentaler kalkreicher Föhrenwald", "6.4.2.1":"Mitteleuropäischer subkontinentaler kalkreicher Föhrenwald (Geissklee-Föhrenwald)", "6.4.3":"Kontinentaler Steppen-Föhrenwald",
-    "6.4.3.1":"Kalkreicher Steppen-Föhrenwald", "6.4.3.2":"Kalkarmer Steppen-Föhrenwald", "6.4.4":"Kalkarmer Föhrenwald", "6.5":"Hochmoorwälder", "6.5.1":"Hochmoor-Birkenwald", "6.5.2":"Hochmoor-Bergföhrenwald",
-    "6.5.3":"Hochmoor-Fichtenwald", "6.6":"Gebirgsnadelwälder", "6.6.1":"Tannen-Fichtenwald", "6.6.2":"Heidelbeer-Fichtenwald", "6.6.3":"Lärchen-Arvenwald", "6.6.4":"Lärchenwald",
-    "6.6.5":"Bergföhrenwald", "6.6.5.1":"Kalkarmer Bergföhrenwald", "6.6.5.2":"Kalkreicher Bergföhrenwald", "7":"Pioniervegetation gestörter Plätze (Ruderalstandorte)", "7.1":"Trittrasen und Ruderalfluren", "7.1.0":"Tritt- und Trümmerflächen ohne Vegetation",
-    "7.1.1":"Feuchte Trittflur", "7.1.2":"Trockene Trittflur", "7.1.3":"Subalpin-alpine Trittflur", "7.1.4":"Einjährige Ruderalflur", "7.1.5":"Trockenwarme Ruderalflur", "7.1.6":"Mesophile Ruderalflur (Steinkleeflur)",
-    "7.1.7":"Alpine Lägerflur (Alpenblackenflur)", "7.1.8":"Lägerflur der Tieflagen", "7.2":"Anthropogene Steinfluren", "7.2.0":"Mauer oder Steinpflästerung ohne Vegetation", "7.2.1":"Trockenwarme Mauerflur", "7.2.2":"Steinpflaster-Trittflur",
-    "8":"Pflanzungen, Äcker und Kulturen", "8.1":"Baumschulen, Obstgärten, Rebberge", "8.1.1":"Baumschule aus Laubgehölzen", "8.1.2":"Baumschule aus Nadelgehölzen", "8.1.3":"Kastanienhain (ohne Unterholz)", "8.1.4":"Hochstammobstgarten",
-    "8.1.5":"Niederstammobstgarten", "8.1.6":"Rebberg", "8.1.7":"Beerenkultur", "8.2":"Feldkulturen (Äcker)", "8.2.0":"Feldkulturen (Äcker) ohne Vegetation", "8.2.1":"Getreidefeld (vorwiegend Winterkultur)",
-    "8.2.1.0":"Getreide ohne Begleitvegetation", "8.2.1.1":"Kalkarme Getreideäcker", "8.2.1.2":"Kalkreiche Getreideäcker", "8.2.2":"Mais-, Tabak- und andere Ackerkulturen (vorwiegend Sommerkultur)", "8.2.3":"Hackfruchtacker (Sommerkultur), Garten", "8.2.3.0":"Hackfrucht ohne Begleitflora",
-    "8.2.3.1":"Kalkarmer, lehmiger Hackfruchtacker", "8.2.3.2":"Kalkreicher, lehmiger Hackfruchtacker", "8.2.3.3":"Kalkarmer, trockener Hackfruchtacker", "8.2.3.4":"Kalkreicher, trockener Hackfruchtacker", "9":"Bauten, Anlagen", "9.1":"Lagerplätze, Deponien",
-    "9.1.1":"Deponie (Sperrgut)", "9.1.2":"Deponie (organische Abfälle)", "9.2":"Bauten", "9.2.1":"Bewohntes Gebäude", "9.2.1.1":"Bauernhaus", "9.2.1.2":"Sennhütte, Chalet",
-    "9.2.1.3":"Einfamilienhaus", "9.2.1.4":"Mietgebäude, Gewerbegebäude", "9.2.2":"Tierstallungen, Gewächshäuser", "9.2.2.1":"Kuh- und Pferdestall", "9.2.2.2":"Schweinestall", "9.2.2.3":"Hühnerstall",
-    "9.2.2.4":"Treibhaus", "9.2.3":"Nebengebäude, Halle, Garage", "9.2.3.1":"Scheune, Schopf", "9.2.3.2":"Garage", "9.2.3.3":"Bootshaus", "9.2.3.4":"Bunker",
-    "9.2.3.5":"Berghütte, Forsthaus", "9.2.4":"Fabrik, Halle, Lagerhaus", "9.2.4.1":"Fabrik", "9.2.4.2":"Lagerhaus", "9.2.4.3":"Elektrisches Kraftwerk", "9.2.4.4":"Atomkraftwerk",
-    "9.2.4.5":"Raffinerie", "9.2.4.6":"Sägerei, Schreinerei", "9.2.5":"Öffentliches Gebäude, Denkmal", "9.2.5.1":"Schloss", "9.2.5.2":"Kriche", "9.2.5.3":"Bahnhof",
-    "9.2.5.4":"Spital", "9.3":"Verkehrswege", "9.3.2":"Asphalt- und Betonstrasse", "9.3.2.1":"Strasse", "9.3.2.2":"Autobahn", "9.3.2.3":"Weg ohne Vegetation (Beton, Kies)",
-    "9.3.3":"Naturstrasse, Weg", "9.3.3.1":"Naturweg (Dreckweg)", "9.3.3.2":"Holzerweg", "9.3.3.3":"Pfad", "9.3.4":"Bahngleis", "9.4":"Versiegeleter Sportplatz, Parkplatz etc."
-  };
-  function typochName(code) { return TYPOCH_NAMES[code] || ""; }
+  // ISO 3166-1 alpha-2 → German country name (input_l/r, data/countries.json); unknown codes stay as they are.
+  function countryLabel(c) { if (c == null || c === "") return "—"; var k = String(c).toUpperCase(); return REF.countries[k] || String(c); }
+  // TypoCH code → German name (data/typoch.json); "<code> <name>" labels for the habitat pivot.
+  function typochName(code) { return REF.typoch.names[code] || ""; }
   function typochLabel(code) { var n = typochName(code); return n ? code + " " + n : String(code); }
   function codeLabel(map, code) { if (code == null || code === "" || code === "—") return "—"; var k = String(code); return map[k] || map[String(parseInt(k, 10))] || k; }
   function tpfLabel(code) { return codeLabel(TPF_LABELS, code); }
@@ -380,6 +261,8 @@
     var P = {
       search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
       x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+      copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V7a2 2 0 0 1 2-2h8"/>',
+      share: '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/>',
       chevRight: '<path d="m9 18 6-6-6-6"/>', chevLeft: '<path d="m15 18-6-6 6-6"/>', chevDown: '<path d="m6 9 6 6 6-6"/>', chevUp: '<path d="m18 15-6-6-6 6"/>',
       info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>',
       plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
@@ -417,15 +300,6 @@
   var excludeCounts = {}, statusCounts = {}, tpfCounts = {}, bauzoneTotal = {}, bauzoneParcelCount = {}, habitatTotal = {}, habitatParcelCount = {};
   var greeninvCounts = { yes: 0, no: 0 }, hasGreeninv = false; // the export carries the opt-in join column
   var BAUZONE_RE = /^bauzonen_(.+)_m2$/; // bauzonen_<slug>_m2 (the bauzonen_m2 total does not match)
-  // Display label per zone slug (ARE harmonised Hauptnutzung) — mirrors web/js/config.js.
-  var BAUZONE_LABELS = {
-    wohnzonen: "Wohnzonen", arbeitszonen: "Arbeitszonen", mischzonen: "Mischzonen",
-    zentrumszonen: "Zentrumszonen", zonen_fuer_oeffentliche_nutzungen: "Zonen für öffentliche Nutzungen",
-    eingeschraenkte_bauzonen: "eingeschränkte Bauzonen", tourismus_und_freizeitzonen: "Tourismus- und Freizeitzonen",
-    verkehrszonen_innerhalb_der_bauzonen: "Verkehrszonen innerhalb der Bauzonen", weitere_bauzonen: "weitere Bauzonen",
-    ohne_bauzone: "Ohne Bauzone" // parcel area no building zone covers (emitted by processing)
-  };
-  function bzLabel(z) { return BAUZONE_LABELS[z] || String(z).replace(/_/g, " "); }
   // Habitat columns come in two export shapes: the current pipeline emits code columns
   // habitat_l1_<code>_m2 + habitat_l2_<code>_m2; older exports a single slug family
   // habitat_<slug>_m2. Use the LEVEL-2 leaves only — the l1_ columns are redundant and
@@ -434,14 +308,6 @@
   var _habCodeCols = PARCELS.some(function (p) { for (var k in p) if (k.indexOf("habitat_l2_") === 0) return true; return false; });
   var HABITAT_RE = _habCodeCols ? /^habitat_l2_(.+)_m2$/ : /^habitat_(.+)_m2$/;
   var _habKeyBySlug = {}; // captured slug/code → the actual column key (differs for code columns)
-  // Display label per habitat slug (TypoCH level-1) — mirrors web/js/config.js.
-  var HABITAT_LABELS = {
-    gewaesser: "Gewässer", ufer_feuchtgebiete: "Ufer & Feuchtgebiete",
-    gletscher_fels_schutt_geroell: "Gletscher, Fels, Schutt, Geröll", gruenland: "Grünland",
-    krautsaeume_hochstauden_gebuesche: "Krautsäume, Hochstauden, Gebüsche", waelder: "Wälder",
-    pionier_ruderalvegetation: "Pionier-/Ruderalvegetation", pflanzungen_aecker_kulturen: "Pflanzungen, Äcker, Kulturen",
-    gebaeude_anlagen: "Gebäude / Anlagen"
-  };
   // Habitat column slug → TypoCH code ("6_3_andere_laubwaelder" → "6.3"; the level-1
   // catch-all "2_ufer_und_feuchtgebiete" → "2"). "" when the slug carries no leading code.
   function habCode(h) {
@@ -449,11 +315,10 @@
     while (i < parts.length && /^[0-9]+$/.test(parts[i])) { code.push(parts[i]); i++; }
     return code.join(".");
   }
-  // Habitat column slug → "<code> <name>" from the embedded TypoCH reference (consistent
-  // with the level-1 group labels). Legacy name-slugs use HABITAT_LABELS; unknown → prettified.
+  // Habitat column slug → "<code> <name>" from the TypoCH reference (consistent with the
+  // level-1 group labels). Legacy name-slugs resolve through their digit; unknown → prettified.
   function hbLabel(h) {
-    if (HABITAT_LABELS[h]) return HABITAT_LABELS[h];
-    var code = habCode(h);
+    var code = habCode(h) || HABITAT_SLUG_DIGIT[h] || "";
     return code ? typochLabel(code) : String(h).replace(/_/g, " ");
   }
   // A habitat column is the level-1 "catch-all" when BAFU only classified it to level 1,
@@ -812,10 +677,10 @@
     var artByMain = {};
     Object.keys(a.byArt).forEach(function (k) {
       if (!(a.byArt[k] > 0)) return;
-      var main = ART_MAIN[k] || "—";
-      var g = artByMain[main] || (artByMain[main] = { name: main, value: 0, swatch: MAIN_COLORS[main] || "#94a3b8", group: main, children: [] });
+      var main = artMain(k) || "—";
+      var g = artByMain[main] || (artByMain[main] = { name: mainLabel(main), value: 0, swatch: mainColorOf(main), group: main, children: [] });
       g.value += a.byArt[k];
-      g.children.push({ name: ART_LABELS[k] || k, value: a.byArt[k], swatch: mainColor(k), key: k, selected: !!filters.arts[k] });
+      g.children.push({ name: artLabel(k), value: a.byArt[k], swatch: mainColor(k), key: k, selected: !!filters.arts[k] });
     });
     var artGroups = Object.keys(artByMain).map(function (m) { return artByMain[m]; }).sort(function (x, y) { return y.value - x.value; });
     artGroups.forEach(function (g) { g.children.sort(function (x, y) { return y.value - x.value; }); });
@@ -988,27 +853,20 @@
     { key: "bzCover", name: "Summe Bauzonen = Grundstücksfläche", tip: "Die Summe der einzelnen Bauzonenflächen inkl. „Ohne Bauzone“ entspricht der Grundstücksfläche (±1 %). Nur Grundstücke mit Bauzonen-Daten." },
     { key: "hbCover", name: "Summe Lebensräume = Grundstücksfläche", tip: "Die Summe der einzelnen BAFU-Lebensraumflächen entspricht der Grundstücksfläche (±1 %). Nur Grundstücke mit Lebensraum-Daten." }
   ];
-  // Per-parcel derived scalars for the quality rules. Parcels are
-  // immutable, so the wide-column scan runs once per parcel and is cached in a WeakMap
-  // (not on the object — keeps it out of exports/the embedded deliverable). This turns
-  // the repeated per-render O(columns) scans in computeRules into
-  // O(1) lookups. Field semantics mirror the original inline loops exactly:
-  //   bzSum    — Σ bauzonen_<slug> EXCLUDING ohne_bauzone (the actual building-zone share)
-  //   bzSumAll — Σ bauzonen_<slug> INCLUDING ohne_bauzone (the full parcel partition)
+  // Per-parcel derived scalars for the quality rules: bzSumAll — Σ bauzonen_<slug> incl.
+  // ohne_bauzone (the full parcel partition); hbSum — Σ habitat leaves. Parcels are immutable,
+  // so the wide-column scan runs once per parcel and is cached in a WeakMap (not on the
+  // object — keeps it out of exports/the embedded deliverable).
   var _statsCache = new WeakMap();
   function parcelStats(p) {
     var s = _statsCache.get(p); if (s) return s;
-    var bzSum = 0, bzSumAll = 0, hbSum = 0, hbNat = 0, nLc = 0, nHb = 0, bzDom = 0, bzDomSlug = "";
+    var bzSumAll = 0, hbSum = 0;
     for (var k in p) {
       if (!Object.prototype.hasOwnProperty.call(p, k) || k.slice(-3) !== "_m2") continue;
-      var v = num(p[k]);
-      var bm = BAUZONE_RE.exec(k);
-      if (bm) { bzSumAll += v; if (bm[1] !== "ohne_bauzone") { bzSum += v; if (v > bzDom) { bzDom = v; bzDomSlug = bm[1]; } } continue; }
-      var hm = HABITAT_RE.exec(k);
-      if (hm) { hbSum += v; if (v > 0) nHb++; if (HABITAT_NAT_DIGIT[habDigit(hm[1])]) hbNat += v; continue; }
-      if (k.indexOf("av_") === 0) { if (v > 0) nLc++; }
+      if (BAUZONE_RE.test(k)) bzSumAll += num(p[k]);
+      else if (HABITAT_RE.test(k)) hbSum += num(p[k]);
     }
-    s = { bzSum: bzSum, bzSumAll: bzSumAll, hbSum: hbSum, hbNat: hbNat, nLc: nLc, nHb: nHb, bzDom: bzDom, bzDomSlug: bzDomSlug };
+    s = { bzSumAll: bzSumAll, hbSum: hbSum };
     _statsCache.set(p, s); return s;
   }
   function computeRules(rows) {
@@ -1113,7 +971,13 @@
     });
   }
   // Rows of the current page (what the header checkbox selects).
-  function pageRows() { var start = (state.page - 1) * state.pageSize; return printing ? state.rows : state.rows.slice(start, start + state.pageSize); }
+  function pageRows() {
+    if (printing) return state.rows;
+    var pages = Math.max(1, Math.ceil(state.rows.length / state.pageSize));
+    if (state.page > pages) state.page = pages; // the row set may have shrunk since the page was chosen
+    var start = (state.page - 1) * state.pageSize;
+    return state.rows.slice(start, start + state.pageSize);
+  }
   function renderHead() {
     var vis = COLUMNS.filter(function (c) { return c.visible; });
     var pr = pageRows(), allSel = pr.length > 0 && pr.every(function (p) { return !!sel[String(p.id == null ? "" : p.id)]; });
@@ -1283,7 +1147,7 @@
       pills.push({ label: covKey === "with" ? "Nur mit Bodenbedeckung" : "Nur ohne Bodenbedeckung", remove: function () { filters.coverage = {}; } });
     }
     Object.keys(filters.arts).forEach(function (a) {
-      pills.push({ label: "Enthält: " + (ART_LABELS[a] || a), remove: function () { delete filters.arts[a]; } });
+      pills.push({ label: "Enthält: " + (artLabel(a)), remove: function () { delete filters.arts[a]; } });
     });
     Object.keys(filters.bauzonen).forEach(function (z) {
       pills.push({ label: "Bauzone: " + bzLabel(z), remove: function () { delete filters.bauzonen[z]; } });
@@ -1365,6 +1229,14 @@
     var qs = pr.toString();
     try { history.replaceState(null, "", qs ? "?" + qs : location.pathname); } catch (e) { /* file:// may block */ }
   }
+  // One comma-separated URL parameter → selection object. `valid` keeps a facet with a fixed
+  // domain from carrying a value that can never match (a typo in a hand-written link would
+  // otherwise empty the dashboard behind a pill); data-driven facets accept any value.
+  function readSet(pr, key, valid) {
+    var o = {};
+    (pr.get(key) || "").split(",").forEach(function (v) { if (v && (!valid || valid(v))) o[v] = true; });
+    return o;
+  }
   // Returns true if defaults were applied (no filter params) and should be written back.
   function readURL() {
     var pr = new URLSearchParams(location.search);
@@ -1376,19 +1248,17 @@
     var validExcl = defaultExclude();
     state.search = pr.get("q") || "";
     document.getElementById("tsearch").value = state.search;
-    filters.exclude = {}; (pr.get("excl") || "").split(",").forEach(function (k) { if (k && validExcl[k]) filters.exclude[k] = true; });
-    filters.status = {}; (pr.get("status") || "").split(",").forEach(function (s) { if (s) filters.status[s] = true; });
-    filters.eigentum = {}; (pr.get("eig") || "").split(",").forEach(function (e) { if (e) filters.eigentum[e] = true; });
+    filters.exclude = readSet(pr, "excl", function (k) { return !!validExcl[k]; });
+    filters.status = readSet(pr, "status");
+    filters.eigentum = readSet(pr, "eig");
+    // `cov` is single-valued (with|without): anything else means "alle".
     filters.coverage = {}; var cov = pr.get("cov"); if (cov === "with" || cov === "without") filters.coverage[cov] = true;
-    filters.countries = {}; (pr.get("land") || "").split(",").forEach(function (c) { if (c) filters.countries[c] = true; });
-    filters.cantons = {}; (pr.get("kanton") || "").split(",").forEach(function (c) { if (c) filters.cantons[c] = true; });
-    filters.arts = {}; (pr.get("art") || "").split(",").forEach(function (a) { if (a) filters.arts[a] = true; });
-    filters.bauzonen = {}; (pr.get("bauz") || "").split(",").forEach(function (z) { if (z) filters.bauzonen[z] = true; });
-    filters.has = {}; (pr.get("has") || "").split(",").forEach(function (m) { if (m && HAS_METRICS[m]) filters.has[m] = true; });
-    VBS_FACETS.forEach(function (f) {
-      filters[f] = {};
-      (pr.get(VBS_URL_KEY[f]) || "").split(",").forEach(function (k) { if (k && VBS_GROUPS[f].fields[k]) filters[f][k] = true; });
-    });
+    filters.countries = readSet(pr, "land");
+    filters.cantons = readSet(pr, "kanton");
+    filters.arts = readSet(pr, "art", function (a) { return !!ART_TYPES[a]; });
+    filters.bauzonen = readSet(pr, "bauz");
+    filters.has = readSet(pr, "has", function (m) { return !!HAS_METRICS[m]; });
+    VBS_FACETS.forEach(function (f) { filters[f] = readSet(pr, VBS_URL_KEY[f], function (k) { return !!VBS_GROUPS[f].fields[k]; }); });
     // Back-compat: VBS productivity used to be two keys of the `has` facet, reachable
     // only by hand-writing the URL. Keep such links working by folding them in here,
     // and flag it so boot stamps the current spelling back into the address bar.
@@ -1396,8 +1266,8 @@
       if (m === "VBSp") { filters.vbsprod.produktiv = true; urlMigrated = true; }
       if (m === "VBSu") { filters.vbsprod.unproduktiv = true; urlMigrated = true; }
     });
-    filters.tpf = {}; (pr.get("tpf") || "").split(",").forEach(function (t) { if (t) filters.tpf[t] = true; });
-    filters.greeninv = {}; (pr.get("gi") || "").split(",").forEach(function (g) { if (GREENINV_LABELS[g]) filters.greeninv[g] = true; });
+    filters.tpf = readSet(pr, "tpf");
+    filters.greeninv = readSet(pr, "gi", function (g) { return !!GREENINV_LABELS[g]; });
     return false;
   }
 
@@ -1565,7 +1435,7 @@
   function renderVbsTyp() { renderVbs("vbstyp"); }
   function renderCountries() { capList("f-countries", countryList.map(function (c) { return chk("l", c, countryLabel(c), countryCounts[c], filters.countries[c]); })); }
   function renderCantons() { capList("f-cantons", cantonList.map(function (c) { return chk("c", c, c, cantonCounts[c], filters.cantons[c]); })); }
-  function renderArts() { capList("f-arts", artListAll.map(function (a) { return chk("a", a, ART_LABELS[a] || a, artParcelCount[a], filters.arts[a]); })); }
+  function renderArts() { capList("f-arts", artListAll.map(function (a) { return chk("a", a, artLabel(a), artParcelCount[a], filters.arts[a]); })); }
   function renderBauzonen() { capList("f-bauzonen", bauzoneListAll.map(function (z) { return chk("z", z, bzLabel(z), bauzoneParcelCount[z], filters.bauzonen[z]); })); }
   function renderTpf() { capList("f-tpf", tpfList.map(function (t) { return chk("t", t, tpfLabel(t), tpfCounts[t], filters.tpf[t]); })); }
   function renderEigentum() { capList("f-eigentum", eigentumList.map(function (e) { return chk("e", e, eigentumLabel(e), eigentumCounts[e], filters.eigentum[e]); })); }
@@ -1634,6 +1504,16 @@
 
   // ---- Tabs (Karte is the start view; the tab is kept in the URL) ----
   var tabBtns = Array.prototype.slice.call(document.querySelectorAll(".tab"));
+  // One map, two homes: the Karte tab (full controls, plain wheel zoom — the page does
+  // not scroll there) and the Auswertung tab's slot ("overview mode": fixed height, the
+  // simple legend instead of the accordion / basemap / selection controls, and
+  // cooperative gestures because that page scrolls under the pointer).
+  var mapMode = "map";
+  function setMapMode(mode) {
+    mapMode = mode;
+    var el = document.getElementById("map"); if (el) el.classList.toggle("ov-mode", mode === "overview");
+    if (map && map.cooperativeGestures) { if (mode === "overview") map.cooperativeGestures.enable(); else map.cooperativeGestures.disable(); }
+  }
   function showTab(name) {
     if (["map", "overview", "quality", "about"].indexOf(name) < 0) name = "map";
     currentTab = name;
@@ -1649,7 +1529,11 @@
     });
     if (name === "quality") renderQuality(state.rows); // gated out of update(); render it on demand with the current filtered set
     document.getElementById("app").classList.toggle("tab-map", name === "map"); // map tab: page fits the viewport, no scrolling
-    if (name === "map") { ensureMap(); if (map && mapReady) setTimeout(function () { map.resize(); }, 30); } // hidden tabs report 0×0
+    var mapEl = document.getElementById("map"), homeSlot = document.getElementById("map-panel"), ovSlot = document.getElementById("ov-map-panel");
+    if (name === "overview" && ovSlot && mapEl) { ensureMap(); if (mapEl.parentNode !== ovSlot) ovSlot.appendChild(mapEl); setMapMode("overview"); }
+    else if (mapEl && homeSlot && mapEl.parentNode !== homeSlot) { homeSlot.insertBefore(mapEl, homeSlot.firstChild); setMapMode("map"); }
+    if (name === "map") { ensureMap(); setMapMode("map"); }
+    if ((name === "map" || name === "overview") && map && mapReady) setTimeout(function () { map.resize(); }, 30); // hidden tabs report 0×0
     writeURL();
   }
   tabBtns.forEach(function (t) { t.addEventListener("click", function () { showTab(t.getAttribute("data-tab")); }); });
@@ -1893,7 +1777,7 @@
   function reportLandcover(p) {
     // Full BBArt detail (not collapsed to the 6 Hauptgruppen): "Hauptgruppe · BBArt", coloured by main category.
     return ART_KEYS.map(function (a) {
-      return { label: (ART_MAIN[a] && ART_MAIN[a] !== ART_LABELS[a] ? ART_MAIN[a] + " · " : "") + (ART_LABELS[a] || a), area: num(p[artCol(a)]), color: mainColor(a) };
+      return { label: artFullLabel(a), area: num(p[artCol(a)]), color: mainColor(a) };
     }).filter(function (r) { return r.area > 0; }).sort(function (x, y) { return y.area - x.area; });
   }
   function reportHabitat(p) {
@@ -2384,7 +2268,7 @@
     div.className = "maplibregl-ctrl maplibregl-ctrl-group";
     var btn = document.createElement("button");
     btn.type = "button"; btn.className = "map-home"; btn.title = "Auf Auswahl zoomen"; btn.setAttribute("aria-label", "Auf Auswahl zoomen");
-    btn.innerHTML = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v9h5v-6h4v6h5v-9"/></svg>';
+    btn.innerHTML = ICON.sz("house", 17);
     btn.addEventListener("click", function () { if (lastRows && lastRows.length) fitMap(rowsToFC(lastRows), true); });
     div.appendChild(btn); this._container = div; return div;
   };
@@ -2398,10 +2282,10 @@
   ART_KEYS.forEach(function (a) { _landcoverColor.push(a, mainColor(a)); });
   _landcoverColor.push("#94a3b8");
   var _habitatColor = ["match", ["slice", ["get", "art"], 0, 1]]; // first char of "8.2.3 …" = TypoCH L1
-  ["1","2","3","4","5","6","7","8","9"].forEach(function (d) { _habitatColor.push(d, HABITAT_L1_COLORS[d]); });
+  HABITAT_DIGITS.forEach(function (d) { _habitatColor.push(d, HABITAT_L1_COLORS[d]); });
   _habitatColor.push("#8e7cc3");
   var _bauzonenColor = ["match", ["get", "art"]]; // overlay `art` = harmonised zone name
-  Object.keys(BAUZONE_LABELS).forEach(function (z) { _bauzonenColor.push(BAUZONE_LABELS[z], bzColor(z)); });
+  BAUZONE_SLUGS.forEach(function (z) { _bauzonenColor.push(bzLabel(z), bzColor(z)); });
   _bauzonenColor.push("#9e9e9e");
   var OVERLAY_DEFS = [
     { key: "landcover", label: "Bodenbedeckung", fill: _landcoverColor, line: "#6b7280", opacity: 0.62 },
@@ -2433,7 +2317,7 @@
   }
   var OVERLAY_NAME = { landcover: "Bodenbedeckung", bauzonen: "Bauzone", habitat: "Lebensraum" };
   function overlayPopupHTML(key, art, area) {
-    var label = key === "landcover" ? (ART_LABELS[art] || art) : art;
+    var label = key === "landcover" ? (artLabel(art)) : art;
     return "<strong>" + esc(label || "—") + "</strong><br><span class='pop-sub'>" + esc(OVERLAY_NAME[key] || "") + "</span>" +
            (area ? "<br>" + fmtAreaU(num(area)) : "");
   }
@@ -2500,8 +2384,7 @@
     var vt1 = num(p.vbs_typ1_m2), vt2 = num(p.vbs_typ2_m2);
 
     var artItems = ART_KEYS.map(function (a) {
-      var label = ART_LABELS[a] || a, main = ART_MAIN[a] || "";
-      return { name: (main && main !== label ? main + " · " + label : label), value: num(p[artCol(a)]), swatch: mainColor(a) };
+      return { name: artFullLabel(a), value: num(p[artCol(a)]), swatch: mainColor(a) };
     }).filter(function (it) { return it.value > 0; }).sort(function (x, y) { return y.value - x.value; });
     var bzItems = [], hbItems = [];
     for (var k in p) {
@@ -2604,9 +2487,9 @@
   var legendEl = null;
   function legendGroups() {
     var g = [{ layer: "parcels-fill", title: null, items: [{ color: PARCEL_COLOR, label: "Grundstücke" }, { color: "#d8232a", label: "Ausgewählt", outline: true }] }];
-    if (map.getLayer("landcover-fill")) g.push({ layer: "landcover-fill", title: "Bodenbedeckung", items: MAIN_ORDER.map(function (mc) { return { color: MAIN_COLORS[mc], label: mc }; }) });
-    if (map.getLayer("bauzonen-fill")) g.push({ layer: "bauzonen-fill", title: "Bauzonen", items: Object.keys(BAUZONE_LABELS).map(function (z) { return { color: bzColor(z), label: BAUZONE_LABELS[z] }; }) });
-    if (map.getLayer("habitat-fill")) g.push({ layer: "habitat-fill", title: "Lebensräume", items: Object.keys(HABITAT_LABELS).map(function (s) { return { color: habColor(s), label: HABITAT_LABELS[s] }; }) });
+    if (map.getLayer("landcover-fill")) g.push({ layer: "landcover-fill", title: "Bodenbedeckung", items: MAIN_ORDER.map(function (m) { return { color: mainColorOf(m), label: mainLabel(m) }; }) });
+    if (map.getLayer("bauzonen-fill")) g.push({ layer: "bauzonen-fill", title: "Bauzonen", items: BAUZONE_SLUGS.map(function (z) { return { color: bzColor(z), label: bzLabel(z) }; }) });
+    if (map.getLayer("habitat-fill")) g.push({ layer: "habitat-fill", title: "Lebensräume", items: HABITAT_DIGITS.map(function (d) { return { color: HABITAT_L1_COLORS[d], label: typochName(d) || d }; }) });
     return g;
   }
   function renderLegend() {
@@ -2631,32 +2514,25 @@
   Legend.prototype.onRemove = function () { if (legendEl && legendEl.parentNode) legendEl.parentNode.removeChild(legendEl); legendEl = null; this._map = undefined; };
 
   // ---- Right-click context menu (mirrors the web app) ----
-  var CTX_ICON = {
-    copy: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V7a2 2 0 0 1 2-2h8"/></svg>',
-    share: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/></svg>',
-    report: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 4 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 4a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg>'
-  };
   function copyText(t) {
     if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(t);
     var ta = document.createElement("textarea"); ta.value = t; ta.style.position = "fixed"; ta.style.opacity = "0";
     document.body.appendChild(ta); ta.select(); try { document.execCommand("copy"); } catch (e) {} document.body.removeChild(ta);
     return Promise.resolve();
   }
-  // WGS84 → LV95 (swisstopo approximate formulas, ~1 m) so the share link centres
-  // map.geo.admin.ch on the clicked point via swisssearch (same viewer the E-GRID links use).
+  // Share link: map.geo.admin.ch centred on the clicked point via swisssearch in LV95
+  // (same viewer the E-GRID links use; wgs84ToLv95 is the PDF report's conversion).
   function geoAdminUrl(lat, lon) {
-    var phi = (lat * 3600 - 169028.66) / 10000, lam = (lon * 3600 - 26782.5) / 10000;
-    var E = Math.round(2600072.37 + 211455.93 * lam - 10938.51 * lam * phi - 0.36 * lam * phi * phi - 44.54 * lam * lam * lam);
-    var N = Math.round(1200147.07 + 308807.95 * phi + 3745.25 * lam * lam + 76.63 * phi * phi - 194.56 * lam * lam * phi + 119.79 * phi * phi * phi);
-    return "https://map.geo.admin.ch/#/map?lang=de&topic=ech&bgLayer=ch.swisstopo.pixelkarte-farbe&swisssearch=" + encodeURIComponent(E + " " + N);
+    var en = wgs84ToLv95(lon, lat);
+    return "https://map.geo.admin.ch/#/map?lang=de&topic=ech&bgLayer=ch.swisstopo.pixelkarte-farbe&swisssearch=" + encodeURIComponent(Math.round(en[0]) + " " + Math.round(en[1]));
   }
   function initContextMenu() {
     var menu = document.createElement("div");
     menu.className = "map-ctxmenu";
     menu.innerHTML =
-      '<div class="ctxitem ctx-coords" data-act="copy" title="Klicken zum Kopieren">' + CTX_ICON.copy + '<span class="ctx-coords-text"></span></div>' +
-      '<div class="ctxitem" data-act="share">' + CTX_ICON.share + '<span>Teilen</span></div>' +
-      '<div class="ctxitem" data-act="report">' + CTX_ICON.report + '<span>Problem melden</span></div>';
+      '<div class="ctxitem ctx-coords" data-act="copy" title="Klicken zum Kopieren">' + ICON.copy + '<span class="ctx-coords-text"></span></div>' +
+      '<div class="ctxitem" data-act="share">' + ICON.share + '<span>Teilen</span></div>' +
+      '<div class="ctxitem" data-act="report">' + ICON.alert + '<span>Problem melden</span></div>';
     map.getContainer().appendChild(menu);
     var coordsText = menu.querySelector(".ctx-coords-text"), ctxLL = null;
     var hide = function () { menu.classList.remove("show"); };
@@ -2762,9 +2638,14 @@
   }
   function setExtVisible(id, on) { var l = extById(id); if (!l) return; l.visible = !!on; if (map && map.getLayer(extMapId(l))) map.setLayoutProperty(extMapId(l), "visibility", on ? "visible" : "none"); extCommit(); }
   function setExtOpacity(id, v) { var l = extById(id); if (!l) return; l.opacity = Math.max(10, Math.min(100, +v || 70)); if (map && map.getLayer(extMapId(l))) map.setPaintProperty(extMapId(l), "raster-opacity", l.opacity / 100); }
-  // Title of a map restored from a link: taken from the geo.admin legend heading; offline the id stays.
+  // Title of a map restored from a link: the app's own lists first (no request, works offline),
+  // otherwise the geo.admin legend heading (best effort — some layers have no legend; the id stays).
+  var EXT_KNOWN_TITLE = {};
+  EXT_RECOMMENDED.forEach(function (r) { EXT_KNOWN_TITLE[r.id] = r.title; });
+  EXT_SUGGEST.forEach(function (s) { EXT_KNOWN_TITLE[s[0]] = s[1]; });
   function resolveExtTitle(l) {
     l.resolve = false;
+    if (EXT_KNOWN_TITLE[l.id]) { l.title = EXT_KNOWN_TITLE[l.id]; return; }
     fetchLegendDoc(l.id).then(function (doc) {
       var h = doc && doc.querySelector(".bod-title, h1, h2, h3"), t = h && h.textContent.trim();
       if (t && l.title === l.id) { l.title = t; renderAccordion(); }
@@ -2917,13 +2798,13 @@
       legend: [["Einzelnes Grundstück", "#3b5a7a", "1.5px solid #fff", true], ["Cluster (bis 25)", "#4f6f93", "1.5px solid #fff", true], ["Cluster (25 bis 100)", "#3b5a7a", "1.5px solid #fff", true], ["Cluster (über 100)", "#2e4a68", "1.5px solid #fff", true]],
       rows: function () { return [["Quelle", "Abgeleitet aus den Grundstücken (visueller Mittelpunkt)"], ["Cluster bis", "Zoomstufe 13"]]; } },
     landcover: { title: "Bodenbedeckung", desc: "Bodenbedeckungsflächen der Amtlichen Vermessung (AV) je Grundstück, eingefärbt nach Hauptgruppe.",
-      legend: function () { return MAIN_ORDER.map(function (mc) { return [mc, MAIN_COLORS[mc], "none"]; }); },
+      legend: function () { return MAIN_ORDER.map(function (m) { return [mainLabel(m), mainColorOf(m), "none"]; }); },
       rows: function () { return [["Quelle", "Amtliche Vermessung, DM.01-AV-CH (geodienste.ch)"], ["Sichtbar ab", "Zoomstufe " + OVERLAY_MINZOOM]]; } },
     bauzonen: { title: "Bauzonen", desc: "Harmonisierte Bauzonen (ARE) je Grundstück.",
-      legend: function () { return Object.keys(BAUZONE_LABELS).map(function (z) { return [BAUZONE_LABELS[z], bzColor(z), "none"]; }); },
+      legend: function () { return BAUZONE_SLUGS.map(function (z) { return [bzLabel(z), bzColor(z), "none"]; }); },
       rows: function () { return [["Quelle", "ARE, ch.are.bauzonen"], ["Sichtbar ab", "Zoomstufe " + OVERLAY_MINZOOM]]; } },
     habitat: { title: "Lebensräume", desc: "BAFU-Lebensraumkarte (modelliert) je Grundstück, eingefärbt nach TypoCH-Klasse.",
-      legend: function () { return ["1", "2", "3", "4", "5", "6", "7", "8", "9"].map(function (d) { return [typochLabel(d), HABITAT_L1_COLORS[d], "none"]; }); },
+      legend: function () { return HABITAT_DIGITS.map(function (d) { return [typochLabel(d), HABITAT_L1_COLORS[d], "none"]; }); },
       rows: function () { return [["Quelle", "BAFU, ch.bafu.lebensraumkarte-schweiz"], ["Sichtbar ab", "Zoomstufe " + OVERLAY_MINZOOM]]; } }
   };
   var infoReq = 0, openInfoModal;
@@ -3130,13 +3011,27 @@
   var HOVER_LAYERS = ["parcels-fill", "clusters", "point", "landcover-fill", "bauzonen-fill", "habitat-fill"];
   function initMap(el) {
     var b = basemapById(basemapId);
-    var opts = { container: el, style: b.url, center: [8.23, 46.82], zoom: 6.4, preserveDrawingBuffer: true, cooperativeGestures: true, attributionControl: { compact: true } };
+    // No cooperative gestures here: the Karte tab fits the viewport (the page does not
+    // scroll), so plain wheel zoom and one-finger pan are what users expect of the main map.
+    // German UI strings for MapLibre's own controls and the cooperative-gesture hint (overview mode).
+    var MAP_LOCALE = {
+      "NavigationControl.ZoomIn": "Hineinzoomen", "NavigationControl.ZoomOut": "Herauszoomen", "NavigationControl.ResetBearing": "Nach Norden ausrichten",
+      "FullscreenControl.Enter": "Vollbild", "FullscreenControl.Exit": "Vollbild beenden",
+      "CooperativeGesturesHandler.WindowsHelpText": "Zum Zoomen Strg + Mausrad verwenden",
+      "CooperativeGesturesHandler.MacHelpText": "Zum Zoomen ⌘ + Mausrad verwenden",
+      "CooperativeGesturesHandler.MobileHelpText": "Karte mit zwei Fingern bewegen",
+      "ScaleControl.Meters": "m", "ScaleControl.Kilometers": "km",
+    };
+    var opts = { container: el, style: b.url, center: [8.23, 46.82], zoom: 6.4, preserveDrawingBuffer: true, attributionControl: { compact: true }, locale: MAP_LOCALE };
     if (b.hybrid) opts.transformStyle = composeHybrid;
     map = new maplibregl.Map(opts);
-    map.addControl(new maplibregl.NavigationControl({ showCompass: true }), "top-right"); // compass = north icon; click resets bearing to 0
-    map.addControl(new HomeControl(), "top-right");
+    if (mapMode === "overview") map.cooperativeGestures.enable(); // created while the Auswertung tab is open
+    // Control stack (top-right), fullscreen always first; the built-in buttons use the
+    // same Lucide icon set as the custom controls (css: .maplibregl-ctrl-icon masks).
     // Fullscreen over the map element itself, so every control, the popup and the dialogs' anchor come along.
     map.addControl(new maplibregl.FullscreenControl(), "top-right");
+    map.addControl(new maplibregl.NavigationControl({ showCompass: true }), "top-right"); // compass = north arrow; click resets bearing to 0
+    map.addControl(new HomeControl(), "top-right");
     map.addControl(new maplibregl.ScaleControl({ maxWidth: 120, unit: "metric" }), "bottom-left");
     map.addControl(new SelBarControl(), "bottom-left");
     map.addControl(new AccordionControl(), "top-left");

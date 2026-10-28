@@ -289,7 +289,7 @@ Level-2 refinements — only groups that depart from their class default are lis
 > ⚠ = judgment call. **Starting-point** mapping pending validation by the
 > sustainability department — the level-1 defaults live in `BAFU_TYPOCH_L1` and the
 > refinements in `BAFU_TYPOCH_REFINE`, kept in lock-step between
-> [web/js/config.js](../web/js/config.js) and [python/config.py](../python/config.py),
+> [processing-web/js/config.js](../processing-web/js/config.js) and [processing-cli/config.py](../processing-cli/config.py),
 > so corrections are a one-line edit in both. BAFU areas are **not** directly comparable
 > to authoritative AV areas; treat them as an approximation where AV is unavailable.
 >
@@ -322,13 +322,13 @@ inferred**. So the KPIs stay backed by actual feature geometry and reconcile to 
 parcel area (BAFU is wall-to-wall).
 
 **Trigger & marking.** A parcel synthesizes only when its real AV cover is below
-**5 %** of the parcel area (`MIN_AV_COVER_FRAC` in [processor.js](../web/js/processor.js)).
+**5 %** of the parcel area (`MIN_AV_COVER_FRAC` in [processor.js](../processing-web/js/processor.js)).
 Synthesized parcels are marked **`lc_source = BAFU`** and **`lc_synthetic = yes`**, and
 each synthetic feature keeps its source TypoCH in a `typoch` column — so synthetic
 cover is never mistaken for authoritative cadastral data and every value is traceable
 back to the habitat type it came from.
 
-**Crosswalk** (`TYPOCH_BBART` in [web/js/config.js](../web/js/config.js)) — keyed by
+**Crosswalk** (`TYPOCH_BBART` in [processing-web/js/config.js](../processing-web/js/config.js)) — keyed by
 TypoCH code, most-specific first, so a fine code overrides its level-1 default. The
 refinements matter most for **class 9**, where level-1 can't tell a building from a
 road (the cadastral-critical sealed / GGF split):

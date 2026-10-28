@@ -55,6 +55,9 @@ Der EGRID konnte in der swisstopo-Datenbank nicht zugeordnet werden. Prüfen Sie
 **Kann ich mehrere Grundstücke gleichzeitig analysieren?**
 Ja. Die CSV-Datei kann beliebig viele Zeilen enthalten. Die Verarbeitung erfolgt parallel (max. 8 gleichzeitig).
 
+**Was zeigt das Protokoll?**
+Während der Verarbeitung erscheint unter der Fortschrittsanzeige ein zugeklapptes Protokoll mit einer Zeile pro Grundstück: ✓ aufgelöst, ⚠ aufgelöst mit Hinweis (z. B. Bodenbedeckung aus BAFU-Lebensräumen abgeleitet, Lebensräume geschätzt), ✕ fehlgeschlagen mit Grund (EGRID ungültig, nicht gefunden, Bodenbedeckung nicht verfügbar). Nach Abschluss bleibt es über der Tabelle; ein Klick auf eine Zeile springt zum Grundstück. Standardmässig werden nur Hinweise und Fehler angezeigt («Alle» zeigt jedes Grundstück); «Kopieren» oder «Als Text» exportiert das Protokoll, z. B. für eine Supportanfrage.
+
 **Welches Koordinatensystem wird verwendet?**
 Die Anzeige erfolgt in WGS 84 (EPSG:4326). Flächenberechnungen basieren auf geodätischen Methoden.
 
@@ -132,6 +135,9 @@ L'EGRID n'a pas pu être trouvé dans la base swisstopo. Vérifiez qu'il est cor
 **Puis-je analyser plusieurs parcelles en même temps ?**
 Oui. Le fichier CSV peut contenir autant de lignes que nécessaire. Le traitement s'effectue en parallèle (max. 8 simultanément).
 
+**Que montre le journal ?**
+Pendant le traitement, un journal replié apparaît sous la barre de progression, avec une ligne par parcelle : ✓ résolue, ⚠ résolue avec un avertissement (p. ex. couverture du sol dérivée des habitats OFEV, habitats estimés), ✕ échec avec le motif (EGRID invalide, non trouvé, couverture du sol indisponible). Une fois le traitement terminé, il reste au-dessus du tableau ; un clic sur une ligne mène à la parcelle. Par défaut, seuls les avertissements et les erreurs sont affichés (« Tout » montre chaque parcelle) ; « Copier » ou « En texte » exporte le journal, p. ex. pour une demande de support.
+
 ### Couverture des données et limitations
 
 Les données de couverture du sol proviennent du service WFS de la mensuration officielle sur [geodienste.ch](https://www.geodienste.ch/services/av). **Tous les cantons ne mettent pas leurs données librement à disposition via ce service.**
@@ -202,6 +208,9 @@ Possibili cause: (1) Il cantone non ha ancora pubblicato i dati di copertura del
 
 **Cosa significa lo stato «Non trovato»?**
 L'EGRID non è stato trovato nella banca dati swisstopo. Verificare che sia corretto e aggiornato.
+
+**Cosa mostra il registro?**
+Durante l'elaborazione, sotto la barra di avanzamento compare un registro chiuso con una riga per particella: ✓ risolta, ⚠ risolta con avviso (p. es. copertura del suolo derivata dagli habitat UFAM, habitat stimati), ✕ fallita con il motivo (EGRID non valido, non trovato, copertura del suolo non disponibile). Al termine rimane sopra la tabella; un clic su una riga porta alla particella. Per impostazione predefinita sono visibili solo avvisi ed errori («Tutti» mostra ogni particella); «Copia» o «Come testo» esporta il registro, p. es. per una richiesta di supporto.
 
 ### Copertura dei dati e limitazioni
 
@@ -276,6 +285,9 @@ The EGRID could not be matched in the swisstopo database. Verify that it is corr
 
 **Can I analyze multiple parcels at once?**
 Yes. The CSV file can contain any number of rows. Processing runs in parallel (max. 8 at a time).
+
+**What does the log show?**
+While processing, a collapsed log appears below the progress bar with one line per parcel: ✓ resolved, ⚠ resolved with a note (e.g. land cover derived from BAFU habitats, habitats estimated), ✕ failed with the reason (invalid EGRID, not found, land cover unavailable). After the run it stays above the table; clicking a line jumps to the parcel. By default only issues and errors are listed ("All" shows every parcel); "Copy" or "As text" exports the log, e.g. for a support request.
 
 **What coordinate system is used?**
 Display uses WGS 84 (EPSG:4326). Area calculations use geodesic methods.

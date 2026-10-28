@@ -13,7 +13,7 @@ saved HTML is what you distribute via ActaNova.
 > Producing the **HTML download** inlines `css/`, `js/` and the basemap thumbnails
 > via `fetch`, which browsers block on `file://`, so build it from a local web server
 > (one command, below). The dashboard *renders* fine from `file://`; only the HTML
-> download needs the server. This is the same model as the [web app](../web/README.md)
+> download needs the server. This is the same model as the [web app](../processing-web/README.md)
 > and its report export.
 
 > The committed `index.html` (and `css/`, `js/`, `assets/`) is the **data-less
@@ -41,9 +41,12 @@ The header carries the Confederation lockup with the dashboard title, the
   accordion (top left), map controls (top right), the basemap switcher (bottom
   right) and a selection bar (bottom left) once parcels are selected for the PDF
   report. Zooming out groups the parcels into clusters; click a cluster to expand it,
-  a polygon to open the parcel popup.
+  a polygon to open the parcel popup. The page does not scroll here, so the mouse
+  wheel zooms the map directly.
 - **Auswertung**: KPI cards, Teilportfolio and Region tables (area and parcel
-  count), the summary tables (VBS, Bauzonen, SIA 416, Versiegelung, AV land cover
+  count), the same map in a fixed-height panel with a simple legend of the visible
+  layers (the Karte-only controls stay away; because this page scrolls, zooming
+  needs Ctrl + wheel, ⌘ on a Mac, as the map's own hint says), the summary tables (VBS, Bauzonen, SIA 416, Versiegelung, AV land cover
   by type, BAFU habitats) and the parcel table with search, sortable columns, a
   column picker, a Total row, pagination and the checkbox column for the PDF
   report.
@@ -96,9 +99,10 @@ table search is now the «In Tabelle filtern…» field above the table.
   filters the table to the parcel), **PDF-Bericht erstellen** and a checkbox to add
   the parcel to the PDF selection, plus «Alle Details anzeigen» (full attribute page
   in a new tab).
-- **Map controls** (top right): zoom, compass (click = north up), **auf Auswahl
-  zoomen** (home) and **Vollbild**. Fullscreen expands the map element itself, so
-  the accordion, switcher and popups come with it. Right-click opens a context menu
+- **Map controls** (top right, in this order): **Vollbild**, zoom, compass (click =
+  north up) and **auf Auswahl zoomen** (home), all drawn with the same Lucide icon
+  set as the rest of the UI. Fullscreen expands the map element itself, so the
+  accordion, switcher and popups come with it. Right-click opens a context menu
   (copy coordinates, share, report a problem).
 
 ### PDF report for a selection
@@ -212,6 +216,8 @@ snapshot with its legend.
 | `css/tokens.css` | Design tokens: the `:root` custom properties (Swiss Confederation CD, radii, shadows, control sizes, z-index scale). |
 | `css/styles.css` | Component + layout styles, including the builder/picker, dialogs, popovers, the map widgets and print rules. |
 | `js/dashboard.js` | The whole app: shared helpers (allowlist, inline-and-embed deliverable), the file picker, the dashboard (`boot`), map, search, external maps, selection, download dialog. |
+| `js/data.js` | **Generated** reference tables (land-cover types and main groups, TypoCH names and level-1 colours, Bauzonen, country names) from `data/*.json` and `processing-web/js/config.js` by `scripts/build_dashboard_data.mjs` — do not edit; `npm run build:dashboard-data` regenerates it. |
+| `tests/data.test.mjs` | Fails when `js/data.js` is stale or a reference breaks its contract (`npm test`). |
 | `js/ch-map.js` | Simplified Swiss outline for the PDF locator map. |
 | `assets/basemaps/*.png` | Basemap thumbnails (rendered from the styles themselves, no API key). |
 

@@ -1,8 +1,8 @@
 # Processing code review — web app and Python CLI
 
 **Date:** 2026-10-28 · **Scope:** the processing code of the web app
-(`web/js/processor.js`, `upload.js`, `config.js`, `export.js`) and the Python CLI
-(`python/api.py`, `processor_web.py`, `geom_wgs84.py`, `classify_web.py`,
+(`processing-web/js/processor.js`, `upload.js`, `config.js`, `export.js`) and the Python CLI
+(`processing-cli/api.py`, `processor_web.py`, `geom_wgs84.py`, `classify_web.py`,
 `export_web.py`, `user_input.py`, `compare.py`, `pipeline.py`, `swisstopo.py`,
 `geometry.py`, `data_io.py`, `main.py`) · **Goal:** bugs, robustness,
 complexity, maintainability, performance — and proof that the web app and the
@@ -151,7 +151,7 @@ latitudes of that ring, and summed over thousands of near-cancelling terms that
 moves a 29'000 m² area by 1e-6 m² — enough to flip an exported 0.01 m² now and then.
 
 **Fix (implemented).** `_ring_area` is now a statement-for-statement port of
-`@turf/area` 7.x, and `python/fdlibm.py` ports fdlibm's `sin` (the algorithm V8
+`@turf/area` 7.x, and `processing-cli/fdlibm.py` ports fdlibm's `sin` (the algorithm V8
 uses). Validated bit for bit against Node on 200'011 random arguments (the
 platform `sin` differed on 6'361 of them); 0.9 µs per call. The web app now pins
 `@turf/turf@7.4.0` so the two cannot drift apart silently; bump both together.
@@ -261,7 +261,7 @@ See [Test layer](#test-layer).
   requests (24) and the risk of 429s; not changed.
 - **R4 gpkg QA flags** — the gpkg path still has no `check_wfs` / `check_geom` /
   `check_habitat` / `check_bauzonen`, "Ohne Bauzone" remainder or habitat
-  gap-fill (python/TODO.md). The tiling fix (F1) and the crash fix (F3) apply to
+  gap-fill (processing-cli/TODO.md). The tiling fix (F1) and the crash fix (F3) apply to
   it; parity of the gpkg path was not a goal here.
 - **R5 Classification tables exist three times** (`config.js`, `config.py`,
   `data/landcover.json`). They are now guarded by tests that fail on any
@@ -324,13 +324,13 @@ What "exact" means after this change set:
 
 | Suite | Runs with | What it pins down |
 |-------|-----------|-------------------|
-| `python/tests/test_parity_js.py` | `pytest` (+ Node) | Every classification table, `classify` / `classifyBafu` / `typochToBBArt`, TypoCH labels and codes, slugs and column keys, `toFixed(1)` / `round2`, `normalizeEgrid`, row shapes **and key order**, `aggregateLandCover` / `aggregateHabitat` / `aggregateBauzonen`, `dominantBfsnr` — evaluated in the browser modules via `tests/js_dump.mjs` and compared with the Python modules on `fixtures/parity_cases.json` |
+| `processing-cli/tests/test_parity_js.py` | `pytest` (+ Node) | Every classification table, `classify` / `classifyBafu` / `typochToBBArt`, TypoCH labels and codes, slugs and column keys, `toFixed(1)` / `round2`, `normalizeEgrid`, row shapes **and key order**, `aggregateLandCover` / `aggregateHabitat` / `aggregateBauzonen`, `dominantBfsnr` — evaluated in the browser modules via `tests/js_dump.mjs` and compared with the Python modules on `fixtures/parity_cases.json` |
 | `test_geom_wgs84.py` | `pytest` | Turf 7.4.0 golden areas (bit-identical) and clips (to the exported digit), incl. two self-intersecting BAFU polygons |
 | `test_fdlibm.py` | `pytest` | `fdlibm.sin` ≡ V8 `Math.sin` on 5'012 golden samples |
 | `test_fetch_paging.py` | `pytest` | Fake services reproducing the server quirks: identify quadtree completeness, dedupe, depth cap, feature cap; WFS page-until-empty, short pages, overlap, cap, malformed geometry; gpkg tiled fetch |
 | `test_user_input.py`, `test_export_web.py` | `pytest` | Upload contract (BOM, `sep=`, delimiter detection, trimming, EGRID normalisation, Excel numerics), CSV / GeoJSON serialisation |
 | `test_live_parity.py` | `LANDCOVER_LIVE=1 pytest` | End-to-end: the Python api source reproduces a committed web export bit for bit |
-| `web/tests/*.test.mjs` | `npm test` (node:test, no dependencies) | `fetchIdentify` / `fetchLandCover` against the same fake services; `round2`, row builders, aggregations, `dominantBfsnr` |
+| `processing-web/tests/*.test.mjs` | `npm test` (node:test, no dependencies) | `fetchIdentify` / `fetchLandCover` against the same fake services; `round2`, row builders, aggregations, `dominantBfsnr` |
 
 Totals: 60 Python tests (+1 live), 13 JS tests.
 
@@ -348,3 +348,38 @@ Totals: 60 Python tests (+1 live), 13 JS tests.
 - **gpkg CSV**: semicolon-delimited, UTF-8 BOM.
 - **Dependencies**: shapely ≥ 2.1; the web pins `@turf/turf@7.4.0`.
 - **Inputs**: EGRIDs are trimmed and upper-cased on both sides.
+
+---
+
+## Post-review changes in the same change set
+
+Done after the review at the owner's request; listed here so the diff reads as one.
+
+- **Folders renamed** `web/` → `processing-web/`, `python/` → `processing-cli/`
+  (consistent "what it is" naming next to `dashboard/`). Every path reference in
+  docs, code, tests and the Claude settings was rewritten; a redirect stub stays at
+  `web/index.html` so the old GitHub Pages URL keeps working (query string and
+  hash are forwarded). The review text above uses the new paths.
+- **Header**: logo removed; two-line title "Bundesamt für Bauten und Logistik /
+  Auswertung Bodenbedeckung" in one style; the title stays visible on phones in
+  the results view as the click-to-home control.
+- **Processing log («Protokoll»)**, `processing-web/js/log.js`: one line per parcel
+  from its `check_*` flags, collapsed below the progress card and above the results
+  table, filters, copy / text export, completion toast. The processor's progress
+  callback now carries the finished parcel (`progress.parcel`) and the result the
+  `cancelled` flag — additive, the Python port is unaffected.
+- **F18 (found while testing the log, pre-existing): "Neue Analyse" aborted when a
+  map popup was open** — `map.remove()` fires the popup's `close` event after the
+  style is gone and `clearIdentifyHighlight()` threw on `getLayer`, so the reset
+  stopped half-way. Guarded in `map.js`.
+- **Explainer («Kurz erklärt»)**, `processing-web/js/explainer.js`: eight
+  CSS-animated SVG scenes on one real parcel (aerial excerpts, boundary, land cover,
+  clip, classify, figures, result) with captions in the UI language below the upload
+  card, start page only. Rebuilt twice after a separate review, see
+  [2026-10-28-explainer-review.md](2026-10-28-explainer-review.md).
+- **Dashboard map**: the Karte tab zooms with the plain mouse wheel (cooperative
+  gestures were on for the single map); the Auswertung tab got its map back (the
+  same map moves into a fixed-height slot with the simple legend, Karte-only
+  controls hidden, cooperative gestures on because that page scrolls); the control
+  stack is fullscreen · zoom · compass · home, all built-in buttons drawn with the
+  Lucide icon set via CSS masks; MapLibre's control tooltips and gesture hint in German.

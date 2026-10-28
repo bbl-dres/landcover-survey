@@ -418,6 +418,20 @@ table.sumtbl .sumbar > i { display: block; height: 100%; background: var(--bar-f
 .map-msg { padding: 32px 24px; color: var(--gray-500); font-size: 14px; text-align: center; }
 .maplibregl-ctrl-group { box-shadow: var(--ring) !important; border-radius: var(--radius-lg) !important; }
 .maplibregl-ctrl-group button.map-home { display: flex; align-items: center; justify-content: center; color: var(--gray-700); }
+/* MapLibre's built-in buttons (zoom, compass, fullscreen) drawn with the same Lucide icons as the custom
+   controls: the default icon images are replaced by masks so the colour follows the CSS like .map-home. */
+.maplibregl-ctrl button .maplibregl-ctrl-icon { background-image: none; background-color: var(--gray-700); -webkit-mask: var(--lucide) center / 17px 17px no-repeat; mask: var(--lucide) center / 17px 17px no-repeat; }
+.maplibregl-ctrl button:hover .maplibregl-ctrl-icon { background-color: var(--gray-900); }
+.maplibregl-ctrl button:disabled .maplibregl-ctrl-icon { background-color: var(--gray-400, #a3a3a3); }
+.maplibregl-ctrl button.maplibregl-ctrl-zoom-in .maplibregl-ctrl-icon { --lucide: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12h14'/%3E%3Cpath d='M12 5v14'/%3E%3C/svg%3E"); }
+.maplibregl-ctrl button.maplibregl-ctrl-zoom-out .maplibregl-ctrl-icon { --lucide: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12h14'/%3E%3C/svg%3E"); }
+.maplibregl-ctrl button.maplibregl-ctrl-compass .maplibregl-ctrl-icon { --lucide: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolygon points='12 2 19 21 12 17 5 21 12 2'/%3E%3C/svg%3E"); }
+.maplibregl-ctrl button.maplibregl-ctrl-fullscreen .maplibregl-ctrl-icon { --lucide: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M8 3H5a2 2 0 0 0-2 2v3'/%3E%3Cpath d='M21 8V5a2 2 0 0 0-2-2h-3'/%3E%3Cpath d='M3 16v3a2 2 0 0 0 2 2h3'/%3E%3Cpath d='M16 21h3a2 2 0 0 0 2-2v-3'/%3E%3C/svg%3E"); }
+.maplibregl-ctrl button.maplibregl-ctrl-shrink .maplibregl-ctrl-icon { --lucide: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M8 3v3a2 2 0 0 1-2 2H3'/%3E%3Cpath d='M21 8h-3a2 2 0 0 1-2-2V3'/%3E%3Cpath d='M3 16h3a2 2 0 0 1 2 2v3'/%3E%3Cpath d='M16 21v-3a2 2 0 0 1 2-2h3'/%3E%3C/svg%3E"); }
+/* Overview mode (the map inside the Auswertung tab): fixed height, legend on, Karte-only controls off. */
+#map.ov-mode { height: 520px; min-height: 0; }
+#map.ov-mode .acc-wrap, #map.ov-mode .bm-wrap, #map.ov-mode .map-selbar { display: none; }
+#map.ov-mode .map-legend { display: block; }
 .maplibregl-ctrl-group button.map-home:hover { color: var(--gray-900); }
 .maplibregl-ctrl-scale { background: rgba(255,255,255,0.9); border-color: var(--gray-500); color: var(--gray-700); font-size: 11px; }
 /* Map popup (C2 content) */
@@ -544,6 +558,7 @@ table.sumtbl .sumbar > i { display: block; height: 100%; background: var(--bar-f
   .tabs-bar { position: static; padding: 8px 14px 0; flex-wrap: wrap; }
   .tab-panel { padding: 14px 14px 40px; }
   #map { height: calc(100vh - 160px); min-height: 380px; }
+  #map.ov-mode { height: 360px; min-height: 0; }
   .modal-backdrop { padding: 12px; }
   th, td { padding: 8px 10px; }
   .tab, .pager .btn, .seg-btn, .dl-act { min-height: 44px; }

@@ -16,7 +16,7 @@
  * Globals from CDN: turf (clipping), GeoTIFF (COG reader), d3 (d3-contour).
  */
 
-/* ── constants (endpoints match web/js/config.js) ── */
+/* ── constants (endpoints match processing-web/js/config.js) ── */
 const API_FIND = "https://api3.geo.admin.ch/rest/services/all/MapServer/find";
 const WFS_AV = "https://geodienste.ch/db/av_0/deu"; // pinned to deu — classifier keys on German Art values
 const STAC_ITEMS =

@@ -1,7 +1,38 @@
 # Scripts
 
 Standalone utility scripts (not part of the web app or the main Python CLI).
-Standard library only — no dependencies.
+No dependencies beyond Python's standard library and Node.
+
+## build_dashboard_data.mjs
+
+Generates `dashboard/js/data.js`, the reference tables the offline dashboard embeds, from
+the shared sources — `data/landcover.json` (BBArt types, AV main groups, colours),
+`data/typoch.json` (TypoCH names, level-1 colours), `data/countries.json` (country names)
+and `processing-web/js/config.js` (Bauzonen labels and colours) — so the dashboard never
+carries a hand-copied table.
+
+```bash
+npm run build:dashboard-data              # rewrite dashboard/js/data.js
+node scripts/build_dashboard_data.mjs --check   # exit 1 when the committed file is stale
+```
+
+`npm test` runs the same check (`dashboard/tests/data.test.mjs`). Run the generator after
+changing any of the sources and commit the result.
+
+## build_explainer_sample.py
+
+Builds the material of the web app's explainer («Kurz erklärt»): one real parcel —
+Zollikofen, Parzelle 112, EGRID CH834682352690 — fetched through the CLI's `api` module
+(boundary from swisstopo, land cover from geodienste.ch), the figures from a CLI run, and
+two SWISSIMAGE excerpts from the geo.admin WMS, projected into the explainer's 640 × 300
+stage. Writes `processing-web/js/explainer-sample.js` and
+`processing-web/assets/explainer/*.jpg`. Needs network, shapely and Pillow (the CLI's
+dependencies).
+
+```bash
+python scripts/build_explainer_sample.py                 # regenerate module + images
+python scripts/build_explainer_sample.py --preview p.png # plus an alignment overlay
+```
 
 ## join_sap_measurements.py
 

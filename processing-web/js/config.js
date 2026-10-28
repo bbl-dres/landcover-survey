@@ -1,0 +1,726 @@
+/**
+ * BBArt classification mappings — ported from processing-cli/config.py
+ */
+import { t, localeFmtNum } from "./i18n.js";
+
+/** Land cover type → SIA 416 classification */
+export const SIA416 = {
+  Gebaeude: "GGF",
+  Strasse_Weg: "BUF",
+  Trottoir: "BUF",
+  Verkehrsinsel: "BUF",
+  Bahn: "BUF",
+  Flugplatz: "BUF",
+  Wasserbecken: "BUF",
+  uebrige_befestigte: "BUF",
+  Acker_Wiese_Weide: "BUF",
+  Reben: "BUF",
+  uebrige_Intensivkultur: "BUF",
+  Gartenanlage: "BUF",
+  Hoch_Flachmoor: "BUF",
+  uebrige_humusierte: "BUF",
+  Wytweide_dicht: "BUF",
+  Wytweide_offen: "BUF",
+  Gewaesser_stehendes: "UUF",
+  Gewaesser_fliessendes: "UUF",
+  Schilfguertel: "UUF",
+  geschlossener_Wald: "UUF",
+  uebrige_bestockte: "UUF",
+  Fels: "UUF",
+  Gletscher_Firn: "UUF",
+  Geroell_Sand: "UUF",
+  Abbau_Deponie: "UUF",
+  uebrige_vegetationslose: "UUF",
+};
+
+/** Land cover type → DIN 277:2021 classification */
+export const DIN277 = {
+  Gebaeude: "BF",
+};
+
+/** Land cover type → Green Space classification */
+export const GREEN_SPACE = {
+  Acker_Wiese_Weide: "Green space (soil-covered)",
+  Reben: "Green space (soil-covered)",
+  Gartenanlage: "Green space (soil-covered)",
+  Hoch_Flachmoor: "Green space (soil-covered)",
+  uebrige_humusierte: "Green space (soil-covered)",
+  Wytweide_dicht: "Green space (soil-covered)",
+  Wytweide_offen: "Green space (soil-covered)",
+  geschlossener_Wald: "Green space (wooded)",
+  uebrige_bestockte: "Green space (wooded)",
+};
+
+/** Land cover type → VBS Kategorie (a–d) */
+export const VBS_KATEGORIE = {
+  // A. Siedlungsfläche
+  Gebaeude: "kat_a",
+  Strasse_Weg: "kat_a",
+  Trottoir: "kat_a",
+  Verkehrsinsel: "kat_a",
+  Bahn: "kat_a",
+  Flugplatz: "kat_a",
+  Wasserbecken: "kat_a",
+  uebrige_befestigte: "kat_a",
+  Abbau_Deponie: "kat_a",
+  // B. Landwirtschaftsfläche
+  Acker_Wiese_Weide: "kat_b",
+  Reben: "kat_b",
+  uebrige_Intensivkultur: "kat_b",
+  Gartenanlage: "kat_b",
+  uebrige_humusierte: "kat_b",
+  Wytweide_dicht: "kat_b",
+  Wytweide_offen: "kat_b",
+  // C. Bestockte Fläche
+  geschlossener_Wald: "kat_c",
+  uebrige_bestockte: "kat_c",
+  // D. Unproduktive Fläche
+  Hoch_Flachmoor: "kat_d",
+  Gewaesser_stehendes: "kat_d",
+  Gewaesser_fliessendes: "kat_d",
+  Schilfguertel: "kat_d",
+  Fels: "kat_d",
+  Gletscher_Firn: "kat_d",
+  Geroell_Sand: "kat_d",
+  uebrige_vegetationslose: "kat_d",
+};
+
+/** VBS biological productivity — derived from VBS_KATEGORIE */
+const _UNPRODUKTIV_FROM_D = new Set(["Fels", "Gletscher_Firn", "Geroell_Sand"]);
+export const VBS_PRODUKTIV = Object.fromEntries(
+  Object.entries(VBS_KATEGORIE).map(([art, kat]) => [
+    art,
+    kat === "kat_a" || _UNPRODUKTIV_FROM_D.has(art) ? "unproduktiv" : "produktiv",
+  ])
+);
+
+/** VBS Typ — within biologically productive only */
+export const VBS_TYP = Object.fromEntries(
+  Object.entries(VBS_PRODUKTIV)
+    .filter(([, prod]) => prod === "produktiv")
+    .map(([art]) => [art, art === "Gartenanlage" ? "typ1" : "typ2"])
+);
+
+/** VBS code → stable English output value (written verbatim to export columns;
+ *  translated for on-screen display via vbsKategorieLabel/… below). */
+export const VBS_KATEGORIE_LABELS = {
+  kat_a: "A. Settlement area",
+  kat_b: "B. Agricultural area",
+  kat_c: "C. Wooded area",
+  kat_d: "D. Unproductive area",
+};
+export const VBS_PRODUKTIV_LABELS = {
+  produktiv: "1 Biologically productive",
+  unproduktiv: "2 Biologically unproductive",
+};
+export const VBS_TYP_LABELS = {
+  typ1: "Type 1 - Green spaces near buildings",
+  typ2: "Type 2 - Other green spaces",
+};
+
+/** Land cover types classified as sealed (versiegelt) */
+export const SEALED = new Set([
+  "Gebaeude",
+  "Strasse_Weg",
+  "Trottoir",
+  "Verkehrsinsel",
+  "Bahn",
+  "Flugplatz",
+  "Wasserbecken",
+  "uebrige_befestigte",
+]);
+
+/** German display names for BBArt types. Canonical source of record (with the
+ *  main-group hierarchy + FR/IT names) is the shared [data/landcover.json]; keep the
+ *  `de` values here in sync with it. Kept inline (not fetched) so it stays available
+ *  synchronously, including in the offline self-contained report. */
+export const ART_LABELS = {
+  Gebaeude: "Gebäude",
+  Strasse_Weg: "Strasse/Weg",
+  Trottoir: "Trottoir",
+  Verkehrsinsel: "Verkehrsinsel",
+  Bahn: "Bahn",
+  Flugplatz: "Flugplatz",
+  Wasserbecken: "Wasserbecken",
+  uebrige_befestigte: "Übrige befestigte",
+  Acker_Wiese_Weide: "Acker/Wiese/Weide",
+  Reben: "Reben",
+  uebrige_Intensivkultur: "Übrige Intensivkultur",
+  Gartenanlage: "Gartenanlage",
+  Hoch_Flachmoor: "Hoch-/Flachmoor",
+  uebrige_humusierte: "Übrige humusierte",
+  Wytweide_dicht: "Wytweide (dicht)",
+  Wytweide_offen: "Wytweide (offen)",
+  Gewaesser_stehendes: "Stehendes Gewässer",
+  Gewaesser_fliessendes: "Fliessendes Gewässer",
+  Schilfguertel: "Schilfgürtel",
+  geschlossener_Wald: "Geschlossener Wald",
+  uebrige_bestockte: "Übrige bestockte",
+  Fels: "Fels",
+  Gletscher_Firn: "Gletscher/Firn",
+  Geroell_Sand: "Geröll/Sand",
+  Abbau_Deponie: "Abbau/Deponie",
+  uebrige_vegetationslose: "Übrige vegetationslose",
+};
+
+/**
+ * BAFU Lebensraumkarte (TypoCH) fallback mapping — used where AV land cover is
+ * unavailable. Keyed by the TypoCH **level-1** code (the leading digit of the
+ * `typoch_de` label, e.g. "6.x.x Wald" → "6"). Only green space + VBS are
+ * derived; SIA 416 / DIN 277 / sealed are deliberately left blank for BAFU rows
+ * (BAFU is a modeled habitat map and cannot resolve building footprints).
+ *
+ * Starting-point mapping — pending validation by the sustainability dept.
+ * See docs/CLASSIFICATION.md (§Fallback) for rationale and the ⚠ judgment calls.
+ */
+export const BAFU_TYPOCH_L1 = {
+  "1": { name: "Gewässer", color: "#0D74FC", green: "Not green space", vbsKategorie: "kat_d", vbsProduktiv: "produktiv", vbsTyp: "typ2" },
+  "2": { name: "Ufer & Feuchtgebiete", color: "#12DEFF", green: "Green space (soil-covered)", vbsKategorie: "kat_d", vbsProduktiv: "produktiv", vbsTyp: "typ2" },
+  "3": { name: "Gletscher, Fels, Schutt, Geröll", color: "#9AAAB3", green: "Not green space", vbsKategorie: "kat_d", vbsProduktiv: "unproduktiv", vbsTyp: null },
+  "4": { name: "Grünland", color: "#FC8C1D", green: "Green space (soil-covered)", vbsKategorie: "kat_b", vbsProduktiv: "produktiv", vbsTyp: "typ2" },
+  "5": { name: "Krautsäume, Hochstauden, Gebüsche", color: "#F0F000", green: "Green space (wooded)", vbsKategorie: "kat_c", vbsProduktiv: "produktiv", vbsTyp: "typ2" },
+  "6": { name: "Wälder", color: "#62AF39", green: "Green space (wooded)", vbsKategorie: "kat_c", vbsProduktiv: "produktiv", vbsTyp: "typ2" },
+  "7": { name: "Pionier-/Ruderalvegetation", color: "#C89646", green: "Not green space", vbsKategorie: "kat_d", vbsProduktiv: "produktiv", vbsTyp: "typ2" },
+  "8": { name: "Pflanzungen, Äcker, Kulturen", color: "#E673E4", green: "Green space (soil-covered)", vbsKategorie: "kat_b", vbsProduktiv: "produktiv", vbsTyp: "typ2" },
+  "9": { name: "Gebäude / Anlagen", color: "#505050", green: "Not green space", vbsKategorie: "kat_a", vbsProduktiv: "unproduktiv", vbsTyp: null },
+};
+
+/** geo.admin.ch layer id of the BAFU habitat map (own layer + legacy fallback). */
+export const BAFU_LAYER_ID = "ch.bafu.lebensraumkarte-schweiz";
+
+/** Green inventory (Grünflächeninventar der Bundesgärtnerei, github.com/bbl-dres/green-inventory):
+ *  the public parcel list the optional "Grüninventar abgleichen" join reads (GitHub Pages, CORS
+ *  open; keyed by EGRID and by the SAP key `erp_id`), and the app that parcel links open. */
+export const GREEN_INVENTORY = {
+  PARCELS_URL: "https://bbl-dres.github.io/green-inventory/prototype-main/data/land_parcels.geojson",
+  APP_URL: "https://bbl-dres.github.io/green-inventory/prototype-main/",
+};
+/** Deep link into the green inventory app at a WGS84 position ([lng, lat]); the app
+ *  reads `center` and `zoom` from its URL on load. */
+export function greenInventoryUrl(lngLat, zoom = 17.5) {
+  if (!lngLat || !isFinite(lngLat[0]) || !isFinite(lngLat[1])) return "";
+  return `${GREEN_INVENTORY.APP_URL}?center=${lngLat[0].toFixed(5)},${lngLat[1].toFixed(5)}&zoom=${zoom}`;
+}
+
+/** TypoCH level-1 digit of a habitat label ("6.3.1 Buchenwald" → "6"). */
+export function typochL1(typochDe) {
+  return String(typochDe || "").trim().charAt(0);
+}
+
+/** Leading TypoCH code token of a habitat label ("6.3.1 Buchenwald" → "6.3.1"). */
+export function typochCode(typochDe) {
+  return String(typochDe || "").trim().split(/\s+/)[0] || "";
+}
+
+/* ── Shared TypoCH name reference (data/typoch.json) ───────────────────────────
+ * The official TypoCH code→name list (levels 1–4, DE/FR/IT) lives in one JSON that
+ * both this app and the Python CLI read, so habitat category names aren't hardcoded
+ * twice. Loaded once, lazily, before processing (processRows awaits ensureTypoch()).
+ * Only the *names* come from here; colours + green/VBS classification are app
+ * decisions and stay in code (below). Fetched relative to this module so it resolves
+ * whether the app is served from /web/ or the repo root. */
+let _typoch = null;            // code → { code, de, fr, it, level }
+let _typochPromise = null;
+export function ensureTypoch() {
+  if (_typoch) return Promise.resolve(_typoch);
+  if (!_typochPromise) {
+    _typochPromise = fetch(new URL("../../data/typoch.json", import.meta.url))
+      .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+      .then((doc) => {
+        _typoch = {};
+        for (const t of doc.types || []) _typoch[t.code] = t;
+        return _typoch;
+      })
+      .catch((err) => { console.warn("TypoCH reference load failed:", err.message); _typoch = {}; return _typoch; });
+  }
+  return _typochPromise;
+}
+
+/** German name for a TypoCH code prefix from the loaded reference ("" if unknown). */
+function typochName(code) { return _typoch?.[code]?.de || ""; }
+
+/** Habitat label at TypoCH level n as "<code> <name>" (e.g. level 2 of
+ *  "6.3.1 Buchenwald" → "6.3 Andere Laubwälder"). Returns "" when the label has
+ *  fewer than n code parts (the layer resolves to level-2 at minimum, level-3 where
+ *  possible). Requires ensureTypoch() to have resolved; falls back to the bare code
+ *  (or the raw label at its deepest level) when the reference isn't loaded. */
+export function typochLabelAtLevel(typochDe, n) {
+  const parts = typochCode(typochDe).split(".").filter(Boolean);
+  if (parts.length < n) return "";
+  const code = parts.slice(0, n).join(".");
+  const name = typochName(code);
+  return name ? `${code} ${name}` : (n === parts.length ? String(typochDe || "").trim() : code);
+}
+export const typochL1Label = (typochDe) => typochLabelAtLevel(typochDe, 1);
+export const typochL2Label = (typochDe) => typochLabelAtLevel(typochDe, 2);
+export const typochL3Label = (typochDe) => typochLabelAtLevel(typochDe, 3);
+
+/** TypoCH code at level n ("6.3.1 Buchenwald" → level 2 = "6.3"); "" if fewer than n parts. */
+export function typochCodeAtLevel(typochDe, n) {
+  const parts = typochCode(typochDe).split(".").filter(Boolean);
+  return parts.length < n ? "" : parts.slice(0, n).join(".");
+}
+
+/** Lighten (amt>0) or darken (amt<0) a #rrggbb colour toward white/black. */
+function shadeHex(hex, amt) {
+  const m = String(hex).replace("#", "");
+  const to = amt < 0 ? 0 : 255, p = Math.min(1, Math.abs(amt));
+  const ch = (i) => { const c = parseInt(m.slice(i, i + 2), 16); return Math.round(c + (to - c) * p).toString(16).padStart(2, "0"); };
+  return `#${ch(0)}${ch(2)}${ch(4)}`;
+}
+
+/** Map/legend colour for a habitat label: the TypoCH level-1 base hue, shaded by the
+ *  level-2 digit so groups within a class read as related but distinguishable. */
+export function habitatColor(typochDe) {
+  const parts = typochCode(typochDe).split(".");
+  const base = BAFU_TYPOCH_L1[parts[0]]?.color || "#888";
+  const l2 = parseInt(parts[1], 10);
+  return Number.isFinite(l2) ? shadeHex(base, (l2 - 3) * 0.06) : base;
+}
+
+/**
+ * TypoCH level-2 / level-3 green-space + VBS refinements, keyed by code and applied
+ * most-specific-first (a finer code overrides its class default in BAFU_TYPOCH_L1).
+ * Only groups whose naturalness differs from their level-1 class default are listed.
+ * ⚠ Starting-point mapping pending sustainability-dept validation — same status as
+ * BAFU_TYPOCH_L1; edit here (and processing-cli/config.py) to correct.
+ */
+export const BAFU_TYPOCH_REFINE = {
+  "1.3": { green: "Green space (soil-covered)", vbsKategorie: "kat_c", vbsProduktiv: "produktiv", vbsTyp: "typ2" }, // Quellen und Quellfluren (spring flora)
+  "2.0": { green: "Not green space", vbsKategorie: "kat_a", vbsProduktiv: "unproduktiv", vbsTyp: null },            // Künstliche Ufer (constructed banks)
+  "4.0": { green: "Green space (soil-covered)", vbsKategorie: "kat_a", vbsProduktiv: "produktiv", vbsTyp: "typ2" }, // Kunstrasen (amenity/artificial lawn)
+  "5.1": { green: "Green space (soil-covered)", vbsKategorie: "kat_c", vbsProduktiv: "produktiv", vbsTyp: "typ2" }, // Krautsäume (herbaceous, not wooded)
+  "5.2": { green: "Green space (soil-covered)", vbsKategorie: "kat_c", vbsProduktiv: "produktiv", vbsTyp: "typ2" }, // Hochstauden-/Schlagfluren (tall-herb)
+  "6.0": { green: "Green space (wooded)", vbsKategorie: "kat_b", vbsProduktiv: "produktiv", vbsTyp: "typ2" },       // Forstpflanzungen (planted, managed)
+  "7.2": { green: "Not green space", vbsKategorie: "kat_a", vbsProduktiv: "unproduktiv", vbsTyp: null },            // Anthropogene Steinfluren (walls, paving)
+  "8.1": { green: "Green space (wooded)", vbsKategorie: "kat_b", vbsProduktiv: "produktiv", vbsTyp: "typ2" },       // Baumschulen, Obstgärten, Rebberge (woody crops)
+};
+
+/** Classify a BAFU TypoCH habitat label (e.g. "6.3.1 Buchenwald") for the fields BAFU
+ *  can supply (greenSpace + VBS); SIA 416 / DIN 277 / sealed stay null. Tries the code
+ *  most-specific-first against BAFU_TYPOCH_REFINE, then the level-1 class default in
+ *  BAFU_TYPOCH_L1, then a neutral fallback. */
+export function classifyBafu(typochDe) {
+  const parts = typochCode(typochDe).split(".").filter(Boolean);
+  let m = null;
+  for (let i = parts.length; i >= 1 && !m; i--) m = BAFU_TYPOCH_REFINE[parts.slice(0, i).join(".")];
+  m = m || BAFU_TYPOCH_L1[parts[0]] || { green: "Not green space", vbsKategorie: "kat_d", vbsProduktiv: "unproduktiv", vbsTyp: null };
+  return { sia416: null, din277: null, sealed: null, greenSpace: m.green, vbsKategorie: m.vbsKategorie, vbsProduktiv: m.vbsProduktiv, vbsTyp: m.vbsTyp };
+}
+
+/**
+ * TypoCH → AV BBArt crosswalk for the SYNTHETIC land-cover fallback, used only
+ * where AV land cover is missing. Each habitat type maps to the BBArt whose
+ * classification (SIA 416 / sealed / green / VBS, via classify()) best matches it,
+ * so synthesized features run through the exact same pipeline as real AV — the
+ * geometry is real (the clipped BAFU polygon), only the BBArt label is inferred.
+ *
+ * Keyed by TypoCH code, most-specific-first: a fine code (e.g. "9.2") overrides its
+ * level-1 default ("9"). The single-digit keys are the level-1 defaults; the dotted
+ * keys refine what level-1 can't resolve — above all class 9, where the cadastral-
+ * critical building-vs-road / sealed-vs-unsealed split lives.
+ *
+ * ⚠ Starting-point mapping, pending validation against real AV on dual-coverage
+ * parcels (see docs/CLASSIFICATION.md §Synthetic AV). ⚠ marks the judgment calls.
+ */
+export const TYPOCH_BBART = {
+  // ── level-1 defaults ──
+  "1": "Gewaesser_stehendes",       // Gewässer → Wasser (UUF, not green, kat_d)
+  "2": "Hoch_Flachmoor",            // Ufer & Feuchtgebiete → Moor/humusiert (BUF, green, kat_d)
+  "3": "Geroell_Sand",              // Gletscher, Fels, Schutt → vegetationslos (UUF, kat_d, unprod.)
+  "4": "Acker_Wiese_Weide",         // Grünland → humusiert (BUF, green, kat_b)
+  "5": "uebrige_bestockte",         // Krautsäume/Hochstauden/Gebüsche → bestockt (UUF, green-wooded, kat_c)
+  "6": "geschlossener_Wald",        // Wälder → Wald (UUF, green-wooded, kat_c)
+  "7": "uebrige_vegetationslose",   // Pionier-/Ruderalvegetation → vegetationslos (UUF, not green, kat_d)
+  "8": "Acker_Wiese_Weide",         // Pflanzungen, Äcker, Kulturen → humusiert (BUF, green, kat_b)
+  "9": "uebrige_befestigte",        // ⚠ Gebäude/Anlagen (unspecified) → befestigt, sealed but not a building (BUF)
+  // ── class 9 refinements (the cadastral-critical ones) ──
+  "9.2": "Gebaeude",                // Bauten → Gebäude (GGF, sealed)
+  "9.3.2": "Strasse_Weg",           // Asphalt-/Betonstrasse → Strasse (BUF, sealed)
+  "9.0.2": "uebrige_befestigte",    // Versiegelte vegetationslose Fläche → befestigt (BUF, sealed)
+  "9.3.3": "uebrige_vegetationslose", // ⚠ Naturstrasse/Weg (unbefestigt) → not sealed
+};
+
+/** Resolve a TypoCH label (e.g. "9.3.2 Asphalt- und Betonstrasse") to a synthetic
+ *  BBArt via TYPOCH_BBART, trying the most specific code first and falling back to
+ *  the level-1 default. Returns null when nothing matches (caller skips the piece). */
+export function typochToBBArt(typochDe) {
+  const code = String(typochDe || "").trim().split(/\s+/)[0]; // "9.3.2"
+  if (!code) return null;
+  const parts = code.split(".");
+  while (parts.length) {
+    const key = parts.join(".");
+    if (TYPOCH_BBART[key]) return TYPOCH_BBART[key];
+    parts.pop();
+  }
+  return null;
+}
+
+/** Harmonised Bauzonen main-use category (ch.are.bauzonen `ch_code_hn`) → colour,
+ *  loosely following Swiss zoning-plan conventions. Keyed by the harmonised code
+ *  so a category gets the same colour in every municipality. */
+export const BAUZONEN_HN_COLORS = {
+  "11": "#f4c430", // Wohnzonen — residential yellow
+  "12": "#8e8e8e", // Arbeitszonen — work / industry grey
+  "13": "#e08a3c", // Mischzonen — mixed orange
+  "14": "#b5651d", // Zentrumszonen — centre brown
+  "15": "#6fa8dc", // Zonen für öffentliche Nutzungen — public blue-grey
+  "16": "#7cb342", // eingeschränkte Bauzonen — restricted green
+  "17": "#c2549d", // Tourismus- und Freizeitzonen — tourism magenta
+  "18": "#5d6d7e", // Verkehrszonen innerhalb der Bauzonen — transport slate
+};
+/** Colour for a Bauzone by its harmonised use code; grey fallback for unknown. */
+export function bauzoneColor(code) {
+  return BAUZONEN_HN_COLORS[String(code ?? "").trim()] || "#9e9e9e";
+}
+
+/** Classify a single BBArt type and return all classifications */
+export function classify(art) {
+  return {
+    sia416: SIA416[art] || "UUF",
+    din277: DIN277[art] || "UF",
+    greenSpace: GREEN_SPACE[art] || "Not green space",
+    sealed: SEALED.has(art),
+    vbsKategorie: VBS_KATEGORIE[art] || "kat_d",
+    vbsProduktiv: VBS_PRODUKTIV[art] || "unproduktiv",
+    vbsTyp: VBS_TYP[art] || null,
+  };
+}
+
+/** Status constants — language-independent codes (translate at display time) */
+export const STATUS = {
+  FOUND: "found",
+  MERGED: "merged",
+  NOT_FOUND: "not_found",
+  INVALID: "invalid",
+};
+
+/** True if an EGRID status code represents a successfully resolved parcel. */
+export function isFound(code) {
+  return code === STATUS.FOUND || code === STATUS.MERGED;
+}
+
+/** Canonical EGRID spelling: trimmed and upper-cased (" ch4277… " → "CH4277…").
+ *  Mirrored by processing-cli/user_input.py normalize_egrid() — applied at every input
+ *  boundary so the same list resolves identically in the browser and the CLI. */
+export function normalizeEgrid(s) {
+  return String(s ?? "").trim().toUpperCase();
+}
+
+/** Translate a status code for display */
+export function statusLabel(code) {
+  const map = {
+    found: "status.found",
+    merged: "status.merged",
+    not_found: "status.notFound",
+    invalid: "status.invalid",
+  };
+  if (map[code]) return t(map[code]);
+  // Error messages stored as "error:actual message"
+  if (code && code.startsWith("error:")) return t("status.error", { message: code.slice(6) });
+  return code || "\u2013";
+}
+
+/** Green space display labels — translates stable English codes at display time */
+const GREEN_SPACE_I18N = {
+  "Green space (soil-covered)": "gs.soil",
+  "Green space (wooded)": "gs.wooded",
+  "Not green space": "gs.none",
+};
+
+export function greenSpaceLabel(code) {
+  const key = GREEN_SPACE_I18N[code];
+  return key ? t(key) : code || "\u2013";
+}
+
+/** VBS display labels \u2014 translate the stable English output values at display time */
+const VBS_KATEGORIE_I18N = {
+  "A. Settlement area": "agg.vbs.kat_a",
+  "B. Agricultural area": "agg.vbs.kat_b",
+  "C. Wooded area": "agg.vbs.kat_c",
+  "D. Unproductive area": "agg.vbs.kat_d",
+};
+const VBS_PRODUKTIV_I18N = {
+  "1 Biologically productive": "agg.vbs.produktiv.yes",
+  "2 Biologically unproductive": "agg.vbs.produktiv.no",
+};
+const VBS_TYP_I18N = {
+  "Type 1 - Green spaces near buildings": "agg.vbs.typ1",
+  "Type 2 - Other green spaces": "agg.vbs.typ2",
+};
+
+export function vbsKategorieLabel(code) {
+  const key = VBS_KATEGORIE_I18N[code];
+  return key ? t(key) : code || "\u2013";
+}
+export function vbsProduktivLabel(code) {
+  const key = VBS_PRODUKTIV_I18N[code];
+  return key ? t(key) : code || "\u2013";
+}
+export function vbsTypLabel(code) {
+  const key = VBS_TYP_I18N[code];
+  return key ? t(key) : code || "\u2013";
+}
+
+/** Stable English error messages \u2014 shared so processor.js (which produces them)
+ *  and errorLabel (which translates them) can't drift out of sync. */
+export const ERR_MSG = {
+  invalidEgrid: "Invalid EGRID",
+  egridNotFound: "EGRID not found in AV",
+  wfsUnavailable: "Land cover unavailable (WFS)",
+};
+/** Prefix for runtime errors carrying a dynamic message ("Error: <msg>"). */
+export const ERR_RUNTIME_PREFIX = "Error: ";
+
+const ERROR_I18N = {
+  [ERR_MSG.invalidEgrid]: "status.invalid",
+  [ERR_MSG.egridNotFound]: "status.notFound",
+  [ERR_MSG.wfsUnavailable]: "err.wfsError",
+};
+export function errorLabel(msg) {
+  if (!msg) return "";
+  if (ERROR_I18N[msg]) return t(ERROR_I18N[msg]);
+  if (msg.startsWith(ERR_RUNTIME_PREFIX)) return t("status.error", { message: msg.slice(ERR_RUNTIME_PREFIX.length) });
+  return msg;
+}
+/** Translate + join an errors array (or single message) for display. */
+export function errorsLabel(arr) {
+  if (Array.isArray(arr)) return arr.map(errorLabel).filter(Boolean).join("; ");
+  return errorLabel(arr);
+}
+
+/** Slugify a label into a lowercase snake_case field-id token (umlauts → ae/oe/ue/ss). */
+export function slugify(s) {
+  return String(s).toLowerCase()
+    .replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/ß/g, "ss")
+    .replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+}
+
+/** Bauzonen per-zone area columns: `bauzonen_<slug>_m2` (slug = slugified zone
+ *  name, lowercase). Encode/decode helpers centralized so the producer (processor)
+ *  and consumers (table, summary, offline dashboard) agree on the field id. */
+const BAUZONEN_PREFIX = "bauzonen_";
+const BAUZONEN_SUFFIX = "_m2";
+/** Display label per zone slug (ARE harmonised Hauptnutzung set). */
+export const BAUZONE_LABELS = {
+  wohnzonen: "Wohnzonen",
+  arbeitszonen: "Arbeitszonen",
+  mischzonen: "Mischzonen",
+  zentrumszonen: "Zentrumszonen",
+  zonen_fuer_oeffentliche_nutzungen: "Zonen für öffentliche Nutzungen",
+  eingeschraenkte_bauzonen: "eingeschränkte Bauzonen",
+  tourismus_und_freizeitzonen: "Tourismus- und Freizeitzonen",
+  verkehrszonen_innerhalb_der_bauzonen: "Verkehrszonen innerhalb der Bauzonen",
+  weitere_bauzonen: "weitere Bauzonen",
+};
+export function bauzoneAreaKey(name) { return `${BAUZONEN_PREFIX}${slugify(name)}${BAUZONEN_SUFFIX}`; }
+export function isBauzoneAreaKey(k) {
+  return k.startsWith(BAUZONEN_PREFIX) && k.endsWith(BAUZONEN_SUFFIX) && k !== "bauzonen_m2";
+}
+/** Zone slug from a column key (`bauzonen_wohnzonen_m2` → `wohnzonen`). */
+export function bauzoneSlugFromKey(k) { return k.slice(BAUZONEN_PREFIX.length, -BAUZONEN_SUFFIX.length); }
+/** Display label from a column key, falling back to a prettified slug. */
+export function bauzoneNameFromKey(k) {
+  const slug = bauzoneSlugFromKey(k);
+  return BAUZONE_LABELS[slug] || slug.replace(/_/g, " ");
+}
+
+/** Habitat per-type area columns, one per TypoCH **code** at each level:
+ *  `habitat_l1_<code>_m2` (level 1) and `habitat_l2_<code>_m2` (level 2), where the
+ *  dotted code has dots → underscores ("6.3" → "6_3"). The name is NOT baked into the
+ *  key — it's looked up from the shared TypoCH reference (ensureTypoch) at display time. */
+const HABITAT_KEY_RE = /^habitat_l([12])_(.+)_m2$/;
+export function habitatAreaKeyL1(code) { return `habitat_l1_${String(code).replace(/\./g, "_")}_m2`; }
+export function habitatAreaKeyL2(code) { return `habitat_l2_${String(code).replace(/\./g, "_")}_m2`; }
+export function isHabitatAreaKey(k) { return HABITAT_KEY_RE.test(k); }
+export function habitatKeyLevel(k) { const m = HABITAT_KEY_RE.exec(k); return m ? +m[1] : 0; }
+export function habitatCodeFromKey(k) { const m = HABITAT_KEY_RE.exec(k); return m ? m[2].replace(/_/g, ".") : ""; }
+/** Display label for a habitat column key: "<code> <name>" from the TypoCH reference,
+ *  falling back to the bare code when the name isn't loaded/known. */
+export function habitatNameFromKey(k) {
+  const code = habitatCodeFromKey(k);
+  const name = typochName(code);
+  return name ? `${code} ${name}` : code;
+}
+
+/** Shared HTML escape utility */
+const _escDiv = document.createElement("div");
+export function esc(s) {
+  _escDiv.textContent = s || "";
+  return _escDiv.innerHTML;
+}
+
+/** Shared number formatter (locale-aware) */
+export function fmtNum(n, decimals = 1) {
+  return localeFmtNum(n, decimals);
+}
+
+/** Shared dynamic script loader */
+export function loadScript(src) {
+  return new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = src;
+    s.onload = resolve;
+    s.onerror = reject;
+    document.head.appendChild(s);
+  });
+}
+
+/**
+ * Shared fetch with an AbortController timeout. Rejects with an AbortError when
+ * the request exceeds `timeoutMs`. Any extra fetch options are passed through.
+ */
+export function fetchWithTimeout(url, { timeoutMs = 15000, ...opts } = {}) {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
+  return fetch(url, { ...opts, signal: controller.signal }).finally(() => clearTimeout(id));
+}
+
+/* ── Area display unit (frontend only — the underlying data stays in m²) ── */
+
+const AREA_UNIT_KEY = "areaUnit";
+let _areaUnit = "ha"; // default: hectares (raw m² values get very large)
+try { const s = localStorage.getItem(AREA_UNIT_KEY); if (s === "ha" || s === "m2") _areaUnit = s; } catch { /* storage blocked */ }
+const _areaUnitListeners = [];
+
+/** Current display unit: "ha" (default) or "m2". */
+export function getAreaUnit() { return _areaUnit; }
+
+/** Register a callback fired (with the new unit) after the display unit changes. */
+export function onAreaUnitChange(cb) { _areaUnitListeners.push(cb); }
+
+/** Switch the display unit (persisted) and notify listeners so the dynamic,
+ *  area-bearing views can re-render. No-op for an unknown or unchanged value. */
+export function setAreaUnit(unit) {
+  if ((unit !== "ha" && unit !== "m2") || unit === _areaUnit) return;
+  _areaUnit = unit;
+  try { localStorage.setItem(AREA_UNIT_KEY, unit); } catch { /* storage blocked */ }
+  for (const cb of _areaUnitListeners) { try { cb(unit); } catch (e) { console.error("Area-unit listener failed:", e); } }
+}
+
+/** The current unit's symbol ("ha" or "m²"). */
+export function areaUnitLabel(unit = _areaUnit) { return unit === "ha" ? "ha" : "m²"; }
+
+/** Strip a baked-in "m²" from a label so the live unit can be shown instead. */
+export function stripAreaUnit(s) { return String(s ?? "").replace(/\s*m²/g, "").trim(); }
+
+/** Format an m² value in the current unit, WITHOUT the unit suffix (e.g. table
+ *  cells, where the unit lives in the column header). ha → 2 dp, m² → 1 dp. */
+export function fmtAreaValue(m2, unit = _areaUnit) {
+  const v = parseFloat(m2);
+  if (isNaN(v)) return "–";
+  return unit === "ha" ? localeFmtNum(v / 10000, 2) : localeFmtNum(v, 1);
+}
+
+/** Format an m² value in the current unit, WITH the unit suffix (summary, popups). */
+export function fmtArea(m2, unit = _areaUnit) {
+  const v = parseFloat(m2);
+  if (isNaN(v)) return "–";
+  return `${fmtAreaValue(v, unit)} ${areaUnitLabel(unit)}`;
+}
+
+/** API endpoints */
+export const API = {
+  PARCEL_FIND: "https://api3.geo.admin.ch/rest/services/all/MapServer/find",
+  IDENTIFY: "https://api3.geo.admin.ch/rest/services/all/MapServer/identify",
+  SEARCH: "https://api3.geo.admin.ch/rest/services/ech/SearchServer",
+  // Pinned to the German (deu) WFS endpoint regardless of the UI language: the
+  // per-language endpoints translate the ms:LCSF *property names and values*
+  // (deu `Art: "Gebaeude"` → fra `Genre: "batiment"`, ita `Genere: "edificio"`;
+  // eng is not supported and returns a ServiceException). classify() keys on the
+  // German BBArt codes, so only deu yields correct results. The UI translates
+  // for display; the Python API path pins deu for the same reason.
+  WFS_AV: "https://geodienste.ch/db/av_0/deu",
+};
+
+/** Basemap styles with thumbnails */
+export const MAP_STYLES = {
+  positron: {
+    name: "Hell",
+    url: "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json",
+    thumbnail: "https://basemaps.cartocdn.com/light_all/8/134/91.png",
+  },
+  voyager: {
+    name: "Standard",
+    url: "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json",
+    thumbnail: "https://basemaps.cartocdn.com/rastertiles/voyager/8/134/91.png",
+  },
+  swissimage: {
+    name: "Luftbild",
+    url: {
+      version: 8,
+      glyphs: "https://tiles.basemaps.cartocdn.com/fonts/{fontstack}/{range}.pbf",
+      sources: {
+        swissimage: {
+          type: "raster",
+          tiles: ["https://wmts.geo.admin.ch/1.0.0/ch.swisstopo.swissimage/default/current/3857/{z}/{x}/{y}.jpeg"],
+          tileSize: 256,
+          maxzoom: 20,
+          attribution: '&copy; <a href="https://www.swisstopo.admin.ch">swisstopo</a>',
+        },
+      },
+      layers: [{ id: "swissimage", type: "raster", source: "swissimage" }],
+    },
+    thumbnail: "https://wmts.geo.admin.ch/1.0.0/ch.swisstopo.swissimage/default/current/3857/8/134/91.jpeg",
+  },
+  "dark-matter": {
+    name: "Dunkel",
+    url: "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",
+    thumbnail: "https://basemaps.cartocdn.com/dark_all/8/134/91.png",
+  },
+};
+
+/** Default map center and zoom (Switzerland) */
+export const MAP_DEFAULT = { center: [8.2275, 46.8182], zoom: 7 };
+
+/** Sliver threshold in m² */
+export const SLIVER_THRESHOLD = 0.001;
+
+/** Brand colours — a JS-side mirror of the CSS tokens in tokens.css. MapLibre
+ *  paint properties and Marker options take literal colour strings (they can't
+ *  read CSS custom properties), so keep these in sync with tokens.css:
+ *  red = --swiss-red, blue = --federal-blue, blueLight = --federal-blue-light. */
+export const BRAND = {
+  red: "#d8232a",
+  blue: "#1a365d",
+  blueLight: "#2d4a7a",
+};
+
+/** Colors for land cover categories on the map */
+export const CATEGORY_COLORS = {
+  GGF: "#e74c3c",      // buildings — red
+  BUF: "#f39c12",      // developed — orange
+  UUF: "#27ae60",      // undeveloped — green
+};
+
+/** Per-BBArt land-cover colours (map fills + detail view). House palette aligned to the
+ *  official BAFU Lebensraumkarte colour families via the BBArt↔TypoCH correspondence —
+ *  canonical source of record is [data/landcover.json] `color`; keep these in sync with it. */
+export const ART_COLORS = {
+  Gebaeude: "#333333",
+  Strasse_Weg: "#595959",
+  Trottoir: "#737373",
+  Verkehrsinsel: "#8C8C8C",
+  Bahn: "#4D4D4D",
+  Flugplatz: "#666666",
+  Wasserbecken: "#6E93B5",
+  uebrige_befestigte: "#999999",
+  Acker_Wiese_Weide: "#FC8C1D",
+  Reben: "#E673E4",
+  uebrige_Intensivkultur: "#FFA6FE",
+  Gartenanlage: "#FCC690",
+  Hoch_Flachmoor: "#5AE3FE",
+  uebrige_humusierte: "#FCE3CA",
+  Wytweide_dicht: "#78C246",
+  Wytweide_offen: "#A5E862",
+  Gewaesser_stehendes: "#0D74FC",
+  Gewaesser_fliessendes: "#589FFC",
+  Schilfguertel: "#12DEFF",
+  geschlossener_Wald: "#62AF39",
+  uebrige_bestockte: "#8ED554",
+  Fels: "#9AAAB3",
+  Gletscher_Firn: "#CBDCE8",
+  Geroell_Sand: "#C1D3DD",
+  Abbau_Deponie: "#ADBEC8",
+  uebrige_vegetationslose: "#B8C6CF",
+};

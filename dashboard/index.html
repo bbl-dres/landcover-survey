@@ -208,6 +208,11 @@
         <div class="panel"><h3>Region</h3><div id="tbl-rg"></div></div>
       </div>
 
+      <h2 class="section-title">Karte</h2>
+      <div class="chart-note">Grundstücke der aktuellen Auswahl auf der Grundkarte. Herauszoomen gruppiert die Punkte; Polygon oder Cluster anklicken. Zoomen hier mit Strg + Mausrad (Mac: ⌘), in der Ansicht «Karte» direkt mit dem Mausrad.</div>
+      <!-- Slot for the one map while the Auswertung tab is shown (overview mode: fixed height, simple legend). -->
+      <div class="panel map-panel" id="ov-map-panel"></div>
+
       <h2 class="section-title">Auswertungen</h2>
       <div class="summary-tables">
         <div class="panel card-tabs">
@@ -350,6 +355,7 @@
 
 <!-- PARCEL-DATA:START — embed data with the in-browser builder (open this file and pick a GeoJSON); do not edit by hand -->
 <!-- PARCEL-DATA:END -->
+<script src="js/data.js"></script>
 <script src="js/ch-map.js"></script>
 <script src="js/dashboard.js"></script>
 </body>
