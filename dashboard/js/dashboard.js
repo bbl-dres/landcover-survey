@@ -693,11 +693,17 @@
     var ofGsf = function (v) { return pct(v, a.totals.parcelArea) + "% der GSF"; };
     var ofArea = function (v) { return pct(v, a.totals.parcelArea) + "% der Grundstücksfläche (GSF)"; };
     var ofCover = function (v) { return pct(v, a.classified) + "% der klassifizierten Bodenbedeckung"; };
+    // Data quality of the selection: the parcels failing a Prüfregel (what the Datenqualität tab calls «Auffällige
+    // Grundstücke») and the number of failed checks; the card jumps to that tab.
+    var R = rulesFor(rows), qBad = new Map(), qDev = 0;
+    RULE_DEFS.forEach(function (d) { R[d.key].fails.forEach(function (f) { qDev++; qBad.set(f.p, true); }); });
     var kpis = [
       // Count card: the sub says how much of the dataset the filters keep ("von 355 (51%)"); without filters, "Alle Grundstücke".
       { label:"Grundstücke", value:fmt(a.len), sub:a.len < PARCELS.length ? "von " + fmt(PARCELS.length) + " (" + pct(a.len, PARCELS.length) + "%)" : "Alle Grundstücke",
         tip:"Anzahl Grundstücke (Liegenschaften und SDR) in der aktuellen Auswahl: " + fmt(a.len) + " von " + fmt(PARCELS.length) + " im Datensatz (" + pct(a.len, PARCELS.length) + "%). " +
             "Davon " + fmt(a.withData) + " mit Bodenbedeckung (" + pct(a.withData, a.len) + "%)." },
+      { label:"Datenqualität", value:fmt(qBad.size), sub:qBad.size ? "auffällig (" + pct(qBad.size, a.len) + "%)" : "keine Abweichungen", goto:"quality",
+        tip:fmt(qBad.size) + " auffällige Grundstücke (" + pct(qBad.size, a.len) + "% der Auswahl) mit " + fmt(qDev) + " nicht bestandenen Prüfungen (Abweichungen). Klick öffnet den Tab Datenqualität." },
       // Area card: the sub is the mean parcel size (the count is the card before); the tooltip relates the area to the whole dataset.
       { label:"Grundstücksfläche", value:fmtAreaU(a.totals.parcelArea), sub:"Im Mittel " + fmtAreaU(a.len ? a.totals.parcelArea / a.len : 0),
         tip:"Summe der berechneten Grundstücksflächen (GSF), 2D-Planfläche auf LV95 (EPSG:2056); im Mittel " + fmtAreaU(a.len ? a.totals.parcelArea / a.len : 0) + " je Grundstück. " +
@@ -707,14 +713,12 @@
         tip:"Humusierte und bestockte Flächen gemäss Grünflächen-Klassifizierung. Aktuell " + ofArea(a.totals.Green) + " bzw. " + ofCover(a.totals.Green) + "." },
       { label:"Versiegelte Fläche", value:fmtAreaU(a.totals.Sealed), sub:ofGsf(a.totals.Sealed),
         tip:"Gebäude und befestigte Flächen (versiegelt). Aktuell " + ofArea(a.totals.Sealed) + " bzw. " + ofCover(a.totals.Sealed) + "." },
-      { label:"Gebäudegrundfläche", value:fmtAreaU(a.totals.GGF), sub:ofGsf(a.totals.GGF),
-        tip:"Gebäudegrundfläche nach SIA 416 (GGF). Aktuell " + ofArea(a.totals.GGF) + " bzw. " + ofCover(a.totals.GGF) + "." },
       { label:"Grundstücke Typ 1", value:fmt(a.nT1), sub:"Typ 2: " + fmt(a.nT2),
         tip:"Grundstücke, deren VBS-Typ-1-Fläche mindestens 10 % der Grundstücksfläche ausmacht (Typ 2 ebenso). Ein Grundstück kann beide Typen haben." }
     ];
     document.getElementById("kpis").classList.toggle("unit-m2", areaUnit === "m2"); // long m² values get a smaller size (css)
     document.getElementById("kpis").innerHTML = kpis.map(function (k) {
-      return '<div class="card"><div class="label tip-term" tabindex="0" data-tip="' + esc(k.tip) + '">' + k.label + '</div>' +
+      return '<div class="card"' + (k.goto ? ' data-goto-tab="' + k.goto + '" role="link" title="Datenqualität anzeigen"' : "") + '><div class="label tip-term" tabindex="0" data-tip="' + esc(k.tip) + '">' + k.label + '</div>' +
              '<div class="value">' + k.value + '</div><div class="sub">' + k.sub + '</div></div>';
     }).join("");
 
@@ -1616,6 +1620,14 @@
     writeURL();
   }
   tabBtns.forEach(function (t) { t.addEventListener("click", function () { showTab(t.getAttribute("data-tab")); }); });
+  // In-page jumps to a tab (the Datenqualität KPI card): click anywhere on the card, Enter / Space on its focused label.
+  var gotoAct = function (e) {
+    if (e.type === "keydown" && e.key !== "Enter" && e.key !== " ") return;
+    var b = e.target.closest && e.target.closest("[data-goto-tab]"); if (!b) return;
+    if (e.type === "keydown") e.preventDefault();
+    showTab(b.getAttribute("data-goto-tab")); window.scrollTo(0, 0);
+  };
+  document.addEventListener("click", gotoAct); document.addEventListener("keydown", gotoAct);
   var tablistEl = document.querySelector(".tabs[role=tablist]");
   if (tablistEl) tablistEl.addEventListener("keydown", function (e) {
     var idx = tabBtns.indexOf(document.activeElement); if (idx < 0) return;

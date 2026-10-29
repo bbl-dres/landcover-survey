@@ -45,9 +45,10 @@ The header carries the Confederation lockup with the dashboard title, the
   a polygon to open its info card at the top right of the map. The page does not scroll
   here, so the mouse wheel zooms the map directly.
 - **Auswertung**, top to bottom: KPI cards (the count card's second line says how much
-  of the dataset the filters keep, «von 355 (51%)», the area card's the mean parcel size,
-  the three area cards read «% der GSF»; each label and line stays on one row, the
-  tooltip carries the long form); the summary tables «Flächenverteilung»
+  of the dataset the filters keep, «von 355 (51%)»; the «Datenqualität» card counts the
+  parcels failing a Prüfregel and jumps to that tab; the area card's second line is the
+  mean parcel size, the two share cards read «% der GSF»; each label and line stays on
+  one row, the tooltip carries the long form); the summary tables «Flächenverteilung»
   (VBS, Bauzonen, SIA 416, Versiegelung, AV land cover by type, BAFU habitats); the
   same map in a fixed-height panel with a compact layer widget (top left: the app's
   own layers, same state as the Karte accordion) and the basemap switcher (bottom

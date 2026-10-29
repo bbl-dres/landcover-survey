@@ -145,6 +145,8 @@ button.pop-row { width: 100%; border: none; background: none; font: inherit; tex
 .card .label, .card .sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } /* one row each; the tooltip carries the long form */
 .card .value { font-size: var(--text-kpi); font-weight: 600; margin: 5px 0 2px; color: var(--gray-900); overflow-wrap: anywhere; }
 .kpis.unit-m2 .card .value { font-size: var(--text-xl); } /* «10'000'000 m²» would spill over the next card at 25px */
+.card[data-goto-tab] { cursor: pointer; }
+.card[data-goto-tab]:hover { border-color: var(--secondary-400); box-shadow: var(--shadow-md); }
 .card .sub   { font-size: var(--text-sm); color: var(--gray-500); }
 /* Panels */
 .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
