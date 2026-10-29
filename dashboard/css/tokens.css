@@ -31,7 +31,7 @@
   --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 22px; --space-6: 24px;
   --z-sticky: 30; --z-map: 400; --z-scrim: 490; --z-drawer: 500; --z-popover: 1050; --z-dialog: 1100; --z-tooltip: 2000; --z-skip: 2500; --z-loading: 10000;
   /* Map colours (read by dashboard.js at boot via getComputedStyle; the deliverable inlines this file) */
-  --parcel: #6f8aac; --parcel-line: #3b5a7a; --map-active: var(--primary-600); --map-checked: var(--secondary-600); --map-label: var(--gray-800);
+  --parcel: #6f8aac; --parcel-line: #3b5a7a; --map-active: var(--primary-600); --map-checked: var(--secondary-600); --map-label: var(--gray-800); --map-ident: #d97706; /* identify preview on external maps (amber: unlike the red mark and the slate selection) */
   --cluster-1: #4f6f93; --cluster-2: #3b5a7a; --cluster-3: #2e4a68; --swatch-rest: #cbd5e1;
   /* Breakpoints (CSS has no variables for media queries): BP_LAPTOP 1280 · BP_TABLET 900 · BP_PHONE 600; dashboard.js mirrors 900 and 600 */
   --font: "Noto Sans", "Helvetica Neue", Arial, system-ui, -apple-system, Segoe UI, sans-serif;

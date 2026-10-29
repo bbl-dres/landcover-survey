@@ -3,7 +3,8 @@
   // ── Shared helpers (used by the picker and the Download menu) ──────────────
   // Snapshot the pristine template BEFORE any DOM mutation, so the HTML download
   // carries a clean shell with data swapped into the PARCEL-DATA markers.
-  var TEMPLATE_HTML = "<!doctype html>\n" + document.documentElement.outerHTML;
+  // The data block is swapped in on save; blanking it here avoids holding a second copy of the data all session.
+  var TEMPLATE_HTML = ("<!doctype html>\n" + document.documentElement.outerHTML).replace(/<!-- PARCEL-DATA:START[\s\S]*?PARCEL-DATA:END -->/, "<!-- PARCEL-DATA:START --><!-- PARCEL-DATA:END -->");
   // PII allowlist (mirrors the old build_dashboard.py): keep every non-input_
   // column; of input_ keep only these seven. The rest never reach a saved file.
   var KEEP_INPUT = { "input_ort":1, "input_plz":1, "input_rg":1, "input_bez. grundstück":1, "input_eigent.art":1, "input_tpf":1, "input_l/r":1 };
@@ -15,6 +16,25 @@
   // Escape `<` (→ no </script> breakout) and U+2028/U+2029 (legal in JSON, but
   // terminate a JS string literal inside an inline <script> → silent corruption).
   var jsonSafe = function (o) { return JSON.stringify(o).replace(new RegExp("[<" + String.fromCharCode(0x2028, 0x2029) + "]", "g"), function (c) { return String.fromCharCode(92) + "u" + ("000" + c.charCodeAt(0).toString(16)).slice(-4); }); };
+  // Pinned CDN files with their SRI hashes (sha384 of the exact versions); a CDN compromise cannot run other code.
+  var CDN = {
+    maplibreJs: { url: "https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js", sri: "sha384-SYKAG6cglRMN0RVvhNeBY0r3FYKNOJtznwA0v7B5Vp9tr31xAHsZC0DqkQ/pZDmj" },
+    maplibreCss: { url: "https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css", sri: "sha384-MinO0mNliZ3vwppuPOUnGa+iq619pfMhLVUXfC4LHwSCvF9H+6P/KO4Q7qBOYV5V" },
+    xlsx: { url: "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js", sri: "sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" },
+    jspdf: { url: "https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js", sri: "sha384-JcnsjUPPylna1s1fvi1u12X5qjY5OL56iySh75FdtrwhO/SWXgMjoVqcKyIIWOLk" }
+  };
+  var cdnScript = function (k) { var el = document.createElement("script"); el.src = CDN[k].url; el.integrity = CDN[k].sri; el.crossOrigin = "anonymous"; return el; };
+  // Replace an element's HTML but keep keyboard focus where it was: the focused descendant is found again by id
+  // or by its first data-* attribute (stable across re-renders), so Tab does not restart at the top of the page.
+  var setHTMLKeepFocus = function (el, html) {
+    var a = document.activeElement, sel = null;
+    if (a && a !== document.body && el.contains(a) && window.CSS && CSS.escape) {
+      if (a.id) sel = "#" + CSS.escape(a.id);
+      else for (var i = 0; i < a.attributes.length; i++) { var at = a.attributes[i]; if (at.name.indexOf("data-") === 0) { sel = a.tagName.toLowerCase() + "[" + at.name + '="' + CSS.escape(at.value) + '"]'; break; } }
+    }
+    el.innerHTML = html;
+    if (sel) { var n = el.querySelector(sel); if (n) try { n.focus({ preventScroll: true }); } catch (e) { /* older engines */ } }
+  };
   var slug = function (s) { return (String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")) || "landcover-dashboard"; };
   // Loading overlay (#app-loading, static in index.html so a deliverable's first paint already shows
   // it). The heavy steps here are synchronous (parsing a 20 MB file, boot, a filter pass over 100k
@@ -22,6 +42,9 @@
   // work, and hides it again — whatever the work returns or throws.
   var loadingEl = document.getElementById("app-loading"), loadingMsgEl = document.getElementById("app-loading-msg");
   var showLoading = function (msg) { if (!loadingEl) return; if (msg) loadingMsgEl.textContent = msg; loadingEl.hidden = false; };
+  // A script error before the first dispatch (js/data.js missing from a hand-edited deliverable, a syntax error)
+  // would leave the overlay spinning forever: name the error on it instead.
+  window.addEventListener("error", function (e) { if (loadingEl && !loadingEl.hidden && loadingMsgEl) loadingMsgEl.textContent = "Fehler: " + ((e && e.message) || "Skript konnte nicht geladen werden") + " – Seite neu laden."; });
   var hideLoading = function () { if (loadingEl) loadingEl.hidden = true; };
   var withLoading = function (msg, fn) {
     showLoading(msg);
@@ -44,7 +67,7 @@
     if (window.XLSX) return Promise.resolve(window.XLSX);
     if (!_xlsxP) _xlsxP = new Promise(function (res, rej) {
       var s = document.createElement("script");
-      s.src = "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";
+      s.src = CDN.xlsx.url; s.integrity = CDN.xlsx.sri; s.crossOrigin = "anonymous";
       s.onload = function () { res(window.XLSX); };
       s.onerror = function () { _xlsxP = null; rej(new Error("SheetJS konnte nicht geladen werden (Internetverbindung nötig).")); };
       document.head.appendChild(s);
@@ -73,7 +96,7 @@
         var o = {}; for (var k in pr) { if (k !== "layer") o[k] = pr[k]; }
         if (f && f.geometry) o._geom = f.geometry; // for the map (survives the allowlist)
         parcels.push(o);
-      } else if (overlays[layer] && f && f.geometry) {
+      } else if (Object.prototype.hasOwnProperty.call(overlays, layer) && f && f.geometry) {
         overlays[layer].features.push({ type: "Feature", geometry: f.geometry, properties: { id: pr.id || "", art: pr.art || pr.Art || pr.bauzone_code || "", area_m2: +pr.area_m2 || 0 } });
       } else {
         skipped++;
@@ -110,7 +133,7 @@
     // Neutralize any script-closing sequence the source carries (e.g. inside a comment or string)
     // so the HTML parser can't terminate the inlined module early — backslash-escaped, it stays
     // identical JS (\/ === /) but is no longer a tag the parser recognises.
-    while ((m = sre.exec(html))) add(m[0], m[1], function (js) { return "<script>\n" + js.replace(/<(\/script)/gi, function (_m, t) { return "<" + String.fromCharCode(92) + t; }) + "\n<\/script>"; });
+    while ((m = sre.exec(html))) add(m[0], m[1], function (js) { return "<script>\n" + js.replace(/<(\/script)/gi, function (_m, t) { return "<" + String.fromCharCode(92) + t; }).replace(/<!--/g, function () { return "<" + String.fromCharCode(92) + "!--"; }) + "\n<\/script>"; }); // `<!--` would put the HTML parser into the escaped-script state
     // Local images (the basemap thumbnails) → data URIs, so the saved file needs no assets/ folder.
     var ire = /<img\b[^>]*src=["'](?!https?:|data:)([^"']+)["'][^>]*>/g;
     while ((m = ire.exec(html))) (function (tag, url) {
@@ -161,7 +184,11 @@
         var clean = allowlist(geo.parcels).cleaned; // strip PII at import
         document.body.classList.remove("builder-mode"); // hide the picker, reveal the dashboard
         boot(clean, geo.overlays);
-      }).catch(function (err) { document.body.classList.add("builder-mode"); setStatus("Fehler beim Aufbau des Dashboards: " + ((err && err.message) || err)); });
+      }).catch(function (err) {
+        // boot() binds document-level listeners before it can throw; a second boot on the same document would double them.
+        document.body.classList.add("builder-mode"); bEl("b-show").disabled = true;
+        setStatus("Fehler beim Aufbau des Dashboards: " + ((err && err.message) || err) + " – Seite neu laden und die Datei erneut wählen.");
+      });
     });
   }
 
@@ -220,7 +247,7 @@
     parcel: tok("--parcel", "#6f8aac"), parcelLine: tok("--parcel-line", "#3b5a7a"),
     active: tok("--map-active", "#d8232a"), checked: tok("--map-checked", "#2f4356"), label: tok("--map-label", "#1f2937"),
     cluster1: tok("--cluster-1", "#4f6f93"), cluster2: tok("--cluster-2", "#3b5a7a"), cluster3: tok("--cluster-3", "#2e4a68"),
-    surface: tok("--surface", "#fff")
+    surface: tok("--surface", "#fff"), ident: tok("--map-ident", "#d97706")
   };
   var PARCEL_COLOR = MAP_COLORS.parcel;
   // SAP codes → Klartext labels (display only; the raw code stays the filter key + in exports).
@@ -328,6 +355,7 @@
   var cantonCounts = {}, countryCounts = {}, eigentumCounts = {}, artTotal = {}, artParcelCount = {}, covWith = 0, covWithout = 0;
   var excludeCounts = {}, statusCounts = {}, tpfCounts = {}, bauzoneTotal = {}, bauzoneParcelCount = {}, habitatTotal = {}, habitatParcelCount = {};
   var greeninvCounts = { yes: 0, no: 0 }, hasGreeninv = false; // the export carries the opt-in join column
+  var gsfAll = 0; // Grundstücksfläche of the whole dataset (the KPI tooltip relates the selection to it)
   var BAUZONE_RE = /^bauzonen_(.+)_m2$/; // bauzonen_<slug>_m2 (the bauzonen_m2 total does not match)
   // Habitat columns come in two export shapes: the current pipeline emits code columns
   // habitat_l1_<code>_m2 + habitat_l2_<code>_m2; older exports a single slug family
@@ -358,6 +386,7 @@
   function hbLabelFull(h) { return hbIsL1Only(h) ? hbLabel(h) + " (nur Stufe 1)" : hbLabel(h); }
   EXCLUDE_RULES.forEach(function (r) { excludeCounts[r.key] = 0; });
   PARCELS.forEach(function (p) {
+    gsfAll += num(p.parcel_area_m2);
     var c = p.input_rg || ""; if (c) cantonCounts[c] = (cantonCounts[c] || 0) + 1;
     var lc = p["input_l/r"] || ""; if (lc) countryCounts[lc] = (countryCounts[lc] || 0) + 1;
     var e = p["input_eigent.art"] || ""; if (e) eigentumCounts[e] = (eigentumCounts[e] || 0) + 1;
@@ -409,8 +438,6 @@
     Sealed: { label:"Versiegelte Fläche", field:"sealed_m2" }
   };
   var HAS_KEYS = Object.keys(HAS_METRICS);
-  var hasCounts = {};
-  HAS_KEYS.forEach(function (m) { hasCounts[m] = 0; });
 
   // VBS (arImmo) as two independent filter groups — Produktivität (layer 2) and, within
   // the productive share, Typ (layer 3; typ1 + typ2 == produktiv). They get their own
@@ -435,7 +462,6 @@
   var vbsCounts = {}; // facet → key → number of parcels carrying that area
   VBS_FACETS.forEach(function (f) { vbsCounts[f] = {}; VBS_GROUPS[f].keys.forEach(function (k) { vbsCounts[f][k] = 0; }); });
   PARCELS.forEach(function (p) {
-    HAS_KEYS.forEach(function (m) { if (num(p[HAS_METRICS[m].field]) > 0) hasCounts[m]++; });
     VBS_FACETS.forEach(function (f) {
       VBS_GROUPS[f].keys.forEach(function (k) { if (vbsHas(p, VBS_GROUPS[f].fields[k])) vbsCounts[f][k]++; });
     });
@@ -490,22 +516,6 @@
     var tp = Object.keys(filters.tpf);
     if (tp.length && !filters.tpf[(p.input_tpf == null || p.input_tpf === "") ? "—" : String(p.input_tpf)]) return false;
     return true;
-  }
-  function activeGroups() {
-    var n = 0;
-    if (EXCLUDE_RULES.some(function (r) { return filters.exclude[r.key] && excludeCounts[r.key] > 0; })) n++;
-    if (Object.keys(filters.countries).length) n++;
-    if (Object.keys(filters.cantons).length) n++;
-    if (Object.keys(filters.coverage).length === 1) n++; // both boxes = alle = no constraint
-    if (Object.keys(filters.arts).length) n++;
-    if (Object.keys(filters.bauzonen).length) n++;
-    if (Object.keys(filters.has).length) n++;
-    VBS_FACETS.forEach(function (f) { if (Object.keys(filters[f]).length) n++; });
-    if (Object.keys(filters.tpf).length) n++;
-    if (Object.keys(filters.eigentum).length) n++;
-    if (Object.keys(filters.status).length) n++;
-    if (Object.keys(filters.greeninv).length) n++;
-    return n;
   }
 
   // ---- Table state & search ----
@@ -619,8 +629,8 @@
       return '<th class="' + (numCls ? numCls + " " : "") + "sortable" + (on ? " sorted" : "") + '" data-vs="' + by +
              '" tabindex="0" role="button" aria-sort="' + (on ? (s.dir < 0 ? "descending" : "ascending") : "none") + '">' + label + arr + '</th>';
     }
-    el.innerHTML = '<table class="sumtbl' + (isTree ? " tree-tbl" : "") + '"><thead><tr>' + th("name", "", "Kategorie") + '<th class="bar-col"></th>' +
-      th("value", "num", (ctx.valHeader || "")) + '<th class="num">Anteil' + hint + '</th>' + (ctx.showN ? '<th class="num">Grundstücke</th>' : "") + '</tr></thead><tbody>' + body + totalRow + '</tbody></table>';
+    setHTMLKeepFocus(el, '<table class="sumtbl' + (isTree ? " tree-tbl" : "") + '"><thead><tr>' + th("name", "", "Kategorie") + '<th class="bar-col"></th>' +
+      th("value", "num", (ctx.valHeader || "")) + '<th class="num">Anteil' + hint + '</th>' + (ctx.showN ? '<th class="num">Grundstücke</th>' : "") + '</tr></thead><tbody>' + body + totalRow + '</tbody></table>');
   }
   // Header click → sort that table (toggle direction), hierarchy-aware.
   function _valSortAct(e) {
@@ -678,26 +688,33 @@
   // ---- Render KPIs + charts + footer from an aggregate ----
   function renderDashboard(rows) {
     var a = aggregate(rows);
-    var ofArea = function (v) { return pct(v, a.totals.parcelArea) + "% der Grundstücksfläche"; };
-    var ofCover = function (v) { return pct(v, a.classified) + "% der Bodenbedeckung"; };
+    // Card subs are one short row, relative to the total Grundstücksfläche (GSF) — the figure users compare against;
+    // the share of the classified Bodenbedeckung stays in the tooltip.
+    var ofGsf = function (v) { return pct(v, a.totals.parcelArea) + "% der GSF"; };
+    var ofArea = function (v) { return pct(v, a.totals.parcelArea) + "% der Grundstücksfläche (GSF)"; };
+    var ofCover = function (v) { return pct(v, a.classified) + "% der klassifizierten Bodenbedeckung"; };
     var kpis = [
-      { label:"Grundstücke", value:fmt(a.len), sub:fmt(a.withData) + " mit Bodenbedeckung (" + pct(a.withData, a.len) + "%)",
-        tip:"Anzahl Grundstücke (Liegenschaften und SDR) in der aktuellen Auswahl. Davon " + fmt(a.withData) + " mit Bodenbedeckung. " +
-            "Entspricht " + pct(a.len, PARCELS.length) + "% des Datensatzes (" + fmt(PARCELS.length) + " Grundstücke)." },
-      { label:"Grundstücksfläche", value:fmtAreaU(a.totals.parcelArea), sub:fmt(a.len) + " Grundstücke",
-        tip:"Summe der berechneten Grundstücksflächen (GSF), 2D-Planfläche auf LV95 (EPSG:2056). " +
+      // Count card: the sub says how much of the dataset the filters keep ("von 355 (51%)"); without filters, "Alle Grundstücke".
+      { label:"Grundstücke", value:fmt(a.len), sub:a.len < PARCELS.length ? "von " + fmt(PARCELS.length) + " (" + pct(a.len, PARCELS.length) + "%)" : "Alle Grundstücke",
+        tip:"Anzahl Grundstücke (Liegenschaften und SDR) in der aktuellen Auswahl: " + fmt(a.len) + " von " + fmt(PARCELS.length) + " im Datensatz (" + pct(a.len, PARCELS.length) + "%). " +
+            "Davon " + fmt(a.withData) + " mit Bodenbedeckung (" + pct(a.withData, a.len) + "%)." },
+      // Area card: the sub is the mean parcel size (the count is the card before); the tooltip relates the area to the whole dataset.
+      { label:"Grundstücksfläche", value:fmtAreaU(a.totals.parcelArea), sub:"Im Mittel " + fmtAreaU(a.len ? a.totals.parcelArea / a.len : 0),
+        tip:"Summe der berechneten Grundstücksflächen (GSF), 2D-Planfläche auf LV95 (EPSG:2056); im Mittel " + fmtAreaU(a.len ? a.totals.parcelArea / a.len : 0) + " je Grundstück. " +
+            "Entspricht " + pct(a.totals.parcelArea, gsfAll) + "% der Grundstücksfläche des ganzen Datensatzes (" + fmtAreaU(gsfAll) + "). " +
             "Klassifizierte Bodenbedeckung: " + fmtAreaU(a.classified) + " (" + ofArea(a.classified) + ")." },
-      { label:"Grünfläche", value:fmtAreaU(a.totals.Green), sub:ofCover(a.totals.Green),
-        tip:"Humusierte und bestockte Flächen gemäss Grünflächen-Klassifizierung. Aktuell " + ofCover(a.totals.Green) + " bzw. " + ofArea(a.totals.Green) + "." },
-      { label:"Versiegelte Fläche", value:fmtAreaU(a.totals.Sealed), sub:ofCover(a.totals.Sealed),
-        tip:"Gebäude und befestigte Flächen (versiegelt). Aktuell " + ofCover(a.totals.Sealed) + " bzw. " + ofArea(a.totals.Sealed) + "." },
-      { label:"Gebäudegrundfläche (GGF)", value:fmtAreaU(a.totals.GGF), sub:ofCover(a.totals.GGF),
-        tip:"Gebäudegrundfläche nach SIA 416 (GGF). Aktuell " + ofCover(a.totals.GGF) + " bzw. " + ofArea(a.totals.GGF) + "." },
-      { label:"Grundstücke mit Typ 1", value:fmt(a.nT1), sub:"Typ 2: " + fmt(a.nT2) + " · ab 10 % Fläche",
-        tip:"Grundstücke, deren VBS-Typ-Fläche mindestens 10 % der Grundstücksfläche ausmacht. Ein Grundstück kann beide Typen haben." }
+      { label:"Grünfläche", value:fmtAreaU(a.totals.Green), sub:ofGsf(a.totals.Green),
+        tip:"Humusierte und bestockte Flächen gemäss Grünflächen-Klassifizierung. Aktuell " + ofArea(a.totals.Green) + " bzw. " + ofCover(a.totals.Green) + "." },
+      { label:"Versiegelte Fläche", value:fmtAreaU(a.totals.Sealed), sub:ofGsf(a.totals.Sealed),
+        tip:"Gebäude und befestigte Flächen (versiegelt). Aktuell " + ofArea(a.totals.Sealed) + " bzw. " + ofCover(a.totals.Sealed) + "." },
+      { label:"Gebäudegrundfläche", value:fmtAreaU(a.totals.GGF), sub:ofGsf(a.totals.GGF),
+        tip:"Gebäudegrundfläche nach SIA 416 (GGF). Aktuell " + ofArea(a.totals.GGF) + " bzw. " + ofCover(a.totals.GGF) + "." },
+      { label:"Grundstücke Typ 1", value:fmt(a.nT1), sub:"Typ 2: " + fmt(a.nT2),
+        tip:"Grundstücke, deren VBS-Typ-1-Fläche mindestens 10 % der Grundstücksfläche ausmacht (Typ 2 ebenso). Ein Grundstück kann beide Typen haben." }
     ];
+    document.getElementById("kpis").classList.toggle("unit-m2", areaUnit === "m2"); // long m² values get a smaller size (css)
     document.getElementById("kpis").innerHTML = kpis.map(function (k) {
-      return '<div class="card"><div class="label tip-term" data-tip="' + esc(k.tip) + '">' + k.label + '</div>' +
+      return '<div class="card"><div class="label tip-term" tabindex="0" data-tip="' + esc(k.tip) + '">' + k.label + '</div>' +
              '<div class="value">' + k.value + '</div><div class="sub">' + k.sub + '</div></div>';
     }).join("");
 
@@ -808,7 +825,7 @@
   function renderQuality(rows) {
     if (!document.getElementById("q-kpis")) return;
     qTotal = rows.length;
-    qRules = computeRules(rows);
+    qRules = rulesFor(rows);
     // Auffällige Grundstücke = every parcel that failed ≥1 Prüfregel (deduped, in row
     // order); the hint lists the check name(s) it did not pass.
     var failNames = new Map(); // parcel → [failed rule names]
@@ -879,7 +896,7 @@
     { key: "area", name: "Fläche vorhanden", tip: "Die Grundstücksfläche ist eine gültige, positive Zahl (nicht NULL, grösser 0). Geprüft: alle Grundstücke der Auswahl." },
     { key: "egridUnique", name: "E-GRID eindeutig", tip: "Jede E-GRID kommt in der aktuellen Auswahl nur einmal vor (keine doppelten Einträge). Geprüft: Grundstücke mit E-GRID." },
     { key: "bbCover", name: "Summe Bodenbedeckung = Grundstücksfläche", tip: "Die Summe der einzelnen Bodenbedeckungsflächen (Gebäude + Umgebung) entspricht der Grundstücksfläche (±1 %). Nur Grundstücke mit Bodenbedeckungsdaten." },
-    { key: "bzCover", name: "Summe Bauzonen = Grundstücksfläche", tip: "Die Summe der einzelnen Bauzonenflächen inkl. „Ohne Bauzone“ entspricht der Grundstücksfläche (±1 %). Nur Grundstücke mit Bauzonen-Daten." },
+    { key: "bzCover", name: "Summe Bauzonen = Grundstücksfläche", tip: "Die Summe der einzelnen Bauzonenflächen inkl. «Ohne Bauzone» entspricht der Grundstücksfläche (±1 %). Nur Grundstücke mit Bauzonen-Daten." },
     { key: "hbCover", name: "Summe Lebensräume = Grundstücksfläche", tip: "Die Summe der einzelnen BAFU-Lebensraumflächen entspricht der Grundstücksfläche (±1 %). Nur Grundstücke mit Lebensraum-Daten." }
   ];
   // Per-parcel derived scalars for the quality rules: bzSumAll — Σ bauzonen_<slug> incl.
@@ -898,16 +915,22 @@
     s = { bzSumAll: bzSumAll, hbSum: hbSum };
     _statsCache.set(p, s); return s;
   }
+  // One result per row set: the Datenqualität tab and its export ask for the same rows, so
+  // the pass is memoised on the array identity (every filter pass builds a new array; sorting keeps it).
+  var _rulesRows = null, _rulesR = null;
+  function rulesFor(rows) { if (rows !== _rulesRows) { _rulesRows = rows; _rulesR = computeRules(rows); } return _rulesR; }
   function computeRules(rows) {
-    var R = {}; RULE_DEFS.forEach(function (d) { R[d.key] = { name: d.name, pass: 0, fail: 0, est: 0, fails: [] }; });
+    var R = {}; RULE_DEFS.forEach(function (d) { R[d.key] = { name: d.name, pass: 0, fail: 0, fails: [] }; });
     // E-GRID uniqueness is judged over the current (filtered) selection — count first.
     var egCounts = {};
     rows.forEach(function (p) { var eg = String(p.egrid == null ? "" : p.egrid).trim(); if (eg) egCounts[eg] = (egCounts[eg] || 0) + 1; });
-    rows.forEach(function (p) {
-      var area = num(p.parcel_area_m2), tol = Math.max(1, area * 0.01);
-      var nearOK = function (a, b) { return Math.abs(a - b) <= tol; };
-      // pass → count; fail → count + remember the parcel so a click can list them.
-      var rec = function (key, ok) { if (ok) R[key].pass++; else { R[key].fail++; R[key].fails.push({ p: p, hint: R[key].name }); } };
+    var p = null, tol = 1; // the two helpers read the current row from here instead of being re-created per row
+    var nearOK = function (a, b) { return Math.abs(a - b) <= tol; };
+    // pass → count; fail → count + remember the parcel so a click can list them.
+    var rec = function (key, ok) { if (ok) R[key].pass++; else { R[key].fail++; R[key].fails.push({ p: p, hint: R[key].name }); } };
+    rows.forEach(function (row) {
+      p = row;
+      var area = num(p.parcel_area_m2); tol = Math.max(1, area * 0.01);
       var classified = num(p.sia416_ggf_m2) + num(p.sia416_buf_m2) + num(p.sia416_uuf_m2);
       var st = parcelStats(p), sumBz = st.bzSumAll, sumHb = st.hbSum;
       var cov = isCovered(p);
@@ -934,7 +957,7 @@
       var attr = (r.fail > 0 ? ' class="clickable' + (d.key === qActiveRule ? ' selected' : '') + '" data-rk="' + d.key + '" tabindex="0" role="button"' : '') + ' data-tip="' + esc(d.tip) + '"';
       return '<tr' + attr + '><td>' + esc(d.name) + '</td><td class="num rule-res">' + esc(result) + '</td><td class="rule-status ' + cls + '" role="img" aria-label="' + aLabel + '">' + status + '</td></tr>';
     }).join("");
-    el.innerHTML = '<table class="sumtbl rules-tbl"><thead><tr><th>Regel</th><th class="num">Ergebnis</th><th class="rule-status">Status</th></tr></thead><tbody>' + body + '</tbody></table>';
+    setHTMLKeepFocus(el, '<table class="sumtbl rules-tbl"><thead><tr><th>Regel</th><th class="num">Ergebnis</th><th class="rule-status">Status</th></tr></thead><tbody>' + body + '</tbody></table>');
   }
   // Switch the Auffällige-Grundstücke table between all problems and one clicked rule's fails.
   function applyQView() {
@@ -943,7 +966,7 @@
     qProblems = active ? qRules[active].fails : qAllProblems;
     var cnt = document.getElementById("q-count");
     if (cnt) {
-      if (active) cnt.innerHTML = "Regel »" + esc(qRules[active].name) + "« · " + fmt(qProblems.length) + " · <span class='q-filter-x' id='q-filter-x' role='button' tabindex='0'>" + ICON.sz("x", 13) + "Filter aufheben</span>";
+      if (active) cnt.innerHTML = "Regel «" + esc(qRules[active].name) + "» · " + fmt(qProblems.length) + " · <span class='q-filter-x' id='q-filter-x' role='button' tabindex='0'>" + ICON.sz("x", 13) + "Filter aufheben</span>";
       else cnt.textContent = fmt(qProblems.length) + " " + (qProblems.length === 1 ? "Grundstück" : "Grundstücke");
     }
     renderQBody();
@@ -964,9 +987,9 @@
     { key:"input_plz", label:"PLZ", def:false, tip:"Postleitzahl." },
     { key:"input_rg", label:"Kanton", def:true, tip:"Kanton (Region)." },
     { key:"input_bez. grundstück", label:"Bezeichnung", def:true, tip:"Bezeichnung des Grundstücks aus SAP." },
-    { key:"input_eigent.art", label:"Eigentumsart", def:false, tip:"Eigentumsart aus SAP (1 = Eigentum Bund, 3 = Anmiete, 5 = Spezialfall).", render: function (v) { return v ? esc(eigentumLabel(v)) : '<span class="muted">–</span>'; } },
-    { key:"input_tpf", label:"Teilportfolio", def:false, tip:"Teilportfolio (GOM) aus SAP.", render: function (v) { return v ? esc(tpfLabel(v)) : '<span class="muted">–</span>'; } },
-    { key:"check_egrid", label:"Status", def:false, tip:"E-GRID-Status (gefunden / zusammengeführt / nicht gefunden)." },
+    { key:"input_eigent.art", label:"Eigentumsart", def:false, tip:"Eigentumsart aus SAP (1 = Eigentum Bund, 3 = Anmiete, 5 = Spezialfall).", render: function (v) { return v ? esc(eigentumLabel(v)) : '<span class="muted">–</span>'; }, text: function (v) { return v ? eigentumLabel(v) : ""; } },
+    { key:"input_tpf", label:"Teilportfolio", def:false, tip:"Teilportfolio (GOM) aus SAP.", render: function (v) { return v ? esc(tpfLabel(v)) : '<span class="muted">–</span>'; }, text: function (v) { return v ? tpfLabel(v) : ""; } },
+    { key:"check_egrid", label:"Status", def:false, tip:"E-GRID-Status (gefunden / zusammengeführt / nicht gefunden).", text: function (v, p) { var k = statusKey(p); return STATUS_LABELS[k] || (v == null ? "" : String(v)); } },
     { key:"greeninv", label:"Grüninventar", def:true, tip:"Im Grüninventar der Bundesgärtnerei erfasst (Abgleich über E-GRID und SAP-Schlüssel). Der Link öffnet das Grüninventar an der Lage des Grundstücks.",
       render: function (v, p) {
         if (v !== "yes" && v !== "no") return '<span class="muted">–</span>';
@@ -990,7 +1013,7 @@
   var colByKey = {};
   COLUMNS.forEach(function (c) { colByKey[c.key] = c; c.visible = c.def; });
 
-  var deCollator = new Intl.Collator("de"); // reused — constructing a collator per comparison is costly at 260k rows
+  var deCollator = new Intl.Collator("de", { numeric: true }); // reused (a collator per comparison is costly at 260k rows); numeric: "9" before "10"
   function sortRows() {
     var key = state.sort, dir = state.dir, isNum = colByKey[key] && colByKey[key].num;
     state.rows.sort(function (a, b) {
@@ -1001,7 +1024,7 @@
   }
   // Rows of the current page (what the header checkbox selects).
   function pageRows() {
-    if (printing) return state.rows;
+    if (printing) return state.rows.slice(0, PRINT_ROWS); // a print never builds more than PRINT_ROWS rows (the footer says so)
     var pages = Math.max(1, Math.ceil(state.rows.length / state.pageSize));
     if (state.page > pages) state.page = pages; // the row set may have shrunk since the page was chosen
     var start = (state.page - 1) * state.pageSize;
@@ -1010,7 +1033,7 @@
   function renderHead() {
     var vis = COLUMNS.filter(function (c) { return c.visible; });
     var pr = pageRows(), allSel = pr.length > 0 && pr.every(function (p) { return !!sel[String(p.id == null ? "" : p.id)]; });
-    document.getElementById("thead-row").innerHTML =
+    setHTMLKeepFocus(document.getElementById("thead-row"),
       '<th class="sel-col" scope="col"><input type="checkbox" id="sel-all" aria-label="Alle Grundstücke dieser Seite für den PDF-Bericht auswählen" title="Alle dieser Seite auswählen"' + (allSel ? " checked" : "") + '></th>' +
       vis.map(function (c) {
       var sorted = state.sort === c.key;
@@ -1019,16 +1042,16 @@
       var cls = (c.num ? "num" : "") + (sorted ? " sorted" : "");
       var lbl = c.num ? stripM2(c.label) + " (" + unitLabel() + ")" : c.label;
       return '<th class="' + cls + '" scope="col" tabindex="0" aria-sort="' + (sorted ? (state.dir < 0 ? "descending" : "ascending") : "none") + '" data-key="' + esc(c.key) + '"' + tip + ">" + esc(lbl) + arrow + "</th>";
-    }).join("");
+    }).join(""));
   }
   function renderBody() {
     var vis = COLUMNS.filter(function (c) { return c.visible; });
     if (!state.rows.length) {
-      document.getElementById("tbody").innerHTML = '<tr><td class="empty" colspan="' + vis.length + '">Keine Grundstücke entsprechen den Filtern.</td></tr>';
+      document.getElementById("tbody").innerHTML = '<tr><td class="empty" colspan="' + (vis.length + 1) + '">Keine Grundstücke entsprechen den Filtern.</td></tr>';
       return;
     }
     var full = selCount() >= SEL_MAX;
-    document.getElementById("tbody").innerHTML = pageRows().map(function (p) {
+    setHTMLKeepFocus(document.getElementById("tbody"), pageRows().map(function (p) {
       var pid = (p.id == null ? "" : String(p.id)), isSel = !!sel[pid];
       var cls = ((selectedParcelId && pid === selectedParcelId) ? "row-active " : "") + (isSel ? "row-checked" : "");
       var rs = cls.trim() ? ' class="' + cls.trim() + '"' : "";
@@ -1040,7 +1063,7 @@
         var s = (v == null || v === "") ? "" : String(v);
         return "<td" + (s ? "" : ' class="muted"') + ">" + (s ? esc(s) : "–") + "</td>";
       }).join("") + "</tr>";
-    }).join("");
+    }).join(""));
   }
   function renderPager() {
     var total = state.rows.length, pages = Math.max(1, Math.ceil(total / state.pageSize));
@@ -1056,11 +1079,11 @@
     var sums = {};
     vis.forEach(function (c) { if (c.num) sums[c.key] = 0; });
     state.rows.forEach(function (p) { vis.forEach(function (c) { if (c.num) sums[c.key] += num(p[c.key]); }); });
-    var labelDone = false;
-    document.getElementById("tfoot-row").innerHTML = '<td class="sel-col"></td>' + vis.map(function (c) {
+    var firstText = -1; vis.forEach(function (c, i) { if (!c.num && firstText < 0) firstText = i; });
+    var label = "Total · " + fmt(state.rows.length) + " Grundstücke" + (printing && state.rows.length > PRINT_ROWS ? " · gedruckt: die ersten " + fmt(PRINT_ROWS) : "");
+    document.getElementById("tfoot-row").innerHTML = '<td class="sel-col">' + (firstText < 0 ? label : "") + '</td>' + vis.map(function (c, i) { // the label goes into the first text column, else the checkbox cell
       if (c.num) return '<td class="num">' + fmtArea(sums[c.key]) + "</td>";
-      if (!labelDone) { labelDone = true; return "<td>Total · " + fmt(state.rows.length) + " Grundstücke</td>"; }
-      return "<td></td>";
+      return "<td>" + (i === firstText ? label : "") + "</td>";
     }).join("");
   }
   function renderTable() { renderHead(); renderBody(); renderFoot(); renderPager(); }
@@ -1088,6 +1111,7 @@
   function clearMapSelection() {
     if (selectedParcelId) selectParcel(null);
     clearOverlayHighlight();
+    clearIdentify();
     hideMapCard();
   }
   // Registered before the dialog / menu / drawer listeners: when one of those is open, Escape is theirs.
@@ -1096,7 +1120,7 @@
     if (document.querySelector(".modal-backdrop:not([hidden])") || document.querySelector(".map-ctxmenu.show") || document.querySelector(".bm-panel:not([hidden])")) return;
     var gm = document.getElementById("gear-menu"), cm = document.getElementById("cols-menu"), dd = document.getElementById("gsearch-dd");
     if ((gm && !gm.hidden) || (cm && cm.classList.contains("open")) || (dd && !dd.hidden) || document.getElementById("app").classList.contains("fp-open")) return;
-    if (selectedParcelId || _selOv) clearMapSelection();
+    if (selectedParcelId || _selOv || _identOpen) clearMapSelection();
   });
   // Table row click, search hit → mark the parcel and fly to it on the map of the current tab: on Auswertung
   // that tab's own map (scrolled into view; the table sits right below it), elsewhere the Karte tab opens.
@@ -1127,7 +1151,7 @@
     if (!map || !mapReady) { _pendingZoom = { id: id, opts: opts }; return; } // the map is still loading: fly once it is ready
     if (!(opts && opts.noCard)) openParcelCard(p); // first: the fit below measures the open card
     if (opts && opts.zoom) { var pole = poleOfGeom(p._geom); if (pole) map.flyTo({ center: pole, zoom: opts.zoom, duration: 800 }); }
-    else fitMap(rowsToFC([p]), true, (opts && opts.noCard) ? 30 : cardPadding()); // the parcel stays clear of the card
+    else fitMap(rowsToFC([p]), true, (opts && opts.noCard) ? 30 : cardPadding(), 17.5); // the parcel stays clear of the card; one parcel may zoom closer than a result set
   }
   var _pendingZoom = null;
 
@@ -1161,18 +1185,20 @@
     if (currentTab === "quality") renderQuality(rows); // skip the costly rule scan unless the Datenqualität tab is open
     renderTable();
     renderMap(rows);
-    var n = activeGroups();
-    var filtered = rows.length < PARCELS.length;
-    var fk = document.getElementById("flag-kpi"); if (fk) fk.classList.toggle("show", filtered);
-    var fq = document.getElementById("flag-q"); if (fq) fq.classList.toggle("show", filtered);
-    var fc = document.getElementById("f-count"); if (fc) fc.textContent = fmt(rows.length) + " Grundstücke";
+    var fq = document.getElementById("flag-q"); if (fq) fq.classList.toggle("show", rows.length < PARCELS.length);
     renderPills();
     renderSelUI();
   }
   // Filter passes over a large dataset take a noticeable moment; below the threshold the overlay
   // would only flicker.
   var LOADING_ROWS = 20000;
-  function commit() { refitMap = true; writeURL(); if (PARCELS.length >= LOADING_ROWS) withLoading("Auswertung wird aktualisiert…", update); else update(); }
+  var PRINT_ROWS = 2000; // print renders the filtered set, capped: 260k rows would build millions of DOM nodes
+  function commit() {
+    refitMap = true;
+    var done = function () { writeURL(); }, fail = function (e) { console.error(e); hideLoading(); }; // the address bar follows a successful update only
+    if (PARCELS.length >= LOADING_ROWS) withLoading("Auswertung wird aktualisiert…", update).then(done, fail);
+    else { try { update(); } catch (e) { fail(e); return; } done(); }
+  }
 
   // ---- Active-filter pills ----
   var _pillActions = [];
@@ -1253,7 +1279,6 @@
   var URL_KEYS = ["q", "excl", "status", "eig", "cov", "land", "kanton", "art", "bauz", "has", "vbsp", "vbst", "tpf", "gi"];
   var NAV_KEYS = ["tab", "basemap", "ext"];
   var VBS_URL_KEY = { vbsprod: "vbsp", vbstyp: "vbst" };
-  var urlMigrated = false; // a legacy parameter was rewritten to its current spelling
   var nav = { tab: "map", basemap: null, ext: null }; // parsed navigation params (consumed by showTab / the map)
   function writeURL() {
     var pr = new URLSearchParams();
@@ -1310,11 +1335,11 @@
     filters.has = readSet(pr, "has", function (m) { return !!HAS_METRICS[m]; });
     VBS_FACETS.forEach(function (f) { filters[f] = readSet(pr, VBS_URL_KEY[f], function (k) { return !!VBS_GROUPS[f].fields[k]; }); });
     // Back-compat: VBS productivity used to be two keys of the `has` facet, reachable
-    // only by hand-writing the URL. Keep such links working by folding them in here,
-    // and flag it so boot stamps the current spelling back into the address bar.
+    // only by hand-writing the URL. Keep such links working by folding them in here
+    // (showTab stamps the current spelling back into the address bar).
     (pr.get("has") || "").split(",").forEach(function (m) {
-      if (m === "VBSp") { filters.vbsprod.produktiv = true; urlMigrated = true; }
-      if (m === "VBSu") { filters.vbsprod.unproduktiv = true; urlMigrated = true; }
+      if (m === "VBSp") filters.vbsprod.produktiv = true;
+      if (m === "VBSu") filters.vbsprod.unproduktiv = true;
     });
     filters.tpf = readSet(pr, "tpf");
     filters.greeninv = readSet(pr, "gi", function (g) { return !!GREENINV_LABELS[g]; });
@@ -1554,7 +1579,6 @@
   bindChecklist("f-status", "s", "status");
   bindChecklist("f-coverage", "v", "coverage");
   bindChecklist("f-greeninv", "g", "greeninv");
-  var frBtn = document.getElementById("f-reset"); if (frBtn) frBtn.addEventListener("click", resetAll);
 
   // ---- Tabs (Karte is the start view; the tab is kept in the URL) ----
   var tabBtns = Array.prototype.slice.call(document.querySelectorAll(".tab"));
@@ -1583,11 +1607,12 @@
     });
     if (name === "quality") renderQuality(state.rows); // gated out of update(); render it on demand with the current filtered set
     document.getElementById("app").classList.toggle("tab-map", name === "map"); // map tab: page fits the viewport, no scrolling
+    document.body.classList.toggle("tab-map", name === "map"); // …and the body is pinned to it (css); the other tabs grow with their content
     var mapEl = document.getElementById("map"), homeSlot = document.getElementById("map-panel"), ovSlot = document.getElementById("ov-map-panel");
     if (name === "overview" && ovSlot && mapEl) { ensureMap(); if (mapEl.parentNode !== ovSlot) ovSlot.appendChild(mapEl); setMapMode("overview"); }
     else if (mapEl && homeSlot && mapEl.parentNode !== homeSlot) { homeSlot.insertBefore(mapEl, homeSlot.firstChild); setMapMode("map"); }
     if (name === "map") { ensureMap(); setMapMode("map"); }
-    if ((name === "map" || name === "overview") && map && mapReady) setTimeout(function () { map.resize(); }, 30); // hidden tabs report 0×0
+    if ((name === "map" || name === "overview") && map && mapReady) setTimeout(function () { map.resize(); if (_mapDirty) renderMap(lastRows); }, 30); // hidden tabs report 0×0; apply a deferred filter pass
     writeURL();
   }
   tabBtns.forEach(function (t) { t.addEventListener("click", function () { showTab(t.getAttribute("data-tab")); }); });
@@ -1604,14 +1629,18 @@
   var appEl = document.getElementById("app");
   // Mobile (≤900px): the filter panel is an off-canvas drawer toggled from the header (#fp-toggle) + scrim.
   var fpScrim = document.getElementById("fp-scrim"), fpToggle = document.getElementById("fp-toggle");
+  var fpMedia = window.matchMedia ? window.matchMedia("(max-width: 900px)") : null;
   function setFpOpen(open) {
     appEl.classList.toggle("fp-open", open);
     lockScroll(open);
+    var fp = document.getElementById("filter-panel"); if (fp && "inert" in fp) fp.inert = !!(fpMedia && fpMedia.matches && !open); // the closed drawer is off-screen: keep it out of the Tab order too
     if (fpScrim) fpScrim.hidden = !open;
     if (fpToggle) fpToggle.setAttribute("aria-expanded", open ? "true" : "false");
   }
   if (fpToggle) fpToggle.addEventListener("click", function () { setFpOpen(!appEl.classList.contains("fp-open")); });
   if (fpScrim) fpScrim.addEventListener("click", function () { setFpOpen(false); });
+  if (fpMedia && fpMedia.addEventListener) fpMedia.addEventListener("change", function (e) { setFpOpen(false); if (!e.matches) { var fp = document.getElementById("filter-panel"); if (fp && "inert" in fp) fp.inert = false; } }); // widened past the drawer breakpoint: no stale scroll lock / inert
+  setFpOpen(false);
   document.addEventListener("keydown", function (e) { if (e.key === "Escape") setFpOpen(false); });
   document.getElementById("fp-collapse").addEventListener("click", function () {
     // Mobile: "‹" just closes the off-canvas drawer. Desktop: collapse to the vertical rail.
@@ -1631,21 +1660,22 @@
     } catch (e) { /* cross-origin tainted canvas — leave it (map prints blank) */ }
   }
   function removeMapPrintImage() { if (_mapPrintImg && _mapPrintImg.parentNode) _mapPrintImg.parentNode.removeChild(_mapPrintImg); }
-  window.addEventListener("beforeprint", function () { printing = true; renderBody(); mapToPrintImage(); });
-  window.addEventListener("afterprint", function () { printing = false; renderBody(); removeMapPrintImage(); });
+  window.addEventListener("beforeprint", function () { printing = true; renderBody(); renderFoot(); if (currentTab === "map" || currentTab === "overview") mapToPrintImage(); });
+  window.addEventListener("afterprint", function () { printing = false; renderBody(); renderFoot(); removeMapPrintImage(); });
 
   // ---- Hover info tooltips ----
   var tipEl = document.getElementById("tip");
   function showTip(t) {
     var txt = t.getAttribute("data-tip"); if (!txt) return;
-    tipEl.textContent = txt;
+    tipEl.textContent = txt; t.setAttribute("aria-describedby", "tip"); _tipHost = t;
     var r = t.getBoundingClientRect(), w = tipEl.offsetWidth, h = tipEl.offsetHeight;
     var top = r.top - h - 8; if (top < 8) top = r.bottom + 8;
     var left = Math.max(8, Math.min(r.left + r.width / 2 - w / 2, window.innerWidth - w - 8));
     tipEl.style.top = top + "px"; tipEl.style.left = left + "px";
     tipEl.classList.add("show");
   }
-  function hideTip() { tipEl.classList.remove("show"); }
+  var _tipHost = null;
+  function hideTip() { tipEl.classList.remove("show"); if (_tipHost) { _tipHost.removeAttribute("aria-describedby"); _tipHost = null; } }
   // Info icons (ⓘ) are hover-only — a click on one must not toggle the checkbox/label it sits inside.
   document.addEventListener("click", function (e) { if (e.target.closest && e.target.closest(".ftip")) e.preventDefault(); }, true);
   document.addEventListener("mouseover", function (e) { var t = e.target.closest("[data-tip]"); if (t) showTip(t); });
@@ -1674,7 +1704,7 @@
     return loadXlsx().then(function (XLSX) {
       var cols = (extraCols || []).concat(COLUMNS.filter(function (c) { return c.visible || c.key === "greeninv"; }));
       var aoa = [cols.map(function (c) { return c.label; })];
-      parcels.forEach(function (p) { aoa.push(cols.map(function (c) { return c.key === "greeninv" ? greeninvLabel(p.greeninv) : c.num ? num(p[c.key]) : (p[c.key] == null ? "" : String(p[c.key])); })); });
+      parcels.forEach(function (p) { aoa.push(cols.map(function (c) { return c.text ? c.text(p[c.key], p) : c.key === "greeninv" ? greeninvLabel(p.greeninv) : c.num ? num(p[c.key]) : (p[c.key] == null ? "" : String(p[c.key])); })); }); // `text`: the label the table shows for a coded column
       var wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), sheet);
       XLSX.writeFile(wb, fname);
@@ -1709,7 +1739,7 @@
     }
   }
   function qualityDeviationRows(rows) {
-    var R = computeRules(rows), egCounts = {};
+    var R = rulesFor(rows), egCounts = {};
     rows.forEach(function (p) { var eg = String(p.egrid == null ? "" : p.egrid).trim(); if (eg) egCounts[eg] = (egCounts[eg] || 0) + 1; });
     var out = [];
     RULE_DEFS.forEach(function (d) {
@@ -1748,7 +1778,7 @@
     if (window.jspdf && window.jspdf.jsPDF) return Promise.resolve(window.jspdf.jsPDF);
     if (!_jspdfP) _jspdfP = new Promise(function (res, rej) {
       var s = document.createElement("script");
-      s.src = "https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js";
+      s.src = CDN.jspdf.url; s.integrity = CDN.jspdf.sri; s.crossOrigin = "anonymous";
       s.onload = function () { res(window.jspdf.jsPDF); };
       s.onerror = function () { _jspdfP = null; rej(new Error("jsPDF konnte nicht geladen werden (Internetverbindung nötig).")); };
       document.head.appendChild(s);
@@ -1895,6 +1925,8 @@
     var ry = hy + 6, sum = 0; pdf.setFontSize(9.5);
     function pct(a) { return totalArea ? Math.round(a / totalArea * 100) + "%" : "–"; }
     var rowsSum = rows.reduce(function (s, r) { return s + num(r.area); }, 0), draw = rows.slice();
+    var maxRows = (opts && opts.maxRows) || 12; // the section slot holds ~13 rows at 5.7 mm; the tail becomes one aggregate line
+    if (draw.length > maxRows) { var tail = draw.slice(maxRows - 1), restArea = tail.reduce(function (s2, r) { return s2 + num(r.area); }, 0); draw = draw.slice(0, maxRows - 1); draw.push({ label: "Übrige (" + tail.length + ")", area: restArea, color: "#cbd5e1" }); }
     if (totalArea > 0 && totalArea - rowsSum > totalArea * 0.005) draw.push({ label: remLabel, area: totalArea - rowsSum, muted: true }); // mirror the on-screen remainder → Total reads 100 %
     draw.forEach(function (r) {
       pdf.setFont("helvetica", "normal");
@@ -2014,7 +2046,7 @@
       pdf.setFont("helvetica", "bold"); pdf.setFontSize(11.5); pdf.setTextColor(191, 31, 37); pdf.text(sec.n + "   " + sec.title, M, yy);
       pdf.setDrawColor(210);
       if (dataUrl) { pdf.addImage(dataUrl, "JPEG", M, yy + 4, imgW, imgH); pdf.rect(M, yy + 4, imgW, imgH, "S"); }
-      else { pdf.setFillColor(245, 246, 247); pdf.rect(M, yy + 4, imgW, imgH, "FD"); pdf.setTextColor(140); pdf.setFontSize(9); pdf.setFont("helvetica", "normal"); pdf.text("Kartenbild nicht verfügbar (Internet?)", M + imgW / 2, yy + 4 + imgH / 2, { align: "center" }); }
+      else { pdf.setFillColor(245, 246, 247); pdf.rect(M, yy + 4, imgW, imgH, "FD"); pdf.setTextColor(140); pdf.setFontSize(9); pdf.setFont("helvetica", "normal"); pdf.text(p._geom ? "Kartenbild nicht verfügbar (Internet?)" : "Keine Geometrie (E-GRID nicht gefunden)", M + imgW / 2, yy + 4 + imgH / 2, { align: "center" }); }
       var tblEnd = reportTable(pdf, tblX, yy + 11, tblW, sec.tbl, sec.rows(p), num(p.parcel_area_m2));
       // Section 1: a Bauzonen overview fills the space under the SIA 416 table (no extra map).
       if (i === 0 && bauzoneListAll.length) reportTable(pdf, tblX, tblEnd + 11, tblW, "Bauzonen (ARE)", reportBauzonen(p), num(p.parcel_area_m2), { remainderLabel: "Ohne Bauzone" });
@@ -2083,6 +2115,8 @@
     var titleInput = document.getElementById("dl-title"), hint = document.getElementById("dl-hint"), defHint = hint.textContent, lastFocus = null;
     var scopeEl = document.getElementById("dl-scope"), scope = "flt";
     var prog = document.getElementById("dl-progress"), bar = document.getElementById("dl-progress-bar"), txt = document.getElementById("dl-progress-txt"), abortBtn = document.getElementById("dl-abort");
+    var track = prog.querySelector(".dl-progress-track");
+    function setBar(n) { bar.style.width = n + "%"; if (track) track.setAttribute("aria-valuenow", String(n)); }
     var pdfBtn = document.getElementById("dl-pdf"), pdfSub = document.getElementById("dl-pdf-sub"), running = false;
     if (window.DASHBOARD_TITLE) titleInput.value = window.DASHBOARD_TITLE;
     var titleVal = function () { return (titleInput.value || "Auswertung Bodenbedeckung").trim(); };
@@ -2119,7 +2153,7 @@
       var c = counts();
       scope = (sc && c[sc]) ? sc : (c.sel ? "sel" : (c.flt ? "flt" : "all"));
       refresh(); hint.textContent = defHint; modal.hidden = false; bgInert(true); lockScroll(true);
-      document.getElementById("dl-close").focus();
+      var card = modal.querySelector(".modal-card"); card.tabIndex = -1; card.focus(); // the dialog itself: its name is announced, Tab reaches the first control
       if (pdfRows) runPdf(pdfRows);
     };
     function closeModal() { modal.hidden = true; bgInert(false); lockScroll(false); if (lastFocus && lastFocus.focus) lastFocus.focus(); }
@@ -2147,18 +2181,18 @@
     document.getElementById("dl-q").addEventListener("click", function () { busy("Datenqualität-Excel wird erstellt…", function () { return exportQualityXlsx(scopeRows(), base() + "-datenqualitaet-" + SCOPE_FILE[scope] + ".xlsx"); }); });
     // PDF-Bericht (A3, eine Seite je Grundstück): Hintergrund-Verarbeitung mit Fortschrittsbalken + Abbrechen.
     function runPdf(rowsIn) {
-      if (running) return;
+      if (running) { txt.textContent = "Ein Bericht läuft bereits."; return; }
       var rows = rowsIn || scopeRows();
       if (!rows.length || rows.length > SEL_MAX) { refresh(); return; }
       var token = { aborted: false };
       running = true; refresh();
-      prog.hidden = false; bar.style.width = "0%"; txt.textContent = "Wird vorbereitet…"; hint.textContent = "PDF-Bericht wird erstellt, bitte warten.";
+      prog.hidden = false; setBar(0); txt.textContent = "Wird vorbereitet…"; hint.textContent = "PDF-Bericht wird erstellt, bitte warten.";
       abortBtn.disabled = false; abortBtn.onclick = function () { token.aborted = true; abortBtn.disabled = true; txt.textContent = "Wird abgebrochen…"; };
       var fname = base() + "-grundstuecksbericht" + (rows.length === 1 && rows[0].id ? "-" + slug(String(rows[0].id)) : "") + ".pdf";
       generateParcelReport(rows, fname, function (frac, label) {
-        bar.style.width = Math.round(frac * 100) + "%"; txt.textContent = Math.round(frac * 100) + "% · " + (label || "");
+        setBar(Math.round(frac * 100)); txt.textContent = Math.round(frac * 100) + "% · " + (label || "");
       }, token).then(function (n) {
-        bar.style.width = "100%"; txt.textContent = "Fertig: " + fname + " (" + n + (n === 1 ? " Seite" : " Seiten") + ")."; hint.textContent = defHint;
+        setBar(100); txt.textContent = "Fertig: " + fname + " (" + n + (n === 1 ? " Seite" : " Seiten") + ")."; hint.textContent = defHint;
         setTimeout(function () { prog.hidden = true; }, 2500);
       }).catch(function (err) {
         var aborted = err && err.message === "__ABORT__";
@@ -2193,6 +2227,7 @@
 
   // ---- Map: switchable basemaps + parcel polygons, poles & clustered ID points + external swisstopo maps ----
   var map = null, mapReady = false, mapFitted = false, refitMap = false, lastRows = [];
+  var _styleUrl = null, _styleFallback = false, _styleLoaded = false, _bmNote = null; // basemap style fallback (see initMap)
   // Visibility of the app's own layers; survives basemap switches, which rebuild every layer.
   var layerVis = { parcels: true, labels: true, landcover: false, bauzonen: false, habitat: false };
   // Basemaps: CARTO vector styles (OpenMapTiles schema) and aerial imagery (Esri World Imagery worldwide,
@@ -2279,7 +2314,7 @@
 
   function rowsToFC(rows) {
     return { type: "FeatureCollection", features: rows.filter(function (p) { return p && p._geom; }).map(function (p) {
-      return { type: "Feature", geometry: p._geom, properties: { id: p.id || "", ort: p.input_ort || "", egrid: p.egrid || "", area: num(p.parcel_area_m2) } };
+      return { type: "Feature", geometry: p._geom, properties: { id: String(p.id == null ? "" : p.id) } }; // string id: the highlight / selection filters compare strings
     }) };
   }
   function rowsToPointsFC(rows) {
@@ -2292,11 +2327,11 @@
     return { type: "FeatureCollection", features: out };
   }
   // `padding` overrides the default 30px (a single parcel with the info card open needs room beside or below it).
-  function fitMap(fc, animate, padding) {
+  function fitMap(fc, animate, padding, maxZoom) {
     var minX = 180, minY = 90, maxX = -180, maxY = -90, any = false;
     function walk(c) { if (typeof c[0] === "number") { if (c[0] < minX) minX = c[0]; if (c[0] > maxX) maxX = c[0]; if (c[1] < minY) minY = c[1]; if (c[1] > maxY) maxY = c[1]; any = true; } else for (var i = 0; i < c.length; i++) walk(c[i]); }
     fc.features.forEach(function (f) { if (f.geometry && f.geometry.coordinates) walk(f.geometry.coordinates); });
-    if (any && map) map.fitBounds([[minX, minY], [maxX, maxY]], { padding: padding || 30, animate: !!animate, duration: 600, maxZoom: 16 });
+    if (any && map) map.fitBounds([[minX, minY], [maxX, maxY]], { padding: padding || 30, animate: !!animate, duration: 600, maxZoom: maxZoom || 16 });
   }
   // Overlay features (Bodenbedeckung / Bauzonen / Lebensräume) bucketed by the SAP
   // parcel id they belong to. Built once per overlay key so clipping the overlays to
@@ -2312,9 +2347,12 @@
     });
     return (_ovById[key] = byId);
   }
+  var _mapDirty = false; // a filter pass while the map's tab is hidden: applied when the map is shown again (showTab)
   function renderMap(rows) {
     lastRows = rows;
     if (!mapReady || !map) return;
+    if (currentTab !== "map" && currentTab !== "overview") { _mapDirty = true; return; }
+    _mapDirty = false;
     var polyFC = rowsToFC(rows);
     var ps = map.getSource("parcels"); if (ps) ps.setData(polyFC);
     var pts = map.getSource("points"); if (pts) pts.setData(rowsToPointsFC(rows));
@@ -2332,6 +2370,7 @@
     });
     // A selected overlay feature may have just been clipped away (and setData regenerates
     // ids anyway), so drop the stale highlight bookkeeping.
+    if (_selOv) hideMapCard(); // the card described a feature that may have been clipped away
     clearOverlayHighlight();
     var emptyEl = map.getContainer().querySelector(".map-empty");
     if (emptyEl) emptyEl.hidden = polyFC.features.length > 0;
@@ -2375,7 +2414,7 @@
     OVERLAY_DEFS.forEach(function (d) {
       var fc = OVERLAYS[d.key];
       if (!fc || !fc.features || !fc.features.length || map.getSource("ov-" + d.key)) return;
-      map.addSource("ov-" + d.key, { type: "geojson", data: fc, generateId: true }); // generateId → feature-state highlight
+      map.addSource("ov-" + d.key, { type: "geojson", data: { type: "FeatureCollection", features: [] }, generateId: true }); // generateId → feature-state highlight; renderMap clips the data in
       map.addLayer({ id: d.key + "-fill", type: "fill", source: "ov-" + d.key, minzoom: OVERLAY_MINZOOM, layout: { visibility: layerVis[d.key] ? "visible" : "none" }, paint: { "fill-color": d.fill, "fill-opacity": d.opacity } });
       map.addLayer({ id: d.key + "-line", type: "line", source: "ov-" + d.key, minzoom: OVERLAY_MINZOOM, layout: { visibility: layerVis[d.key] ? "visible" : "none" }, paint: {
         "line-color": ["case", ["boolean", ["feature-state", "selected"], false], MAP_COLORS.active, d.line],
@@ -2412,49 +2451,120 @@
     _selOv = { source: source, id: id };
     map.setFeatureState(_selOv, { selected: true });
   }
-  var OVERLAY_NAME = { landcover: "Bodenbedeckung", bauzonen: "Bauzone", habitat: "Lebensraum" };
+  var OVERLAY_NAME = { landcover: "Bodenbedeckung", bauzonen: "Bauzonen", habitat: "Lebensräume" }; // = the layer names in the accordion
+  // Every card starts with a kicker naming the layer (feature type), so what was clicked is obvious at a glance.
   function overlayCardHTML(key, art, area) {
     var label = key === "landcover" ? (artLabel(art)) : art;
-    return "<strong>" + esc(label || "—") + "</strong><br><span class='pop-sub'>" + esc(OVERLAY_NAME[key] || "") + "</span>" +
-           (area ? "<br>" + fmtAreaU(num(area)) : "");
+    return '<div class="map-pop"><div class="mp-kicker">' + esc(OVERLAY_NAME[key] || "") + ' · interne Karte</div><div class="mp-t">' + esc(label || "—") + '</div>' +
+           (area ? '<div class="mp-kv"><span>Fläche</span><span>' + fmtAreaU(num(area)) + '</span></div>' : "") + '</div>';
   }
 
   // ── Parcel detail page (opened in a new tab from the map's info card) ────────────
-  // Renders every available attribute of one parcel, grouped by topic, into a
-  // self-contained HTML document opened via a blob URL — so it works offline from
-  // the distributed single-file deliverable (no server, no data fetch). Empty
-  // topic sections are omitted; a collapsible "Alle Felder" dumps the raw columns.
-  // The detail page is a separate document: it gets the same palette through the token values.
-  var DETAIL_CSS = (function () {
-    var c = { text: tok("--gray-800", "#1f2937"), bg: tok("--gray-100", "#f3f4f6"), red: tok("--primary-600", "#d8232a"), brand: tok("--secondary-500", "#46596b"),
-              h: tok("--secondary-600", "#2f4356"), muted: tok("--gray-500", "#6b7280"), border: tok("--gray-200", "#e5e7eb"), border2: tok("--gray-300", "#d1d5db"), faint: tok("--gray-50", "#f9fafb"), surface: tok("--surface", "#fff") };
-    return "*{box-sizing:border-box}" +
-      "body{margin:0;font-family:'Noto Sans','Helvetica Neue',Arial,sans-serif;color:" + c.text + ";background:" + c.bg + ";font-size:14px;line-height:1.45}" +
-      ".head{background:" + c.surface + ";border-bottom:3px solid " + c.red + ";padding:16px 24px;overflow:hidden}" +
-      ".head .brand{color:" + c.brand + ";font-size:12px;letter-spacing:.02em}" +
-      ".head h1{margin:.25em 0 .1em;font-size:20px;color:" + c.h + "}" +
-      ".head .sub{color:" + c.muted + ";font-size:13px}" +
-      ".head .actions{float:right}" +
-      ".btn{border:1px solid " + c.border2 + ";background:" + c.faint + ";border-radius:4px;padding:6px 12px;cursor:pointer;font:inherit;color:" + c.h + "}" +
-      ".wrap{max-width:980px;margin:20px auto;padding:0 16px;display:flex;flex-direction:column;gap:14px}" +
-      ".grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}" +
-      "@media(max-width:760px){.grid2{grid-template-columns:1fr}}" +
-      ".card{background:" + c.surface + ";border:1px solid " + c.border + ";border-radius:6px;padding:14px 16px}" +
-      ".card h2{margin:0 0 10px;font-size:13px;color:" + c.red + ";text-transform:uppercase;letter-spacing:.03em;border-bottom:1px solid " + c.bg + ";padding-bottom:6px}" +
-      "table{width:100%;border-collapse:collapse}" +
-      ".kv th{text-align:left;font-weight:500;color:" + c.muted + ";padding:3px 8px 3px 0;vertical-align:top;width:44%}" +
-      ".kv td{padding:3px 0;color:" + c.text + ";word-break:break-word}" +
-      ".at th{font-size:12px;color:" + c.muted + ";text-align:left;border-bottom:1px solid " + c.border + ";padding:4px 6px}" +
-      ".at td{padding:4px 6px;border-bottom:1px solid " + c.bg + "}" +
-      ".at .num{text-align:right;white-space:nowrap}" +
-      ".at .tot td{font-weight:600;border-top:1px solid " + c.border2 + ";border-bottom:none}" +
-      ".sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:7px;vertical-align:middle}" +
-      ".raw summary{cursor:pointer;color:" + c.h + ";font-weight:600}" +
-      ".raw table{margin-top:8px}" +
-      ".foot{max-width:980px;margin:6px auto 28px;padding:0 16px;color:" + c.muted + ";font-size:12px}" +
-      "a{color:" + c.red + "}" +
-      "@media print{body{background:" + c.surface + "}.actions{display:none}.card{break-inside:avoid;border-color:" + c.border2 + "}}";
-  })();
+  // A self-contained HTML document opened via a blob URL. It carries the app's own stylesheets (tokens +
+  // styles, read from document.styleSheets — so it looks like the app and works offline from the single-file
+  // deliverable), the app's header with a sub header naming the parcel, the simplified map (MapLibre from the
+  // CDN: basemap switcher, compact layer widget, the parcel highlighted and zoomed in, its overlay features as
+  // on the dashboard) and every available attribute, grouped by topic, in cards with one aligned label column.
+  // Empty topic sections are omitted; a collapsible "Alle Felder" dumps the raw columns.
+  function appCssText() {
+    var out = [];
+    Array.prototype.forEach.call(document.styleSheets, function (ss) {
+      try {
+        if (ss.href && /maplibre/.test(ss.href)) return; // the detail page links its own copy
+        var rules = ss.cssRules; if (!rules) return;
+        var t = ""; for (var i = 0; i < rules.length; i++) t += rules[i].cssText + "\n"; out.push(t);
+      } catch (e) { /* cross-origin sheet: skipped */ }
+    });
+    return out.join("\n");
+  }
+  // Page-specific rules on top of the app stylesheet: sub header, card stack, key/value and area tables.
+  var DETAIL_CSS =
+    "body.detail { background: var(--secondary-50); }" +
+    ".detail-sub { background: var(--surface); border-bottom: 1px solid var(--gray-200); padding: 12px 24px; display: flex; align-items: baseline; gap: 6px 18px; flex-wrap: wrap; }" +
+    ".detail-sub h1 { margin: 0; font-size: var(--text-lg); font-weight: 600; color: var(--gray-900); }" +
+    ".detail-sub .detail-meta { font-size: var(--text-sm); color: var(--gray-600); }" +
+    ".detail-wrap { width: 100%; max-width: 1180px; margin: 0 auto; padding: 0 24px 44px; flex: 1 0 auto; box-sizing: border-box; }" +
+    ".detail-stack { display: flex; flex-direction: column; gap: 16px; }" +
+    ".grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }" +
+    ".grid2 > .panel, .detail-stack > .panel { min-width: 0; }" +
+    "table.kv { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: var(--text-sm); }" + // fixed layout: the label column is exactly 220px in every card, long labels wrap
+    "table.kv th { width: 220px; text-align: left; font-weight: 400; font-size: var(--text-sm); text-transform: none; letter-spacing: normal; background: transparent; color: var(--gray-500); padding: 5px 10px 5px 0; vertical-align: top; border-bottom: 1px solid var(--gray-100); white-space: normal; }" + // one label column everywhere (values line up across cards); not the data table's header style
+    "table.kv td { padding: 5px 0; color: var(--gray-800); border-bottom: 1px solid var(--gray-100); overflow-wrap: anywhere; white-space: normal; }" +
+    "table.kv tr:last-child th, table.kv tr:last-child td { border-bottom: none; }" +
+    "table.at { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: var(--text-sm); }" +
+    "table.at th { font-size: var(--text-xs); font-weight: 600; color: var(--gray-500); text-align: left; border-bottom: 1px solid var(--gray-200); padding: 4px 8px 6px 0; }" +
+    "table.at td { padding: 5px 8px 5px 0; border-bottom: 1px solid var(--gray-100); }" +
+    "table.at .num { text-align: right; white-space: nowrap; width: 110px; }" + // fixed numeric columns: they line up across cards
+    "table.at .tot td { font-weight: 600; border-top: 1px solid var(--gray-300); border-bottom: none; }" +
+    ".sw { display: inline-block; width: 10px; height: 10px; border-radius: var(--radius-sm); margin-right: 7px; vertical-align: middle; }" +
+    ".raw summary { cursor: pointer; color: var(--secondary-600); font-weight: 600; font-size: var(--text-sm); }" +
+    ".raw table { margin-top: 8px; }" +
+    ".detail-links a { display: inline-flex; align-items: center; gap: 4px; color: var(--link); font-size: var(--text-sm); margin: 0 18px 4px 0; }" +
+    "@media (max-width: 760px) { .grid2 { grid-template-columns: 1fr; } table.kv th { width: 40%; } .detail-sub, .detail-wrap { padding-left: 14px; padding-right: 14px; } }" +
+    "@media print { header .hbtn { display: none !important; } .panel { break-inside: avoid; } #map.ov-mode { height: 120mm; } }";
+  // Runs inside the detail page (embedded as source text, so it must be self-contained): the simplified map.
+  function detailMapScript(CFG, composeHybrid) {
+    var el = document.getElementById("map"); if (!el) return;
+    if (!window.maplibregl) { el.innerHTML = '<div class="map-msg">Karte konnte nicht geladen werden (Internetverbindung nötig).</div>'; return; }
+    el.innerHTML = "";
+    function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+    var vis = CFG.layerVis, bmId = CFG.basemapId, bmOpen = false, C = CFG.colors;
+    function bm(id) { for (var i = 0; i < CFG.basemaps.length; i++) if (CFG.basemaps[i].id === id) return CFG.basemaps[i]; return CFG.basemaps[0]; }
+    function styleOpts(b) { return b.hybrid ? { diff: false, transformStyle: composeHybrid } : { diff: false }; }
+    var b0 = bm(bmId), opts = { container: el, style: b0.url, center: [8.23, 46.82], zoom: 6.4, preserveDrawingBuffer: true, attributionControl: { compact: true }, locale: CFG.locale, cooperativeGestures: true };
+    if (b0.hybrid) opts.transformStyle = composeHybrid;
+    var map = new maplibregl.Map(opts);
+    map.addControl(new maplibregl.FullscreenControl(), "top-right");
+    map.addControl(new maplibregl.NavigationControl({ showCompass: true }), "top-right");
+    map.addControl(new maplibregl.ScaleControl({ maxWidth: 120, unit: "metric" }), "bottom-left");
+    // Compact layer widget (top-left): the parcel and its overlays, same markup as the dashboard's.
+    var lw = document.createElement("div"); lw.className = "maplibregl-ctrl map-layers"; lw.setAttribute("role", "group"); lw.setAttribute("aria-label", "Karten ein- und ausblenden");
+    function defs() { return [{ key: "parcels", label: "Grundstück", layers: ["parcel-fill", "parcel-line", "parcel-hl-casing", "parcel-hl"] }].concat(CFG.overlayDefs.map(function (d) { return { key: d.key, label: d.label, layers: [d.key + "-fill", d.key + "-line"] }; })); }
+    function renderLw() { lw.innerHTML = '<div class="lw-title">Karten</div>' + defs().map(function (d) { return '<label class="lw-row' + (vis[d.key] ? "" : " is-off") + '"><input type="checkbox" data-lw="' + d.key + '"' + (vis[d.key] ? " checked" : "") + '><span>' + esc(d.label) + '</span></label>'; }).join(""); }
+    function applyVis() { defs().forEach(function (d) { d.layers.forEach(function (lid) { if (map.getLayer(lid)) map.setLayoutProperty(lid, "visibility", vis[d.key] ? "visible" : "none"); }); }); }
+    lw.addEventListener("change", function (e) { var t = e.target; if (t && t.hasAttribute("data-lw")) { vis[t.getAttribute("data-lw")] = t.checked; applyVis(); renderLw(); } });
+    map.addControl({ onAdd: function () { renderLw(); return lw; }, onRemove: function () { if (lw.parentNode) lw.parentNode.removeChild(lw); } }, "top-left");
+    // Basemap switcher (bottom-right): same options, thumbnails and markup as the dashboard's.
+    var bmEl = document.createElement("div"); bmEl.className = "maplibregl-ctrl bm-wrap";
+    function renderBm() {
+      var cur = bm(bmId);
+      bmEl.innerHTML = '<div class="popover bm-panel"' + (bmOpen ? "" : " hidden") + ' role="group" aria-label="Hintergrundkarte">' +
+        CFG.basemaps.map(function (b) { return '<button type="button" class="bm-opt' + (b.id === bmId ? " is-active" : "") + '" data-bm="' + b.id + '" title="' + esc(b.name) + '"><img class="bm-thumb" src="' + esc(b.thumb) + '" alt=""><span>' + esc(b.name) + '</span></button>'; }).join("") + '</div>' +
+        '<button type="button" class="bm-btn" data-bm-toggle title="Hintergrund wechseln" aria-haspopup="true" aria-expanded="' + (bmOpen ? "true" : "false") + '"><img class="bm-thumb" src="' + esc(cur.thumb) + '" alt="Aktueller Hintergrund: ' + esc(cur.name) + '"><span class="bm-l">Hintergrund</span></button>';
+    }
+    bmEl.addEventListener("click", function (e) {
+      var o = e.target.closest("[data-bm]");
+      if (o) { bmOpen = false; var nb = bm(o.getAttribute("data-bm")); if (nb.id !== bmId) { bmId = nb.id; map.once("style.load", addLayers); map.setStyle(nb.url, styleOpts(nb)); } renderBm(); return; }
+      if (e.target.closest("[data-bm-toggle]")) { bmOpen = !bmOpen; renderBm(); }
+    });
+    document.addEventListener("click", function (e) { if (bmOpen && !(e.composedPath && e.composedPath().indexOf(bmEl) >= 0)) { bmOpen = false; renderBm(); } });
+    document.addEventListener("keydown", function (e) { if (e.key === "Escape" && bmOpen) { bmOpen = false; renderBm(); } });
+    map.addControl({ onAdd: function () { renderBm(); return bmEl; }, onRemove: function () { if (bmEl.parentNode) bmEl.parentNode.removeChild(bmEl); } }, "bottom-right");
+    function addLayers() {
+      if (map.getSource("parcel")) return;
+      map.addSource("parcel", { type: "geojson", data: CFG.parcel });
+      map.addLayer({ id: "parcel-fill", type: "fill", source: "parcel", paint: { "fill-color": C.parcel, "fill-opacity": 0.4 } });
+      map.addLayer({ id: "parcel-line", type: "line", source: "parcel", paint: { "line-color": C.parcelLine, "line-width": 0.7 } });
+      CFG.overlayDefs.forEach(function (d) {
+        map.addSource("ov-" + d.key, { type: "geojson", data: CFG.overlays[d.key] });
+        map.addLayer({ id: d.key + "-fill", type: "fill", source: "ov-" + d.key, paint: { "fill-color": d.fill, "fill-opacity": d.opacity } });
+        map.addLayer({ id: d.key + "-line", type: "line", source: "ov-" + d.key, paint: { "line-color": d.line, "line-width": 0.4 } });
+      });
+      map.addLayer({ id: "parcel-hl-casing", type: "line", source: "parcel", paint: { "line-color": C.surface, "line-width": 5, "line-opacity": 0.9 } }); // the «Markiert» outline, above the overlays
+      map.addLayer({ id: "parcel-hl", type: "line", source: "parcel", paint: { "line-color": C.active, "line-width": 2.6 } });
+      applyVis();
+    }
+    map.on("load", function () {
+      addLayers();
+      var b = [180, 90, -180, -90];
+      (function walk(c) { if (typeof c[0] === "number") { if (c[0] < b[0]) b[0] = c[0]; if (c[1] < b[1]) b[1] = c[1]; if (c[0] > b[2]) b[2] = c[0]; if (c[1] > b[3]) b[3] = c[1]; } else for (var i = 0; i < c.length; i++) walk(c[i]); })(CFG.parcel.features.map(function (f) { return f.geometry.coordinates; }));
+      if (b[0] <= b[2]) map.fitBounds([[b[0], b[1]], [b[2], b[3]]], { padding: 48, animate: false, maxZoom: 17.5 });
+    });
+    // Print: the WebGL canvas prints blank → a snapshot over it (same as the dashboard).
+    var pimg = null;
+    window.addEventListener("beforeprint", function () { try { if (!pimg) { pimg = document.createElement("img"); pimg.className = "map-print-img"; pimg.alt = "Kartenausschnitt"; } pimg.src = map.getCanvas().toDataURL("image/png"); el.appendChild(pimg); } catch (e) { /* tainted canvas */ } });
+    window.addEventListener("afterprint", function () { if (pimg && pimg.parentNode) pimg.parentNode.removeChild(pimg); });
+  }
 
   function buildParcelDetailHTML(p) {
     function detailKV(rows) {
@@ -2473,7 +2583,7 @@
       b += '<tr class="tot"><td>Total</td><td class="num">' + fmtAreaU(sum) + '</td><td class="num">' + (total ? pct(sum, total) + ' %' : '') + '</td></tr>';
       return '<table class="at"><thead><tr><th>Kategorie</th><th class="num">Fläche</th><th class="num">Anteil GSF</th></tr></thead><tbody>' + b + '</tbody></table>';
     }
-    function card(title, inner) { return inner ? '<div class="card"><h2>' + esc(title) + '</h2>' + inner + '</div>' : ''; }
+    function card(title, inner) { return inner ? '<div class="panel"><h3>' + esc(title) + '</h3>' + inner + '</div>' : ''; }
     function grid2(a, b) { return (a && b) ? '<section class="grid2">' + a + b + '</section>' : ((a || '') + (b || '')); }
 
     var parcelArea = num(p.parcel_area_m2);
@@ -2510,8 +2620,8 @@
     var flaechen = card("Flächen (Übersicht)", detailKV([
       ["Grundstücksfläche (GSF)", fmtAreaU(parcelArea)],
       ["Klassifizierte Bodenbedeckung (AV)", fmtAreaU(classified) + " (" + pct(classified, parcelArea) + " % der GSF)"],
-      ["Grünfläche", fmtAreaU(green) + " (" + pct(green, classified) + " % der Bodenbedeckung)"],
-      ["Versiegelte Fläche", fmtAreaU(sealed) + " (" + pct(sealed, classified) + " % der Bodenbedeckung)"]
+      ["Grünfläche", fmtAreaU(green) + " (" + pct(green, parcelArea) + " % der GSF)"],
+      ["Versiegelte Fläche", fmtAreaU(sealed) + " (" + pct(sealed, parcelArea) + " % der GSF)"]
     ]));
     var siaCard = classified > 0 ? card("SIA 416", detailKV([
       ["GGF · Gebäudegrundfläche", fmtAreaU(ggf)], ["BUF · Bearbeitete Umgebung", fmtAreaU(buf)], ["UUF · Unbearbeitete Umgebung", fmtAreaU(uuf)]
@@ -2542,11 +2652,11 @@
     }
     var giUrl = p.greeninv === "yes" ? greenInventoryUrl(p) : "";
     if (giUrl) links.push('<a href="' + esc(giUrl) + '" target="_blank" rel="noopener">Im Grüninventar öffnen ' + ICON.sz("extlink", 12) + '</a>');
-    var linkCard = links.length ? card("Verknüpfungen", links.join("<br>")) : "";
+    var linkCard = links.length ? card("Verknüpfungen", '<div class="detail-links">' + links.join("") + '</div>') : "";
     var rawKeys = Object.keys(p).filter(function (k) { return k.charAt(0) !== "_"; }).sort();
     var rawBody = "";
     rawKeys.forEach(function (k) { var v = p[k]; rawBody += '<tr><th>' + esc(k) + '</th><td>' + esc(v == null ? "" : String(v)) + '</td></tr>'; });
-    var rawCard = '<div class="card"><details class="raw"><summary>Alle Felder (Rohdaten · ' + rawKeys.length + ')</summary><table class="kv">' + rawBody + '</table></details></div>';
+    var rawCard = '<div class="panel"><details class="raw"><summary>Alle Felder (Rohdaten · ' + rawKeys.length + ')</summary><table class="kv">' + rawBody + '</table></details></div>';
 
     var ort = p.input_ort || "", plz = p.input_plz || "", subParts = [];
     if (p.egrid) subParts.push(esc(p.egrid));
@@ -2554,30 +2664,45 @@
     if (p.input_rg) subParts.push("Kanton " + esc(p.input_rg));
     if (p.input_tpf) subParts.push("Teilportfolio " + esc(tpfLabel(p.input_tpf)));
     var dashTitle = window.DASHBOARD_TITLE || "Auswertung Bodenbedeckung";
-
-    var body =
-      '<div class="head">' +
-        '<div class="actions"><button class="btn" onclick="window.print()">Drucken</button></div>' +
-        '<div class="brand">Schweizerische Eidgenossenschaft · Grundstück-Details</div>' +
-        '<h1>System-ID ' + esc(p.id || "—") + '</h1>' +
-        '<div class="sub">' + subParts.join(" · ") + '</div>' +
-      '</div>' +
-      '<div class="wrap">' +
-        grid2(idCard, lageCard) + flaechen + grid2(siaCard, dinCard) +
-        artCard + vbsCard + bzCard + hbCard + qCard + linkCard + rawCard +
-      '</div>' +
-      '<div class="foot">Quelle: Amtliche Vermessung · geodienste.ch · swisstopo · BAFU · ARE · ' + esc(dashTitle) + '</div>';
+    // The app's header (logo lockup) as is, its h1 demoted: this page's h1 is the parcel, in the sub header.
+    var lockup = document.querySelector("header .logo-lockup");
+    var headerHTML = '<header>' + (lockup ? lockup.outerHTML.replace(/<h1 /, "<span ").replace(/<\/h1>/, "</span>").replace(/ id="dash-title"/, "") : "") +
+      '<span class="spacer"></span><button class="hbtn" type="button" onclick="window.print()">Drucken</button></header>';
+    // Map config: the parcel, its overlay features (as on the dashboard), the basemaps with thumbnails, colours, locale.
+    var pid = String(p.id == null ? "" : p.id), ovData = {}, ovDefs = [];
+    OVERLAY_DEFS.forEach(function (d) { var fs = overlayById(d.key)[pid] || []; if (fs.length) { ovData[d.key] = { type: "FeatureCollection", features: fs }; ovDefs.push({ key: d.key, label: d.label, fill: d.fill, line: d.line, opacity: d.opacity }); } });
+    var cfg = { parcel: rowsToFC([p]), overlays: ovData, overlayDefs: ovDefs, basemapId: basemapId, aerialStyle: AERIAL_STYLE,
+      basemaps: BASEMAPS.map(function (b) { var img = document.querySelector('#basemap-thumbs img[data-bm="' + b.id + '"]'); return { id: b.id, name: b.name, url: b.url, hybrid: !!b.hybrid, thumb: img ? img.src : "" }; }),
+      colors: { parcel: PARCEL_COLOR, parcelLine: MAP_COLORS.parcelLine, active: MAP_COLORS.active, surface: MAP_COLORS.surface }, locale: MAP_LOCALE,
+      layerVis: { parcels: true, landcover: !!layerVis.landcover, bauzonen: !!layerVis.bauzonen, habitat: !!layerVis.habitat } };
+    var body = headerHTML +
+      '<div class="detail-sub"><h1>Grundstück ' + esc(p.id || "—") + '</h1><span class="detail-meta">' + subParts.join(" · ") + '</span></div>' +
+      '<main class="detail-wrap">' +
+        '<h2 class="section-title">Karte</h2>' +
+        '<div class="chart-note">Grundstück markiert und eingezoomt. Karten oben links ein- und ausblenden, Hintergrund unten rechts wechseln. Zoomen mit Strg + Mausrad (Mac: ⌘).</div>' +
+        '<div class="panel map-panel"><div id="map" class="ov-mode"><div class="map-msg"><span class="spinner spinner-sm" aria-hidden="true"></span>Karte wird geladen…</div></div></div>' +
+        '<h2 class="section-title">Grundstück</h2><div class="detail-stack">' + grid2(idCard, lageCard) + flaechen + grid2(siaCard, dinCard) + artCard + vbsCard + bzCard + hbCard + '</div>' +
+        '<h2 class="section-title">Datenqualität und Verknüpfungen</h2><div class="detail-stack">' + grid2(qCard, linkCard) + rawCard + '</div>' +
+      '</main>' +
+      '<footer id="footer"><div class="footer-info">Bundesamt für Bauten und Logistik BBL · ' + esc(dashTitle) + '</div><div class="footer-links"><span>Quelle: Amtliche Vermessung · geodienste.ch · swisstopo · BAFU · ARE</span></div></footer>' +
+      '<script id="detail-cfg" type="application/json">' + jsonSafe(cfg) + '</script>' + // `<` escaped: no <!--<script or </script breakout from raw columns
+      '<script src="' + CDN.maplibreJs.url + '" integrity="' + CDN.maplibreJs.sri + '" crossorigin="anonymous"></script>' +
+      '<script>var CFG = JSON.parse(document.getElementById("detail-cfg").textContent); var AERIAL_STYLE = CFG.aerialStyle; var composeHybrid = ' + composeHybrid.toString() + '; (' + detailMapScript.toString() + ')(CFG, composeHybrid);</script>';
 
     return '<!doctype html><html lang="de"><head><meta charset="utf-8">' +
       '<meta name="viewport" content="width=device-width, initial-scale=1">' +
-      '<title>Grundstück ' + esc(p.id || "") + ': Details</title><style>' + DETAIL_CSS + '</style></head><body>' + body + '</body></html>';
+      '<title>Grundstück ' + esc(p.id || "") + ' · ' + esc(dashTitle) + '</title>' +
+      '<link rel="stylesheet" href="' + CDN.maplibreCss.url + '" integrity="' + CDN.maplibreCss.sri + '" crossorigin="anonymous">' +
+      '<style>' + appCssText() + '</style><style>' + DETAIL_CSS + '</style></head><body class="detail">' + body + '</body></html>';
   }
 
+  var _detailUrls = []; // kept for the session: a reload or «Duplicate tab» of a detail page must keep working
+  window.addEventListener("pagehide", function () { _detailUrls.forEach(function (u) { URL.revokeObjectURL(u); }); _detailUrls = []; });
   function openParcelDetails(id) {
     var p = parcelById(id); if (!p) return;
     var url = URL.createObjectURL(new Blob([buildParcelDetailHTML(p)], { type: "text/html;charset=utf-8" }));
+    _detailUrls.push(url);
     window.open(url, "_blank");
-    setTimeout(function () { URL.revokeObjectURL(url); }, 60000); // keep alive long enough for the new tab to load
   }
   // Delegated: the card's «Alle Details anzeigen» link (the card body is re-rendered on each open).
   document.addEventListener("click", function (e) {
@@ -2613,6 +2738,80 @@
     return legendEl;
   };
   Legend.prototype.onRemove = function () { if (legendEl && legendEl.parentNode) legendEl.parentNode.removeChild(legendEl); legendEl = null; this._map = undefined; };
+
+  // ---- Identify on external maps (geo.admin): a click on the background map asks the identify API of
+  // api3.geo.admin.ch for every visible external map, previews the hit geometries on the map (amber) and shows
+  // the attributes in the info card — the official htmlPopup table where the layer has one, else the raw
+  // attributes of the identify result. ----
+  var GEOADMIN_API = "https://api3.geo.admin.ch/rest/services/api/MapServer/";
+  var _identSeq = 0, _identOpen = false, IDENT_MAX = 6;
+  // fetch with a deadline: an identify / htmlPopup request that hangs must not leave «Wird abgefragt…» forever.
+  function fetchTimeout(url, ms) {
+    var ctl = window.AbortController ? new AbortController() : null, t = ctl ? setTimeout(function () { ctl.abort(); }, ms) : null;
+    return fetch(url, ctl ? { signal: ctl.signal } : undefined).then(function (r) { if (t) clearTimeout(t); return r; }, function (e) { if (t) clearTimeout(t); throw e; });
+  }
+  function addIdentLayers() {
+    if (map.getSource("ident")) return;
+    map.addSource("ident", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+    map.addLayer({ id: "ident-fill", type: "fill", source: "ident", filter: ["==", ["geometry-type"], "Polygon"], paint: { "fill-color": MAP_COLORS.ident, "fill-opacity": 0.22 } });
+    map.addLayer({ id: "ident-line", type: "line", source: "ident", paint: { "line-color": MAP_COLORS.ident, "line-width": 2.4 } });
+    map.addLayer({ id: "ident-point", type: "circle", source: "ident", filter: ["==", ["geometry-type"], "Point"], paint: { "circle-radius": 7, "circle-color": MAP_COLORS.ident, "circle-stroke-color": MAP_COLORS.surface, "circle-stroke-width": 2 } });
+  }
+  function clearIdentify() {
+    _identSeq++; _identOpen = false; // a pending request is ignored when it returns
+    if (map && map.getSource("ident")) map.getSource("ident").setData({ type: "FeatureCollection", features: [] });
+  }
+  function identifyAt(lngLat) {
+    var layers = extLayers.filter(function (l) { return l.visible && map && map.getLayer(extMapId(l)); });
+    if (!layers.length) return false;
+    var seq = ++_identSeq; _identOpen = true;
+    var b = map.getBounds(), c = map.getContainer();
+    var q = "&geometry=" + lngLat.lng.toFixed(6) + "," + lngLat.lat.toFixed(6) + "&geometryType=esriGeometryPoint&mapExtent=" +
+      [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()].map(function (v) { return v.toFixed(6); }).join(",") +
+      "&imageDisplay=" + c.clientWidth + "," + c.clientHeight + ",96&tolerance=6&returnGeometry=true&geometryFormat=geojson&sr=4326&lang=de";
+    showMapCard(identCardHTML(layers, null));
+    // One request per map: a map without a queryable table (plain map images) fails a combined request as a whole.
+    Promise.all(layers.map(function (l) {
+      return fetchTimeout(GEOADMIN_API + "identify?layers=all:" + encodeURIComponent(l.id) + "&limit=" + IDENT_MAX + q, 12000) // limit: no multi-MB geometry sets for six hits
+        .then(function (r) { return r.ok ? r.json() : { results: [] }; })
+        .then(function (d) { return (d.results || []).map(function (r) { r._layer = l; return r; }); })
+        .catch(function () { return []; });
+    })).then(function (lists) {
+      if (seq !== _identSeq) return; // a later click or Escape superseded this request
+      var results = [].concat.apply([], lists).slice(0, IDENT_MAX);
+      if (map.getSource("ident")) map.getSource("ident").setData({ type: "FeatureCollection", features: results.filter(function (r) { return r.geometry && r.geometry.type; }).map(function (r) { return { type: "Feature", geometry: r.geometry, properties: {} }; }) });
+      showMapCard(identCardHTML(layers, results));
+      results.forEach(function (r, i) { fillIdentAttributes(r, i, seq); });
+    });
+    return true;
+  }
+  // The official attribute table of a hit (geo.admin htmlPopup), sanitized like the legends; a layer without one keeps the raw attributes.
+  function fillIdentAttributes(r, i, seq) {
+    var fid = r.featureId != null ? r.featureId : r.id; if (fid == null) return;
+    var slotOf = function () { return _cardEl ? _cardEl.querySelector('[data-ident="' + i + '"]') : null; };
+    fetchTimeout(GEOADMIN_API + encodeURIComponent(r.layerBodId || r._layer.id) + "/" + encodeURIComponent(String(fid)) + "/htmlPopup?lang=de", 12000)
+      .then(function (res) { if (!res.ok) throw new Error("HTTP " + res.status); return res.text(); })
+      .then(function (html) {
+        if (seq !== _identSeq) return;
+        var doc = sanitizeHtml(html), src = doc.querySelector(".htmlpopup-content") || doc.body, slot = slotOf();
+        if (!slot || !src || !src.textContent.trim()) return;
+        var wrap = document.createElement("div"); while (src.firstChild) wrap.appendChild(src.firstChild); // nodes, never a <body> inside the card
+        slot.className = "ident-api"; slot.innerHTML = ""; slot.appendChild(wrap);
+      })
+      .catch(function () { if (seq !== _identSeq) return; var w = slotOf() && slotOf().querySelector(".ident-wait"); if (w) w.textContent = "Keine weiteren Attribute verfügbar."; });
+  }
+  function identCardHTML(layers, results) {
+    var names = layers.map(function (l) { return l.title; }).join(", ");
+    var head = '<div class="map-pop"><div class="mp-kicker">Objektinfo · externe Karte</div>';
+    if (!results) return head + '<div class="mp-t">Wird abgefragt…</div><div class="mp-s"><span class="spinner spinner-sm" aria-hidden="true"></span>' + esc(names) + '</div></div>';
+    if (!results.length) return head + '<div class="mp-t">Kein Objekt an dieser Stelle</div><div class="mp-s">Abgefragt: ' + esc(names) + '</div></div>';
+    return head + results.map(function (r, i) {
+      var attrs = r.attributes || {}, keys = Object.keys(attrs).filter(function (k) { var v = attrs[k]; return v != null && v !== "" && typeof v !== "object"; }).slice(0, 12);
+      var sameLayer = i > 0 && results[i - 1]._layer === r._layer; // several hits of one map share its heading
+      return '<div class="ident-res">' + (sameLayer ? "" : '<div class="mp-t">' + esc(r._layer.title) + '</div>' + (r.layerName && r.layerName !== r._layer.title ? '<div class="mp-s">' + esc(r.layerName) + '</div>' : "")) +
+        '<div data-ident="' + i + '">' + (keys.length ? '<div class="mp-kv">' + keys.map(function (k) { return '<span>' + esc(k) + '</span><span>' + esc(String(attrs[k])) + '</span>'; }).join("") + '</div>' : '<div class="mp-s ident-wait">Attribute werden geladen…</div>') + '</div></div>';
+    }).join("") + '</div>';
+  }
 
   // ---- Right-click context menu (mirrors the web app) ----
   function copyText(t) {
@@ -2719,7 +2918,7 @@
     if (!map || !map.getLayer("parcels-fill")) return;
     extLayers.slice().reverse().forEach(function (l) { if (map.getLayer(extMapId(l))) map.moveLayer(extMapId(l), "parcels-fill"); });
   }
-  function extCommit() { syncExtOrder(); renderAccordion(); writeURL(); }
+  function extCommit() { syncExtOrder(); renderAccordion(); writeURL(); if (_identOpen) { clearIdentify(); hideMapCard(); } } // an identify result belongs to the maps shown at the time
   function addExtLayer(id, title) {
     if (!EXT_ID_RE.test(id || "")) return;
     var l = extById(id);
@@ -2753,21 +2952,31 @@
     }).catch(function () {});
   }
   var _legendCache = {};
-  // geo.admin legend HTML → sanitized Document (scripts, frames, objects, forms, styles, event handlers and
-  // javascript: URLs removed; links open in a new tab). Cached per layer id.
+  // geo.admin HTML (legends, identify popups) → sanitized Document: scripts, frames, objects, forms, styles,
+  // event handlers and javascript: URLs removed; links open in a new tab.
+  // Callers must insert the resulting NODES (cloneNode / appendChild), never re-serialise doc.body.innerHTML: a
+  // DOMParser document has scripting off, so e.g. <noscript> content is parsed as elements and would become raw
+  // text — and markup — again in the live page (mutation XSS).
+  function sanitizeHtml(html) {
+    var doc = new DOMParser().parseFromString(html, "text/html");
+    Array.prototype.forEach.call(doc.querySelectorAll("script, iframe, object, embed, form, link, meta, base, style, noscript, noembed, noframes, template, xmp, animate, set, animateTransform, animateMotion"), function (el) { el.parentNode.removeChild(el); });
+    var URL_ATTR = /^(href|src|xlink:href|action|formaction|poster|data|background)$/i;
+    Array.prototype.forEach.call(doc.querySelectorAll("*"), function (el) {
+      Array.prototype.slice.call(el.attributes).forEach(function (a) {
+        var v = String(a.value).replace(/[\u0000-\u0020]/g, ""); // entities are decoded by the parser; browsers ignore control characters before a scheme
+        var unsafeUrl = URL_ATTR.test(a.name) && v.indexOf(":") >= 0 && !/^(https?|mailto|tel):/i.test(v); // only http(s)/mailto/tel schemes, or scheme-less
+        if (/^on/i.test(a.name) || a.name === "style" || a.name === "srcdoc" || unsafeUrl) el.removeAttribute(a.name);
+      });
+    });
+    Array.prototype.forEach.call(doc.querySelectorAll("a[href]"), function (a) { a.setAttribute("target", "_blank"); a.setAttribute("rel", "noopener"); });
+    return doc;
+  }
+  // Legend document, cached per layer id.
   function fetchLegendDoc(id) {
     if (_legendCache[id]) return _legendCache[id];
     return (_legendCache[id] = fetch("https://api3.geo.admin.ch/rest/services/api/MapServer/" + encodeURIComponent(id) + "/legend?lang=de")
       .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.text(); })
-      .then(function (html) {
-        var doc = new DOMParser().parseFromString(html, "text/html");
-        Array.prototype.forEach.call(doc.querySelectorAll("script, iframe, object, embed, form, link, meta, base, style"), function (el) { el.parentNode.removeChild(el); });
-        Array.prototype.forEach.call(doc.querySelectorAll("*"), function (el) {
-          Array.prototype.slice.call(el.attributes).forEach(function (a) { if (/^on/i.test(a.name) || /^\s*javascript:/i.test(a.value)) el.removeAttribute(a.name); });
-        });
-        Array.prototype.forEach.call(doc.querySelectorAll("a[href]"), function (a) { a.setAttribute("target", "_blank"); a.setAttribute("rel", "noopener"); });
-        return doc;
-      }).catch(function (e) { delete _legendCache[id]; throw e; }));
+      .then(sanitizeHtml).catch(function (e) { delete _legendCache[id]; throw e; }));
   }
 
   // ---- Internal maps (checkbox + info): parcels, labels/clusters, and the data overlays the export carries ----
@@ -2810,18 +3019,19 @@
     if (!accEl) return;
     accEl.classList.toggle("is-closed", !menuOpen);
     var nVis = extLayers.filter(function (l) { return l.visible; }).length;
-    accEl.innerHTML = '<aside class="acc-panel" aria-label="Werkzeuge">' +
+    setHTMLKeepFocus(accEl, '<aside class="acc-panel" aria-label="Werkzeuge">' +
       '<button type="button" class="acc-head" data-acc-toggle aria-expanded="' + (accOpen ? "true" : "false") + '"><span class="acc-arrow">' + ICON.sz("chevRight", 18) + '</span><span>Dargestellte Karten</span><span class="acc-meta">' + (nVis ? nVis + " extern" : "") + '</span></button>' +
       '<div class="acc-body"' + (accOpen ? "" : " hidden") + '>' +
         '<div class="acc-group">Interne Karten</div>' +
         internalLayerDefs().map(function (d) { return lyrRow({ kind: "int", id: d.key, label: d.label, on: !!layerVis[d.key] }); }).join("") +
         '<div class="acc-group sep">Externe Karten</div>' +
+        (extLayers.some(function (l) { return l.visible; }) ? '<div class="acc-hint">Klick auf die Karte fragt die eingeblendeten Karten ab (Objektinfo oben rechts).</div>' : "") +
         (extLayers.some(function (l) { return l.rec && !l.visible; }) ? '<div class="acc-hint">Empfohlene Karten sind ausgeblendet. Häkchen setzen zum Einblenden.</div>' : "") +
         (extLayers.length ? extLayers.map(function (l) { return lyrRow({ kind: "ext", id: l.id, label: l.title, on: l.visible, tip: l.title + " · " + l.id }); }).join("")
                           : '<div class="acc-empty">Keine externen Karten aktiv.</div>') +
         '<div class="acc-add"><button type="button" class="btn" data-acc-add>' + ICON.plus + 'Karte hinzufügen</button><div class="acc-hint">Sucht Karten im Geokatalog von swisstopo.</div></div>' +
       '</div></aside>' +
-      '<button type="button" class="acc-toggle" data-menu-toggle aria-expanded="' + (menuOpen ? "true" : "false") + '"><span class="acc-chev">' + ICON.sz("chevRight", 18) + '</span><span>' + (menuOpen ? "Menü schliessen" : "Menü öffnen") + '</span></button>';
+      '<button type="button" class="acc-toggle" data-menu-toggle aria-expanded="' + (menuOpen ? "true" : "false") + '"><span class="acc-chev">' + ICON.sz("chevRight", 18) + '</span><span>' + (menuOpen ? "Menü schliessen" : "Menü öffnen") + '</span></button>');
   }
   function accClick(e) {
     var t = e.target;
@@ -2852,9 +3062,9 @@
   LayerWidget.prototype.onRemove = function () { if (lwEl && lwEl.parentNode) lwEl.parentNode.removeChild(lwEl); lwEl = null; this._map = undefined; };
   function renderLayerWidget() {
     if (!lwEl) return;
-    lwEl.innerHTML = '<div class="lw-title">Karten</div>' + internalLayerDefs().map(function (d) {
+    setHTMLKeepFocus(lwEl, '<div class="lw-title">Karten</div>' + internalLayerDefs().map(function (d) {
       return '<label class="lw-row' + (layerVis[d.key] ? "" : " is-off") + '"><input type="checkbox" data-lw="' + esc(d.key) + '"' + (layerVis[d.key] ? " checked" : "") + '><span>' + esc(d.label) + '</span></label>';
-    }).join("");
+    }).join(""));
   }
 
   // ---- Basemap switcher (bottom-right) ----
@@ -2877,16 +3087,16 @@
   function renderBasemapUI() {
     if (!bmEl) return;
     var cur = basemapById(basemapId);
-    bmEl.innerHTML = '<div class="popover bm-panel"' + (bmOpen ? "" : " hidden") + ' role="group" aria-label="Hintergrundkarte">' +
+    setHTMLKeepFocus(bmEl, '<div class="popover bm-panel"' + (bmOpen ? "" : " hidden") + ' role="group" aria-label="Hintergrundkarte">' +
       BASEMAPS.map(function (b) { return '<button type="button" class="bm-opt' + (b.id === basemapId ? " is-active" : "") + '" data-bm="' + b.id + '" title="' + esc(b.name) + '"><img class="bm-thumb" src="' + esc(basemapThumb(b.id)) + '" alt=""><span>' + esc(b.name) + '</span></button>'; }).join("") + '</div>' +
-      '<button type="button" class="bm-btn" data-bm-toggle title="Hintergrund wechseln" aria-haspopup="true" aria-expanded="' + (bmOpen ? "true" : "false") + '"><img class="bm-thumb" src="' + esc(basemapThumb(cur.id)) + '" alt="Aktueller Hintergrund: ' + esc(cur.name) + '"><span class="bm-l">Hintergrund</span></button>';
+      '<button type="button" class="bm-btn" data-bm-toggle title="Hintergrund wechseln" aria-haspopup="true" aria-expanded="' + (bmOpen ? "true" : "false") + '"><img class="bm-thumb" src="' + esc(basemapThumb(cur.id)) + '" alt="Aktueller Hintergrund: ' + esc(cur.name) + '"><span class="bm-l">Hintergrund</span></button>');
   }
   function styleOptions(b) { return b.hybrid ? { diff: false, transformStyle: composeHybrid } : { diff: false }; }
   function setBasemap(id) {
     var b = basemapById(id);
     if (b.id === basemapId || !map) { basemapId = b.id; renderBasemapUI(); return; }
     basemapId = b.id; renderBasemapUI(); writeURL();
-    mapReady = false;
+    mapReady = false; _styleUrl = typeof b.url === "string" ? b.url : null; _styleFallback = false; _styleLoaded = false;
     map.off("style.load", addAppLayers); map.once("style.load", addAppLayers); // rebuild every source + layer on the new style
     map.setStyle(b.url, styleOptions(b));
   }
@@ -2949,7 +3159,9 @@
       fetchLegendDoc(l.id).then(function (doc) {
         if (req !== infoReq) return;
         var h = doc.querySelector(".bod-title"); if (h && l.title === l.id && h.textContent.trim()) { l.title = h.textContent.trim(); title.textContent = l.title; renderAccordion(); }
-        body.innerHTML = '<div class="lyr-api">' + (doc.body ? doc.body.innerHTML : "") + '</div>' + infoFoot(l);
+        var wrap = document.createElement("div"); wrap.className = "lyr-api"; // cloned nodes (the document is cached), never a re-serialised string
+        if (doc.body) Array.prototype.forEach.call(doc.body.childNodes, function (n) { wrap.appendChild(n.cloneNode(true)); });
+        body.innerHTML = infoFoot(l); body.insertBefore(wrap, body.firstChild);
       }).catch(function () {
         if (req !== infoReq) return;
         body.innerHTML = '<div class="info-status">Informationen konnten nicht geladen werden (Internetverbindung nötig).</div><table class="info-kv"><tr><td>Layer-ID</td><td>' + esc(l.id) + '</td></tr></table>' + infoFoot(l);
@@ -2959,7 +3171,7 @@
   }
   (function () {
     var modal = document.getElementById("info-modal"), body = document.getElementById("info-body"), lastFocus = null;
-    openInfoModal = function () { lastFocus = document.activeElement; modal.hidden = false; bgInert(true); lockScroll(true); document.getElementById("info-close").focus(); };
+    openInfoModal = function () { lastFocus = document.activeElement; modal.hidden = false; bgInert(true); lockScroll(true); var card = modal.querySelector(".modal-card"); card.tabIndex = -1; card.focus(); };
     function close() { infoReq++; modal.hidden = true; bgInert(false); lockScroll(false); if (lastFocus && lastFocus.focus) lastFocus.focus(); }
     trapTab(modal.querySelector(".modal-card"));
     document.getElementById("info-close").addEventListener("click", close);
@@ -2977,15 +3189,16 @@
     var pid = String(p.id == null ? "" : p.id), bez = p[NAME_COL] || "";
     var act = function (a, label, icon) { return '<button type="button" class="mp-act" data-pop="' + a + '" data-id="' + esc(pid) + '">' + ICON.sz(icon, 15) + '<span>' + label + '</span></button>'; };
     var full = !sel[pid] && selCount() >= SEL_MAX;
-    return '<div class="map-pop"><div class="mp-t">' + esc(p.input_ort || "—") + '</div>' + (bez ? '<div class="mp-s">' + esc(bez) + '</div>' : "") +
+    return '<div class="map-pop"><div class="mp-kicker">Grundstück · interne Karte</div><div class="mp-t">' + esc(p.input_ort || "—") + '</div>' + (bez ? '<div class="mp-s">' + esc(bez) + '</div>' : "") +
       '<div class="mp-kv"><span>ID</span><span>' + esc(pid || "—") + '</span><span>E-GRID</span><span>' + esc(p.egrid || "—") + '</span><span>Region</span><span>' + esc((p.input_rg || "—") + " · " + (p.input_plz ? p.input_plz + " " : "") + (p.input_ort || "")) + '</span><span>Grundstücksfläche</span><span>' + fmtAreaU(num(p.parcel_area_m2)) + '</span>' +
+      '<span>Teilportfolio</span><span>' + esc(p.input_tpf ? tpfLabel(p.input_tpf) : "—") + '</span><span>Eigentumsart</span><span>' + esc(p["input_eigent.art"] ? eigentumLabel(p["input_eigent.art"]) : "—") + '</span>' +
       (hasGreeninv ? '<span>Grüninventar</span><span>' + esc(greeninvLabel(p.greeninv)) + '</span>' : "") + '</div>' +
       '<div class="mp-acts">' + act("zoom", "Hinzoomen", "zoomIn") + act("table", "In Tabelle anzeigen", "funnel") + act("pdf", "PDF-Bericht erstellen", "fileText") +
       (p.greeninv === "yes" && greenInventoryUrl(p) ? '<a class="mp-act" href="' + esc(greenInventoryUrl(p)) + '" target="_blank" rel="noopener">' + ICON.sz("extlink", 15) + '<span>Im Grüninventar öffnen</span></a>' : "") +
       '<label class="mp-sel"><input type="checkbox" data-pop-sel="' + esc(pid) + '"' + (sel[pid] ? " checked" : "") + (full ? " disabled" : "") + '> Für PDF-Bericht auswählen' + (full ? " (max. " + SEL_MAX + ")" : "") + '</label></div>' +
       (pid ? '<a href="#" class="mp-more popup-details-link" data-id="' + esc(pid) + '"><span>Alle Details anzeigen' + ICON.sz("extlink", 12) + '</span></a>' : "") + '</div>';
   }
-  function openParcelCard(p) { if (map && p) showMapCard(parcelCardHTML(p)); }
+  function openParcelCard(p) { if (!map || !p) return; clearIdentify(); showMapCard(parcelCardHTML(p)); } // a pending identify must not overwrite this card
   // Delegated card actions (the card body is re-rendered on each open).
   document.addEventListener("click", function (e) {
     var b = e.target.closest && e.target.closest("[data-pop]"); if (!b) return;
@@ -3109,7 +3322,7 @@
     input.addEventListener("input", function () { q = input.value.trim(); if (!open) setOpen(true); runRemote(); render(); });
     input.addEventListener("focus", function () { q = input.value.trim(); setOpen(true); runRemote(); });
     input.addEventListener("keydown", function (e) {
-      if (e.key === "Escape") { setOpen(false); input.blur(); return; }
+      if (e.key === "Escape") { if (open) e.stopPropagation(); setOpen(false); input.blur(); return; } // an open dropdown owns Escape (the document handler would clear the map mark)
       if (!open) { if (e.key === "ArrowDown") setOpen(true); return; }
       var rows = dd.querySelectorAll("[data-i]");
       if (e.key === "ArrowDown" || e.key === "ArrowUp") {
@@ -3128,23 +3341,38 @@
   }
 
   // ---- Map init: controls once, app layers on every (re)load of a style ----
+  // German UI strings for MapLibre's own controls and the cooperative-gesture hint (overview mode).
+  var MAP_LOCALE = {
+    "NavigationControl.ZoomIn": "Hineinzoomen", "NavigationControl.ZoomOut": "Herauszoomen", "NavigationControl.ResetBearing": "Nach Norden ausrichten",
+    "FullscreenControl.Enter": "Vollbild", "FullscreenControl.Exit": "Vollbild beenden",
+    "CooperativeGesturesHandler.WindowsHelpText": "Zum Zoomen Strg + Mausrad verwenden",
+    "CooperativeGesturesHandler.MacHelpText": "Zum Zoomen ⌘ + Mausrad verwenden",
+    "CooperativeGesturesHandler.MobileHelpText": "Karte mit zwei Fingern bewegen",
+    "ScaleControl.Meters": "m", "ScaleControl.Kilometers": "km",
+  };
   var HOVER_LAYERS = ["parcels-fill", "clusters", "point", "point-label", "landcover-fill", "bauzonen-fill", "habitat-fill"];
   function initMap(el) {
     var b = basemapById(basemapId);
     // No cooperative gestures here: the Karte tab fits the viewport (the page does not
     // scroll), so plain wheel zoom and one-finger pan are what users expect of the main map.
-    // German UI strings for MapLibre's own controls and the cooperative-gesture hint (overview mode).
-    var MAP_LOCALE = {
-      "NavigationControl.ZoomIn": "Hineinzoomen", "NavigationControl.ZoomOut": "Herauszoomen", "NavigationControl.ResetBearing": "Nach Norden ausrichten",
-      "FullscreenControl.Enter": "Vollbild", "FullscreenControl.Exit": "Vollbild beenden",
-      "CooperativeGesturesHandler.WindowsHelpText": "Zum Zoomen Strg + Mausrad verwenden",
-      "CooperativeGesturesHandler.MacHelpText": "Zum Zoomen ⌘ + Mausrad verwenden",
-      "CooperativeGesturesHandler.MobileHelpText": "Karte mit zwei Fingern bewegen",
-      "ScaleControl.Meters": "m", "ScaleControl.Kilometers": "km",
-    };
     var opts = { container: el, style: b.url, center: [8.23, 46.82], zoom: 6.4, preserveDrawingBuffer: true, attributionControl: { compact: true }, locale: MAP_LOCALE };
     if (b.hybrid) opts.transformStyle = composeHybrid;
     map = new maplibregl.Map(opts);
+    // A basemap style that cannot be downloaded (offline deliverable, a network that blocks the tile CDNs) would leave
+    // a blank map that never fires "load": fall back to an empty inline style so the app's own layers (local data)
+    // still render, and say why the background is missing. Only the style document counts — tile, sprite and glyph
+    // errors after a successful load are MapLibre's business.
+    _styleUrl = typeof b.url === "string" ? b.url : null; _styleFallback = false; _styleLoaded = false;
+    _bmNote = document.createElement("div"); _bmNote.className = "map-bm-note"; _bmNote.hidden = true; // own class: renderMap toggles .map-empty
+    _bmNote.textContent = "Hintergrundkarte nicht erreichbar (Internetverbindung nötig) – Grundstücke ohne Hintergrund."; el.appendChild(_bmNote);
+    map.on("error", function (e) {
+      var err = e && e.error, u = err && err.url ? String(err.url) : "";
+      if (mapReady || _styleFallback || _styleLoaded || !_styleUrl) return; // after style.load only tiles, sprites and glyphs can fail
+      if (u && u.indexOf(_styleUrl) !== 0) return;
+      _styleFallback = true; _bmNote.hidden = false;
+      map.setStyle({ version: 8, sources: {}, layers: [], glyphs: AERIAL_STYLE.glyphs }, { diff: false }); // → style.load → addAppLayers
+    });
+    map.on("style.load", function () { _styleLoaded = true; if (!_styleFallback && _bmNote) _bmNote.hidden = true; });
     if (mapMode === "overview") map.cooperativeGestures.enable(); // created while the Auswertung tab is open
     if (window.ResizeObserver) new ResizeObserver(function () { if (map) map.resize(); }).observe(el); // the map fills a flex box
     var emptyNote = document.createElement("div"); emptyNote.className = "map-empty"; emptyNote.hidden = true;
@@ -3152,7 +3380,7 @@
     _cardEl = document.createElement("div"); _cardEl.className = "map-card"; _cardEl.hidden = true;
     _cardEl.setAttribute("role", "region"); _cardEl.setAttribute("aria-label", "Details zum angeklickten Objekt");
     _cardEl.innerHTML = '<button type="button" class="icon-btn map-card-x" title="Schliessen" aria-label="Schliessen">' + ICON.sz("x", 16) + '</button><div class="map-card-body"></div>';
-    _cardEl.querySelector(".map-card-x").addEventListener("click", hideMapCard); // closes the card, keeps the mark
+    _cardEl.querySelector(".map-card-x").addEventListener("click", function () { hideMapCard(); clearIdentify(); clearOverlayHighlight(); }); // closes the card (and an identify / overlay highlight), keeps the parcel mark
     el.appendChild(_cardEl);
     // Control stack (top-right), fullscreen always first; the built-in buttons use the
     // same Lucide icon set as the custom controls (css: .maplibregl-ctrl-icon masks).
@@ -3171,6 +3399,7 @@
     // One click handler, priority top→bottom: cluster → label / marker → overlay → parcel → nothing (clear).
     map.on("click", function (e) {
       if (!mapReady) return;
+      clearIdentify(); // any click supersedes a pending / shown identify result
       if (map.getLayer("clusters")) {
         var cl = map.queryRenderedFeatures(e.point, { layers: ["clusters"] });
         if (cl.length) {
@@ -3205,7 +3434,8 @@
         }
         return;
       }
-      clearMapSelection(); // nothing under the pointer
+      clearMapSelection(); // nothing of the app under the pointer…
+      identifyAt(e.lngLat); // …but maybe an external map: ask geo.admin (no-op without visible external maps)
     });
     map.on("mousemove", function (e) {
       if (!mapReady) return;
@@ -3217,14 +3447,16 @@
   // Everything the app draws: runs on the first load and again after every basemap switch (setStyle drops it all).
   function addAppLayers() {
     if (map.getSource("parcels")) return; // already built for this style
-    map.addSource("parcels", { type: "geojson", data: rowsToFC(lastRows) });
+    map.addSource("parcels", { type: "geojson", data: { type: "FeatureCollection", features: [] } }); // renderMap below fills the sources once
     map.addLayer({ id: "parcels-fill", type: "fill", source: "parcels", minzoom: PARCEL_MINZOOM, paint: { "fill-color": PARCEL_COLOR, "fill-opacity": 0.4 } });
     map.addLayer({ id: "parcels-line", type: "line", source: "parcels", minzoom: PARCEL_MINZOOM, paint: { "line-color": MAP_COLORS.parcelLine, "line-width": 0.7 } });
     map.addLayer({ id: "parcels-sel", type: "line", source: "parcels", minzoom: PARCEL_MINZOOM, filter: ["in", ["get", "id"], ["literal", selIds()]], paint: { "line-color": MAP_COLORS.checked, "line-width": 2.2, "line-dasharray": [2, 1.2] } });
     map.addLayer({ id: "parcels-hl-casing", type: "line", source: "parcels", minzoom: PARCEL_MINZOOM, filter: ["==", ["get", "id"], selectedParcelId || " "], paint: { "line-color": MAP_COLORS.surface, "line-width": 5, "line-opacity": 0.9 } });
     map.addLayer({ id: "parcels-hl", type: "line", source: "parcels", minzoom: PARCEL_MINZOOM, filter: ["==", ["get", "id"], selectedParcelId || " "], paint: { "line-color": MAP_COLORS.active, "line-width": 2.6 } });
     addOverlayLayers(); // Bodenbedeckung / Bauzonen / Lebensräume, under the markers
-    map.addSource("points", { type: "geojson", data: rowsToPointsFC(lastRows), cluster: true, clusterRadius: 48, clusterMaxZoom: 13 });
+    addIdentLayers(); // identify preview (external maps): above the overlays, under the markers
+    if (_identOpen) { clearIdentify(); hideMapCard(); } // a style rebuild drops the preview (and a pending request)
+    map.addSource("points", { type: "geojson", data: { type: "FeatureCollection", features: [] }, cluster: true, clusterRadius: 48, clusterMaxZoom: 13 });
     map.addLayer({ id: "clusters", type: "circle", source: "points", filter: ["has", "point_count"],
       paint: { "circle-color": ["step", ["get", "point_count"], MAP_COLORS.cluster1, 25, MAP_COLORS.cluster2, 100, MAP_COLORS.cluster3], "circle-radius": ["step", ["get", "point_count"], 14, 25, 18, 100, 24], "circle-stroke-color": MAP_COLORS.surface, "circle-stroke-width": 1.5 } });
     map.addLayer({ id: "cluster-count", type: "symbol", source: "points", filter: ["has", "point_count"],
@@ -3246,10 +3478,14 @@
     var el = document.getElementById("map"); if (!el || _mapTried) return; _mapTried = true;
     if (window.maplibregl) { initMap(el); return; }
     el.innerHTML = '<div class="map-msg"><span class="spinner spinner-sm" aria-hidden="true"></span>Karte wird geladen…</div>';
-    var css = document.createElement("link"); css.rel = "stylesheet"; css.href = "https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css"; document.head.appendChild(css);
-    var s = document.createElement("script"); s.src = "https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js";
+    if (!document.getElementById("maplibre-css")) { var css = document.createElement("link"); css.id = "maplibre-css"; css.rel = "stylesheet"; css.href = CDN.maplibreCss.url; css.integrity = CDN.maplibreCss.sri; css.crossOrigin = "anonymous"; document.head.appendChild(css); }
+    var s = cdnScript("maplibreJs");
     s.onload = function () { el.innerHTML = ""; initMap(el); };
-    s.onerror = function () { el.innerHTML = '<div class="map-msg">Karte konnte nicht geladen werden (Internetverbindung nötig).</div>'; };
+    s.onerror = function () { // e.g. offline at that moment: offer a retry instead of a dead map until the next reload
+      _mapTried = false;
+      el.innerHTML = '<div class="map-msg">Karte konnte nicht geladen werden (Internetverbindung nötig).<button type="button" class="btn" id="map-retry">Erneut versuchen</button></div>';
+      var rb = document.getElementById("map-retry"); if (rb) rb.addEventListener("click", ensureMap);
+    };
     document.head.appendChild(s);
   }
 

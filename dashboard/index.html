@@ -27,7 +27,7 @@
     <p class="b-lead">Wählen Sie einen <code>landcover-parcels.geojson</code>-Export. Die Daten werden lokal im Browser ausgewertet, ohne Server und ohne Installation. Herunterladen (Dashboard als HTML, Excel, PDF) können Sie anschliessend oben rechts.</p>
     <label class="b-field"><span>GeoJSON-Export <em>(erforderlich)</em></span><input id="b-geojson" type="file" accept=".geojson,.json"></label>
     <div class="b-actions">
-      <button class="btn b-primary" id="b-show" disabled>Dashboard anzeigen</button>
+      <button class="btn b-primary" id="b-show" type="button" disabled>Dashboard anzeigen</button>
     </div>
     <div id="b-status" class="b-status">Noch keine Datei gewählt.</div>
     <p class="b-note">Persönliche Felder (Eigentümer, Koordinaten, SAP-Codes) werden beim Laden automatisch entfernt.</p>
@@ -54,7 +54,7 @@
       <button class="pop-row gear-phone" id="btn-new-menu" type="button">Neue Datei laden</button>
     </div>
   </div>
-  <button class="hbtn hbtn-light" id="btn-new" title="Andere GeoJSON laden">Neue Datei</button>
+  <button class="hbtn hbtn-light" id="btn-new" type="button" title="Andere GeoJSON laden">Neue Datei</button>
   <button class="hbtn" id="dl-btn" type="button" aria-haspopup="dialog">Herunterladen</button>
 </header>
 
@@ -83,11 +83,11 @@
           <button class="btn btn-primary dl-act" id="dl-pdf" type="button">PDF erstellen</button>
         </div>
         <div class="dl-progress" id="dl-progress" hidden>
-          <div class="dl-progress-row"><div class="dl-progress-track"><i id="dl-progress-bar"></i></div><button class="btn btn-sm" id="dl-abort" type="button">Abbrechen</button></div>
-          <span class="dl-progress-txt" id="dl-progress-txt"></span>
+          <div class="dl-progress-row"><div class="dl-progress-track" role="progressbar" aria-label="PDF-Bericht" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="dl-progress-bar"></i></div><button class="btn btn-sm" id="dl-abort" type="button">Abbrechen</button></div>
+          <span class="dl-progress-txt" id="dl-progress-txt" aria-live="polite"></span>
         </div>
         <div class="dl-row">
-          <div class="dl-row-main"><div class="dl-row-t">Excel</div><div class="dl-row-s">Tabelle mit den sichtbaren Spalten.</div></div>
+          <div class="dl-row-main"><div class="dl-row-t">Excel</div><div class="dl-row-s">Sichtbare Spalten; Flächen in m², Codes als Bezeichnungen (Teilportfolio, Eigentumsart, Status, Grüninventar).</div></div>
           <button class="btn btn-primary dl-act" id="dl-xlsx" type="button">Herunterladen</button>
         </div>
         <div class="dl-row">
@@ -103,7 +103,7 @@
           <button class="btn btn-primary dl-act" id="dl-html" type="button">Herunterladen</button>
         </div>
       </div>
-      <div class="dl-hint" id="dl-hint">Karte und PDF benötigen eine Internetverbindung.</div>
+      <div class="dl-hint" id="dl-hint" aria-live="polite">Karte und PDF benötigen eine Internetverbindung.</div>
     </div>
   </div>
 </div>
@@ -123,7 +123,7 @@
   <aside id="filter-panel" aria-label="Filter">
     <div class="fp-head">
       <span class="fp-title">Filter</span>
-      <button class="icon-btn fp-collapse" id="fp-collapse" aria-label="Filter einklappen" title="Einklappen"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button>
+      <button class="icon-btn fp-collapse" id="fp-collapse" type="button" aria-label="Filter einklappen" title="Einklappen"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button>
     </div>
     <div class="fp-body">
       <div id="pill-row" class="pill-row"></div>
@@ -177,7 +177,7 @@
       </div>
     </div>
   </aside>
-  <button class="fp-expand" id="fp-expand" title="Filter anzeigen"><span>Filter</span><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
+  <button class="fp-expand" id="fp-expand" type="button" title="Filter anzeigen"><span>Filter</span><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
   <div class="fp-scrim" id="fp-scrim" hidden></div>
 
   <main id="main" tabindex="-1">
@@ -235,8 +235,8 @@
       </div>
 
       <h2 class="section-title">Karte der Auswahl</h2>
-      <div class="chart-note">Polygon, Beschriftung oder Cluster anklicken; die Details erscheinen oben rechts. Karten oben links ein- und ausblenden. Zoomen mit Strg + Mausrad (Mac: ⌘).</div>
-      <!-- Slot for the one map while the Auswertung tab is shown (overview mode: fixed height, layer widget + legend). -->
+      <div class="chart-note">Polygon, Beschriftung oder Cluster anklicken; die Details erscheinen oben rechts. Karten oben links ein- und ausblenden, Hintergrund unten rechts wechseln. Zoomen mit Strg + Mausrad (Mac: ⌘).</div>
+      <!-- Slot for the one map while the Auswertung tab is shown (overview mode: fixed height, layer widget + basemap switcher). -->
       <div class="panel map-panel" id="ov-map-panel"></div>
 
       <h2 class="section-title">Grundstücksliste</h2>

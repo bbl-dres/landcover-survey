@@ -22,7 +22,7 @@ const readJson = (rel) => JSON.parse(readFileSync(path.join(ROOT, rel), "utf8"))
 const BAUZONE_CODE = {
   wohnzonen: "11", arbeitszonen: "12", mischzonen: "13", zentrumszonen: "14",
   zonen_fuer_oeffentliche_nutzungen: "15", eingeschraenkte_bauzonen: "16",
-  tourismus_und_freizeitzonen: "17", verkehrszonen_innerhalb_der_bauzonen: "18",
+  tourismus_und_freizeitzonen: "17", verkehrszonen_innerhalb_der_bauzonen: "18", weitere_bauzonen: "19", // ARE Hauptnutzung 19xx
 };
 /** The zone-free remainder the processing emits as "Ohne Bauzone" (slug ohne_bauzone); slate so it
  *  reads as "no zone" next to the ARE colours. */
@@ -60,7 +60,10 @@ export async function buildDashboardData() {
   }
 
   const bauzonen = {};
-  for (const [slug, label] of Object.entries(cfg.BAUZONE_LABELS)) bauzonen[slug] = { label, color: cfg.bauzoneColor(BAUZONE_CODE[slug] || "") };
+  for (const [slug, label] of Object.entries(cfg.BAUZONE_LABELS)) {
+    if (!BAUZONE_CODE[slug]) throw new Error(`BAUZONE_LABELS: no code for "${slug}" — add it to BAUZONE_CODE (it would silently get the grey fallback colour)`);
+    bauzonen[slug] = { label, color: cfg.bauzoneColor(BAUZONE_CODE[slug]) };
+  }
   bauzonen.ohne_bauzone = OHNE_BAUZONE;
 
   const country = {};

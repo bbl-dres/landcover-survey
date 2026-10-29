@@ -7,7 +7,8 @@ produces by inlining those assets and embedding the data.
 
 Open `index.html`, pick a GeoJSON, and it renders the dashboard live; the
 **Herunterladen** dialog then saves the self-contained HTML (runs fully offline by
-double-click, no data file, no server, no CDN), Excel, GeoJSON or a PDF report. The
+double-click, no data file, no server; the map, search, Excel and PDF still load their
+libraries from a CDN), Excel, GeoJSON or a PDF report. The
 saved HTML is what you distribute via ActaNova.
 
 > Producing the **HTML download** inlines `css/`, `js/` and the basemap thumbnails
@@ -43,12 +44,16 @@ The header carries the Confederation lockup with the dashboard title, the
   report. Zooming out groups the parcels into clusters; click a cluster to expand it,
   a polygon to open its info card at the top right of the map. The page does not scroll
   here, so the mouse wheel zooms the map directly.
-- **Auswertung**, top to bottom: KPI cards; the summary tables «Flächenverteilung»
+- **Auswertung**, top to bottom: KPI cards (the count card's second line says how much
+  of the dataset the filters keep, «von 355 (51%)», the area card's the mean parcel size,
+  the three area cards read «% der GSF»; each label and line stays on one row, the
+  tooltip carries the long form); the summary tables «Flächenverteilung»
   (VBS, Bauzonen, SIA 416, Versiegelung, AV land cover by type, BAFU habitats); the
   same map in a fixed-height panel with a compact layer widget (top left: the app's
-  own layers, same state as the Karte accordion) and a legend of the visible layers
-  (the Karte-only controls stay away; because this page scrolls, zooming needs
-  Ctrl + wheel, ⌘ on a Mac, as the map's own hint says); the parcel table right
+  own layers, same state as the Karte accordion) and the basemap switcher (bottom
+  right); the accordion and the selection bar stay away, the legend prints only;
+  because this page scrolls, zooming needs Ctrl + wheel, ⌘ on a Mac, as the map's
+  own hint says; the parcel table right
   below it with search, sortable columns, a column picker, a Total row, pagination
   and the checkbox column for the PDF report (a row click marks the parcel on this
   map and scrolls the map into view); and the Teilportfolio and Region tables (area
@@ -103,8 +108,26 @@ table search is now the «In Tabelle filtern…» field above the table.
   E-GRID, Region and Grundstücksfläche with the actions **Hinzoomen**, **In Tabelle
   anzeigen** (switches to Auswertung and filters the table to the parcel),
   **PDF-Bericht erstellen** and a checkbox to add the parcel to the PDF selection,
-  plus «Alle Details anzeigen» (full attribute page in a new tab). A clicked overlay
-  feature (Bodenbedeckung, Bauzone, Lebensraum) opens in the same card.
+  plus «Alle Details anzeigen» (the detail page, below). A clicked overlay feature
+  (Bodenbedeckung, Bauzone, Lebensraum) opens in the same card. Every card starts
+  with a line naming the layer («Grundstück · interne Karte», «Bodenbedeckung ·
+  interne Karte», «Objektinfo · externe Karte»), and the parcel card lists
+  Teilportfolio and Eigentumsart.
+- **Detail page** («Alle Details anzeigen»): a self-contained page in a new tab that
+  carries the app's own stylesheets and header (plus a sub header naming the parcel
+  and a Drucken button), the simplified map (basemap switcher, layer widget, the
+  parcel highlighted and zoomed in, its overlay features following the dashboard's
+  toggles), the attribute cards with one aligned 220 px label column and fixed
+  numeric columns, data-quality fields, links and the raw fields. It works offline
+  from the deliverable except for the map tiles.
+- **Objektinfo on external maps**: a click on the background map (no parcel, label or
+  overlay under the pointer) asks the geo.admin identify API for every visible
+  external map (one request per map, 6 px tolerance), previews the hit geometries in
+  amber and shows the official attribute table (htmlPopup, sanitized like the
+  legends) in the info card, headed by the map's name; raw attributes when a map has
+  no htmlPopup, «Kein Objekt an dieser Stelle» when nothing is hit. Escape, an empty
+  click, the card's × or any change to the external maps clears the preview. Needs
+  an internet connection.
 - **Marking a parcel**: a click on a polygon, on its ID label or on its point marker
   marks the parcel (red outline, red inset in the table, info card). A click on empty
   map, or **Escape**, clears the mark, the overlay highlight and the card; the card's
@@ -218,7 +241,8 @@ report, and for covered parcels a link that
 opens the [green inventory app](https://bbl-dres.github.io/green-inventory/prototype-main/)
 centred on the parcel (`center` + `zoom` from the parcel's visual centre). The column
 travels with every export: the Excel table export always writes **Grüninventar**
-(Erfasst / Nicht erfasst), even when the column is hidden in the table; the GeoJSON
+(Erfasst / Nicht erfasst), even when the column is hidden in the table (Teilportfolio,
+Eigentumsart and Status are written as their labels too); the GeoJSON
 export keeps the raw `greeninv` property; the Datenqualität workbook's Abweichungen
 sheet carries it as well. Exports without the column show none of this.
 
@@ -234,7 +258,9 @@ line carries one while an export runs.
 ### Layout, phones and tokens
 
 The page is a flex column (header · app · footer): the Karte tab fills the viewport at
-any header height and never scrolls; the other tabs scroll the page. Below 900 px the
+any header height and never scrolls (the body is pinned to the viewport only while that
+tab is active, `body.tab-map`); the other tabs grow with their content, so the footer
+stays at the page end and the sticky filter panel follows the scroll down to it. Below 900 px the
 filter panel is a drawer (full height, scrolls inside, locks the page while open);
 below 600 px the filter toggle shares the tabs row, «Neue Datei» moves into the gear
 menu, the search dropdown spans the width and the map's selection bar wraps. Dialogs
@@ -243,6 +269,21 @@ size, icon size, z-index and map colour comes from `css/tokens.css`; the app scr
 reads the map colours from the tokens at boot (`MAP_COLORS`), so the offline
 deliverable carries the same palette. Design review:
 [docs/reviews/2026-10-28-dashboard-ux-review.md](../docs/reviews/2026-10-28-dashboard-ux-review.md).
+
+### Robustness notes (code review 2026-10-29)
+
+- The three CDN libraries (MapLibre, SheetJS, jsPDF) are loaded with Subresource
+  Integrity hashes; a CDN compromise cannot run other code. A basemap style that
+  cannot be downloaded falls back to an empty inline style, so the parcels still draw
+  and a note says the background is missing; a failed MapLibre download offers
+  «Erneut versuchen».
+- Printing renders at most 2'000 table rows (the Total row says so); the
+  Datenqualität rules run once per filter pass and are shared by the tab and the
+  export; re-renders keep keyboard focus on the control that was used.
+- geo.admin HTML (legends, identify popups) is sanitised into DOM nodes (never
+  re-serialised), with URL schemes restricted to http(s)/mailto/tel and inline styles
+  dropped; identify requests carry a limit and a 12 s deadline.
+- Review: [docs/reviews/2026-10-29-dashboard-code-review.md](../docs/reviews/2026-10-29-dashboard-code-review.md).
 
 ### Settings and print
 
