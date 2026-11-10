@@ -22,10 +22,10 @@ test("land-cover rows: AV and synthetic share one shape, synthetic keeps its typ
   const av = proc.makeLandcoverRow("P", "CH1", "Gebaeude", { fid: "7", bfsnr: 3203, gwrEgid: "1" }, 10.004, null);
   assert.deepEqual(Object.keys(av).slice(0, 7), ["id", "egrid", "fid", "art", "bfsnr", "gwr_egid", "check_greenspace"]);
   assert.equal(av.lc_source, "AV"); assert.equal(av.area_m2, 10); assert.equal(av._rawArea, 10.004);
-  assert.equal(av.vbs_kategorie, "A. Settlement area"); assert.equal(av.vbs_typ, "");
+  assert.equal(av.av_kategorie, "A. Settlement area"); assert.equal(av.av_typ, "");
   const synth = proc.makeLandcoverRow("P", "CH1", "Acker_Wiese_Weide", { lcSource: "BAFU", typoch: "4.5 Fettwiesen" }, 5, null);
   assert.deepEqual(Object.keys(synth).slice(0, 6), ["id", "egrid", "fid", "art", "typoch", "bfsnr"]);
-  assert.equal(synth.lc_source, "BAFU"); assert.equal(synth.vbs_typ, "Type 2 - Other green spaces");
+  assert.equal(synth.lc_source, "BAFU"); assert.equal(synth.av_typ, "Type 2 - Other green spaces");
 });
 
 test("aggregateLandCover sums unrounded areas and rounds once", () => {
@@ -39,8 +39,8 @@ test("aggregateLandCover sums unrounded areas and rounds once", () => {
   assert.equal(agg.av_gebaeude_m2, 0.01);
   assert.equal(agg.sealed_m2, 0.01);
   assert.equal(agg.greenspace_m2, 100);
-  assert.equal(agg.vbs_typ1_m2, 100); assert.equal(agg.vbs_typ2_m2, 0);
-  assert.equal(agg.vbs_kat_b_m2, 100); assert.equal(agg.vbs_kat_a_m2, 0.01);
+  assert.equal(agg.av_typ1_m2, 100); assert.equal(agg.av_typ2_m2, 0);
+  assert.equal(agg.av_kat_b_m2, 100); assert.equal(agg.av_kat_a_m2, 0.01);
 });
 
 test("dominantBfsnr picks the largest share, ties to the smaller value, keeps the type", () => {

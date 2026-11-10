@@ -34,7 +34,7 @@ import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "processing-cli"))
+sys.path.insert(0, str(ROOT / "processing-cli" / "src"))
 import api  # noqa: E402  (the CLI's live-service client — same fetches as the web app)
 from shapely.geometry import box, mapping, shape  # noqa: E402
 from shapely.ops import unary_union  # noqa: E402

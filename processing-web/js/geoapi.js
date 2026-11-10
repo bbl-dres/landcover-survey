@@ -1,6 +1,6 @@
 /**
  * Live-service clients for the processing pipeline — the exact requests the Python
- * `api` source fires (processing-cli/api.py). The two files are kept in lock-step so the web
+ * `api` source fires (processing-cli/src/api.py). The two files are kept in lock-step so the web
  * app and the CLI resolve the same feature sets and therefore the same results:
  *
  * - fetchParcelGeometry — geo.admin.ch `find` (parcel by EGRID, duplicates unioned,
@@ -109,6 +109,10 @@ export async function fetchParcelGeometry(egrid) {
     layer: "ch.kantone.cadastralwebmap-farbe",
     searchText: egrid,
     searchField: "egris_egrid",
+    // Exact match. The default is a substring search: "CH12" would return 200
+    // unrelated parcels (unioned into one "merged" parcel) and a truncated EGRID
+    // the parcel it is a part of. Mirrored in processing-cli/src/api.py.
+    contains: "false",
     returnGeometry: "true",
     geometryFormat: "geojson",
     sr: "4326",

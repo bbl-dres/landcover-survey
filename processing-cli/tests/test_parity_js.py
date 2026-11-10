@@ -2,7 +2,7 @@
 classifiers, label/key helpers, number formatting, row shapes and aggregation.
 
 The JS side is evaluated by tests/js_dump.mjs (Node) on tests/fixtures/parity_cases.json;
-every value must be identical here — the end-to-end parity (processing-cli/compare.py) rests
+every value must be identical here — the end-to-end parity (processing-cli/src/compare.py) rests
 on it.
 """
 

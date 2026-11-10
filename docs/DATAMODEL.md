@@ -117,14 +117,14 @@ classDiagram
         +float din277_uf_m2
         +float sealed_m2
         +float greenspace_m2
-        +float vbs_produktiv_m2
-        +float vbs_unproduktiv_m2
-        +float vbs_kat_a_m2
-        +float vbs_kat_b_m2
-        +float vbs_kat_c_m2
-        +float vbs_kat_d_m2
-        +float vbs_typ1_m2
-        +float vbs_typ2_m2
+        +float av_produktiv_m2
+        +float av_unproduktiv_m2
+        +float av_kat_a_m2
+        +float av_kat_b_m2
+        +float av_kat_c_m2
+        +float av_kat_d_m2
+        +float av_typ1_m2
+        +float av_typ2_m2
         +float av_TYP_m2
         +varchar bauzonen
         +float bauzonen_m2
@@ -144,9 +144,9 @@ classDiagram
         +integer bfsnr
         +integer gwr_egid
         +varchar check_greenspace
-        +varchar vbs_kategorie
-        +varchar vbs_produktiv
-        +varchar vbs_typ
+        +varchar av_kategorie
+        +varchar av_produktiv
+        +varchar av_typ
         +float area_m2
         +varchar lc_source
         +varchar prob
@@ -168,9 +168,9 @@ classDiagram
         +integer fid
         +varchar art
         +varchar check_greenspace
-        +varchar vbs_kategorie
-        +varchar vbs_produktiv
-        +varchar vbs_typ
+        +varchar av_kategorie
+        +varchar av_produktiv
+        +varchar av_typ
         +float area_m2
         +varchar prob
         +varchar lc_source
@@ -207,7 +207,7 @@ Aggregation columns are included by default (Python: `--no-aggregate` to omit).
 
 > **Field-id convention (web app + Python CLI).** All output column ids are
 > lowercase `snake_case`, namespaced by classification scheme (`sia416_`, `din277_`,
-> `vbs_`) or source layer (`av_` AV land cover, `bauzonen_` ARE zones, `habitat_`
+> `av_`) or source layer (`av_` AV land cover, `bauzonen_` ARE zones, `habitat_`
 > BAFU). Coded *values* keep their domain casing (e.g. `lc_source` = `AV`, the `art`
 > value = `Gebaeude`). The `status` / `errors` / `check_wfs` / `check_geom` /
 > `lc_source` / `nbident` columns are produced by the web app and the CLI `api`
@@ -237,9 +237,9 @@ Aggregation columns are included by default (Python: `--no-aggregate` to omit).
 | `din277_uf_m2` | `float` | Non-built-up area — everything else (DIN 277 UF) |
 | `sealed_m2` | `float` | Sealed area (Gebäude + all *befestigt*) |
 | `greenspace_m2` | `float` | Total green space (soil-covered + wooded) |
-| `vbs_produktiv_m2`, `vbs_unproduktiv_m2` | `float` | Biologically productive / unproductive area (VBS) |
-| `vbs_kat_a_m2` … `vbs_kat_d_m2` | `float` | Area per VBS Kategorie (A. Siedlung, B. Landwirtschaft, C. bestockt, D. unproduktiv) |
-| `vbs_typ1_m2`, `vbs_typ2_m2` | `float` | Area per VBS Typ — biologically productive only |
+| `av_produktiv_m2`, `av_unproduktiv_m2` | `float` | Biologically productive / unproductive area (AV classification) |
+| `av_kat_a_m2` … `av_kat_d_m2` | `float` | Area per AV Kategorie (A. Siedlung, B. Landwirtschaft, C. bestockt, D. unproduktiv) |
+| `av_typ1_m2`, `av_typ2_m2` | `float` | Area per AV Typ — biologically productive only |
 | `av_{art}_m2` | `float` | Area per AV land-cover type: `av_` + the lowercased BBArt value + `_m2` (e.g. `av_gebaeude_m2`, `av_strasse_weg_m2`, `av_acker_wiese_weide_m2`). The CSV has all 26 types as columns (0 where absent); the **GeoJSON is sparse** — each parcel carries only the types it contains (area > 0). AV parcels only |
 | `bauzonen`, `bauzonen_m2` | `varchar` | Building-zone names + areas intersecting the parcel, semicolon-joined (opt-in) |
 | `bauzonen_{slug}_m2` | `float` | One column per building-zone type: `bauzonen_` + the slugified (lowercase) zone name (e.g. `bauzonen_wohnzonen_m2`, `bauzonen_zonen_fuer_oeffentliche_nutzungen_m2`); 0 where the zone is absent. A parcel can span several zones (opt-in) |
@@ -269,16 +269,16 @@ disable with `--no-landcover`).
 | `bfsnr` | `integer` | Federal municipality number |
 | `gwr_egid` | `integer` | Federal building register ID (may be empty) |
 | `check_greenspace` | `varchar` | `Green space (soil-covered)` / `Green space (wooded)` / `Not green space` |
-| `vbs_kategorie` | `varchar` | `A. Settlement area` / `B. Agricultural area` / `C. Wooded area` / `D. Unproductive area` |
-| `vbs_produktiv` | `varchar` | `1 Biologically productive` / `2 Biologically unproductive` |
-| `vbs_typ` | `varchar` | `Type 1 - …` / `Type 2 - …`; **blank** for biologically unproductive types |
+| `av_kategorie` | `varchar` | `A. Settlement area` / `B. Agricultural area` / `C. Wooded area` / `D. Unproductive area` |
+| `av_produktiv` | `varchar` | `1 Biologically productive` / `2 Biologically unproductive` |
+| `av_typ` | `varchar` | `Type 1 - …` / `Type 2 - …`; **blank** for biologically unproductive types |
 | `area_m2` | `float` | Calculated 2D planar area of the clipped land cover polygon |
 | `lc_source` | `varchar` | `AV` (Amtliche Vermessung) in this layer |
 | `prob` | `varchar` | Empty for AV rows (populated only in the Habitat layer) |
 
 > **Column values are stable English codes**, translated for display in the web app
 > and written verbatim to CSV/Excel. See [CLASSIFICATION.md](CLASSIFICATION.md) for the
-> rules behind the `check_greenspace` / `vbs_*` values. (The Python `--bauzonen` /
+> rules behind the `check_greenspace` / `av_*` values. (The Python `--bauzonen` /
 > `--habitat` CLI flags attach overlay columns to green-space rows here; the **web app**
 > emits Bauzonen and Habitat as their own layers instead — see below.)
 
@@ -307,7 +307,7 @@ One row per clipped BAFU habitat piece per parcel — Excel sheet **Lebensräume
 GeoJSON `layer: habitat`. Source: BAFU Lebensraumkarte
 (`ch.bafu.lebensraumkarte-schweiz`) — a **modeled, probabilistic** map, not an
 official survey. SIA 416 / DIN 277 / sealed are not derivable here; only green
-space + VBS are classified (provisional).
+space + AV classification are classified (provisional).
 
 | Attribute | Format | Description |
 |-----------|--------|-------------|
@@ -316,7 +316,7 @@ space + VBS are classified (provisional).
 | `art` | `varchar` | TypoCH habitat label **as served** — the deepest level the layer resolved (e.g. `6.3.1 Buchenwald`, or `3.4 Felsen` where only level-2 exists) |
 | `typoch_l1`, `typoch_l2`, `typoch_l3` | `varchar` | The full TypoCH hierarchy split into its three levels, each `«code» «name»` (e.g. `6 Wälder` / `6.3 Andere Laubwälder` / `6.3.1 Buchenwald`). `typoch_l3` is empty where the layer only resolved to level-2. Names come from the shared [`data/typoch.json`](../data/typoch.json) reference |
 | `check_greenspace` | `varchar` | Green-space class (derived) |
-| `vbs_kategorie`, `vbs_produktiv`, `vbs_typ` | `varchar` | VBS classification (provisional for a modeled map) |
+| `av_kategorie`, `av_produktiv`, `av_typ` | `varchar` | AV classification (provisional for a modeled map) |
 | `area_m2` | `float` | Clipped habitat area within the parcel |
 | `prob` | `varchar` | BAFU model probability (`prob_de`) |
 | `lc_source` | `varchar` | `BAFU` |
@@ -379,7 +379,7 @@ Present when the matching overlay was analysed (both on by default in the web ap
 | Code | EN | DE | Description |
 |------|----|----|-------------|
 | `AV` | AV | AV | Amtliche Vermessung land cover (authoritative cadastral surface) |
-| `BAFU` | BAFU | BAFU | BAFU Lebensraumkarte (modeled habitat): the rows of the optional **habitat overlay layer**, and on a parcel the **synthetic land-cover fallback** where AV cover is essentially absent (`lc_synthetic` = `yes`). In the habitat layer only green space + VBS are derived; SIA 416 / DIN 277 / sealed blank. See [CLASSIFICATION.md](CLASSIFICATION.md) §BAFU Lebensraumkarte |
+| `BAFU` | BAFU | BAFU | BAFU Lebensraumkarte (modeled habitat): the rows of the optional **habitat overlay layer**, and on a parcel the **synthetic land-cover fallback** where AV cover is essentially absent (`lc_synthetic` = `yes`). In the habitat layer only green space + AV classification are derived; SIA 416 / DIN 277 / sealed blank. See [CLASSIFICATION.md](CLASSIFICATION.md) §BAFU Lebensraumkarte |
 | `Bauzonen` | Bauzonen | Bauzonen | Harmonised building zones (`ch.are.bauzonen`) — the web app's optional **building-zone overlay layer**; `art` holds the zone name |
 
 ### `lc_synthetic` (Parcels — web app + CLI `api` source)
@@ -407,7 +407,7 @@ Present when the green-inventory join ran (web «Grüninventar abgleichen», CLI
 | `Green space (wooded)` | Wooded | Bestockt | Bestockt green space: geschlossener Wald, übrige bestockte |
 | `Not green space` | Not vegetated | Nicht begrünt | All other types (incl. übrige Intensivkultur, befestigt, Gewässer, vegetationslos, Gebäude) |
 
-### `vbs_kategorie` (Land Cover)
+### `av_kategorie` (Land Cover)
 
 | Code | EN | DE | Description |
 |------|----|----|-------------|
@@ -416,14 +416,14 @@ Present when the green-inventory join ran (web «Grüninventar abgleichen», CLI
 | `C. Wooded area` | C. Wooded area | C. Bestockte Fläche | Forest: geschlossener Wald, übrige bestockte |
 | `D. Unproductive area` | D. Unproductive area | D. Unproduktive Fläche | Water, bog, reed, rock, glacier, scree, other unvegetated |
 
-### `vbs_produktiv` (Land Cover)
+### `av_produktiv` (Land Cover)
 
 | Code | EN | DE | Description |
 |------|----|----|-------------|
 | `1 Biologically productive` | 1 Biologically productive | 1 Biologisch produktiv | Kategorie B + C + D, **minus** Fels, Gletscher/Firn, Geröll/Sand |
 | `2 Biologically unproductive` | 2 Biologically unproductive | 2 Biologisch unproduktiv | Kategorie A, **plus** Fels, Gletscher/Firn, Geröll/Sand |
 
-### `vbs_typ` (Land Cover)
+### `av_typ` (Land Cover)
 
 | Code | EN | DE | Description |
 |------|----|----|-------------|

@@ -93,7 +93,14 @@
       var pr = (f && f.properties) || {};
       var layer = hasLayer ? pr.layer : "parcel";
       if (layer === "parcel") {
+        // Legacy exports carry the old `vbs_*` attribute names → read them as `av_*` (an explicit `av_*` wins).
         var o = {}; for (var k in pr) { if (k !== "layer") o[k] = pr[k]; }
+        Object.keys(o).forEach(function (lk) {
+          if (lk.indexOf("vbs_") !== 0) return;
+          var nk = "av_" + lk.slice(4);
+          if (!(nk in o)) o[nk] = o[lk];
+          delete o[lk];
+        });
         if (f && f.geometry) o._geom = f.geometry; // for the map (survives the allowlist)
         parcels.push(o);
       } else if (Object.prototype.hasOwnProperty.call(overlays, layer) && f && f.geometry) {
@@ -446,14 +453,14 @@
   // other group ("produktiv" AND "Typ 1") and still OR inside a group.
   var VBS_GROUPS = {
     vbsprod: {
-      keys: ["produktiv", "unproduktiv"], pill: "VBS", attr: "vp",
-      fields: { produktiv:"vbs_produktiv_m2", unproduktiv:"vbs_unproduktiv_m2" },
+      keys: ["produktiv", "unproduktiv"], pill: "AV", attr: "vp",
+      fields: { produktiv:"av_produktiv_m2", unproduktiv:"av_unproduktiv_m2" },
       labels: { produktiv:"Biologisch produktiv", unproduktiv:"Biologisch unproduktiv" },
       short:  { produktiv:"Biologisch produktiv", unproduktiv:"Biologisch unproduktiv" }
     },
     vbstyp: {
-      keys: ["typ1", "typ2"], pill: "VBS Typ", attr: "vt",
-      fields: { typ1:"vbs_typ1_m2", typ2:"vbs_typ2_m2" },
+      keys: ["typ1", "typ2"], pill: "AV Typ", attr: "vt",
+      fields: { typ1:"av_typ1_m2", typ2:"av_typ2_m2" },
       labels: { typ1:"Typ 1 · Grünflächen in Gebäudeumgebung", typ2:"Typ 2 · Übrige Grünflächen" },
       short:  { typ1:"Typ 1", typ2:"Typ 2" }
     }
@@ -466,7 +473,7 @@
       VBS_GROUPS[f].keys.forEach(function (k) { if (vbsHas(p, VBS_GROUPS[f].fields[k])) vbsCounts[f][k]++; });
     });
   });
-  // A legacy export without any vbs_* column would leave a dead filter behind — hide
+  // A legacy export without any av_* column would leave a dead filter behind — hide
   // the whole group in that case (the current pipeline always writes these columns).
   function vbsHasData(f) { return VBS_GROUPS[f].keys.some(function (k) { return vbsCounts[f][k] > 0; }); }
 
@@ -546,12 +553,12 @@
       t.parcelArea += num(p.parcel_area_m2);
       t.GGF += num(p.sia416_ggf_m2); t.BUF += num(p.sia416_buf_m2); t.UUF += num(p.sia416_uuf_m2);
       t.Sealed += num(p.sealed_m2); t.Green += num(p.greenspace_m2);
-      t.VBSp += num(p.vbs_produktiv_m2); t.VBSu += num(p.vbs_unproduktiv_m2);
-      t.VBSt1 += num(p.vbs_typ1_m2); t.VBSt2 += num(p.vbs_typ2_m2); // VBS Typ (within produktiv): typ1+typ2 == produktiv
-      t.VBSa += num(p.vbs_kat_a_m2); t.VBSb += num(p.vbs_kat_b_m2); t.VBSc += num(p.vbs_kat_c_m2); t.VBSd += num(p.vbs_kat_d_m2);
+      t.VBSp += num(p.av_produktiv_m2); t.VBSu += num(p.av_unproduktiv_m2);
+      t.VBSt1 += num(p.av_typ1_m2); t.VBSt2 += num(p.av_typ2_m2); // VBS Typ (within produktiv): typ1+typ2 == produktiv
+      t.VBSa += num(p.av_kat_a_m2); t.VBSb += num(p.av_kat_b_m2); t.VBSc += num(p.av_kat_c_m2); t.VBSd += num(p.av_kat_d_m2);
       if (isCovered(p)) withData++;
-      var h1 = vbsHas(p, "vbs_typ1_m2"), h2 = vbsHas(p, "vbs_typ2_m2");
-      if (h1) nT1++; if (h2) nT2++; if (h1 || h2) nP++; if (vbsHas(p, "vbs_unproduktiv_m2")) nU++;
+      var h1 = vbsHas(p, "av_typ1_m2"), h2 = vbsHas(p, "av_typ2_m2");
+      if (h1) nT1++; if (h2) nT2++; if (h1 || h2) nP++; if (vbsHas(p, "av_unproduktiv_m2")) nU++;
       if (p.check_wfs && p.check_wfs !== "ok") wfsIssues++;
       if (p.check_geom && p.check_geom !== "ok") geomIssues++;
       for (var ai = 0; ai < ART_KEYS.length; ai++) { var av = num(p[artCols[ai]]); if (av) byArt[ART_KEYS[ai]] = (byArt[ART_KEYS[ai]] || 0) + av; }
@@ -714,7 +721,7 @@
       { label:"Versiegelte Fläche", value:fmtAreaU(a.totals.Sealed), sub:ofGsf(a.totals.Sealed),
         tip:"Gebäude und befestigte Flächen (versiegelt). Aktuell " + ofArea(a.totals.Sealed) + " bzw. " + ofCover(a.totals.Sealed) + "." },
       { label:"Grundstücke Typ 1", value:fmt(a.nT1), sub:"Typ 2: " + fmt(a.nT2),
-        tip:"Grundstücke, deren VBS-Typ-1-Fläche mindestens 10 % der Grundstücksfläche ausmacht (Typ 2 ebenso). Ein Grundstück kann beide Typen haben." }
+        tip:"Grundstücke, deren AV-Typ-1-Fläche mindestens 10 % der Grundstücksfläche ausmacht (Typ 2 ebenso). Ein Grundstück kann beide Typen haben." }
     ];
     document.getElementById("kpis").classList.toggle("unit-m2", areaUnit === "m2"); // long m² values get a smaller size (css)
     document.getElementById("kpis").innerHTML = kpis.map(function (k) {
@@ -1006,12 +1013,12 @@
     { key:"sia416_uuf_m2", label:"UUF m²", num:true, def:false, tip:"Unbearbeitete Umgebungsfläche nach SIA 416 (Gewässer + bestockt + vegetationslos)." },
     { key:"greenspace_m2", label:"Grünfläche m²", num:true, def:true, tip:"Grünfläche (humusiert + bestockt)." },
     { key:"sealed_m2", label:"Versiegelt m²", num:true, def:true, tip:"Versiegelte Fläche (Gebäude + befestigt)." },
-    { key:"vbs_produktiv_m2", label:"VBS produktiv m²", num:true, def:false, tip:"Biologisch produktive Fläche (VBS-Klassifizierung)." },
-    { key:"vbs_unproduktiv_m2", label:"VBS unproduktiv m²", num:true, def:false, tip:"Biologisch unproduktive Fläche (VBS-Klassifizierung)." },
+    { key:"av_produktiv_m2", label:"AV produktiv m²", num:true, def:false, tip:"Biologisch produktive Fläche (AV-Klassifizierung)." },
+    { key:"av_unproduktiv_m2", label:"AV unproduktiv m²", num:true, def:false, tip:"Biologisch unproduktive Fläche (AV-Klassifizierung)." },
     // Typ 1 + Typ 2 partition the productive share — selectable so the VBS-Typ filter's
     // dimension can also be read off the table (both default-hidden, like the two above).
-    { key:"vbs_typ1_m2", label:"VBS Typ 1 m²", num:true, def:false, tip:"Typ 1 · Grünflächen in Gebäudeumgebung (Teil der biologisch produktiven Fläche)." },
-    { key:"vbs_typ2_m2", label:"VBS Typ 2 m²", num:true, def:false, tip:"Typ 2 · Übrige Grünflächen (Teil der biologisch produktiven Fläche)." }
+    { key:"av_typ1_m2", label:"AV Typ 1 m²", num:true, def:false, tip:"Typ 1 · Grünflächen in Gebäudeumgebung (Teil der biologisch produktiven Fläche)." },
+    { key:"av_typ2_m2", label:"AV Typ 2 m²", num:true, def:false, tip:"Typ 2 · Übrige Grünflächen (Teil der biologisch produktiven Fläche)." }
   ];
   if (!hasGreeninv) COLUMNS = COLUMNS.filter(function (c) { return c.key !== "greeninv"; }); // column only when the export carries the join
   var colByKey = {};
@@ -1869,9 +1876,9 @@
   // (same reconciliation as the on-screen VBS Produktiv & Typ pivot). Replaces the former
   // SIA 416 table: for a naturnahe-VBS survey report the VBS split is the on-topic breakdown.
   function reportVbs(p) { return [
-    { label: "Typ 1 · Grünflächen in Gebäudeumgebung", area: num(p.vbs_typ1_m2), color: "#8ED554" },
-    { label: "Typ 2 · Übrige Grünflächen", area: num(p.vbs_typ2_m2), color: "#62AF39" },
-    { label: "Biologisch unproduktiv", area: num(p.vbs_unproduktiv_m2), color: "#9AAAB3" }
+    { label: "Typ 1 · Grünflächen in Gebäudeumgebung", area: num(p.av_typ1_m2), color: "#8ED554" },
+    { label: "Typ 2 · Übrige Grünflächen", area: num(p.av_typ2_m2), color: "#62AF39" },
+    { label: "Biologisch unproduktiv", area: num(p.av_unproduktiv_m2), color: "#9AAAB3" }
   ]; }
   function reportLandcover(p) {
     // Full BBArt detail (not collapsed to the 6 Hauptgruppen): "Hauptgruppe · BBArt", coloured by main category.
@@ -1922,7 +1929,7 @@
   function landcoverFills(b, pid) { if (_lcIdx === null) _lcIdx = _overlayIndex(OVERLAYS && OVERLAYS.landcover, mainColor); return _forParcel(_lcIdx, b, pid); }
   function habitatFills(b, pid) { if (_hbIdx === null) _hbIdx = _overlayIndex(OVERLAYS && OVERLAYS.habitat, habColorArt); return _forParcel(_hbIdx, b, pid); }
   var REPORT_SECTIONS = [
-    { n: "1", title: "Lage & VBS", layers: "ch.swisstopo.swissimage", tbl: "VBS - Naturnahe Flächen", rows: reportVbs },
+    { n: "1", title: "Lage & AV", layers: "ch.swisstopo.swissimage", tbl: "AV - Naturnahe Flächen", rows: reportVbs },
     { n: "2", title: "Bodenbedeckung (AV)", layers: "ch.swisstopo.pixelkarte-grau", tbl: "Bodenbedeckung", rows: reportLandcover, fills: landcoverFills },
     { n: "3", title: "BAFU Lebensräume", layers: "ch.swisstopo.pixelkarte-grau", tbl: "Lebensräume (TypoCH)", rows: reportHabitat, fills: habitatFills }
   ];
@@ -2602,9 +2609,9 @@
     var ggf = num(p.sia416_ggf_m2), buf = num(p.sia416_buf_m2), uuf = num(p.sia416_uuf_m2), classified = ggf + buf + uuf;
     var green = num(p.greenspace_m2), sealed = num(p.sealed_m2);
     var dbf = num(p.din277_bf_m2), duf = num(p.din277_uf_m2);
-    var vbsP = num(p.vbs_produktiv_m2), vbsU = num(p.vbs_unproduktiv_m2);
-    var va = num(p.vbs_kat_a_m2), vb = num(p.vbs_kat_b_m2), vc = num(p.vbs_kat_c_m2), vd = num(p.vbs_kat_d_m2);
-    var vt1 = num(p.vbs_typ1_m2), vt2 = num(p.vbs_typ2_m2);
+    var vbsP = num(p.av_produktiv_m2), vbsU = num(p.av_unproduktiv_m2);
+    var va = num(p.av_kat_a_m2), vb = num(p.av_kat_b_m2), vc = num(p.av_kat_c_m2), vd = num(p.av_kat_d_m2);
+    var vt1 = num(p.av_typ1_m2), vt2 = num(p.av_typ2_m2);
 
     var artItems = ART_KEYS.map(function (a) {
       return { name: artFullLabel(a), value: num(p[artCol(a)]), swatch: mainColor(a) };
@@ -2642,7 +2649,7 @@
       ["BF · Bebaute Fläche", fmtAreaU(dbf)], ["UF · Unbebaute Fläche", fmtAreaU(duf)]
     ])) : "";
     var artCard = artItems.length ? card("Bodenbedeckung nach Art (AV)", detailAreaTable(artItems, parcelArea)) : "";
-    var vbsCard = (vbsP || vbsU || va || vb || vc || vd) ? card("VBS-Klassierung", detailKV([
+    var vbsCard = (vbsP || vbsU || va || vb || vc || vd) ? card("AV-Klassierung", detailKV([
       ["Produktiv", fmtAreaU(vbsP)], ["Unproduktiv", fmtAreaU(vbsU)],
       ((vt1 || vt2) ? ["Typ 1 / Typ 2", fmtAreaU(vt1) + " / " + fmtAreaU(vt2)] : null),
       ["A · Siedlungsfläche", fmtAreaU(va)], ["B · Landwirtschaftsfläche", fmtAreaU(vb)],

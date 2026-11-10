@@ -2,9 +2,9 @@
  * Core processing: EGRID → Parcel Geometry → WFS Land Cover → Turf.js Clip → Area
  *
  * This module clips, classifies and aggregates; every live request lives in
- * geoapi.js (mirrored by processing-cli/api.py) and this file is mirrored step for step by
- * processing-cli/processor_web.py — keep the two in lock-step, the cross-check
- * (processing-cli/compare.py) depends on it.
+ * geoapi.js (mirrored by processing-cli/src/api.py) and this file is mirrored step for step by
+ * processing-cli/src/processor_web.py — keep the two in lock-step, the cross-check
+ * (processing-cli/src/compare.py) depends on it.
  *
  * Performance strategy:
  * - Parallel parcels (bounded, max CONCURRENCY at once)
@@ -416,9 +416,9 @@ function clipFeatures(parcelGeom, features, onPiece) {
 /** VBS classification codes → the stable English output labels (blank Typ when none). */
 function vbsLabels(cls) {
   return {
-    vbs_kategorie: VBS_KATEGORIE_LABELS[cls.vbsKategorie] || "",
-    vbs_produktiv: VBS_PRODUKTIV_LABELS[cls.vbsProduktiv] || "",
-    vbs_typ: cls.vbsTyp ? (VBS_TYP_LABELS[cls.vbsTyp] || "") : "",
+    av_kategorie: VBS_KATEGORIE_LABELS[cls.vbsKategorie] || "",
+    av_produktiv: VBS_PRODUKTIV_LABELS[cls.vbsProduktiv] || "",
+    av_typ: cls.vbsTyp ? (VBS_TYP_LABELS[cls.vbsTyp] || "") : "",
   };
 }
 
@@ -639,7 +639,7 @@ export function aggregateHabitat(rows) {
 /** Aggregate clipped land cover into summary columns */
 export function aggregateLandCover(clippedFeatures) {
   // Aggregation columns — all lowercase, namespaced by classification scheme
-  // (sia416_/din277_/vbs_) or imperviousness/green. Raw per-Art areas are added
+  // (sia416_/din277_/av_) or imperviousness/green. Raw per-Art areas are added
   // below as av_<art>_m2 (source = AV land cover).
   const agg = {
     sia416_ggf_m2: 0,
@@ -649,14 +649,14 @@ export function aggregateLandCover(clippedFeatures) {
     din277_uf_m2: 0,
     sealed_m2: 0,
     greenspace_m2: 0,
-    vbs_produktiv_m2: 0,
-    vbs_unproduktiv_m2: 0,
-    vbs_kat_a_m2: 0,
-    vbs_kat_b_m2: 0,
-    vbs_kat_c_m2: 0,
-    vbs_kat_d_m2: 0,
-    vbs_typ1_m2: 0,
-    vbs_typ2_m2: 0,
+    av_produktiv_m2: 0,
+    av_unproduktiv_m2: 0,
+    av_kat_a_m2: 0,
+    av_kat_b_m2: 0,
+    av_kat_c_m2: 0,
+    av_kat_d_m2: 0,
+    av_typ1_m2: 0,
+    av_typ2_m2: 0,
   };
 
   const artAreas = {};
@@ -687,19 +687,19 @@ export function aggregateLandCover(clippedFeatures) {
     if (f.check_greenspace !== "Not green space") agg.greenspace_m2 += area;
 
     // VBS biological productivity
-    if (f._vbsProduktiv === "produktiv") agg.vbs_produktiv_m2 += area;
-    else agg.vbs_unproduktiv_m2 += area;
+    if (f._vbsProduktiv === "produktiv") agg.av_produktiv_m2 += area;
+    else agg.av_unproduktiv_m2 += area;
 
     // VBS Kategorie (a–d); unknown falls back to kat_d
     const kat = f._vbsKategorie || "kat_d";
-    if (kat === "kat_a") agg.vbs_kat_a_m2 += area;
-    else if (kat === "kat_b") agg.vbs_kat_b_m2 += area;
-    else if (kat === "kat_c") agg.vbs_kat_c_m2 += area;
-    else agg.vbs_kat_d_m2 += area;
+    if (kat === "kat_a") agg.av_kat_a_m2 += area;
+    else if (kat === "kat_b") agg.av_kat_b_m2 += area;
+    else if (kat === "kat_c") agg.av_kat_c_m2 += area;
+    else agg.av_kat_d_m2 += area;
 
     // VBS Typ — biologically productive only (unproductive contributes to neither)
-    if (f._vbsTyp === "typ1") agg.vbs_typ1_m2 += area;
-    else if (f._vbsTyp === "typ2") agg.vbs_typ2_m2 += area;
+    if (f._vbsTyp === "typ1") agg.av_typ1_m2 += area;
+    else if (f._vbsTyp === "typ2") agg.av_typ2_m2 += area;
   }
 
   for (const k of Object.keys(agg)) agg[k] = round2(agg[k]);

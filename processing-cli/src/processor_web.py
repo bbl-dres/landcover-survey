@@ -21,6 +21,7 @@ from __future__ import annotations
 import logging
 import math
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import api
@@ -42,6 +43,12 @@ CONCURRENCY = 8
 MIN_AV_COVER_FRAC = 0.05     # below this AV share, synthesize land cover from BAFU
 OHNE_BAUZONE_MIN_AREA = 1    # m² — min zone-free remainder worth a row
 HABITAT_GAP_MIN_FRAC = 0.01  # min parcel share a dropped habitat feature must cover to gap-fill
+
+# --- CLI only (the web has no equivalent): the services answer 502 in bursts that
+# outlast the per-request retries, so parcels with a failed query are asked again.
+RETRY_ROUNDS = 2
+RETRY_PAUSE_S = 20
+NOT_PROCESSED = "error:Not processed (run interrupted)"
 
 STATUS = {"FOUND": "found", "MERGED": "merged", "NOT_FOUND": "not_found", "INVALID": "invalid"}
 ERR_MSG = {
@@ -96,9 +103,9 @@ def _cached_parcel_geometry(egrid: str) -> dict | None:
 def _vbs_labels(cls: dict) -> dict:
     """Map classify() codes → the stable English output labels (blank Typ when None)."""
     return {
-        "vbs_kategorie": VBS_KATEGORIE_LABELS.get(cls["vbsKategorie"], ""),
-        "vbs_produktiv": VBS_PRODUKTIV_LABELS.get(cls["vbsProduktiv"], ""),
-        "vbs_typ": VBS_TYP_LABELS.get(cls["vbsTyp"], "") if cls["vbsTyp"] else "",
+        "av_kategorie": VBS_KATEGORIE_LABELS.get(cls["vbsKategorie"], ""),
+        "av_produktiv": VBS_PRODUKTIV_LABELS.get(cls["vbsProduktiv"], ""),
+        "av_typ": VBS_TYP_LABELS.get(cls["vbsTyp"], "") if cls["vbsTyp"] else "",
     }
 
 
@@ -152,7 +159,7 @@ def _lc_row(id_, egrid, art, bfsnr, gwr_egid, fid, area, geometry, cls, *, lc_so
     row.update({
         "bfsnr": bfsnr, "gwr_egid": gwr_egid,
         "check_greenspace": cls["greenSpace"],
-        "vbs_kategorie": vbs["vbs_kategorie"], "vbs_produktiv": vbs["vbs_produktiv"], "vbs_typ": vbs["vbs_typ"],
+        "av_kategorie": vbs["av_kategorie"], "av_produktiv": vbs["av_produktiv"], "av_typ": vbs["av_typ"],
         "lc_source": lc_source, "prob": prob,
         "area_m2": round2(area),
         "_rawArea": area, "_geometry": geometry,
@@ -182,7 +189,7 @@ def _make_habitat_row(id_, egrid, typoch, prob, fid, area, geometry):
         "typoch_l3": C.typoch_l3_label(typoch),
         "bfsnr": "", "gwr_egid": "",
         "check_greenspace": cls["greenSpace"],
-        "vbs_kategorie": vbs["vbs_kategorie"], "vbs_produktiv": vbs["vbs_produktiv"], "vbs_typ": vbs["vbs_typ"],
+        "av_kategorie": vbs["av_kategorie"], "av_produktiv": vbs["av_produktiv"], "av_typ": vbs["av_typ"],
         "lc_source": "BAFU", "prob": prob,
         "area_m2": round2(area), "_rawArea": area, "_geometry": geometry,
         "_sia416": None, "_din277": None, "_sealed": None,
@@ -312,9 +319,9 @@ def _aggregate_landcover(clipped):
         "sia416_ggf_m2": 0.0, "sia416_buf_m2": 0.0, "sia416_uuf_m2": 0.0,
         "din277_bf_m2": 0.0, "din277_uf_m2": 0.0,
         "sealed_m2": 0.0, "greenspace_m2": 0.0,
-        "vbs_produktiv_m2": 0.0, "vbs_unproduktiv_m2": 0.0,
-        "vbs_kat_a_m2": 0.0, "vbs_kat_b_m2": 0.0, "vbs_kat_c_m2": 0.0, "vbs_kat_d_m2": 0.0,
-        "vbs_typ1_m2": 0.0, "vbs_typ2_m2": 0.0,
+        "av_produktiv_m2": 0.0, "av_unproduktiv_m2": 0.0,
+        "av_kat_a_m2": 0.0, "av_kat_b_m2": 0.0, "av_kat_c_m2": 0.0, "av_kat_d_m2": 0.0,
+        "av_typ1_m2": 0.0, "av_typ2_m2": 0.0,
     }
     art_areas: dict[str, float] = {}
 
@@ -343,24 +350,24 @@ def _aggregate_landcover(clipped):
             agg["greenspace_m2"] += area
 
         if f["_vbsProduktiv"] == "produktiv":
-            agg["vbs_produktiv_m2"] += area
+            agg["av_produktiv_m2"] += area
         else:
-            agg["vbs_unproduktiv_m2"] += area
+            agg["av_unproduktiv_m2"] += area
 
         kat = f["_vbsKategorie"] or "kat_d"
         if kat == "kat_a":
-            agg["vbs_kat_a_m2"] += area
+            agg["av_kat_a_m2"] += area
         elif kat == "kat_b":
-            agg["vbs_kat_b_m2"] += area
+            agg["av_kat_b_m2"] += area
         elif kat == "kat_c":
-            agg["vbs_kat_c_m2"] += area
+            agg["av_kat_c_m2"] += area
         else:
-            agg["vbs_kat_d_m2"] += area
+            agg["av_kat_d_m2"] += area
 
         if f["_vbsTyp"] == "typ1":
-            agg["vbs_typ1_m2"] += area
+            agg["av_typ1_m2"] += area
         elif f["_vbsTyp"] == "typ2":
-            agg["vbs_typ2_m2"] += area
+            agg["av_typ2_m2"] += area
 
     for k in agg:
         agg[k] = round2(agg[k])
@@ -583,12 +590,46 @@ def _process_one(row, options):
 # Batch driver (processRows)
 # ---------------------------------------------------------------------------
 
+def needs_retry(result) -> bool:
+    """True when a query of this parcel failed (a state of the service, not a
+    property of the parcel): the lookup or the pipeline raised, or the land-cover,
+    Bauzonen or habitat request did not answer."""
+    p = result["parcel"]
+    return (str(p.get("check_egrid", "")).startswith("error:")
+            or p.get("check_wfs") == "wfs_error"
+            or p.get("check_bauzonen") == "error"
+            or p.get("check_habitat") == "error")
+
+
+def _run_pool(rows, indices, options, results, on_done) -> bool:
+    """Process ``rows[i]`` for *indices* with bounded concurrency into *results*.
+    Returns False when interrupted (Ctrl-C); finished parcels are kept."""
+    if not indices:
+        return True
+    pool = ThreadPoolExecutor(max_workers=min(CONCURRENCY, len(indices)))
+    futures = {pool.submit(_process_one, rows[i], options): i for i in indices}
+    try:
+        for fut in as_completed(futures):
+            results[futures[fut]] = fut.result()
+            on_done(futures[fut])
+    except KeyboardInterrupt:
+        pool.shutdown(wait=False, cancel_futures=True)
+        return False
+    pool.shutdown(wait=True)
+    return True
+
+
 def process_rows(rows, options=None, on_progress=None):
     """Process rows (each ``{"id","egrid", ...}``) → ``{parcels, landcover, bauzonen, habitat}``.
 
     Mirrors ``processRows``: bounded-concurrency per-parcel processing, then a
     flatten pass that makes the per-zone / per-habitat columns rectangular
     (0-filled across every parcel) so exports have a uniform header.
+
+    CLI only: parcels with a failed query are processed again (``RETRY_ROUNDS``
+    times, after a pause). On Ctrl-C the finished parcels are returned, the others
+    as error rows, and the result carries ``interrupted = True`` — the caller still
+    writes the exports.
     """
     options = options or {}
     # Optional green-inventory join: one parcel file (public URL or a local path), loaded
@@ -604,19 +645,40 @@ def process_rows(rows, options=None, on_progress=None):
     completed = 0
     succeeded = 0
 
-    if total:
-        with ThreadPoolExecutor(max_workers=min(CONCURRENCY, total)) as pool:
-            futures = {pool.submit(_process_one, rows[i], options): i for i in range(total)}
-            for fut in as_completed(futures):
-                i = futures[fut]
-                r = fut.result()
-                results[i] = r
-                completed += 1
-                if r and is_found(r["parcel"]["check_egrid"]):
-                    succeeded += 1
-                if on_progress:
-                    on_progress({"processed": completed, "total": total,
-                                 "succeeded": succeeded, "failed": completed - succeeded})
+    def on_done(i):
+        nonlocal completed, succeeded
+        completed += 1
+        if is_found(results[i]["parcel"]["check_egrid"]):
+            succeeded += 1
+        if on_progress:
+            on_progress({"processed": completed, "total": total,
+                         "succeeded": succeeded, "failed": completed - succeeded})
+
+    finished = _run_pool(rows, list(range(total)), options, results, on_done)
+    for attempt in range(RETRY_ROUNDS):
+        failed = [i for i, r in enumerate(results) if r and needs_retry(r)]
+        if not finished or not failed:
+            break
+        logger.warning("%d parcel(s) with a failed query — retry %d/%d in %d s",
+                       len(failed), attempt + 1, RETRY_ROUNDS, RETRY_PAUSE_S)
+        try:
+            time.sleep(RETRY_PAUSE_S)
+        except KeyboardInterrupt:
+            finished = False
+            break
+        # A retry replaces the earlier result only when it is itself complete or the
+        # earlier one had nothing (an error row): never trade a partial result for none.
+        again: list[dict | None] = [None] * total
+        finished = _run_pool(rows, failed, options, again, lambda i: None)
+        for i in failed:
+            if again[i] and (not needs_retry(again[i]) or not is_found(results[i]["parcel"]["check_egrid"])):
+                results[i] = again[i]
+    if not finished:
+        for i, r in enumerate(results):
+            if r is None:
+                row = rows[i]
+                results[i] = {"parcel": _make_error_parcel(row.get("id") or "", row.get("egrid") or "", row,
+                                                           NOT_PROCESSED), "landcover": []}
 
     # Collect every per-zone / per-habitat column seen, first-seen order preserved
     # (dict as an ordered set) so the 0-filled columns match the web's Set order.
@@ -659,4 +721,5 @@ def process_rows(rows, options=None, on_progress=None):
         bauzonen.extend(r.get("bauzonen") or [])
         habitat.extend(r.get("habitat") or [])
 
-    return {"parcels": parcels, "landcover": landcover, "bauzonen": bauzonen, "habitat": habitat}
+    return {"parcels": parcels, "landcover": landcover, "bauzonen": bauzonen, "habitat": habitat,
+            "interrupted": not finished}

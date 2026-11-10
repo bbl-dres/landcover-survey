@@ -9,7 +9,7 @@
 > **Alpha software for research and demonstration, not production use.** The web
 > app depends on external services with known coverage and response limits; validate
 > results before use. The local Python workflow can use a full GeoPackage. See the
-> [user guide](docs/MANUAL.md) and [current CLI limitations](processing-cli/TODO.md).
+> [user guide](docs/MANUAL.md) and [current CLI limitations](processing-cli/docs/TODO.md).
 
 Tools for calculating land-cover area per Swiss cadastral parcel from official
 survey data (Amtliche Vermessung), with browser, command-line, and specialist
@@ -54,7 +54,7 @@ tools are available at their paths shown above.
 - [User guide and data coverage](docs/MANUAL.md)
 - [Architecture, processing pipeline, and limitations](docs/ARCHITECTURE.md)
 - [Classification](docs/CLASSIFICATION.md) and [data model](docs/DATAMODEL.md)
-- [Current Python parity and API-limit work](processing-cli/TODO.md)
+- [Current Python parity and API-limit work](processing-cli/docs/TODO.md)
 
 Related project: [Green Inventory](https://github.com/bbl-dres/green-inventory).
 

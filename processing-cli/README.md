@@ -14,17 +14,35 @@ Command-line tool that computes per-parcel land cover areas. Two data sources:
 
 ## Requirements
 
-- Python >= 3.10
-- `api` source: `shapely >= 2.1` (+ `pandas`, `openpyxl` for `--input` / Excel export). Internet access.
-- `gpkg` source: `geopandas`, `pandas`, `shapely >= 2.1`, `openpyxl`, and an AV GeoPackage (`av_2056.gpkg`) from [geodienste.ch](https://www.geodienste.ch/services/av).
-- tests: `pytest` (and Node.js for the web-parity tests).
+Python 3.10 or newer, and:
 
-## Install
+| Package | Needed for |
+|---|---|
+| `shapely` >= 2.1 | always (geometry) |
+| `pandas` >= 2.0, `openpyxl` | `--input` lists and the Excel export |
+| `geopandas` >= 0.14 | `gpkg` source only |
+| `pytest` >= 7 | tests only (plus Node.js for the web-parity tests) |
 
 ```bash
-cd processing-cli
-pip install geopandas pandas shapely openpyxl
+pip install shapely pandas openpyxl geopandas pytest
 ```
+
+The `api` source needs internet access. The `gpkg` source needs an AV GeoPackage
+(`av_2056.gpkg`) from [geodienste.ch](https://www.geodienste.ch/services/av).
+
+## Layout
+
+```
+processing-cli/
+├── main.py          entry point (the only script in the main folder)
+├── src/             the code (cli.py + modules, see below)
+├── tests/           pytest suite
+├── docs/            TODO.md
+├── in/              your input lists (gitignored)
+├── out/             results (gitignored, created on the first run)
+└── pyproject.toml   package metadata and dependencies
+```
+
 
 ## Usage
 
@@ -34,7 +52,8 @@ cd processing-cli
 # --- api source (default): live services, GeoJSON + Excel + CSV ---
 python main.py --egrid CH427760110057                       # single parcel
 python main.py --egrid CH427760110057,CH690292570744        # a few parcels
-python main.py --input ../data/example.csv --output-dir ./out   # CSV/Excel list of ID,EGRID
+python main.py --input ../data/example.csv                  # CSV/Excel list of ID,EGRID
+python main.py --input in/my-parcels.xlsx --output-dir D:/results   # another output folder
 python main.py --egrid CH427760110057 --no-bauzonen --no-habitat  # AV land cover only
 python main.py --input ../data/example.csv --green-inventory         # + greeninv column (yes/no)
 
@@ -50,6 +69,20 @@ case-insensitively — the same required-column check as the web upload); it err
 otherwise. Every other column is optional and passed through as `input_<col>`
 (headers lowercased, matching the web). The `api` source also accepts `--egrid` with
 one or more comma-separated EGRIDs, so no input file is needed.
+
+Put your own lists into `in/` and find the results in `out/`. Both folders are
+gitignored, so parcel data stays out of the repository.
+
+## When a service fails (`api` source)
+
+The services answer HTTP 502 in bursts. Each request is retried; parcels whose
+query still failed are processed again at the end of the run (two rounds, 20 s
+apart). What fails even then is flagged in `check_egrid`, `check_wfs`,
+`check_bauzonen` or `check_habitat`, and the CLI prints how many parcels are
+affected. Ctrl-C keeps the finished parcels and writes the exports; the
+remaining rows are marked `Not processed`.
+
+An EGRID is matched exactly: a shortened or mistyped one ends as `not_found`.
 
 ## Data sources & modes
 
@@ -69,20 +102,20 @@ The `gpkg` source keeps its two modes: **Mode 1** (`--input` parcel list) and
 
 ## Cross-check vs. the web app
 
-`compare.py` verifies that an `api`-source export matches the web app's export for
+`src/compare.py` verifies that an `api`-source export matches the web app's export for
 the same parcels:
 
 ```bash
 # 1. export the same EGRIDs from the web app (Download → GeoJSON) → web.geojson
 # 2. run the api source for those EGRIDs → e.g. out/20260701_...geojson
-python compare.py web.geojson out/<python>.geojson --rtol 1e-4 --atol 0.02
+python src/compare.py web.geojson out/<python>.geojson --rtol 1e-4 --atol 0.02
 ```
 
 It matches parcels by `id` + `egrid` (every KPI / flag), then the detail layers per
 parcel (feature count, area per `art`, area per feature `fid`), reporting any
 difference above tolerance. Exit 0 = match. The `api` source fires the same
 requests (same paging and tiling), ports `turf.area` statement for statement —
-including the JavaScript engine's own `sin` (`fdlibm.py`) — and clips in the same
+including the JavaScript engine's own `sin` (`src/fdlibm.py`) — and clips in the same
 CRS with the same geometry repair, so parcel columns and feature areas are
 identical to the last exported digit; `--rtol 0 --atol 0` is the acceptance level
 used by `tests/test_live_parity.py`. The remaining full-precision difference is
@@ -107,7 +140,9 @@ the cadastral data behind it changes.
 
 ## Outputs
 
-**`api` source** (written to `--output-dir`, timestamped):
+Everything is written to `out/` (or `--output-dir`), timestamped.
+
+**`api` source:**
 
 1. **GeoJSON** (`{prefix}{ts}.geojson`) — one `FeatureCollection`; every feature
    tagged `layer` (`parcel` | `landcover` | `bauzonen` | `habitat`). Skip with `--no-geojson`.
@@ -115,8 +150,8 @@ the cadastral data behind it changes.
 3. **CSV** (`{prefix}parcels_{ts}.csv`, `{prefix}landcover_{ts}.csv`) — semicolon-delimited,
    UTF-8 BOM, matching the web export. Skip with `--no-csv`.
 
-**`gpkg` source** (written next to the input file, timestamped; semicolon-delimited,
-UTF-8 BOM — the same CSV dialect as the web / `api` export):
+**`gpkg` source** (semicolon-delimited, UTF-8 BOM — the same CSV dialect as the
+web / `api` export):
 
 1. **Parcels** (`{input}_parcels_{ts}.csv`) — one row per parcel. Disable with `--no-parcels`.
 2. **Land Cover** (`{input}_landcover_{ts}.csv`) — one row per clipped piece. Disable with `--no-landcover`.
@@ -129,7 +164,7 @@ UTF-8 BOM — the same CSV dialect as the web / `api` export):
 | `--source {api,gpkg}` | `api` | Data source |
 | `--egrid CH…[,CH…]` | — | (api) one or more EGRIDs, comma-separated |
 | `--input PATH` | — | CSV/Excel with `ID`,`EGRID` (api: optional; gpkg Mode 1: required) |
-| `--output-dir PATH` | *(input dir, else ./data)* | Output directory |
+| `--output-dir PATH` | `out/` | Output directory |
 | `--limit N` | *(all)* | First N parcels (api / gpkg Mode 1) or N municipalities (gpkg Mode 2) |
 | `--green-inventory [URL\|FILE]` | off | Add `greeninv` (`yes` / `no`): parcel in the [green inventory](https://github.com/bbl-dres/green-inventory) parcel list, matched by EGRID, else by the SAP key (`id`). Default source: the public file on GitHub Pages |
 | `--no-bauzonen` / `--no-habitat` | off | (api) disable an overlay |
@@ -144,9 +179,11 @@ UTF-8 BOM — the same CSV dialect as the web / `api` export):
 
 ## Modules
 
+`main.py` only starts the CLI; everything else is in `src/`.
+
 | Module | Responsibility |
 |--------|----------------|
-| `main.py` | CLI: parse args, route to the `api` or `gpkg` path |
+| `cli.py` | CLI: parse args, route to the `api` or `gpkg` path |
 | `geom_wgs84.py` | (api) EPSG:4326 geometry — `turf.area` port, clip / union / difference |
 | `classify_web.py` | (api) `classify()` + BAFU TypoCH maps (`classify_bafu`, `typoch_to_bbart`) |
 | `api.py` | (api) live-service clients (`find`, WFS `ms:LCSF`, `identify`) |
@@ -156,13 +193,6 @@ UTF-8 BOM — the same CSV dialect as the web / `api` export):
 | `config.py` | shared classification maps + constants |
 | `pipeline.py`, `geometry.py`, `data_io.py`, `swisstopo.py`, `bauzonen.py`, `habitat.py` | (gpkg) GeoPackage pipeline |
 
-## Tech stack
-
-| Library | Version | Purpose |
-|---------|---------|---------|
-| [Shapely](https://shapely.readthedocs.io) | >= 2.0 | Geometry operations (clip, union, `make_valid`) |
-| [GeoPandas](https://geopandas.org) | >= 0.14 | (gpkg) GeoPackage I/O, spatial operations |
-| [pandas](https://pandas.pydata.org) | >= 2.0 | Tabular data, CSV/Excel I/O |
-| [openpyxl](https://openpyxl.readthedocs.io) | — | Excel (.xlsx) read/write |
+Open work on the `gpkg` source: [docs/TODO.md](docs/TODO.md).
 
 For the land cover classification, see [CLASSIFICATION](../docs/CLASSIFICATION.md); for inputs/outputs, [DATAMODEL](../docs/DATAMODEL.md); for the processing pipeline, [ARCHITECTURE](../docs/ARCHITECTURE.md). ([docs index](../docs/README.md))

@@ -289,7 +289,7 @@ Level-2 refinements — only groups that depart from their class default are lis
 > ⚠ = judgment call. **Starting-point** mapping pending validation by the
 > sustainability department — the level-1 defaults live in `BAFU_TYPOCH_L1` and the
 > refinements in `BAFU_TYPOCH_REFINE`, kept in lock-step between
-> [processing-web/js/config.js](../processing-web/js/config.js) and [processing-cli/config.py](../processing-cli/config.py),
+> [processing-web/js/config.js](../processing-web/js/config.js) and [processing-cli/src/config.py](../processing-cli/src/config.py),
 > so corrections are a one-line edit in both. BAFU areas are **not** directly comparable
 > to authoritative AV areas; treat them as an approximation where AV is unavailable.
 >

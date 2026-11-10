@@ -22,10 +22,10 @@ logger = logging.getLogger(__name__)
 
 # Fixed detail-layer column orders (export.js).
 LANDCOVER_HEADERS = ["id", "egrid", "fid", "art", "bfsnr", "gwr_egid", "check_greenspace",
-                     "vbs_kategorie", "vbs_produktiv", "vbs_typ", "area_m2", "lc_source", "prob"]
+                     "av_kategorie", "av_produktiv", "av_typ", "area_m2", "lc_source", "prob"]
 BAUZONEN_HEADERS = ["id", "egrid", "fid", "art", "bauzone_code", "area_m2", "lc_source"]
 HABITAT_HEADERS = ["id", "egrid", "fid", "art", "typoch_l1", "typoch_l2", "typoch_l3", "check_greenspace",
-                   "vbs_kategorie", "vbs_produktiv", "vbs_typ", "area_m2", "prob", "lc_source"]
+                   "av_kategorie", "av_produktiv", "av_typ", "area_m2", "prob", "lc_source"]
 
 
 def _norm_num(v):
@@ -131,10 +131,25 @@ def _write_text(text: str, path: str | Path) -> None:
 
 def _cell_value(v):
     if isinstance(v, list):
-        return "; ".join(str(x) for x in v)
+        v = "; ".join(str(x) for x in v)
     if v is None:
         return ""
+    if isinstance(v, str):
+        # openpyxl raises on control characters — one stray byte in an input column
+        # would abort the export after the whole run.
+        from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
+        return ILLEGAL_CHARACTERS_RE.sub("", v)
     return _norm_num(v)
+
+
+def _append_row(sheet, values: list) -> None:
+    """Append plain values. A text starting with ``=`` stays text (openpyxl would
+    store it as a formula; the web export, SheetJS, writes it as text too)."""
+    sheet.append(values)
+    if any(isinstance(v, str) and v.startswith("=") for v in values):
+        for cell in sheet[sheet._current_row]:
+            if cell.data_type == "f":
+                cell.data_type = "s"
 
 
 def _safe_sheet_name(name: str) -> str:
@@ -160,7 +175,7 @@ def write_xlsx(results: dict, path: str | Path) -> None:
     p_headers = _union_headers(parcels)
     ws.append(p_headers)
     for p in parcels:
-        ws.append([_cell_value(p.get(h, "")) for h in p_headers])
+        _append_row(ws, [_cell_value(p.get(h, "")) for h in p_headers])
 
     def add_sheet(rows, headers, name):
         if not rows:
@@ -168,7 +183,7 @@ def write_xlsx(results: dict, path: str | Path) -> None:
         sheet = wb.create_sheet(_safe_sheet_name(name))
         sheet.append(headers)
         for row in rows:
-            sheet.append([_cell_value(row.get(h, "")) for h in headers])
+            _append_row(sheet, [_cell_value(row.get(h, "")) for h in headers])
 
     add_sheet(results.get("landcover", []), LANDCOVER_HEADERS, "Bodenbedeckung")
     add_sheet(results.get("bauzonen", []), BAUZONEN_HEADERS, "Bauzonen")

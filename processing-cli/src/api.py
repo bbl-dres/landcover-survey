@@ -125,6 +125,9 @@ def _norm_feature(f: dict) -> dict:
 def fetch_parcel_geometry(egrid: str) -> dict | None:
     """Resolve an EGRID to a parcel geometry. ``None`` when the EGRID isn't found.
 
+    The match is exact and case-sensitive (callers pass the EGRID upper-cased, see
+    ``user_input.normalize_egrid``).
+
     A single EGRID can map to several features (mutations, overlapping SDR /
     Baurecht); all matching geometries are unioned into one polygon (mirrors the
     Python GeoPackage "dissolve by EGRID"). Returns
@@ -134,6 +137,10 @@ def fetch_parcel_geometry(egrid: str) -> dict | None:
         "layer": "ch.kantone.cadastralwebmap-farbe",
         "searchText": egrid,
         "searchField": "egris_egrid",
+        # Exact match. The default is a substring search: "CH12" would return 200
+        # unrelated parcels (unioned into one "merged" parcel) and a truncated EGRID
+        # the parcel it is a part of.
+        "contains": "false",
         "returnGeometry": "true",
         "geometryFormat": "geojson",
         "sr": "4326",

@@ -154,7 +154,7 @@ async function handleFile(file) {
     }
 
     // Normalize headers to lowercase, trim every cell (Excel cells arrive untrimmed),
-    // and canonicalise the EGRID — the same contract as processing-cli/user_input.py.
+    // and canonicalise the EGRID — the same contract as processing-cli/src/user_input.py.
     parsedData.rows = parsedData.rows.map((row) => {
       const normalized = {};
       parsedData.headers.forEach((h) => {

@@ -192,7 +192,7 @@ VBS_TYP: dict[str, str] = {
 # ---------------------------------------------------------------------------
 # VBS output values  (stable, language-independent strings)
 #
-# Written verbatim to the vbs_kategorie / vbs_produktiv / vbs_typ output columns.
+# Written verbatim to the av_kategorie / av_produktiv / av_typ output columns.
 # The web app translates these for display; the CSV carries them as-is.
 # Mirrors the check_greenspace string pattern.
 # Biologically unproductive types have NO Typ ("" — per the document hint
@@ -231,9 +231,9 @@ VBS_TYP_BY_ART: dict[str, str] = {
 }
 
 # Output column ids (lowercase snake_case — matches the web-app schema)
-COL_VBS_KATEGORIE = "vbs_kategorie"
-COL_VBS_PRODUKTIV = "vbs_produktiv"
-COL_VBS_TYP = "vbs_typ"
+COL_VBS_KATEGORIE = "av_kategorie"
+COL_VBS_PRODUKTIV = "av_produktiv"
+COL_VBS_TYP = "av_typ"
 
 # ---------------------------------------------------------------------------
 # check_egrid status codes — language-independent, shared with the web app and
@@ -308,7 +308,7 @@ def habitat_l1_label(typoch_de: str | None) -> str:
 # come from here; green/VBS classification stays in code (BAFU_TYPOCH_L1 +
 # BAFU_TYPOCH_REFINE). Mirrors ensureTypoch() / typochLabelAtLevel() in config.js.
 # ---------------------------------------------------------------------------
-TYPOCH_JSON_PATH = Path(__file__).resolve().parent.parent / "data" / "typoch.json"
+TYPOCH_JSON_PATH = Path(__file__).resolve().parents[2] / "data" / "typoch.json"
 
 
 def _load_typoch(path: Path = TYPOCH_JSON_PATH) -> dict[str, dict]:

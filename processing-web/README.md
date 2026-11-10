@@ -16,7 +16,7 @@ Either way, the app will:
 1. Look up parcel geometries from [swisstopo](https://api3.geo.admin.ch) (`ch.kantone.cadastralwebmap-farbe`)
 2. Fetch land cover polygons from [geodienste.ch](https://geodienste.ch) WFS (`ms:LCSF`)
 3. Clip land cover to parcel boundaries using [Turf.js](https://turfjs.org)
-4. Classify by SIA 416, DIN 277, green space, imperviousness, and VBS Kategorie
+4. Classify by SIA 416, DIN 277, green space, imperviousness, and AV Kategorie
 5. Display results on an interactive map with table and summary panel
 
 Multilingual — German (DE), French (FR), Italian (IT), and English (EN) via the `?lang=` URL parameter.
@@ -28,7 +28,7 @@ Multilingual — German (DE), French (FR), Italian (IT), and English (EN) via th
 - **Accordion Menu** — Layer toggles and Geokatalog (all swisstopo layers)
 - **Search Bar** — Search parcels by ID/EGRID, Swiss locations, and swisstopo map layers
 - **Table Widget** — Tabs for Parcels and Land Covers, sortable columns, search filter, pagination (25/50/100), column visibility dropdown, resizable panel
-- **Summary Panel** — Parcel status, area analysis with donut chart, and key metrics. Aggregation dropdown switches between land cover, SIA 416, DIN 277, green space, imperviousness, VBS Kategorie, VBS Produktivität, and VBS Typ — updating chart, legend, and map colors
+- **Summary Panel** — Parcel status, area analysis with donut chart, and key metrics. Aggregation dropdown switches between land cover, SIA 416, DIN 277, green space, imperviousness, AV Kategorie, AV Produktivität, and AV Typ — updating chart, legend, and map colors
 - **Context Menu** — Right-click to copy coordinates, share, or report issues
 - **External Layers** — Toggle official survey and habitat map overlays, or add any swisstopo layer via Geokatalog/search
 - **Green inventory** — Optional join («Grüninventar abgleichen», off by default) that marks parcels covered by the [Bundesgärtnerei green inventory](https://github.com/bbl-dres/green-inventory) (`greeninv` = `yes` / `no`, matched by EGRID, else by the SAP key); the parcel popup links into the inventory app at that position
@@ -99,9 +99,9 @@ js/
   main.js       State machine (upload → processing → results)
   upload.js     CSV/XLSX parsing with auto-delimiter detection, EGRID normalisation
   geoapi.js     Live requests: EGRID lookup, WFS land cover (paged until empty), Identify
-                overlays (bbox quadtree), green inventory — mirrored by processing-cli/api.py
+                overlays (bbox quadtree), green inventory — mirrored by processing-cli/src/api.py
   processor.js  Clip (Turf.js) + classify + aggregate, 8 parcels in parallel — mirrored by
-                processing-cli/processor_web.py
+                processing-cli/src/processor_web.py
   log.js        Processing log («Protokoll»): per-parcel outcome lines, filters, copy / text export
   explainer.js  «Kurz erklärt» explainer: eight CSS-animated SVG scenes over aerial excerpts
   explainer-sample.js  Generated: the explainer's real parcel (boundary, land cover, figures) —

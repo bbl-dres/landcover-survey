@@ -1,5 +1,5 @@
 /**
- * BBArt classification mappings — ported from processing-cli/config.py
+ * BBArt classification mappings — ported from processing-cli/src/config.py
  */
 import { t, localeFmtNum } from "./i18n.js";
 
@@ -283,7 +283,7 @@ export function habitatColor(typochDe) {
  * most-specific-first (a finer code overrides its class default in BAFU_TYPOCH_L1).
  * Only groups whose naturalness differs from their level-1 class default are listed.
  * ⚠ Starting-point mapping pending sustainability-dept validation — same status as
- * BAFU_TYPOCH_L1; edit here (and processing-cli/config.py) to correct.
+ * BAFU_TYPOCH_L1; edit here (and processing-cli/src/config.py) to correct.
  */
 export const BAFU_TYPOCH_REFINE = {
   "1.3": { green: "Green space (soil-covered)", vbsKategorie: "kat_c", vbsProduktiv: "produktiv", vbsTyp: "typ2" }, // Quellen und Quellfluren (spring flora)
@@ -401,7 +401,7 @@ export function isFound(code) {
 }
 
 /** Canonical EGRID spelling: trimmed and upper-cased (" ch4277… " → "CH4277…").
- *  Mirrored by processing-cli/user_input.py normalize_egrid() — applied at every input
+ *  Mirrored by processing-cli/src/user_input.py normalize_egrid() — applied at every input
  *  boundary so the same list resolves identically in the browser and the CLI. */
 export function normalizeEgrid(s) {
   return String(s ?? "").trim().toUpperCase();

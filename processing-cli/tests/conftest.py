@@ -15,8 +15,10 @@ PY_DIR = HERE.parent
 REPO = PY_DIR.parent
 FIXTURES = HERE / "fixtures"
 
-if str(PY_DIR) not in sys.path:
-    sys.path.insert(0, str(PY_DIR))
+SRC = PY_DIR / "src"
+
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
 
 
 @pytest.fixture(scope="session")

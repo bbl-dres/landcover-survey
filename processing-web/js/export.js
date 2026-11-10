@@ -6,7 +6,7 @@ import { t } from "./i18n.js";
 
 /** Land cover export columns — shared by the CSV and XLSX exporters. */
 const LANDCOVER_HEADERS = ["id", "egrid", "fid", "art", "bfsnr", "gwr_egid", "check_greenspace",
-  "vbs_kategorie", "vbs_produktiv", "vbs_typ", "area_m2", "lc_source", "prob"];
+  "av_kategorie", "av_produktiv", "av_typ", "area_m2", "lc_source", "prob"];
 
 /** Bauzonen detail export columns. */
 const BAUZONEN_HEADERS = ["id", "egrid", "fid", "art", "bauzone_code", "area_m2", "lc_source"];
@@ -14,7 +14,7 @@ const BAUZONEN_HEADERS = ["id", "egrid", "fid", "art", "bauzone_code", "area_m2"
 /** BAFU habitat detail export columns. `art` is the TypoCH label as served (deepest
  *  level); typoch_l1/l2/l3 split it into the three hierarchy levels ("<code> <name>"). */
 const HABITAT_HEADERS = ["id", "egrid", "fid", "art", "typoch_l1", "typoch_l2", "typoch_l3", "check_greenspace",
-  "vbs_kategorie", "vbs_produktiv", "vbs_typ", "area_m2", "prob", "lc_source"];
+  "av_kategorie", "av_produktiv", "av_typ", "area_m2", "prob", "lc_source"];
 
 /** Escape a CSV cell value (semicolon-delimited) */
 function csvCell(val) {

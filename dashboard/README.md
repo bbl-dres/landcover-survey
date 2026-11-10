@@ -174,7 +174,7 @@ and one list of formats:
 
 **Filter** (left panel): Ausschliessen (Bezeichnung), E-GRID-Status,
 Bodenbedeckung vorhanden, Eigentumsart, Teilportfolio, Land, Kanton, Enthält
-Bodenbedeckungsart, Enthält Bauzone, VBS Produktivität and VBS Typ. Filtering is
+Bodenbedeckungsart, Enthält Bauzone, AV Produktivität and AV Typ. Filtering is
 live and recomputes the whole dashboard (KPIs, tables, map). Every group is a
 checklist with the same **alle / keine** toggle in its header (`data-toggle="<facet>"`
 → one delegated handler, see `GROUP_TOGGLES` in `js/dashboard.js`). Active filters
@@ -188,7 +188,7 @@ appear as pills with an ✕ and an «Alle Filter zurücksetzen» link.
   use the same 10 % rule as the counts (below), so the filter results equal the
   counts. Options inside one group OR, the two groups AND. A legacy `has=VBSp` /
   `has=VBSu` link still resolves and is rewritten to `vbsp=…` on load. Both groups
-  hide themselves if the export carries no `vbs_*` columns.
+  hide themselves if the export carries no `av_*` columns.
 - **Explicit shareable URLs**: every active filter is its own query parameter
   (`?excl=ABGA,LÖVM,PP&status=found&eig=1&cov=with&kanton=GR&art=…&vbsp=…&vbst=…&has=…&q=…`),
   alongside the navigation parameters `tab`, `basemap` and `ext`. A URL without
@@ -223,8 +223,8 @@ The rules live in `EXCLUDE_RULES` in `js/dashboard.js`:
 
 Tables show area **and** number of parcels. A parcel counts in a VBS category when
 the category covers at least **10 %** of the parcel area (`VBS_THRESHOLD` in
-`js/dashboard.js`; Typ 1 = `vbs_typ1_m2`, Typ 2 = `vbs_typ2_m2`, Unproduktiv =
-`vbs_unproduktiv_m2`; Produktiv = Typ 1 or Typ 2). A parcel can count in several
+`js/dashboard.js`; Typ 1 = `av_typ1_m2`, Typ 2 = `av_typ2_m2`, Unproduktiv =
+`av_unproduktiv_m2`; Produktiv = Typ 1 or Typ 2). A parcel can count in several
 categories, so the counts do not sum to the number of parcels («Mehrfachzählung
 möglich»). Teilportfolio and Region count without a threshold (exclusive, sums to
 the Total row). The KPI card «Grundstücke mit Typ 1» shows the Typ 2 count as its
