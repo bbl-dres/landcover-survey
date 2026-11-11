@@ -15,9 +15,9 @@ Usage
     python main.py --input "in/BBL Grundstücke 2026-11.txt"
     python main.py --input "in/BBL Grundstücke 2026-11.txt" --resume out/naturnah_<ts>.jsonl
 
-Outputs (timestamped, in ``--output-dir``): an Excel workbook (Parzellen /
-Details / Quellen / Datenmodell), a GeoJSON with the parcels and the clipped
-pieces, a log and a checkpoint (``.jsonl``, one line per finished EGRID) that
+Outputs (timestamped, in ``--output-dir``): an Excel workbook (Grundstücke /
+Datenmodell), a GeoJSON with the Grundstücke and the clipped objects on them,
+a log and a checkpoint (``.jsonl``, one line per finished EGRID) that
 ``--resume`` reads to re-query only what failed or is still missing.
 
 Column prefixes: ``in_`` = taken from the input list, ``out_`` = produced here.
@@ -78,17 +78,15 @@ def _r2(x: float) -> float:
     return round(x + 0.0, 2)
 
 
-def _col(element: dict) -> str:
-    """Output column of an element."""
-    return f"out_{element['key']}_m2"
+_col = sources.element_column   # output column of an element
 
 
 def out_columns() -> list[str]:
     """The ``out_`` columns of a parcel record, in sheet order."""
-    return ([c for c, _, _ in sources.PARCEL_COLS_HEAD]
+    return ([c[0] for c in sources.GRUNDSTUECK_COLS_HEAD]
             + [_col(e) for e in sources.ELEMENTS]
             + [f"out_kat{k}_m2" for k in sources.KATEGORIEN]
-            + [c for c, _, _ in sources.PARCEL_COLS_TAIL])
+            + [c[0] for c in sources.GRUNDSTUECK_COLS_TAIL])
 
 
 def empty_out(status: str) -> dict:
@@ -436,73 +434,39 @@ def _append(ws, values: list) -> None:
                 cell.data_type = "s"
 
 
-def write_xlsx(records: list[dict], results: dict, path: Path, run_info: list[tuple] = ()) -> None:
+def write_xlsx(records: list[dict], path: Path) -> None:
+    """The workbook: «Grundstücke» (one row per row of the input list) and
+    «Datenmodell» (every attribute of the workbook and of the GeoJSON, with its
+    format, description, source and a link to the dataset on the federal map
+    viewer — :func:`sources.data_model`)."""
     from openpyxl import Workbook
-    from openpyxl.styles import Font
+    from openpyxl.styles import Alignment, Font
 
     wb = Workbook()
     ws = wb.active
-    ws.title = "Parzellen"
+    ws.title = sources.SHEET_GRUNDSTUECKE
     cols = list(records[0].keys())
     _append(ws, cols)
-    for p in records:
-        _append(ws, [p.get(c) for c in cols])
+    for rec in records:
+        _append(ws, [rec.get(c) for c in cols])
 
-    wd = wb.create_sheet("Details")
-    dcols = [c for c, _, _ in sources.DETAIL_COLS]
-    _append(wd, dcols)
-    for r in results.values():
-        for d in r["details"]:
-            _append(wd, [d[c] for c in dcols])
-
-    wq = wb.create_sheet("Quellen")
-    _append(wq, ["Spalte", "Zeile(n) BAFU-Liste", "Element", "Kategorie Nr.", "Kategorie", "Datenquelle", "Layer"])
-    for e in sources.ELEMENTS:
-        _append(wq, [_col(e), e["rows"], e["element"], e["kat"], sources.KATEGORIEN[e["kat"]],
-                     e["source"], e["layer"]])
-    _append(wq, [])
-    _append(wq, ["Nicht abgedeckt", "Zeile(n) BAFU-Liste", "Element", "", "", "Grund"])
-    for rows, element, reason in sources.NOT_COVERED:
-        _append(wq, ["", rows, element, "", "", reason])
-    _append(wq, [])
-    _append(wq, ["Hinweise"])
-    for note in (
-        "Präfix der Spalten: in_ = aus der Eingabeliste übernommen, out_ = von dieser Auswertung erzeugt.",
-        "Flächen in m², auf die Grundstücksgrenze zugeschnitten; sphärische Flächenberechnung wie in der Web-App.",
-        "Überlappende Objekte werden je Element, je Kategorie und im Total nur einmal gezählt.",
-        "out_naturnah_total_m2 = Vereinigung aller Elemente; kann kleiner sein als die Summe der Spalten.",
-        "out_blw_total_m2 = gesamte BLW-Nutzungsfläche auf dem Grundstück (alle Kultur-Codes), als Kontext.",
-        "Leere Zelle = nicht abgefragt (kein gültiges EGRID, Grundstück nicht gefunden oder Layer-Abfrage "
-        "fehlgeschlagen); 0 = abgefragt, keine Fläche.",
-        "Kategorie und Total bleiben leer, sobald einer der beteiligten Layer nicht abgefragt werden konnte.",
-        "out_error fasst alle Auffälligkeiten einer Zeile zusammen (leer = in Ordnung): danach filtern.",
-        "Dieselbe EGRID kann in mehreren Zeilen stehen (out_egrid_count > 1): beim Summieren nur einmal zählen. "
-        "Auch Baurechte und ihre Stammgrundstücke können sich überlagern.",
-    ):
-        _append(wq, [note])
-    if run_info:
-        _append(wq, [])
-        _append(wq, ["Lauf"])
-        for k, v in run_info:
-            _append(wq, [k, v])
-
-    wm = wb.create_sheet("Datenmodell")
-    _append(wm, ["Blatt / Layer", "Attribut", "Typ", "Beschreibung", "Verwendet als"])
-    for col, typ, desc in sources.PARCEL_COLS_IN + sources.PARCEL_COLS_HEAD:
-        _append(wm, ["Parzellen", col, typ, desc])
-    for e in sources.ELEMENTS:
-        _append(wm, ["Parzellen", _col(e), "m²",
-                     f"{e['element']} (Zeile {e['rows']} der BAFU-Liste; {e['source']})"])
-    for k, label in sources.KATEGORIEN.items():
-        _append(wm, ["Parzellen", f"out_kat{k}_m2", "m²", f"Kategorie {k}: {label} (Elemente vereinigt)"])
-    for col, typ, desc in sources.PARCEL_COLS_TAIL:
-        _append(wm, ["Parzellen", col, typ, desc])
-    for col, typ, desc in sources.DETAIL_COLS:
-        _append(wm, ["Details", col, typ, desc])
-    for row in sources.LAYER_ATTRS:
+    wm = wb.create_sheet(sources.SHEET_DATENMODELL)
+    _append(wm, sources.DATENMODELL_HEADER)
+    link_col = len(sources.DATENMODELL_HEADER)
+    for row in sources.data_model():
         _append(wm, list(row))
+        cell = wm.cell(row=wm.max_row, column=link_col)
+        if cell.value:                      # a clickable link to the dataset on map.geo.admin.ch
+            cell.hyperlink = cell.value
+            cell.style = "Hyperlink"
+    # Readable without resizing: fixed widths, long texts wrapped.
+    for letter, width in zip("ABCDEF", (24, 32, 24, 80, 52, 60)):
+        wm.column_dimensions[letter].width = width
+    for row in wm.iter_rows(min_row=2, max_col=5):
+        for cell in row:
+            cell.alignment = Alignment(wrap_text=True, vertical="top")
 
-    for sheet in (ws, wd, wq, wm):
+    for sheet in (ws, wm):
         for c in sheet[1]:
             c.font = Font(bold=True)
         sheet.freeze_panes = "A2"
@@ -511,18 +475,23 @@ def write_xlsx(records: list[dict], results: dict, path: Path, run_info: list[tu
 
 
 def write_geojson(records: list[dict], results: dict, path: Path) -> None:
-    """Parcels (one per input row, with all its columns) and clipped pieces (one
-    per object and distinct EGRID), told apart by ``layer``."""
+    """One FeatureCollection with two kinds of features, told apart by ``layer``: the
+    Grundstücke (one per input row with a found Grundstück, with all its columns) and
+    the clipped objects on them (one per object and distinct EGRID). Compact, one
+    feature per line, as the main tools write it."""
     feats = []
     for rec in records:
         r = results.get(rec["in_egrid"])
         if r and r["geometry"] is not None:
-            feats.append({"type": "Feature", "geometry": r["geometry"], "properties": {"layer": "parcel", **rec}})
+            feats.append({"type": "Feature", "geometry": r["geometry"],
+                          "properties": {"layer": sources.LAYER_GRUNDSTUECK, **rec}})
     for r in results.values():
         for d, g in zip(r["details"], r["pieces"]):
-            feats.append({"type": "Feature", "geometry": g, "properties": {"layer": "naturnah", **d}})
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump({"type": "FeatureCollection", "features": feats}, f, ensure_ascii=False)
+            feats.append({"type": "Feature", "geometry": g, "properties": {"layer": sources.LAYER_NATURNAH, **d}})
+    nl = chr(10)
+    lines = [json.dumps(f, ensure_ascii=False, separators=(",", ":"), allow_nan=False) for f in feats]
+    with open(path, "w", encoding="utf-8", newline="") as fh:
+        fh.write('{"type":"FeatureCollection","features":[' + nl + ("," + nl).join(lines) + nl + "]}")
     logger.info("GeoJSON → %s", path)
 
 
@@ -579,19 +548,7 @@ def main(argv: list[str] | None = None) -> int:
     n_found = sum(1 for r in results.values() if r["out"]["out_check_egrid"] == ST_FOUND)
     n_incomplete = sum(1 for r in results.values() if not r["complete"])
     n_hit = sum(1 for r in results.values() if (r["out"]["out_naturnah_total_m2"] or 0) > 0)
-    run_info = [
-        ("Datum", datetime.now().strftime("%d.%m.%Y %H:%M")),
-        ("Eingabe", Path(args.input_path).name if args.input_path else "--egrid"),
-        ("Zeilen", len(rows)),
-        ("Zeilen ohne EGRID", n_missing),
-        ("Zeilen mit ungültiger EGRID", n_invalid),
-        ("Verschiedene EGRID", len(egrids)),
-        ("davon abgefragt", len(results)),
-        ("davon Grundstück gefunden", n_found),
-        ("davon unvollständig (Abfrage fehlgeschlagen)", n_incomplete),
-        ("Lauf abgebrochen", "ja" if aborted else "nein"),
-    ]
-    write_xlsx(records, results, out_dir / f"naturnah_{ts}.xlsx", run_info)
+    write_xlsx(records, out_dir / f"naturnah_{ts}.xlsx")
     write_geojson(records, results, out_dir / f"naturnah_{ts}.geojson")
     logger.info("Done: %d of %d EGRID(s) queried, %d found, %d with near-natural area, %d incomplete → %s",
                 len(results), len(egrids), n_found, n_hit, n_incomplete, out_dir)

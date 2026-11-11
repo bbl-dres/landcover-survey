@@ -277,3 +277,19 @@ Done in the same change set, for `test-naturnah/` and `processing-cli/` alike:
   `processing-cli/docs/TODO.md`). The review of 2026-10-28 keeps the old paths,
   as a record of that date.
 - Both READMEs list the required packages in one table.
+
+---
+
+## Follow-up — output structure
+
+Changed later the same day; the text above describes the workbook as it was during
+the review.
+
+- The workbook has two sheets: «Grundstücke» (was «Parzellen») and «Datenmodell»
+  (columns `Blatt / Layer`, `Attribut`, `Format`, `Beschreibung`, `Quelle`).
+- The sheets «Details» and «Quellen» are gone. The clipped objects are in the
+  GeoJSON only (`layer` = `naturnah`); the source of every column is in the «Quelle»
+  column and in `test-naturnah/docs/DATAMODEL.md`, which also lists the rows of the
+  BAFU list that are not covered.
+- GeoJSON `layer` values are `grundstueck` and `naturnah`; the file is compact, one
+  feature per line.

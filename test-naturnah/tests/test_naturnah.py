@@ -90,8 +90,35 @@ def test_sources_are_consistent():
     assert len(main.out_columns()) == len(set(main.out_columns()))
     # every category in use has a column, and no category is left without an element
     assert {e["kat"] for e in sources.ELEMENTS} == set(sources.KATEGORIEN)
-    # the data dictionary describes every Details column the code writes
-    assert all(c.startswith(("in_", "out_")) for c, _, _ in sources.DETAIL_COLS)
+    # the data dictionary: six cells per row, only the link may be empty, no attribute described twice per sheet / layer
+    model = sources.data_model()
+    assert all(len(r) == len(sources.DATENMODELL_HEADER) == 6 and all(str(c).strip() for c in r[:5]) for r in model)
+    assert len({(r[0], r[1]) for r in model}) == len(model)
+    # every element names its dataset in words and links to it on the map viewer
+    for e in sources.ELEMENTS:
+        row = next(r for r in model if r[1] == sources.element_column(e))
+        assert sources.DATASETS[e["layer"]] in row[4] and row[5] == sources.map_url(e["layer"])
+    assert set(sources.DATASETS) == set(sources.LAYERS) | {sources.AV}
+
+
+def test_quelle_has_one_form():
+    """«Quelle» is always ``<Herkunft> – <Angabe>``: a known origin, at most one detail,
+    two origins separated by «; » — and a link exactly when the origin is one dataset."""
+    for sheet, attr, _fmt, _desc, src, link in sources.data_model():
+        entries = src.split("; ")
+        assert 1 <= len(entries) <= 2, (attr, src)
+        for entry in entries:
+            origin, _, detail = entry.partition(sources.SEP)
+            assert origin in sources.ORIGINS, (attr, src)
+            assert sources.SEP not in detail and ":" not in entry and "ch." not in entry, (attr, src)
+            assert detail or origin == sources.SRC_INPUT, (attr, src)          # only the input list stands alone
+            if origin == sources.SRC_CALC:
+                assert detail.startswith("aus ") or detail == "fester Wert", (attr, src)
+        one_dataset = len(entries) == 1 and entries[0].partition(sources.SEP)[0] in sources.DATASETS.values()
+        assert bool(link) == one_dataset, (sheet, attr, src, link)
+        if link:
+            layer = next(k for k, v in sources.DATASETS.items() if v == entries[0].partition(sources.SEP)[0])
+            assert link == sources.map_url(layer)
 
 
 @pytest.mark.parametrize("name", ["api.py", "geom_wgs84.py", "fdlibm.py", "user_input.py"])
@@ -148,8 +175,7 @@ def test_csv_and_excel_input(tmp_path):
     """Any columns, in any order; only EGRID is required."""
     p = tmp_path / "list.csv"
     p.write_text("Bemerkung Nr.;egrid;Bemerkung Nr.\nx; ch111111111111 ;y\n", encoding="utf-8")
-    rows = inputs.read_input(p)
-    assert rows[0]["egrid"] == E1 and list(rows[0])[0] == "bemerkung_nr" and len(rows[0]) == 3
+    assert inputs.read_input(p) == [{"bemerkung_nr": "y", "egrid": E1}]   # repeated CSV header: the last one wins
     import pandas as pd
     x = tmp_path / "list.xlsx"
     pd.DataFrame({"ID": [7], "E-GRID": [E2], "Fläche m²": [12.5]}).to_excel(x, index=False)
@@ -307,23 +333,36 @@ def test_outputs(service, tmp_path):
     rows = [{"we": "=cmd()", "egrid": E1}, {"we": "2", "egrid": E1}, {"we": "3", "egrid": ""}]
     results, _ = main.run([E1], tmp_path / "c.jsonl")
     recs = main.build_rows(rows, results)
-    main.write_xlsx(recs, results, tmp_path / "o.xlsx", [("Zeilen", 3)])
+    main.write_xlsx(recs, tmp_path / "o.xlsx")
     main.write_geojson(recs, results, tmp_path / "o.geojson")
 
     wb = load_workbook(tmp_path / "o.xlsx")
-    assert wb.sheetnames == ["Parzellen", "Details", "Quellen", "Datenmodell"]
-    ws = wb["Parzellen"]
+    assert wb.sheetnames == ["Grundstücke", "Datenmodell"]
+    ws = wb["Grundstücke"]
     header = [c.value for c in ws[1]]
     assert header == ["in_we", "in_egrid"] + main.out_columns()
     assert ws.max_row == 4                                 # one row per input row
     assert ws["A2"].value == "=cmd()" and ws["A2"].data_type == "s"       # text, not a formula
-    details = wb["Details"]
-    assert details.max_row == 2                            # once per distinct EGRID
-    assert details["F2"].value == "=1+1" and details["F2"].data_type == "s"   # control character removed
-    documented = {r[1] for r in wb["Datenmodell"].iter_rows(min_row=2, values_only=True) if r[0] == "Parzellen"}
-    assert set(main.out_columns()) <= documented
+
+    # «Datenmodell»: every column of «Grundstücke» and every GeoJSON attribute, each with format and source
+    wm = wb["Datenmodell"]
+    assert [c.value for c in wm[1]] == ["Blatt / Layer", "Attribut", "Format", "Beschreibung", "Quelle", "Link"]
+    model = list(wm.iter_rows(min_row=2, values_only=True))
+    assert all(all(cell not in (None, "") for cell in row[:5]) for row in model)      # the link may be empty
+    by_attr = {r[1].value: r for r in wm.iter_rows(min_row=2) if r[0].value == "Grundstücke"}
+    link = by_attr["out_magerwiesen_611_m2"][5]
+    assert link.value == "https://map.geo.admin.ch/#/map?lang=de&layers=ch.blw.landwirtschaftliche-nutzungsflaechen"
+    assert link.hyperlink is not None and link.hyperlink.target == link.value        # clickable
+    assert by_attr["out_magerwiesen_611_m2"][4].value == "Landwirtschaftliche Nutzungsflächen (BLW) – Kultur-Code 611"
+    assert by_attr["out_naturnah_total_m2"][5].value in (None, "")                    # computed: no link
+    documented = {r[1] for r in model if r[0] == "Grundstücke"}
+    assert set(main.out_columns()) | {"in_egrid", "in_<Spalte>"} == documented
 
     fc = json.loads((tmp_path / "o.geojson").read_text(encoding="utf-8"))
     kinds = [f["properties"]["layer"] for f in fc["features"]]
-    assert kinds == ["parcel", "parcel", "naturnah"]
+    assert kinds == ["grundstueck", "grundstueck", "naturnah"]       # the object once, although the EGRID is listed twice
     assert fc["features"][0]["properties"]["in_we"] == "=cmd()"
+    obj = fc["features"][2]["properties"]
+    assert obj["out_bezeichnung"] == "=1+1\x07" and obj["out_element"] == "magerwiesen_611"
+    assert set(obj) - {"layer"} == {r[1] for r in model if r[0] == "GeoJSON · naturnah"} - {"geometry", "layer"}
+    assert (tmp_path / "o.geojson").read_text(encoding="utf-8").count("\n") == len(fc["features"]) + 1   # one feature per line

@@ -20,8 +20,6 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-import pandas as pd
-
 import user_input
 from user_input import normalize_egrid
 
@@ -83,19 +81,14 @@ def _read_table(p: Path) -> tuple[list[str], list[list[str]]]:
     """``(headers, rows)`` of a CSV or Excel file, cells as trimmed strings."""
     suffix = p.suffix.lower()
     if suffix in user_input.EXCEL_SUFFIXES:
-        df = pd.read_excel(p)
-        df = df.apply(lambda col: col.map(user_input._excel_cell_str))
+        headers, rows = user_input._parse_excel(p)
     elif suffix in user_input.CSV_SUFFIXES:
-        with open(p, encoding="utf-8-sig") as fh:
-            first = fh.readline()
-        if first.lower().startswith("sep="):
-            delim, skip = (first.strip()[4:5] or ";"), 1
-        else:
-            delim, skip = user_input._detect_delimiter(first), 0
-        df = pd.read_csv(p, dtype=str, sep=delim, skiprows=skip, encoding="utf-8-sig")
+        headers, rows = user_input._parse_delimited(user_input._decode_text(p.read_bytes()))
     else:
         raise ValueError(f"Unsupported file format: {suffix}")
-    return [str(c) for c in df.columns], [[user_input._cell(v) for v in row] for row in df.itertuples(index=False)]
+    # A dict per row loses a repeated header; fine here, the last one wins as in the main CLI.
+    headers = list(dict.fromkeys(headers))
+    return headers, [[str(row.get(h, "")).strip() for h in headers] for row in rows]
 
 
 # ---------------------------------------------------------------------------

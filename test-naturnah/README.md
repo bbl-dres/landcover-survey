@@ -79,18 +79,17 @@ An empty `out_error` means the row is fine.
 
 Outputs go to `./out`, timestamped:
 
-- `naturnah_<ts>.xlsx` with four sheets (attributes: [docs/DATAMODEL.md](docs/DATAMODEL.md)):
-  - **Parzellen**: one row per input row, all `in_` columns, `out_error`, one
+- `naturnah_<ts>.xlsx` with two sheets (attributes: [docs/DATAMODEL.md](docs/DATAMODEL.md)):
+  - **Grundstücke**: one row per input row, all `in_` columns, `out_error`, one
     `out_<element>_m2` column per element, the totals per category (`out_kat<n>_m2`),
-    `out_naturnah_total_m2`, `out_naturnah_anteil_pct` (share of the parcel area)
-    and `out_blw_total_m2`.
-  - **Details**: one row per clipped object and distinct EGRID, with Kultur-Code,
-    name and area. It lists every BLW object on the parcel, also those whose
-    Kultur-Code is not in the list, so missing codes can be spotted.
-  - **Quellen**: which column comes from which row of the BAFU list, which rows
-    are not covered, and the figures of the run.
-  - **Datenmodell**: every column and every source-layer attribute, described.
-- `naturnah_<ts>.geojson`: parcels and clipped pieces, for a visual check in QGIS.
+    `out_naturnah_total_m2`, `out_naturnah_anteil_pct` (share of the area of the
+    Grundstück) and `out_blw_total_m2`.
+  - **Datenmodell**: every attribute of the workbook and of the GeoJSON with its
+    format, description and source (layer, Kultur-Code, row of the BAFU list).
+- `naturnah_<ts>.geojson`, for QGIS: the Grundstücke (`layer` = `grundstueck`) and
+  the clipped objects on them (`layer` = `naturnah`). The objects include every BLW
+  area on a Grundstück, also those whose Kultur-Code is not in the list, so missing
+  codes can be spotted.
 - `naturnah_<ts>.jsonl`: checkpoint, one line per finished EGRID (for `--resume`).
 - `naturnah_<ts>.log`
 
@@ -149,7 +148,7 @@ python main.py --input "in/BBL Grundstücke 2026-11.txt" --resume out/naturnah_<
   names 905 «Ruderalflächen, Steinhaufen und -wälle» and has a separate code 906
   «Trockenmauern», which the list does not mention.
 - Not covered yet: rows 7, 14, 15, 16, 19, 21–25 and the Lebensraumkarte Gehölze
-  (reasons in the «Quellen» sheet). The Bestockungskarte cannot be queried through
+  (reasons in [docs/DATAMODEL.md](docs/DATAMODEL.md#3-what-is-measured), «Not measured»). The Bestockungskarte cannot be queried through
   `identify`.
 - The BLW layer covers agricultural land with direct payments only; building
   parcels will mostly return nothing from it.
@@ -166,4 +165,4 @@ python main.py --input "in/BBL Grundstücke 2026-11.txt" --resume out/naturnah_<
 | `src/sources.py` | Element table (layer, Kultur-Codes, category) and data dictionary |
 | `src/api.py`, `geom_wgs84.py`, `fdlibm.py`, `user_input.py` | Unchanged copies from `processing-cli/src/` (a test fails when they drift) |
 | `tests/` | Offline tests |
-| `docs/DATAMODEL.md` | Source layers, their attributes and the output columns |
+| `docs/DATAMODEL.md` | Input, data sources, what is measured, the output columns and how to read them |

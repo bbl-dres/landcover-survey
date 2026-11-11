@@ -4,23 +4,26 @@ Three anonymous, read-only geo.admin.ch / geodienste.ch endpoints, all in
 **EPSG:4326** so the geometry matches the web byte-for-byte:
 
 - :func:`fetch_parcel_geometry` — geo.admin.ch ``find`` (parcel by EGRID, duplicates
-  unioned);
+  unioned, cached per process);
 - :func:`fetch_landcover` — geodienste.ch WFS ``ms:LCSF``, paged via ``STARTINDEX``
   until an **empty** page (the only reliable end signal) and deduplicated;
 - :func:`fetch_identify` — geo.admin.ch ``identify``, bbox **quadtree** so that every
   request is a single page (``offset`` paging is lossy on this endpoint); keeps the
   null-geometry "dropped" features the server omits above a size cap.
 
-These are pure fetch functions returning shapely geometries; caching and the
-per-parcel pipeline live in :mod:`processor_web`. Requests, params, page sizes,
-tiling, dedupe and sort order mirror the web constants so results cross-check.
+These are fetch functions returning shapely geometries; nothing in here clips or
+classifies — that is :mod:`processor_web`. Requests, params, page sizes, tiling,
+dedupe, sort order and the function names mirror geoapi.js so results cross-check
+and a change on one side is easy to find on the other.
 """
 
 from __future__ import annotations
 
+import http.client
 import json
 import logging
 import math
+import threading
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -70,7 +73,9 @@ def _fetch_json(url: str) -> dict:
 
     Retries up to ``MAX_RETRIES`` with exponential backoff (honouring
     ``Retry-After`` on 429/5xx, capped at 10 s). Non-retryable HTTP statuses
-    (e.g. 4xx other than 429) raise immediately, matching the web.
+    (e.g. 4xx other than 429) raise immediately, matching the web. A body that is
+    cut off or is not JSON (a proxy's error page served with status 200) counts as
+    a failed attempt and is asked again — mirrors fetchJson() in geoapi.js.
     """
     last_err: Exception | None = None
     for attempt in range(MAX_RETRIES + 1):
@@ -89,7 +94,9 @@ def _fetch_json(url: str) -> dict:
                 _sleep_ms(delay_ms)
                 continue
             raise
-        except (urllib.error.URLError, TimeoutError, OSError, json.JSONDecodeError) as e:
+        except (urllib.error.URLError, TimeoutError, OSError, http.client.HTTPException, ValueError) as e:
+            # ValueError covers json.JSONDecodeError and a body that is not UTF-8;
+            # HTTPException covers IncompleteRead (connection dropped mid-body).
             last_err = e
             if attempt < MAX_RETRIES:
                 _sleep_ms(BASE_DELAY_MS * (2 ** attempt))
@@ -122,7 +129,29 @@ def _norm_feature(f: dict) -> dict:
 # Parcel geometry — geo.admin.ch find (fetchParcelGeometry)
 # ---------------------------------------------------------------------------
 
+# EGRID → parcel cache, shared across worker threads (value None = negative cache
+# for "not found"; a failed request is not cached). Mirrors egridCache in geoapi.js.
+_egrid_cache: dict[str, dict | None] = {}
+_cache_lock = threading.Lock()
+
+
+def clear_parcel_cache() -> None:
+    with _cache_lock:
+        _egrid_cache.clear()
+
+
 def fetch_parcel_geometry(egrid: str) -> dict | None:
+    """Parcel geometry by EGRID (with cache). ``None`` when the EGRID isn't found."""
+    with _cache_lock:
+        if egrid in _egrid_cache:
+            return _egrid_cache[egrid]
+    result = _find_parcel(egrid)   # network; outside the lock
+    with _cache_lock:
+        _egrid_cache[egrid] = result
+    return result
+
+
+def _find_parcel(egrid: str) -> dict | None:
     """Resolve an EGRID to a parcel geometry. ``None`` when the EGRID isn't found.
 
     The match is exact and case-sensitive (callers pass the EGRID upper-cased, see
@@ -348,7 +377,7 @@ def fetch_bauzonen(parcel_geom) -> dict:
 # Green inventory — parcel list keyed by EGRID + ERP id (loadGreenInventory)
 # ---------------------------------------------------------------------------
 
-def fetch_green_inventory(source: str | None = None) -> dict:
+def load_green_inventory(source: str | None = None) -> dict:
     """Load the green inventory parcel list → ``{"by_egrid": {...}, "by_erp": {...}}``.
 
     *source* is a URL or a local GeoJSON path; ``None`` reads the public file

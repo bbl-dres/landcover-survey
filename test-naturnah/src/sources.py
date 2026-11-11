@@ -62,108 +62,195 @@ KATEGORIEN = {
     7: "Auen",
 }
 
-# Elements of the list that this sample does NOT cover, and why (written to the
-# «Quellen» sheet so the gaps stay visible).
-NOT_COVERED = [
-    ("7", "Stufige Waldränder", "keine Datenquelle in der Liste"),
-    ("8", "Hochstammobstgärten (≥20 Bäume)",
-     "Kultur-Codes 921–923 kommen im BLW-Layer nicht vor (Bäume werden vermutlich als Stückzahl geführt, nicht als Fläche)"),
-    ("9", "Einheimische Einzelbäume / Baumgruppen",
-     "Kultur-Code 924 kommt im BLW-Layer nicht vor (vermutlich Stückzahl, keine Fläche)"),
-    ("14", "Kies-/Mergelplätze, schwach bewachsene Flächen", "nur REN-Layer als Zusatzinformation"),
-    ("15", "Gewässerufer (bewachsen)", "Bestockungskarte ist über identify nicht abfragbar (HTTP 400)"),
-    ("16", "Tümpel, Teiche, Wassergräben (naturnah)", "keine eindeutige Datenquelle"),
-    ("19", "Nährstoffreiche Feuchtwiesen (nicht Moor)", "nur REN-Layer / Feuchtgebietskorridore"),
-    ("21", "Spezielle Waldstandorte", "Waldreservate: noch nicht eingebunden"),
-    ("22", "Felsen, Schutthalden", "nur «ev.»-Quellen"),
-    ("23", "Sonderstandorte", "keine Datenquelle in der Liste"),
-    ("24", "Flachdach-/Fassadenbegrünung", "keine Datenquelle in der Liste"),
-    ("25", "Versickerungsfähige Wege/Plätze", "keine Datenquelle in der Liste"),
-    ("6, 9", "Lebensraumkarte – Gehölze (Datenquelle 2)", "noch nicht eingebunden"),
-]
+# The elements of the list this sample does not cover are listed, with the reason, in
+# docs/DATAMODEL.md («Not measured»).
 
 # ---------------------------------------------------------------------------
-# Data dictionary (written to the «Datenmodell» sheet; see docs/DATAMODEL.md)
+# The datasets, as a reader should find them: official name (as geo.admin.ch gives
+# it) and the address of the layer on the federal map viewer.
 # ---------------------------------------------------------------------------
 
-# Attributes the source layers deliver through ``identify``:
-# (layer, attribute, type, description, used in the output as)
-LAYER_ATTRS = [
-    (BLW, "lnf_code", "integer", "Kultur-Code der Nutzungsfläche (z. B. 611); Filter für die Elemente", "out_kultur_code"),
-    (BLW, "nutzung_de / _fr / _it", "text", "Bezeichnung der Nutzung zum Kultur-Code", "out_bezeichnung (de)"),
-    (BLW, "hauptkategorie_de / _fr / _it", "text", "Hauptkategorie (Ackerfläche, Dauerwiesen, …)", ""),
-    (BLW, "bff_qualitaet_1", "text", "Biodiversitätsförderfläche Qualitätsstufe I («1» = ja, «0» = nein)", "out_bff_qualitaet_1"),
-    (BLW, "bezugsjahr", "integer", "Stand der Daten als JJJJMMTT (z. B. 20250101)", "out_bezugsjahr"),
-    (BLW, "flaeche_m2", "integer", "Fläche des ganzen Objekts gemäss Quelle (nicht zugeschnitten)", ""),
-    (BLW, "bewirtschaftungsgrad", "integer", "Bewirtschaftungsgrad in %", ""),
-    (BLW, "nutzungsidentifikator", "text", "Kennung der Nutzungsfläche im kantonalen System", ""),
-    (BLW, "bur_nr", "text", "BUR-Nummer des Betriebs (Betriebskennung, nicht exportiert)", ""),
-    (BLW, "t_id / label", "text", "Technische Kennung des Objekts", ""),
-    (TWW, "name", "text", "Name des Objekts", "out_bezeichnung"),
-    (TWW, "objnummer", "integer", "Objektnummer im Bundesinventar", "out_objnummer"),
-    (TWW, "teilobjnummer", "text", "Nummer des Teilobjekts (z. B. BE2130018)", ""),
-    (TWW, "bewertung", "integer", "Bewertung des Teilobjekts", ""),
-    (TWW, "singularitaet", "text", "Singularität (Ja / Nein)", ""),
-    (TWW, "shape_area", "float", "Fläche des ganzen Objekts in m² (nicht zugeschnitten)", ""),
-    (TWW, "refobjblat", "URL", "Objektblatt (PDF)", ""),
-    (HOCHMOOR, "name", "text", "Name des Objekts", "out_bezeichnung"),
-    (HOCHMOOR, "objnummer", "integer", "Objektnummer im Bundesinventar", "out_objnummer"),
-    (HOCHMOOR, "hochmoore_type_de / _fr / _it", "text", "Typ (z. B. Primäre Hochmoorfläche)", ""),
-    (HOCHMOOR, "hm_ke / unit_de / _fr / _it", "integer / text", "Kartiereinheit (z. B. Birken- und Fichtenmoore)", ""),
-    (HOCHMOOR, "shape_area", "float", "Fläche der Teilfläche in m² (nicht zugeschnitten)", ""),
-    (HOCHMOOR, "refobjblat", "URL", "Objektblatt (PDF)", ""),
-    (FLACHMOOR, "name", "text", "Name des Objekts", "out_bezeichnung"),
-    (FLACHMOOR, "objnummer", "integer", "Objektnummer im Bundesinventar", "out_objnummer"),
-    (FLACHMOOR, "shape_area", "float", "Fläche des ganzen Objekts in m² (nicht zugeschnitten)", ""),
-    (FLACHMOOR, "refobjblat", "URL", "Objektblatt (PDF)", ""),
-    (AUEN, "name", "text", "Name des Objekts", "out_bezeichnung"),
-    (AUEN, "objnummer", "integer", "Objektnummer im Bundesinventar", "out_objnummer"),
-    (AUEN, "auen_type / auen_type_de / _fr / _it", "integer / text", "Auentyp (z. B. Fliessgewässer)", ""),
-    (AUEN, "shape_area", "float", "Fläche des ganzen Objekts in m² (nicht zugeschnitten)", ""),
-    (AUEN, "refobjblat", "URL", "Objektblatt (PDF)", ""),
-]
+AV = "ch.kantone.cadastralwebmap-farbe"   # the cadastral layer the Grundstück is looked up in
 
-# Columns of the «Parzellen» sheet: (column, type, description). ``in_`` = taken
-# from the input list, ``out_`` = produced by this tool. The ``out_<element>_m2``
-# and ``out_kat<n>_m2`` columns sit between HEAD and TAIL and are generated from
-# ELEMENTS / KATEGORIEN.
-PARCEL_COLS_IN = [
-    ("in_egrid", "text", "Eidgenössischer Grundstücksidentifikator; einzige Pflichtspalte, Schlüssel für den Verschnitt"),
-    ("in_<Spalte>", "text",
+
+def map_url(layer_id: str) -> str:
+    """The layer on map.geo.admin.ch."""
+    return f"https://map.geo.admin.ch/#/map?lang=de&layers={layer_id}"
+
+
+# Name (owner) — one pattern for all six.
+DATASETS = {
+    AV: "Amtliche Vermessung (Kantone)",
+    BLW: "Landwirtschaftliche Nutzungsflächen (BLW)",
+    TWW: "Bundesinventar Trockenwiesen und -weiden (BAFU)",
+    HOCHMOOR: "Bundesinventar Hoch- und Übergangsmoore (BAFU)",
+    FLACHMOOR: "Bundesinventar Flachmoore (BAFU)",
+    AUEN: "Bundesinventar Auengebiete (BAFU)",
+}
+
+# ---------------------------------------------------------------------------
+# Data dictionary — the «Datenmodell» sheet of the workbook (see docs/DATAMODEL.md)
+#
+# One entry per attribute: (Attribut, Format, Beschreibung, Quelle, Link).
+# ``in_`` = taken from the input list, ``out_`` = produced by this tool.
+#
+# «Quelle» has one fixed form, built by :func:`quelle`:
+#
+#     <Herkunft> – <Angabe>
+#
+# Herkunft is one of ORIGINS: the input list, one dataset by its name, a group of
+# datasets, or «Berechnet». Angabe says what of it: «Attribut «x»», «Kultur-Code 611»,
+# «alle Flächen», or «aus <columns>» for a computed value. A value with two origins
+# lists both, separated by «; ». «Link» is the dataset on the map viewer (empty when
+# the origin is not a single dataset).
+# ---------------------------------------------------------------------------
+
+FMT_TEXT = "Text"
+FMT_INT = "Ganzzahl"
+FMT_M2 = "Zahl (m², 2 Dezimalen)"
+FMT_PCT = "Zahl (%, 2 Dezimalen)"
+FMT_GEOM = "Polygon / MultiPolygon (WGS84)"
+
+SRC_INPUT = "Eingabeliste"
+SRC_CALC = "Berechnet"
+SRC_ALL = "Alle fünf Datensätze"            # the five datasets that are measured
+SRC_INVENTARE = "Bundesinventare (BAFU)"    # the four inventories together
+SRC_SHEET = "Blatt «Grundstücke»"
+ORIGINS = (SRC_INPUT, SRC_CALC, SRC_ALL, SRC_INVENTARE, SRC_SHEET) + tuple(DATASETS.values())
+SEP = " – "
+
+
+def quelle(origin: str, detail: str = "") -> str:
+    """One «Quelle» entry in the fixed form ``<Herkunft> – <Angabe>``."""
+    if origin not in ORIGINS:
+        raise ValueError(f"unknown origin: {origin}")
+    return origin + (SEP + detail if detail else "")
+
+
+SHEET_GRUNDSTUECKE = "Grundstücke"
+SHEET_DATENMODELL = "Datenmodell"
+DATENMODELL_HEADER = ["Blatt / Layer", "Attribut", "Format", "Beschreibung", "Quelle", "Link"]
+# GeoJSON `layer` values: the Grundstück itself, and the clipped objects on it.
+LAYER_GRUNDSTUECK = "grundstueck"
+LAYER_NATURNAH = "naturnah"
+
+EMPTY_VS_ZERO = "Leer = nicht abgefragt (Grundstück nicht gefunden oder Datensatz nicht abfragbar), 0 = abgefragt, keine Fläche."
+
+# Columns of the «Grundstücke» sheet. The ``out_<element>_m2`` and ``out_kat<n>_m2``
+# columns sit between HEAD and TAIL and are generated from ELEMENTS / KATEGORIEN.
+GRUNDSTUECK_COLS_IN = [
+    ("in_egrid", FMT_TEXT,
+     "Eidgenössischer Grundstücksidentifikator (E-GRID); einzige Pflichtspalte, Schlüssel für den Verschnitt",
+     quelle(SRC_INPUT), ""),
+    ("in_<Spalte>", FMT_TEXT,
      "Jede weitere Spalte der Eingabeliste, unverändert übernommen (Name = Spaltentitel in Kleinbuchstaben, "
-     "Sonderzeichen als «_»)"),
+     "Sonderzeichen als «_»)", quelle(SRC_INPUT), ""),
 ]
-PARCEL_COLS_HEAD = [
-    ("out_error", "text",
+GRUNDSTUECK_COLS_HEAD = [
+    ("out_error", FMT_TEXT,
      "Alles, was an dieser Zeile nicht stimmt, mit «; » getrennt; leer = in Ordnung. Mögliche Einträge: "
      "«EGRID fehlt», «EGRID ungültig», «EGRID mehrfach in der Liste (n×)», «EGRID nicht gefunden», "
      "«Grundstück konnte nicht abgefragt werden (Meldung des Dienstes)», «Nicht verarbeitet (Lauf abgebrochen)» "
-     "sowie die Layer, die nicht oder unvollständig abgefragt werden konnten, mit der Meldung des Dienstes"),
-    ("out_check_egrid", "text",
-     "«EGRID found», «EGRID not found», «EGRID missing», «Invalid EGRID», «Not processed» oder «Error: …»"),
-    ("out_egrid_count", "integer",
-     "Anzahl Zeilen der Eingabeliste mit dieser EGRID; > 1 = dasselbe Grundstück mehrfach (beim Summieren beachten)"),
-    ("out_nummer", "text", "Grundstücksnummer gemäss amtlicher Vermessung"),
-    ("out_parcel_area_m2", "m²", "Berechnete Fläche des Grundstücks"),
-    ("out_check_naturnah", "text",
-     "«ok» oder die Layer, die nicht oder unvollständig abgefragt werden konnten (betroffene Werte bleiben leer)"),
+     "sowie die Datensätze, die nicht oder unvollständig abgefragt werden konnten, mit der Meldung des Dienstes",
+     quelle(SRC_CALC, "aus out_check_egrid, out_egrid_count, out_check_naturnah"), ""),
+    ("out_check_egrid", FMT_TEXT,
+     "Ergebnis der Suche nach dem Grundstück: «EGRID found», «EGRID not found», «EGRID missing», «Invalid EGRID», "
+     "«Not processed» oder «Error: …»", quelle(DATASETS[AV], "Suche nach der E-GRID"), map_url(AV)),
+    ("out_egrid_count", FMT_INT,
+     "Anzahl Zeilen der Eingabeliste mit dieser EGRID; > 1 = dasselbe Grundstück mehrfach geführt "
+     "(beim Summieren nur einmal zählen)", quelle(SRC_CALC, "aus der Eingabeliste"), ""),
+    ("out_nummer", FMT_TEXT, "Grundstücksnummer", quelle(DATASETS[AV], "Attribut «number»"), map_url(AV)),
+    ("out_parcel_area_m2", FMT_M2,
+     "Fläche des Grundstücks, aus seiner Grenze berechnet (nicht das amtliche Flächenmass)",
+     quelle(DATASETS[AV], "Fläche der Grundstücksgrenze"), map_url(AV)),
+    ("out_check_naturnah", FMT_TEXT,
+     "«ok» oder die Datensätze, die nicht oder unvollständig abgefragt werden konnten (betroffene Werte bleiben leer)",
+     quelle(SRC_CALC, "aus den Abfragen der fünf Datensätze"), ""),
 ]
-PARCEL_COLS_TAIL = [
-    ("out_naturnah_total_m2", "m²", "Vereinigung aller Elemente auf dem Grundstück (Überlappungen einmal gezählt)"),
-    ("out_naturnah_anteil_pct", "%", "out_naturnah_total_m2 / out_parcel_area_m2 × 100"),
-    ("out_blw_total_m2", "m²", "Gesamte BLW-Nutzungsfläche auf dem Grundstück (alle Kultur-Codes), als Kontext"),
+GRUNDSTUECK_COLS_TAIL = [
+    ("out_naturnah_total_m2", FMT_M2,
+     "Naturnahe Fläche auf dem Grundstück: alle Elemente zusammen, jede Fläche einmal gezählt (kann kleiner "
+     "sein als die Summe der Element-Spalten). Leer, sobald ein Datensatz nicht abgefragt werden konnte.",
+     quelle(SRC_CALC, "aus allen Element-Spalten"), ""),
+    ("out_naturnah_anteil_pct", FMT_PCT,
+     "Anteil der naturnahen Fläche an der Grundstücksfläche: out_naturnah_total_m2 / out_parcel_area_m2 × 100",
+     quelle(SRC_CALC, "aus out_naturnah_total_m2, out_parcel_area_m2"), ""),
+    ("out_blw_total_m2", FMT_M2,
+     "Gesamte landwirtschaftliche Nutzungsfläche auf dem Grundstück, unabhängig vom Kultur-Code; als Kontext. "
+     + EMPTY_VS_ZERO, quelle(DATASETS[BLW], "alle Flächen"), map_url(BLW)),
 ]
 
-# Columns of the «Details» sheet (one row per clipped object and distinct EGRID).
-DETAIL_COLS = [
-    ("in_egrid", "text", "EGRID des Grundstücks (Schlüssel zum Blatt «Parzellen»)"),
-    ("out_layer", "text", "Layer-ID auf geo.admin.ch, aus dem das Objekt stammt"),
-    ("out_element", "text", "Schlüssel des Elements (Spalte ohne «out_» und «_m2»); leer = Kultur-Code nicht in der Liste"),
-    ("out_feature_id", "integer", "Objekt-ID im Layer"),
-    ("out_kultur_code", "integer", "BLW: lnf_code; sonst leer"),
-    ("out_bezeichnung", "text", "BLW: nutzung_de; Inventare: name"),
-    ("out_objnummer", "integer", "Inventare: Objektnummer; BLW: leer"),
-    ("out_bff_qualitaet_1", "text", "BLW: Qualitätsstufe I («1» / «0»); sonst leer"),
-    ("out_bezugsjahr", "integer", "BLW: Stand der Daten (JJJJMMTT); sonst leer"),
-    ("out_area_m2", "m²", "Fläche des Objekts innerhalb des Grundstücks"),
+# Attributes of the clipped objects — the GeoJSON features with layer = «naturnah»
+# (one per source object and Grundstück; a Grundstück listed twice has them once).
+OBJEKT_COLS = [
+    ("in_egrid", FMT_TEXT, "EGRID des Grundstücks, auf dem das Objekt liegt (Schlüssel zu «Grundstücke»)", quelle(SRC_INPUT), ""),
+    ("out_layer", FMT_TEXT,
+     "Datensatz, aus dem das Objekt stammt, als Layer-ID von geo.admin.ch (auf map.geo.admin.ch unter dieser ID zu finden)",
+     quelle(SRC_ALL, "Layer-ID"), ""),
+    ("out_element", FMT_TEXT,
+     "Element der BAFU-Liste, zu dem das Objekt zählt (Spaltenname ohne «out_» und «_m2»); leer = der Kultur-Code "
+     "steht nicht in der Liste", quelle(SRC_CALC, "aus out_layer, out_kultur_code"), ""),
+    ("out_feature_id", FMT_INT, "Technische Nummer des Objekts in seinem Datensatz", quelle(SRC_ALL, "Objekt-ID"), ""),
+    ("out_kultur_code", FMT_INT, "Kultur-Code der Nutzungsfläche (z. B. 611); nur landwirtschaftliche Flächen",
+     quelle(DATASETS[BLW], "Attribut «lnf_code»"), map_url(BLW)),
+    ("out_bezeichnung", FMT_TEXT, "Bezeichnung der Nutzung (landwirtschaftliche Flächen) bzw. Name des Inventarobjekts",
+     quelle(DATASETS[BLW], "Attribut «nutzung_de»") + "; " + quelle(SRC_INVENTARE, "Attribut «name»"), ""),
+    ("out_objnummer", FMT_INT,
+     "Objektnummer im Bundesinventar (TWW, Hoch- und Übergangsmoore, Flachmoore, Auengebiete); bei "
+     "landwirtschaftlichen Flächen leer", quelle(SRC_INVENTARE, "Attribut «objnummer»"), ""),
+    ("out_bff_qualitaet_1", FMT_TEXT,
+     "Biodiversitätsförderfläche Qualitätsstufe I («1» = ja, «0» = nein); nur landwirtschaftliche Flächen",
+     quelle(DATASETS[BLW], "Attribut «bff_qualitaet_1»"), map_url(BLW)),
+    ("out_bezugsjahr", FMT_INT, "Stand des Eintrags als JJJJMMTT (z. B. 20250101); nur landwirtschaftliche Flächen",
+     quelle(DATASETS[BLW], "Attribut «bezugsjahr»"), map_url(BLW)),
+    ("out_area_m2", FMT_M2, "Fläche des Objekts innerhalb des Grundstücks",
+     quelle(SRC_CALC, "aus der zugeschnittenen Fläche"), ""),
 ]
+
+
+def element_column(element: dict) -> str:
+    """Output column of an element."""
+    return f"out_{element['key']}_m2"
+
+
+def element_source(element: dict) -> str:
+    """«Quelle» of an element: the dataset by its name, and the Kultur-Codes that select it."""
+    name = DATASETS[element["layer"]]
+    if element["codes"] is None:
+        return quelle(name, "alle Flächen")
+    codes = ", ".join(str(c) for c in element["codes"])
+    return quelle(name, ("Kultur-Code " if len(element["codes"]) == 1 else "Kultur-Codes ") + codes)
+
+
+def data_model() -> list[tuple[str, str, str, str, str, str]]:
+    """Rows of the «Datenmodell» sheet: (Blatt / Layer, Attribut, Format, Beschreibung, Quelle, Link)."""
+    sheet = SHEET_GRUNDSTUECKE
+    rows = [(sheet, *c) for c in GRUNDSTUECK_COLS_IN + GRUNDSTUECK_COLS_HEAD]
+    for e in ELEMENTS:
+        rows.append((sheet, element_column(e), FMT_M2,
+                     f"{e['element']}: Fläche auf dem Grundstück, überlappende Objekte einmal gezählt. "
+                     f"Zeile {e['rows']}, Kategorie {e['kat']} der BAFU-Liste. {EMPTY_VS_ZERO}",
+                     element_source(e), map_url(e["layer"])))
+    for k, label in KATEGORIEN.items():
+        cols = ", ".join(element_column(e) for e in ELEMENTS if e["kat"] == k)
+        rows.append((sheet, f"out_kat{k}_m2", FMT_M2,
+                     f"Kategorie {k} der BAFU-Liste: {label}. Ihre Elemente zusammen, jede Fläche einmal "
+                     "gezählt. Leer, sobald ein beteiligter Datensatz nicht abgefragt werden konnte.",
+                     quelle(SRC_CALC, f"aus {cols}"), ""))
+    rows += [(sheet, *c) for c in GRUNDSTUECK_COLS_TAIL]
+
+    gj = f"GeoJSON · {LAYER_GRUNDSTUECK}"
+    rows.append((gj, "geometry", FMT_GEOM,
+                 "Grenze des Grundstücks; ein Feature je Zeile der Eingabeliste, deren Grundstück gefunden wurde",
+                 quelle(DATASETS[AV], "Grundstücksgrenze"), map_url(AV)))
+    rows.append((gj, "layer", FMT_TEXT, f"Immer «{LAYER_GRUNDSTUECK}»", quelle(SRC_CALC, "fester Wert"), ""))
+    rows.append((gj, "in_… / out_…", "wie Blatt", f"Alle Attribute des Blatts «{sheet}»",
+                 quelle(SRC_SHEET, "alle Spalten"), ""))
+    gj = f"GeoJSON · {LAYER_NATURNAH}"
+    rows.append((gj, "geometry", FMT_GEOM,
+                 "Auf das Grundstück zugeschnittenes Objekt eines Datensatzes; ein Feature je Objekt und Grundstück. "
+                 "Enthält alle landwirtschaftlichen Flächen, auch solche, deren Kultur-Code nicht in der BAFU-Liste steht.",
+                 quelle(SRC_ALL, "Fläche innerhalb der Grundstücksgrenze"), ""))
+    rows.append((gj, "layer", FMT_TEXT, f"Immer «{LAYER_NATURNAH}»", quelle(SRC_CALC, "fester Wert"), ""))
+    rows += [(gj, *c) for c in OBJEKT_COLS]
+    return rows
