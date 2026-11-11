@@ -23,6 +23,23 @@ COL_FLAECHE = "Flaeche"  # official area column in resf
 # SQL batch size for IN-clause queries
 SQL_BATCH_SIZE = 500
 
+# --- gpkg source only -------------------------------------------------------
+# Selbständige und dauernde Rechte (SDR, e.g. Baurecht) sit in their own layer in
+# the AV GeoPackage. Mode 1 looks an EGRID up there when ``resf`` does not have it;
+# Mode 2 leaves the layer out (SDR overlap the Liegenschaften).
+LAYER_SDR = "dprsf"
+
+# EGRIDs per parcel lookup. The AV GeoPackage has no attribute index, so every
+# lookup is one scan of the parcel table: few large IN lists beat many small ones.
+# 5'000 EGRIDs are about 100 kB of SQL — far below SQLite's 1 MB statement limit.
+EGRID_BATCH_SIZE = 5000
+
+# check_egrid of a Mode 2 parcel that carries no EGRID in the AV data (its ``egrid``
+# is empty and its ``id`` is ``fid:<fid>``).
+MSG_EGRID_NO_EGRID = "no_egrid"
+# Internal key prefix of such a parcel (never written to the ``egrid`` column).
+NO_EGRID_KEY_PREFIX = "fid:"
+
 # ---------------------------------------------------------------------------
 # Green space classification  (Art → Check_GreenSpace)
 # ---------------------------------------------------------------------------
@@ -165,23 +182,27 @@ VBS_KATEGORIE: dict[str, str] = {
 }
 
 # ---------------------------------------------------------------------------
-# VBS biological productivity  (Art → produktiv / unproduktiv)
+# AV biological productivity  (Art → produktiv / unproduktiv)
 #
-# 1 Biologisch produktiv  = B + C + D  minus  Fels, Gletscher_Firn, Geroell_Sand
-# 2 Biologisch unproduktiv = A  plus  Fels, Gletscher_Firn, Geroell_Sand
+# Definition of BAFU (9 Nov 2026): the green area is every AV land-cover type except
+# codes 0–7 and 24, i.e. everything outside Kategorie A.
+#
+# 1 Biologisch produktiv   = B + C + D
+# 2 Biologisch unproduktiv = A
+#
+# Fels, Gletscher_Firn and Geroell_Sand (codes 21–23) were counted as unproductive
+# before; they are productive, Typ 2, now.
 # ---------------------------------------------------------------------------
-_UNPRODUKTIV_FROM_D = {"Fels", "Gletscher_Firn", "Geroell_Sand"}
-
 VBS_PRODUKTIV: dict[str, str] = {
-    art: "unproduktiv" if (kat == "kat_a" or art in _UNPRODUKTIV_FROM_D) else "produktiv"
+    art: "unproduktiv" if kat == "kat_a" else "produktiv"
     for art, kat in VBS_KATEGORIE.items()
 }
 
 # ---------------------------------------------------------------------------
-# VBS Typ  (within biologically productive only)
+# AV Typ  (within biologically productive only)
 #
-# Typ 1 — Grünflächen in Gebäudeumgebung  = Gartenanlage only
-# Typ 2 — Übrige Grünflächen              = all other biologically productive
+# Typ 1 — Grünflächen in Gebäudeumgebung  = Gartenanlage (code 11)
+# Typ 2 — Übrige Grünflächen              = codes 8–23 without 11, plus 25
 # ---------------------------------------------------------------------------
 VBS_TYP: dict[str, str] = {
     art: ("typ1" if art == "Gartenanlage" else "typ2")
@@ -278,7 +299,7 @@ def to_fixed_1(x: float) -> str:
 BAFU_TYPOCH_L1: dict[str, dict] = {
     "1": {"name": "Gewässer", "green": "Not green space", "vbsKategorie": "kat_d", "vbsProduktiv": "produktiv", "vbsTyp": "typ2"},
     "2": {"name": "Ufer & Feuchtgebiete", "green": "Green space (soil-covered)", "vbsKategorie": "kat_d", "vbsProduktiv": "produktiv", "vbsTyp": "typ2"},
-    "3": {"name": "Gletscher, Fels, Schutt, Geröll", "green": "Not green space", "vbsKategorie": "kat_d", "vbsProduktiv": "unproduktiv", "vbsTyp": None},
+    "3": {"name": "Gletscher, Fels, Schutt, Geröll", "green": "Not green space", "vbsKategorie": "kat_d", "vbsProduktiv": "produktiv", "vbsTyp": "typ2"},
     "4": {"name": "Grünland", "green": "Green space (soil-covered)", "vbsKategorie": "kat_b", "vbsProduktiv": "produktiv", "vbsTyp": "typ2"},
     "5": {"name": "Krautsäume, Hochstauden, Gebüsche", "green": "Green space (wooded)", "vbsKategorie": "kat_c", "vbsProduktiv": "produktiv", "vbsTyp": "typ2"},
     "6": {"name": "Wälder", "green": "Green space (wooded)", "vbsKategorie": "kat_c", "vbsProduktiv": "produktiv", "vbsTyp": "typ2"},

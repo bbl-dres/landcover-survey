@@ -227,6 +227,9 @@ async function findByEgrid(egrid) {
     layer: CADASTRAL_LAYER,
     searchText: egrid,
     searchField: "egris_egrid",
+    // Exact match (the default is a substring search): a shortened EGRID used to
+    // select a parcel here that the analysis then could not find.
+    contains: "false",
     returnGeometry: "true",
     geometryFormat: "geojson",
     sr: "4326",
@@ -237,7 +240,7 @@ async function findByEgrid(egrid) {
   const feat = (data.results || []).find((r) => r.geometry);
   if (!feat) return null;
   const p = feat.properties || feat.attributes || {};
-  return { egrid: egrid.toUpperCase(), nummer: p.number || "", geometry: feat.geometry };
+  return { egrid: p.egris_egrid || egrid, nummer: p.number || "", geometry: feat.geometry };
 }
 
 /** swisstopo location search (addresses, places, parcels). */

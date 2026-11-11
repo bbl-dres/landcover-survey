@@ -86,6 +86,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Reset
   function resetToUpload() {
+    runSeq++; // retire a run in progress: its late results must not reopen the results view
     cancelProcessing();
     teardownMap();
     resetUploadView();
@@ -219,7 +220,9 @@ document.addEventListener("DOMContentLoaded", () => {
     if (processedResults) {
       const toast = showToast(t("download.report.generating"), { duration: 60000 });
       try {
-        await downloadReportHTML(processedResults, { filename: currentFilename, lang: getLang() });
+        await downloadReportHTML(processedResults, {
+          filename: currentFilename, lang: getLang(), analysed: currentRunTime ? currentRunTime.toISOString() : "",
+        });
       } catch (err) {
         console.error("Report export failed:", err);
         showToast(t("toast.report.failed"));
@@ -241,8 +244,12 @@ document.addEventListener("DOMContentLoaded", () => {
       data.landcover = data.parcels.flatMap((p) => p._landcover || []);
       data.bauzonen = data.parcels.flatMap((p) => p._bauzonen || []);
       data.habitat = data.parcels.flatMap((p) => p._habitat || []);
+      const meta = window.__EMBEDDED_META__ || {};
+      data.cancelled = !!meta.cancelled;
       processedResults = data;
-      currentFilename = window.__EMBEDDED_META__?.filename || "";
+      currentFilename = meta.filename || "";
+      const analysed = new Date(meta.analysed || meta.generated || "");
+      currentRunTime = isNaN(analysed) ? null : analysed;
       // A report can't regenerate itself (no source files to fetch) — hide that option.
       document.getElementById("dl-report")?.setAttribute("hidden", "");
       showResults();
@@ -290,7 +297,14 @@ function showState(state) {
   // so no timer-based resize is needed when entering the results view.
 }
 
+/** Sequence number of the current run. A run that is no longer current (the user went
+ *  back to the start, or started another analysis) must not touch the UI when its last
+ *  requests settle — it would pop up the results view by itself, or show one list's
+ *  results under another list's name. */
+let runSeq = 0;
+
 async function onStartProcessing(parsedData) {
+  const run = ++runSeq;
   showState("processing");
   currentFilename = parsedData.filename || "";
   const startTime = Date.now();
@@ -298,10 +312,14 @@ async function onStartProcessing(parsedData) {
   mountLog("processing");
 
   try {
-    processedResults = await processRows(parsedData.rows, (progress) => {
+    const results = await processRows(parsedData.rows, (progress) => {
+      if (run !== runSeq) return;
       updateProgress(progress, startTime);
       if (progress.parcel) logParcel(progress.parcel);
     }, parsedData.options);
+    if (run !== runSeq) return;
+    processedResults = results;
+    currentRunTime = new Date();
     finishLog({
       elapsedMs: Date.now() - startTime,
       cancelled: !!(processedResults && processedResults.cancelled),
@@ -312,8 +330,9 @@ async function onStartProcessing(parsedData) {
 
     if (!processedResults || !processedResults.parcels.length) {
       showState("upload");
+      // Cancelled before the first parcel finished: back to the start, nothing to report.
       const err = document.getElementById("upload-error");
-      if (err) { err.textContent = t("upload.error.empty"); err.hidden = false; }
+      if (err && !processedResults?.cancelled) { err.textContent = t("upload.error.empty"); err.hidden = false; }
       return;
     }
 
@@ -322,6 +341,7 @@ async function onStartProcessing(parsedData) {
 
     showResults();
   } catch (err) {
+    if (run !== runSeq) return;
     console.error("Processing failed:", err);
     showState("upload");
     const errEl = document.getElementById("upload-error");
@@ -356,8 +376,10 @@ function updateProgress(progress, startTime) {
   const etaSeconds = Math.ceil(remaining / 1000);
   const etaMin = Math.floor(etaSeconds / 60);
   const etaSec = etaSeconds % 60;
-  progressEls.eta.textContent =
-    processed < total ? t("processing.eta", { min: etaMin, sec: etaSec }) : t("processing.finishing");
+  // While parcels with a failed query wait for another attempt, say so: the bar
+  // stands still for the pause between retry rounds.
+  progressEls.eta.textContent = progress.retrying ? t("processing.retrying", { n: progress.retrying })
+    : processed < total ? t("processing.eta", { min: etaMin, sec: etaSec }) : t("processing.finishing");
   progressEls.stats.textContent = t("processing.stats", { succeeded, failed });
 }
 
@@ -780,7 +802,7 @@ function rerenderResults() {
 function showResults() {
   showState("results");
   mountLog("results"); // the processing log moves above the table (collapsed); hidden for an embedded report
-  currentRunTime = new Date(); // stamp the run once; updateSummaryPanel reuses it across re-renders
+  if (!currentRunTime) currentRunTime = new Date(); // set when the run finished (or by an embedded report)
   updateSummaryPanel();
 
   const isMobile = window.innerWidth <= 767;

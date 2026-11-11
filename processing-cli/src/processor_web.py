@@ -10,6 +10,14 @@ processing-web/js/geoapi.js):
 4. overlay Bauzonen (+ "Ohne Bauzone" remainder) and BAFU habitat (+ gap-fill);
 5. set the ``status`` / ``check_*`` / ``lc_source`` / ``lc_synthetic`` flags.
 
+A value whose query failed is left **empty**, never 0: an empty cell means "not
+known", a 0 means "asked, nothing there". Parcels with a failed query are asked
+again at the end of the run (:data:`RETRY_ROUNDS`).
+
+Function names follow processor.js (``processOne`` ⇄ ``_process_one``,
+``makeLandcoverRow`` ⇄ ``_make_landcover_row``, ``aggregateLandCover`` ⇄
+``_aggregate_landcover`` …) — see docs/ARCHITECTURE.md §Web ⇄ CLI name map.
+
 Output rows are plain dicts with the same keys (and same insertion order) the web
 builds, incl. internal ``_``-prefixed keys (``_geometry`` etc.) that
 :mod:`export_web` uses and strips. :func:`process_rows` returns
@@ -44,11 +52,22 @@ MIN_AV_COVER_FRAC = 0.05     # below this AV share, synthesize land cover from B
 OHNE_BAUZONE_MIN_AREA = 1    # m² — min zone-free remainder worth a row
 HABITAT_GAP_MIN_FRAC = 0.01  # min parcel share a dropped habitat feature must cover to gap-fill
 
-# --- CLI only (the web has no equivalent): the services answer 502 in bursts that
-# outlast the per-request retries, so parcels with a failed query are asked again.
+# The services answer 502 in bursts that outlast the per-request retries, so parcels
+# with a failed query are processed again after the first pass (as in processor.js).
 RETRY_ROUNDS = 2
 RETRY_PAUSE_S = 20
+# CLI only: a row the run did not reach before Ctrl-C (the web drops such rows).
 NOT_PROCESSED = "error:Not processed (run interrupted)"
+
+# The fixed aggregation columns of a parcel, in output order (aggregateLandCover).
+LANDCOVER_AGG_KEYS = (
+    "sia416_ggf_m2", "sia416_buf_m2", "sia416_uuf_m2",
+    "din277_bf_m2", "din277_uf_m2",
+    "sealed_m2", "greenspace_m2",
+    "av_produktiv_m2", "av_unproduktiv_m2",
+    "av_kat_a_m2", "av_kat_b_m2", "av_kat_c_m2", "av_kat_d_m2",
+    "av_typ1_m2", "av_typ2_m2",
+)
 
 STATUS = {"FOUND": "found", "MERGED": "merged", "NOT_FOUND": "not_found", "INVALID": "invalid"}
 ERR_MSG = {
@@ -57,16 +76,6 @@ ERR_MSG = {
     "wfsUnavailable": "Land cover unavailable (WFS)",
 }
 ERR_RUNTIME_PREFIX = "Error: "
-
-# EGRID → parcel-geometry cache, shared across worker threads (value None = negative cache).
-_egrid_cache: dict[str, dict | None] = {}
-_cache_lock = threading.Lock()
-
-
-def clear_cache() -> None:
-    with _cache_lock:
-        _egrid_cache.clear()
-
 
 def _js_round(x: float) -> float:
     """JS ``Math.round`` — nearest int, ties toward +∞. Areas here are ≥ 0."""
@@ -80,20 +89,6 @@ def round2(n: float) -> float:
 
 def is_found(code: str) -> bool:
     return code == STATUS["FOUND"] or code == STATUS["MERGED"]
-
-
-# ---------------------------------------------------------------------------
-# Parcel geometry cache
-# ---------------------------------------------------------------------------
-
-def _cached_parcel_geometry(egrid: str) -> dict | None:
-    with _cache_lock:
-        if egrid in _egrid_cache:
-            return _egrid_cache[egrid]
-    result = api.fetch_parcel_geometry(egrid)  # network; outside the lock
-    with _cache_lock:
-        _egrid_cache[egrid] = result
-    return result
 
 
 # ---------------------------------------------------------------------------
@@ -147,9 +142,13 @@ def _dominant_bfsnr(rows):
     return value[best] if best else ""
 
 
-def _lc_row(id_, egrid, art, bfsnr, gwr_egid, fid, area, geometry, cls, *, lc_source="AV", prob="", typoch=None):
-    """Build one land-cover detail row (AV clip or synthetic), matching makeLandcoverRow."""
+def _make_landcover_row(id_, egrid, art, area, geometry, *, fid="", bfsnr="", gwr_egid="",
+                        lc_source="AV", prob="", typoch=None):
+    """Build one land-cover detail row — an AV clip (``lc_source`` "AV") or a synthetic
+    piece derived from BAFU (``lc_source`` "BAFU", ``typoch`` keeps the source habitat
+    label). Mirror of makeLandcoverRow; the keyword arguments are its options object."""
     _warn_unknown_art(art)
+    cls = C.classify(art)
     vbs = _vbs_labels(cls)
     row = {
         "id": id_, "egrid": egrid, "fid": fid, "art": art,
@@ -258,7 +257,7 @@ def _clip_landcover(parcel_geom, lc_features, id_, egrid):
         fid = lc.get("id") or props.get("fid") or ""
         bfsnr = props.get("bfsnr") or props.get("BFSNr") or ""
         gwr = props.get("gwr_egid") or props.get("GWR_EGID") or ""
-        results.append(_lc_row(id_, egrid, art, bfsnr, gwr, fid, area, geometry, C.classify(art)))
+        results.append(_make_landcover_row(id_, egrid, art, area, geometry, fid=fid, bfsnr=bfsnr, gwr_egid=gwr))
 
     skipped = _clip_features(parcel_geom, lc_features, on_piece)
     return {"results": results, "skipped": skipped}
@@ -306,23 +305,21 @@ def _ohne_bauzone_geometry(parcel_geom, zone_rows):
 
 
 def _make_synth_landcover_row(id_, egrid, art, typoch, area, geometry):
-    return _lc_row(id_, egrid, art, "", "", "", area, geometry, C.classify(art),
-                   lc_source="BAFU", prob="", typoch=typoch)
+    return _make_landcover_row(id_, egrid, art, area, geometry, lc_source="BAFU", typoch=typoch)
 
 
 # ---------------------------------------------------------------------------
 # Aggregation
 # ---------------------------------------------------------------------------
 
+def _empty_landcover_aggregate() -> dict:
+    """The aggregation columns of a parcel whose land-cover request failed: present
+    (uniform export header) but empty — the areas are unknown, not 0."""
+    return dict.fromkeys(LANDCOVER_AGG_KEYS, "")
+
+
 def _aggregate_landcover(clipped):
-    agg = {
-        "sia416_ggf_m2": 0.0, "sia416_buf_m2": 0.0, "sia416_uuf_m2": 0.0,
-        "din277_bf_m2": 0.0, "din277_uf_m2": 0.0,
-        "sealed_m2": 0.0, "greenspace_m2": 0.0,
-        "av_produktiv_m2": 0.0, "av_unproduktiv_m2": 0.0,
-        "av_kat_a_m2": 0.0, "av_kat_b_m2": 0.0, "av_kat_c_m2": 0.0, "av_kat_d_m2": 0.0,
-        "av_typ1_m2": 0.0, "av_typ2_m2": 0.0,
-    }
+    agg = dict.fromkeys(LANDCOVER_AGG_KEYS, 0.0)
     art_areas: dict[str, float] = {}
 
     for f in clipped:
@@ -433,13 +430,14 @@ def _process_one(row, options):
         return {"parcel": _make_error_parcel(id_, egrid, row, STATUS["INVALID"]), "landcover": []}
 
     try:
-        parcel_result = _cached_parcel_geometry(egrid)
+        parcel_result = api.fetch_parcel_geometry(egrid)
         if not parcel_result:
             return {"parcel": _make_error_parcel(id_, egrid, row, STATUS["NOT_FOUND"]), "landcover": []}
 
         parcel_geom = parcel_result["geometry"]
         bbox = geom.bbox(parcel_geom)
         lc_result = api.fetch_landcover(bbox)
+        lc_failed = lc_result["error"]   # the request failed: land cover is unknown, not absent
         parcel_area = geom.area(parcel_geom)
 
         clip = _clip_landcover(parcel_geom, lc_result["features"], id_, egrid)
@@ -463,10 +461,12 @@ def _process_one(row, options):
                 _bafu_holder["value"] = None
             return _bafu_holder["value"]
 
-        # Step 3b — synthetic AV land cover where AV is essentially absent.
+        # Step 3b — synthetic AV land cover where AV is essentially absent. Not after a
+        # failed request: then AV is not absent but unknown, and the same parcel would
+        # get BAFU-derived numbers on one run and AV numbers on the next.
         av_classified = agg["sia416_ggf_m2"] + agg["sia416_buf_m2"] + agg["sia416_uuf_m2"]
         synth_enabled = options.get("synthLandcover", True) is not False
-        if synth_enabled and parcel_area > 0 and av_classified < parcel_area * MIN_AV_COVER_FRAC:
+        if synth_enabled and not lc_failed and parcel_area > 0 and av_classified < parcel_area * MIN_AV_COVER_FRAC:
             bafu = get_bafu()
             if bafu and bafu["clip"]["results"]:
                 synth = []
@@ -481,8 +481,10 @@ def _process_one(row, options):
                     lc_source, lc_synthetic = "BAFU", True
 
         lc_errors = []
-        if len(clipped) == 0 and lc_result["error"]:
+        if lc_failed:
             lc_errors.append(ERR_MSG["wfsUnavailable"])
+            agg = _empty_landcover_aggregate()
+            lc_source = ""
 
         merged = parcel_result["properties"]["mergedCount"] > 1
         parcel = {
@@ -495,7 +497,7 @@ def _process_one(row, options):
             "nbident": parcel_result["properties"].get("nbident") or "",
             "status": "found",
             "check_egrid": STATUS["MERGED"] if merged else STATUS["FOUND"],
-            "check_wfs": "wfs_error" if lc_result["error"] else ("truncated" if lc_result["truncated"] else "ok"),
+            "check_wfs": "wfs_error" if lc_failed else ("truncated" if lc_result["truncated"] else "ok"),
             "check_geom": f"{skipped}_skipped" if skipped > 0 else "ok",
             "errors": lc_errors,
             "lc_source": lc_source,
@@ -593,7 +595,7 @@ def _process_one(row, options):
 def needs_retry(result) -> bool:
     """True when a query of this parcel failed (a state of the service, not a
     property of the parcel): the lookup or the pipeline raised, or the land-cover,
-    Bauzonen or habitat request did not answer."""
+    Bauzonen or habitat request did not answer. Mirror of needsRetry()."""
     p = result["parcel"]
     return (str(p.get("check_egrid", "")).startswith("error:")
             or p.get("check_wfs") == "wfs_error"
@@ -601,17 +603,26 @@ def needs_retry(result) -> bool:
             or p.get("check_habitat") == "error")
 
 
-def _run_pool(rows, indices, options, results, on_done) -> bool:
-    """Process ``rows[i]`` for *indices* with bounded concurrency into *results*.
-    Returns False when interrupted (Ctrl-C); finished parcels are kept."""
+def _better_result(prev, new):
+    """The result to keep after a retry: the new one, unless it failed again and
+    the earlier one at least resolved the parcel — never trade a partial result
+    for an error row. Mirror of betterResult()."""
+    if prev is None or not needs_retry(new) or not is_found(prev["parcel"]["check_egrid"]):
+        return new
+    return prev
+
+
+def _run_pool(rows, indices, options, on_result) -> bool:
+    """Process ``rows[i]`` for *indices* with bounded concurrency, calling
+    ``on_result(i, result)`` as each finishes. Returns False when interrupted
+    (Ctrl-C); what was finished has been delivered."""
     if not indices:
         return True
     pool = ThreadPoolExecutor(max_workers=min(CONCURRENCY, len(indices)))
     futures = {pool.submit(_process_one, rows[i], options): i for i in indices}
     try:
         for fut in as_completed(futures):
-            results[futures[fut]] = fut.result()
-            on_done(futures[fut])
+            on_result(futures[fut], fut.result())
     except KeyboardInterrupt:
         pool.shutdown(wait=False, cancel_futures=True)
         return False
@@ -619,17 +630,23 @@ def _run_pool(rows, indices, options, results, on_done) -> bool:
     return True
 
 
+def _overlay_fill(parcel, check_key):
+    """Value for an overlay area column the parcel has no entry in: 0 when the
+    overlay answered for this parcel, "" when it did not. Mirror of overlayFill()."""
+    answered = is_found(parcel.get("check_egrid")) and parcel.get(check_key) not in ("", "error", None)
+    return 0 if answered else ""
+
+
 def process_rows(rows, options=None, on_progress=None):
     """Process rows (each ``{"id","egrid", ...}``) → ``{parcels, landcover, bauzonen, habitat}``.
 
-    Mirrors ``processRows``: bounded-concurrency per-parcel processing, then a
-    flatten pass that makes the per-zone / per-habitat columns rectangular
-    (0-filled across every parcel) so exports have a uniform header.
+    Mirrors ``processRows``: bounded-concurrency per-parcel processing, retry
+    rounds for parcels with a failed query, then a flatten pass that makes the
+    per-zone / per-habitat columns rectangular so exports have a uniform header.
 
-    CLI only: parcels with a failed query are processed again (``RETRY_ROUNDS``
-    times, after a pause). On Ctrl-C the finished parcels are returned, the others
-    as error rows, and the result carries ``interrupted = True`` — the caller still
-    writes the exports.
+    A parcel is reported to ``on_progress`` once, with its final result. On Ctrl-C
+    the finished parcels are returned, the rows not reached as error rows, and the
+    result carries ``interrupted = True`` — the caller still writes the exports.
     """
     options = options or {}
     # Optional green-inventory join: one parcel file (public URL or a local path), loaded
@@ -637,48 +654,67 @@ def process_rows(rows, options=None, on_progress=None):
     green_index = None
     if options.get("greeninv"):
         try:
-            green_index = api.fetch_green_inventory(options.get("greeninv_source"))
+            green_index = api.load_green_inventory(options.get("greeninv_source"))
         except Exception as e:  # network / parse error: degrade, do not abort the run
-            logging.getLogger(__name__).warning("Green inventory unavailable (%s): the greeninv column stays empty", e)
+            logger.warning("Green inventory unavailable (%s): the greeninv column stays empty", e)
     total = len(rows)
     results: list[dict | None] = [None] * total
+    reported: set[int] = set()
+
+    # How often each EGRID stands in the list. A repeated parcel is processed per row
+    # and carries its full areas in each — a sum over the parcel table counts it that
+    # many times. The count travels on the parcel as ``_egridCount`` (internal, not
+    # exported); the CLI warns about it.
+    egrid_counts: dict[str, int] = {}
+    for r in rows:
+        if r.get("egrid"):
+            egrid_counts[r["egrid"]] = egrid_counts.get(r["egrid"], 0) + 1
     completed = 0
     succeeded = 0
 
-    def on_done(i):
+    def report(i):
         nonlocal completed, succeeded
+        reported.add(i)
         completed += 1
         if is_found(results[i]["parcel"]["check_egrid"]):
             succeeded += 1
         if on_progress:
-            on_progress({"processed": completed, "total": total,
-                         "succeeded": succeeded, "failed": completed - succeeded})
+            on_progress({"processed": completed, "total": total, "succeeded": succeeded,
+                         "failed": completed - succeeded, "parcel": results[i]["parcel"]})
 
-    finished = _run_pool(rows, list(range(total)), options, results, on_done)
-    for attempt in range(RETRY_ROUNDS):
-        failed = [i for i, r in enumerate(results) if r and needs_retry(r)]
-        if not finished or not failed:
+    # First pass over every row, then up to RETRY_ROUNDS passes over the parcels
+    # with a failed query. A parcel that will be asked again is not reported yet.
+    pending = list(range(total))
+    finished = True
+    for attempt in range(RETRY_ROUNDS + 1):
+        last = attempt == RETRY_ROUNDS
+
+        def on_result(i, result, last=last):
+            result["parcel"]["_egridCount"] = egrid_counts.get(result["parcel"]["egrid"], 1)
+            results[i] = _better_result(results[i], result)
+            if last or not needs_retry(results[i]):
+                report(i)
+
+        finished = _run_pool(rows, pending, options, on_result)
+        pending = [i for i in pending if results[i] is not None and needs_retry(results[i])]
+        if not finished or not pending or last:
             break
         logger.warning("%d parcel(s) with a failed query — retry %d/%d in %d s",
-                       len(failed), attempt + 1, RETRY_ROUNDS, RETRY_PAUSE_S)
+                       len(pending), attempt + 1, RETRY_ROUNDS, RETRY_PAUSE_S)
         try:
             time.sleep(RETRY_PAUSE_S)
         except KeyboardInterrupt:
             finished = False
             break
-        # A retry replaces the earlier result only when it is itself complete or the
-        # earlier one had nothing (an error row): never trade a partial result for none.
-        again: list[dict | None] = [None] * total
-        finished = _run_pool(rows, failed, options, again, lambda i: None)
-        for i in failed:
-            if again[i] and (not needs_retry(again[i]) or not is_found(results[i]["parcel"]["check_egrid"])):
-                results[i] = again[i]
     if not finished:
         for i, r in enumerate(results):
             if r is None:
                 row = rows[i]
                 results[i] = {"parcel": _make_error_parcel(row.get("id") or "", row.get("egrid") or "", row,
                                                            NOT_PROCESSED), "landcover": []}
+    for i in range(total):          # held back for a retry that did not happen
+        if results[i] is not None and i not in reported:
+            report(i)
 
     # Collect every per-zone / per-habitat column seen, first-seen order preserved
     # (dict as an ordered set) so the 0-filled columns match the web's Set order.
@@ -702,18 +738,24 @@ def process_rows(rows, options=None, on_progress=None):
         if not r:
             continue
         p = r["parcel"]
+        # Every parcel carries the joined columns and every per-zone / per-habitat
+        # column, so the export header is uniform. A column the parcel has no area in
+        # is 0 when its overlay answered and empty when it did not (error rows, a
+        # failed request): empty = not known, 0 = asked, nothing there.
         if options.get("bauzonen"):
             p.setdefault("bauzonen", "")
             p.setdefault("bauzonen_m2", "")
             p.setdefault("check_bauzonen", "")
+            fill = _overlay_fill(p, "check_bauzonen")
             for k in zone_keys:
-                p.setdefault(k, 0)
+                p.setdefault(k, fill)
         if options.get("habitat"):
             p.setdefault("habitat", "")
             p.setdefault("habitat_m2", "")
             p.setdefault("check_habitat", "")
+            fill = _overlay_fill(p, "check_habitat")
             for k in habitat_keys:
-                p.setdefault(k, 0)
+                p.setdefault(k, fill)
         if options.get("greeninv"):
             p["greeninv"] = api.green_inventory_flag(green_index, p.get("id") or "", p.get("egrid") or "")
         parcels.append(p)

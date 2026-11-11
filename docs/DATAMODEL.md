@@ -31,18 +31,34 @@ user input file is needed. (Python CLI only.)
 |-----------|--------|----------|-------------|
 | `ID` | `varchar` | Yes | User-defined feature identifier |
 | `EGRID` | `varchar(14)` | Yes | Federal parcel identifier — foreign key to the AV data (e.g. `CH427760110057`) |
-| *(other columns)* | *(varies)* | No | Passed through to all outputs, prefixed `input_` (e.g. `Address` → `input_Address`) |
+| *(other columns)* | *(varies)* | No | Passed through to all outputs, prefixed `input_`, header lowercased (e.g. `Address` → `input_address`) |
+
+The web app and the CLI read a list the same way (`processing-web/js/userinput.js`
+⇄ `processing-cli/src/user_input.py`, compared by a test on 26 texts):
+
+- **Formats:** CSV / TSV / TXT (UTF-8, else Windows-1252; `;`, tab or `,`, or an
+  Excel `sep=` line; quoted fields), Excel (first sheet), and the **SAP list export**
+  («Dynamische Listenausgabe», `.txt`): there `ID` = BuKr/WE/Grundstk and `EGRID` =
+  E-GRID, every other column is passed through.
+- **Cells are text.** Nothing is interpreted: `NA`, `null` or `007` stay as written.
+- **EGRID:** upper-cased, blanks removed (`CH 4277 6011 0057` → `CH427760110057`).
+  It is matched **exactly**; a shortened one is `not_found`.
+- **`ID`** should be unique and not empty: the dashboard keys selections on it.
+- A file is refused (with the reason) when a required column is missing, a quoted
+  field is never closed, or an SAP row has a different number of cells than the header.
 
 ## Input — Official survey GeoPackage (AV)
 
 **Source:** `av_2056.gpkg` — EPSG:2056. Download: https://www.geodienste.ch/services/av
 (The web app fetches the equivalent data live from swisstopo + the geodienste.ch WFS instead.)
 
-### Table `resf` — Parcels (Liegenschaften and SDR)
+### Table `resf` — Parcels (Liegenschaften), and `dprsf` (SDR)
 
-Contains both *Liegenschaften* (real property) and *selbständige und dauernde
-Rechte* (SDR / independent permanent rights, e.g. Baurecht). Both carry an EGRID
-and are processed uniformly.
+`resf` holds the *Liegenschaften* (real property). *Selbständige und dauernde
+Rechte* (SDR / independent permanent rights, e.g. Baurecht) are in a separate layer
+`dprsf` with the same columns plus `Art`. Mode 1 looks an EGRID up in `resf` and,
+if it is not there, in `dprsf`; Mode 2 processes `resf` only (the SDR lie on top of
+the Liegenschaften and would count the ground twice).
 
 | Attribute | Format | Description |
 |-----------|--------|-------------|
@@ -51,9 +67,13 @@ and are processed uniformly.
 | `Nummer` | `varchar` | Official parcel number |
 | `NBIdent` | `varchar` | Surveying office identifier |
 | `BFSNr` | `integer` | Federal municipality number |
-| `Flaechenmass` | `integer` | Legal area in m² (may be missing; may differ from the calculated area — see note below) |
-| `GWR_EGID` | `integer` | Federal building register ID (optional) |
-| `geom` | `MULTIPOLYGON` | Parcel polygon geometry (used internally, not exported) |
+| `Flaeche` | `integer` | Legal area in m² (may be missing; may differ from the calculated area — see note below) |
+| `wkb_geometry` | `MULTIPOLYGON` | Parcel polygon geometry (used internally, not exported) |
+
+`EGRIS_EGRID` and `BFSNr` can be empty (in the 2026 file: 18,529 and 45,696 of
+3.04 million rows, mostly TI). Mode 2 keeps such parcels: one without EGRID is
+processed on its own and exported with an empty `egrid`, `id` = `fid:<fid>` and
+`check_egrid` = `no_egrid`.
 
 ### Table `lcsf` — Land cover surfaces (Bodenabdeckung)
 
@@ -216,19 +236,19 @@ Aggregation columns are included by default (Python: `--no-aggregate` to omit).
 
 | Attribute | Format | Description |
 |-----------|--------|-------------|
-| `id` | `varchar` | User-defined identifier (Mode 1) or generated from AV (Mode 2) |
+| `id` | `varchar` | User-defined identifier (Mode 1); the EGRID, or `fid:<fid>` for a parcel without one (Mode 2) |
 | `egrid` | `varchar(14)` | Federal parcel identifier |
-| `nummer` | `varchar` | Official parcel number from AV |
+| `nummer` | `varchar` | Official parcel number from AV. For a `merged` parcel (`gpkg`): the distinct numbers of its parts, joined with `; ` |
 | `bfsnr` | `integer` | Federal municipality number (BFS-Nr). `gpkg`: from the parcel layer. Web app + CLI `api`: the geo.admin.ch `find` service carries none, so it is taken from the parcel's AV land-cover surfaces (the number covering the largest share); **empty** where no AV surface carries one (synthetic-AV parcels, canton TI) |
 | `nbident` | `varchar` | Cadastral numbering-area identifier (NBIdent, e.g. `BE0200000042`) as served by the `find` service. Web app + CLI `api` source only |
 | `status` | `varchar` | Parcel resolution — `found` / `not_found` |
 | `check_egrid` | `varchar` | EGRID-resolution detail — `found` / `merged` / `not_found` / `invalid` / `error:<msg>` (see enum below) |
 | `check_wfs`, `check_geom` | `varchar` | Land-cover retrieval / clipping status (see enums below). Web app + CLI `api` source |
-| `check_bauzonen`, `check_habitat` | `varchar` | Overlay retrieval status; present when that overlay ran. Web app + CLI `api` source |
+| `check_bauzonen`, `check_habitat` | `varchar` | Overlay retrieval status; present when that overlay ran (all implementations) |
 | `errors` | `varchar` | Error message(s) for the parcel; empty when none |
-| `lc_source` | `varchar` | Land-cover source — `AV` for resolved parcels, `BAFU` when the land cover was synthesized from the habitat map (see `lc_synthetic`), **empty** when the parcel has no land cover. The Bauzonen / BAFU overlays are **separate** layers, not the parcel's source |
+| `lc_source` | `varchar` | Land-cover source — `AV` for resolved parcels, `BAFU` when the land cover was synthesized from the habitat map (see `lc_synthetic`), **empty** when the parcel was not resolved or its land-cover request failed (`check_wfs` = `wfs_error`). The Bauzonen / BAFU overlays are **separate** layers, not the parcel's source |
 | `lc_synthetic` | `varchar` | `yes` when AV land cover was essentially absent (< 5 % of the parcel) and the land cover was synthesized from the BAFU habitat polygons (`lc_source` = `BAFU`); empty otherwise. Web app + CLI `api` source |
-| `flaeche` | `integer` | Legal area from AV (may be missing) |
+| `flaeche` | `integer` | Legal area from AV (may be missing). For a `merged` parcel (`gpkg`): the sum over its parts |
 | `parcel_area_m2` | `float` | Calculated 2D planar area of the cleaned parcel polygon |
 | `sia416_ggf_m2` | `float` | Building footprint area (SIA 416 GGF) |
 | `sia416_buf_m2` | `float` | Developed surrounding area (SIA 416 BUF) |
@@ -244,10 +264,25 @@ Aggregation columns are included by default (Python: `--no-aggregate` to omit).
 | `bauzonen`, `bauzonen_m2` | `varchar` | Building-zone names + areas intersecting the parcel, semicolon-joined (opt-in) |
 | `bauzonen_{slug}_m2` | `float` | One column per building-zone type: `bauzonen_` + the slugified (lowercase) zone name (e.g. `bauzonen_wohnzonen_m2`, `bauzonen_zonen_fuer_oeffentliche_nutzungen_m2`); 0 where the zone is absent. A parcel can span several zones (opt-in) |
 | `habitat`, `habitat_m2` | `varchar` | BAFU habitat group labels + areas intersecting the parcel, semicolon-joined, grouped by **TypoCH level-2** (Lebensraumgruppe, `«code» «name»`) (opt-in) |
-| `habitat_{slug}_m2` | `float` | One column per TypoCH level-2 habitat group: `habitat_` + the slugified (lowercase) group label (e.g. `habitat_6_3_andere_laubwaelder_m2`, `habitat_4_5_fettwiesen_und_weiden_m2`); 0 where absent. Up to ~34 groups (opt-in) |
+| `habitat_l1_{code}_m2`, `habitat_l2_{code}_m2` | `float` | Web app + CLI `api`: one column per TypoCH code at level 1 and at level 2, dots as underscores (e.g. `habitat_l1_6_m2`, `habitat_l2_6_3_m2`); a feature classified to level 1 only counts under its level-1 code at both levels (opt-in) |
+| `habitat_{slug}_m2` | `float` | CLI `gpkg`: one column per TypoCH level-2 habitat group, `habitat_` + the slugified group label (e.g. `habitat_6_3_andere_laubwaelder_m2`); a level-1-only label gets its own column (e.g. `habitat_6_waelder_m2`). Rounded to 2 decimals after summing (opt-in) |
 | `greeninv` | `varchar` | Green-inventory coverage — `yes` when the parcel is in the Bundesgärtnerei green inventory ([green-inventory](https://github.com/bbl-dres/green-inventory) `prototype-main/data/land_parcels.geojson`, matched by EGRID, else by the SAP key = `id`), `no` otherwise; empty when the join did not run or the file was unreachable. Opt-in: web «Grüninventar abgleichen» (off by default), CLI `--green-inventory` |
 | `input_*` | *(varies)* | User-provided columns, prefixed `input_` (Mode 1) |
 
+> **Empty means unknown, 0 means nothing there** (all implementations). An area
+> cell is **empty** when the value could not be obtained: the parcel was not resolved
+> (`check_egrid` not `found` / `merged`), its land-cover request failed (`check_wfs`
+> = `wfs_error`: all `sia416_*`, `din277_*`, `sealed_m2`, `greenspace_m2`, `av_*`
+> columns), or its overlay request failed (`check_bauzonen` / `check_habitat` =
+> `error`: the per-zone / per-habitat columns). It is **0** when the service answered
+> and the parcel has no area of that kind. A sum over a column therefore covers only
+> the parcels whose value is known; the `check_*` columns say which are not.
+>
+> **The same EGRID in several rows.** Each row is processed and carries the full
+> areas, so a sum over the parcel table counts that parcel as often as it is listed.
+> The web app notes it in the processing log, the CLI warns at the end of the run,
+> and the dashboard counts such a parcel once.
+>
 > The sum of `sia416_ggf_m2 + sia416_buf_m2 + sia416_uuf_m2` (= the classified
 > land cover) is typically **less than** `parcel_area_m2`: AV land cover only covers
 > the mapped portion of each parcel, so the remainder is parcel area without land
@@ -323,9 +358,12 @@ space + AV classification are classified (provisional).
 
 ---
 
-## Output — GeoJSON (combined · web app)
+## Output — GeoJSON (combined · web app + CLI `api` source)
 
-The web app also exports **all layers in one** GeoJSON `FeatureCollection`. Every
+The web app and the CLI `api` source also export **all layers in one** GeoJSON
+`FeatureCollection`, written compact with one feature per line (an indented export
+of about 2,100 parcels was 437 MB; the dashboard reads the file as one string and a
+browser string ends at about 512 MB in Chrome and Edge). Every
 feature carries a `layer` property — `parcel` | `landcover` | `bauzonen` |
 `habitat` — so the four feature types are distinguishable (`lc_source` alone
 can't: a parcel and its AV land-cover pieces both report `AV`). Parcels keep a
@@ -346,8 +384,9 @@ to the output; **EN** / **DE** = the labels the web app shows for it.
 | `found` | Found | Gefunden | Single matching parcel found. |
 | `merged` | Found (merged) | Gefunden (zusammengeführt) | Multiple `fid` entries dissolved into one (merge count in the log). |
 | `not_found` | Not found | Nicht gefunden | EGRID not found in the AV data. |
-| `invalid` | Invalid EGRID | EGRID ungültig | Malformed EGRID (does not start with `CH`). Web app only. |
-| `error:<msg>` | Error: \<msg\> | Fehler: \<msg\> | Unexpected processing error, message appended. Web app only. |
+| `invalid` | Invalid EGRID | EGRID ungültig | Malformed EGRID (empty or does not start with `CH`). Web app + CLI `api` source; the `gpkg` source reports `not_found`. |
+| `no_egrid` | — | — | The parcel has no EGRID in the GeoPackage (`gpkg` Mode 2); `egrid` is empty, `id` = `fid:<fid>`. |
+| `error:<msg>` | Error: \<msg\> | Fehler: \<msg\> | The lookup or the processing of this parcel failed, message appended (web app + CLI `api`). `error:Not processed (run interrupted)`: the CLI was stopped before it reached this row. |
 
 ### `check_wfs` (Parcels — web app + CLI `api` source)
 
@@ -355,7 +394,7 @@ to the output; **EN** / **DE** = the labels the web app shows for it.
 |------|----|----|-------------|
 | `ok` | OK | OK | Land cover retrieved successfully (paged until an empty page, deduplicated) |
 | `truncated` | Truncated | Abgeschnitten | Paging reached the 10'000-feature safety cap while still receiving features; the result may be incomplete |
-| `wfs_error` | WFS error | WFS-Fehler | WFS request failed after retries; no land cover for this parcel |
+| `wfs_error` | WFS error | WFS-Fehler | The WFS request failed after the retries and the retry rounds. The land cover of this parcel is **unknown**: its area columns are empty, `errors` says so, and no BAFU-derived substitute is used. |
 
 ### `check_geom` (Parcels — web app + CLI `api` source)
 
@@ -364,15 +403,18 @@ to the output; **EN** / **DE** = the labels the web app shows for it.
 | `ok` | OK | OK | All land cover features clipped successfully |
 | `N_skipped` | N skipped | N übersprungen | N features could not be clipped (invalid geometry) and were dropped |
 
-### `check_bauzonen` / `check_habitat` (Parcels — web app + CLI `api` source)
+### `check_bauzonen` / `check_habitat` (Parcels)
 
 Present when the matching overlay was analysed (both on by default in the web app).
+Empty for a parcel that was not resolved.
 
 | Code | EN | DE | Description |
 |------|----|----|-------------|
 | `ok` | OK | OK | Overlay features retrieved (the parcel bbox is tiled so every identify request is a single, complete page) and clipped |
 | `truncated` | Truncated | Abgeschnitten | The fetch reached its safety cap (5'000 habitat / 2'000 Bauzonen features per parcel) or a tile was still full at the tiling depth cap; the result may be incomplete |
-| `error` | Error | Fehler | Identify request failed; no overlay data for this parcel |
+| `partial` | Partial | Unvollständig | The service delivered a feature without geometry (it omits geometries above a size cap), so part of the parcel could not be attributed. Bauzonen: any such feature; habitat: when it leaves more than 1 % of the parcel uncovered |
+| `estimated` | Estimated | Geschätzt | Habitat, web app + CLI `api`: exactly one feature came without geometry and the uncovered rest of the parcel was attributed to its type |
+| `error` | Error | Fehler | The identify request failed; the overlay of this parcel is **unknown** and its per-type columns are empty |
 
 ### `lc_source` (Parcels & Land Cover — web app + CLI `api` source)
 
@@ -420,15 +462,18 @@ Present when the green-inventory join ran (web «Grüninventar abgleichen», CLI
 
 | Code | EN | DE | Description |
 |------|----|----|-------------|
-| `1 Biologically productive` | 1 Biologically productive | 1 Biologisch produktiv | Kategorie B + C + D, **minus** Fels, Gletscher/Firn, Geröll/Sand |
-| `2 Biologically unproductive` | 2 Biologically unproductive | 2 Biologisch unproduktiv | Kategorie A, **plus** Fels, Gletscher/Firn, Geröll/Sand |
+| `1 Biologically productive` | 1 Biologically productive | 1 Biologisch produktiv | Kategorie B + C + D: every land-cover type except codes 0–7 and 24 (the green area as BAFU defines it) |
+| `2 Biologically unproductive` | 2 Biologically unproductive | 2 Biologisch unproduktiv | Kategorie A: buildings, sealed surfaces, Abbau/Deponie |
+
+Until 2026-11-10 Fels, Gletscher/Firn and Geröll/Sand counted as unproductive; an
+export made before then carries the old values.
 
 ### `av_typ` (Land Cover)
 
 | Code | EN | DE | Description |
 |------|----|----|-------------|
-| `Type 1 - Green spaces near buildings` | Type 1 — Green spaces near buildings | Typ 1 — Grünflächen in Gebäudeumgebung | Gartenanlage only |
-| `Type 2 - Other green spaces` | Type 2 — Other green spaces | Typ 2 — Übrige Grünflächen | All other biologically productive types |
+| `Type 1 - Green spaces near buildings` | Type 1 — Green spaces near buildings | Typ 1 — Grünflächen in Gebäudeumgebung | Gartenanlage only (code 11) |
+| `Type 2 - Other green spaces` | Type 2 — Other green spaces | Typ 2 — Übrige Grünflächen | All other biologically productive types: codes 8–23 without 11, plus 25 — incl. Fels, Gletscher/Firn, Geröll/Sand since 2026-11-10 |
 | *(blank)* | — | — | Biologically unproductive types have no Typ |
 
 ### `Art` (lcsf input / Land Cover output)

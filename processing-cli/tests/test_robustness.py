@@ -60,7 +60,7 @@ def service(monkeypatch):
     monkeypatch.setattr(api, "fetch_parcel_geometry", parcel)
     monkeypatch.setattr(api, "fetch_landcover", landcover)
     monkeypatch.setattr(processor_web, "RETRY_PAUSE_S", 0)
-    processor_web.clear_cache()
+    api.clear_parcel_cache()
     return state
 
 
@@ -119,3 +119,91 @@ def test_xlsx_export_survives_formula_and_control_characters(tmp_path):
     assert row["input_note"].value == "ab"
     assert row["errors"].value == "=x; y" and row["errors"].data_type == "s"
     assert row["area"].value == 1
+
+
+# ---------------------------------------------------------------------------
+# A failed query leaves the value empty — never 0, never a substitute
+# ---------------------------------------------------------------------------
+
+P2 = box(7.5, 46.9, 7.501, 46.901)
+
+
+def _lc(geometry, art="Gebaeude"):
+    return {"features": [{"geometry": geometry, "properties": {"Art": art, "BFSNr": 351}, "id": 1}],
+            "error": False, "truncated": False}
+
+
+def _install(monkeypatch, *, landcover, bauzonen=None, bafu=None):
+    """Fake services keyed by parcel: ``landcover[egrid]`` etc. are results or exceptions."""
+    geoms = {"CH000000000001": PARCEL, "CH000000000002": P2}
+    by_bounds = {g.bounds: e for e, g in geoms.items()}
+    egrid_of = lambda g: by_bounds[g.bounds]  # noqa: E731
+
+    def give(v):
+        if isinstance(v, Exception):
+            raise v
+        return v
+
+    monkeypatch.setattr(api, "fetch_parcel_geometry", lambda e: None if e not in geoms else {
+        "geometry": geoms[e], "properties": {"number": "1", "nbident": "", "area": "", "mergedCount": 1}})
+    monkeypatch.setattr(api, "fetch_landcover", lambda bbox: give(landcover[by_bounds[tuple(bbox)]]))
+    monkeypatch.setattr(api, "fetch_bauzonen", lambda g: give((bauzonen or {})[egrid_of(g)]))
+    monkeypatch.setattr(api, "fetch_landcover_bafu", lambda g: give((bafu or {})[egrid_of(g)]))
+    monkeypatch.setattr(processor_web, "RETRY_PAUSE_S", 0)
+    api.clear_parcel_cache()
+
+
+FAILED = {"features": [], "error": True, "truncated": False}
+ROWS = [{"id": "A", "egrid": "CH000000000001"}, {"id": "B", "egrid": "CH000000000002"},
+        {"id": "C", "egrid": "CH000000000009"}, {"id": "D", "egrid": ""}]
+
+
+def test_failed_landcover_request_leaves_areas_empty_and_is_not_replaced_by_bafu(monkeypatch):
+    habitat = {"features": [{"geometry": PARCEL, "properties": {"typoch_de": "6.3.1 Buchenwald"}, "id": 7}],
+               "dropped": [], "error": False, "truncated": False}
+    _install(monkeypatch, landcover={"CH000000000001": FAILED, "CH000000000002": _lc(P2)},
+             bafu={"CH000000000001": habitat, "CH000000000002": habitat})
+    res = processor_web.process_rows(ROWS[:2], {"bauzonen": False, "habitat": False, "synthLandcover": True})
+    a, b = res["parcels"]
+    assert a["check_wfs"] == "wfs_error" and a["errors"] == ["Land cover unavailable (WFS)"]
+    assert a["lc_synthetic"] == "" and a["lc_source"] == ""          # unknown ≠ absent: no BAFU substitute
+    assert [a[k] for k in processor_web.LANDCOVER_AGG_KEYS] == [""] * len(processor_web.LANDCOVER_AGG_KEYS)
+    assert a["parcel_area_m2"] > 0                                     # the parcel itself was found
+    assert b["check_wfs"] == "ok" and b["sia416_ggf_m2"] > 0 and b["greenspace_m2"] == 0   # asked: really 0
+    assert [lc["id"] for lc in res["landcover"]] == ["B"]
+
+
+def test_overlay_columns_are_empty_where_the_overlay_did_not_answer(monkeypatch):
+    zone = lambda g, name: {"features": [{"geometry": g, "properties": {"ch_bez_d": name, "ch_code_hn": "11"}, "id": 3}],  # noqa: E731
+                            "dropped": [], "truncated": False}
+    _install(monkeypatch, landcover={"CH000000000001": _lc(PARCEL), "CH000000000002": _lc(P2)},
+             bauzonen={"CH000000000001": zone(PARCEL, "Wohnzonen"), "CH000000000002": RuntimeError("502")})
+    res = processor_web.process_rows(ROWS, {"bauzonen": True, "habitat": False, "synthLandcover": False})
+    a, b, c, d = res["parcels"]
+    assert a["check_bauzonen"] == "ok" and a["bauzonen_wohnzonen_m2"] > 0
+    assert b["check_bauzonen"] == "error" and b["bauzonen_wohnzonen_m2"] == ""    # the request failed: unknown
+    assert c["check_egrid"] == "not_found" and c["bauzonen_wohnzonen_m2"] == ""   # no parcel: nothing asked
+    assert d["check_egrid"] == "invalid" and d["bauzonen_wohnzonen_m2"] == ""
+
+    other = lambda g: zone(g, "Arbeitszonen")  # noqa: E731
+    _install(monkeypatch, landcover={"CH000000000001": _lc(PARCEL), "CH000000000002": _lc(P2)},
+             bauzonen={"CH000000000001": zone(PARCEL, "Wohnzonen"), "CH000000000002": other(P2)})
+    a, b = processor_web.process_rows(ROWS[:2], {"bauzonen": True, "habitat": False, "synthLandcover": False})["parcels"]
+    assert a["bauzonen_arbeitszonen_m2"] == 0 and b["bauzonen_wohnzonen_m2"] == 0     # asked, not in that zone
+
+
+def test_each_parcel_is_reported_once_with_its_final_result(monkeypatch):
+    calls = {"n": 0}
+
+    def landcover_flaky(bbox):
+        calls["n"] += 1
+        return FAILED if calls["n"] == 1 else _lc(PARCEL)
+
+    _install(monkeypatch, landcover={})
+    monkeypatch.setattr(api, "fetch_landcover", landcover_flaky)
+    seen = []
+    processor_web.process_rows(ROWS[:1] + ROWS[2:], {"bauzonen": False, "habitat": False, "synthLandcover": False},
+                               on_progress=lambda p: seen.append((p["processed"], p["parcel"]["id"], p["parcel"].get("check_wfs"))))
+    assert sorted(i for _, i, _ in seen) == ["A", "C", "D"]            # once each
+    assert [p for p, _, _ in seen] == [1, 2, 3]
+    assert ("A", "ok") in [(i, w) for _, i, w in seen]                 # the retried result, not the failed one

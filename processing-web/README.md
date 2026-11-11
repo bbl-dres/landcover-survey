@@ -69,7 +69,7 @@ The Parcels output carries QA columns so you can spot where web results may diff
 from the authoritative Python run:
 
 - `check_egrid` — `found`, `merged` (one EGRID matched several features, geometries unioned), `not_found`, `invalid`, or an error message
-- `check_wfs` — `ok`, `truncated` (still receiving features at the 10'000-feature paging safety cap — totals may be incomplete), or `wfs_error`
+- `check_wfs` — `ok`, `truncated` (still receiving features at the 10'000-feature paging safety cap — totals may be incomplete), or `wfs_error` (the request failed: the land-cover columns of that parcel are **empty**, not 0, and no BAFU substitute is used)
 - `bfsnr` — the BFS municipality number carried by the parcel's AV surfaces (empty where none carry one); `nbident` — the cadastral numbering-area id the `find` service returns
 - `check_geom` — `ok` or `<n>_skipped` (land-cover features whose clip failed on invalid geometry and were dropped)
 - `lc_source` — `AV` (authoritative cadastral land cover) or `BAFU` (synthetic, derived from the habitat map where AV is missing)
@@ -97,7 +97,9 @@ css/
   styles.css    Component styles + responsive breakpoints
 js/
   main.js       State machine (upload → processing → results)
-  upload.js     CSV/XLSX parsing with auto-delimiter detection, EGRID normalisation
+  upload.js     Upload view: drop zone, file input, mode toggle, Excel read (SheetJS)
+  userinput.js  List reader (pure): CSV / SAP list export parsing, delimiter detection, header
+                + EGRID normalisation — mirrored by processing-cli/src/user_input.py
   geoapi.js     Live requests: EGRID lookup, WFS land cover (paged until empty), Identify
                 overlays (bbox quadtree), green inventory — mirrored by processing-cli/src/api.py
   processor.js  Clip (Turf.js) + classify + aggregate, 8 parcels in parallel — mirrored by
@@ -110,10 +112,13 @@ js/
   table.js      Table widget (tabs, sorting, pagination, column toggle)
   search.js     Header search (parcels + locations + layers)
   swisstopo.js  External layer management, Geokatalog, layer info modal
-  config.js     BBArt mappings (SIA 416, DIN 277, green space, sealed, VBS)
+  config.js     BBArt mappings (SIA 416, DIN 277, green space, sealed, AV Kategorie · Produktivität · Typ)
   export.js     CSV/XLSX/GeoJSON export
   i18n.js       Translations (DE, FR, IT, EN)
-tests/          node:test unit tests for geoapi.js + processor.js (`npm test` from the repo root)
+tests/          node:test unit tests for geoapi.js, processor.js (pure parts + processRows against
+                fake services) and log.js (`npm test` from the repo root);
+                smoke_browser.py drives the real app in headless Chromium against the live
+                services (`python processing-web/tests/smoke_browser.py`, needs Playwright)
 ```
 
 ## Tech stack

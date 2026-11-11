@@ -81,14 +81,19 @@ def main(argv: list[str] | None = None) -> None:
     )
     parser.add_argument(
         "--mode", type=int, choices=[1, 2], default=1,
-        help="(gpkg) 1 = user parcel list, 2 = all parcels (default: 1)",
+        help="(gpkg) 1 = user parcel list (--input), 2 = all parcels of the GeoPackage; "
+             "Mode 2 does not read --input (default: 1)",
     )
     parser.add_argument(
         "--chunk-size", type=int, default=10000,
-        help="(gpkg) Mode 1: rows per processing chunk (default: 10000)",
+        help="(gpkg) Mode 1: input rows per processing chunk, at least 1 (default: 10000). The result "
+             "does not depend on it; if a later chunk fails or the run is interrupted, the finished "
+             "chunks are still written",
     )
-    parser.add_argument("--bauzonen", action="store_true", help="(gpkg) Intersect with Bauzonen")
-    parser.add_argument("--habitat", action="store_true", help="(gpkg) Intersect with BAFU Lebensraumkarte")
+    parser.add_argument("--bauzonen", action="store_true",
+                        help="(gpkg) Intersect with Bauzonen (live geo.admin.ch requests; adds check_bauzonen)")
+    parser.add_argument("--habitat", action="store_true",
+                        help="(gpkg) Intersect with BAFU Lebensraumkarte (live geo.admin.ch requests; adds check_habitat)")
     parser.add_argument("--no-aggregate", action="store_true", help="(gpkg) Skip area aggregation on parcels")
     parser.add_argument("--no-parcels", action="store_true", help="(gpkg) Skip parcels CSV export")
     parser.add_argument("--no-landcover", action="store_true", help="(gpkg) Skip land cover CSV export")
@@ -112,6 +117,10 @@ def main(argv: list[str] | None = None) -> None:
     else:  # gpkg
         if args.mode == 1 and args.input_path is None:
             parser.error("--source gpkg --mode 1 requires --input <path to CSV or Excel file>")
+        if args.chunk_size < 1:
+            parser.error(f"--chunk-size must be at least 1 (got {args.chunk_size})")
+        if args.limit is not None and args.limit < 1:
+            parser.error(f"--limit must be at least 1 (got {args.limit})")
 
     # --- Resolve output directory ---
     output_dir = Path(args.output_dir) if args.output_dir is not None else DEFAULT_OUTPUT_DIR
@@ -202,6 +211,12 @@ def _run_api(args, output_dir: Path, ts: str, prefix: str, logger) -> None:
     n_found = sum(1 for p in results["parcels"] if processor_web.is_found(p["check_egrid"]))
     if results.get("interrupted"):
         logger.error("Interrupted — writing what is finished; the other rows are marked 'Not processed'.")
+    repeated = {p["egrid"] for p in results["parcels"]
+                if p.get("_egridCount", 1) > 1 and processor_web.is_found(p["check_egrid"])}
+    if repeated:
+        n_rows = sum(1 for p in results["parcels"] if p["egrid"] in repeated)
+        logger.warning("%d EGRID(s) stand more than once in the list (%d rows): each row carries the full "
+                       "areas, so a sum over the parcel table counts these parcels repeatedly.", len(repeated), n_rows)
     n_failed = sum(1 for p in results["parcels"] if processor_web.needs_retry({"parcel": p}))
     if n_failed:
         logger.warning("%d parcel(s) still have a failed query (see check_egrid / check_wfs / check_bauzonen / "
@@ -226,23 +241,53 @@ def _run_api(args, output_dir: Path, ts: str, prefix: str, logger) -> None:
 # ---------------------------------------------------------------------------
 
 def _run_gpkg(args, output_dir: Path, ts: str) -> None:
-    from pipeline import run
+    """Run the GeoPackage pipeline. Exit status 1 for a problem the user has to fix
+    (unreadable list, missing GeoPackage — message, no traceback) and for a run that
+    stopped part-way (the finished part is written); 130 when interrupted before
+    anything was finished."""
+    from pipeline import PipelineError, run
 
-    run(
-        mode=args.mode,
-        input_path=args.input_path,
-        gpkg_path=args.gpkg,
-        output_dir=str(output_dir),
-        limit=args.limit,
-        chunk_size=args.chunk_size,
-        ts=ts,
-        aggregate=not args.no_aggregate,
-        export_parcels=not args.no_parcels,
-        export_landcover=not args.no_landcover,
-        bauzonen=args.bauzonen,
-        habitat=args.habitat,
-        greeninv=args.green_inventory,
-    )
+    logger = logging.getLogger(__name__)
+
+    # Options of the other source do nothing here — say so instead of ignoring them.
+    ignored = [flag for flag, given in (
+        ("--egrid", bool(args.egrid)),
+        ("--no-bauzonen", args.no_bauzonen), ("--no-habitat", args.no_habitat),
+        ("--no-synthetic", args.no_synthetic), ("--no-geojson", args.no_geojson),
+        ("--no-xlsx", args.no_xlsx), ("--no-csv", args.no_csv),
+    ) if given]
+    if ignored:
+        logger.warning("Ignored with --source gpkg (api-source options): %s", ", ".join(ignored))
+    if args.mode == 2 and args.input_path:
+        logger.warning("--mode 2 processes ALL parcels of the GeoPackage: --input %s is not read "
+                       "(its name is only used as the output file prefix).", args.input_path)
+    if args.mode == 2 and args.chunk_size != 10000:
+        logger.warning("--chunk-size applies to Mode 1 only; Mode 2 is batched by municipality.")
+
+    try:
+        complete = run(
+            mode=args.mode,
+            input_path=args.input_path,
+            gpkg_path=args.gpkg,
+            output_dir=str(output_dir),
+            limit=args.limit,
+            chunk_size=args.chunk_size,
+            ts=ts,
+            aggregate=not args.no_aggregate,
+            export_parcels=not args.no_parcels,
+            export_landcover=not args.no_landcover,
+            bauzonen=args.bauzonen,
+            habitat=args.habitat,
+            greeninv=args.green_inventory,
+        )
+    except PipelineError as e:
+        logger.error(str(e))
+        raise SystemExit(1)
+    except KeyboardInterrupt:
+        logger.error("Interrupted before anything was finished — nothing written.")
+        raise SystemExit(130)
+    if not complete:
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

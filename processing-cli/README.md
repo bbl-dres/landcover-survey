@@ -70,6 +70,15 @@ otherwise. Every other column is optional and passed through as `input_<col>`
 (headers lowercased, matching the web). The `api` source also accepts `--egrid` with
 one or more comma-separated EGRIDs, so no input file is needed.
 
+The reader is a port of the web app's (`processing-web/js/userinput.js`), so a file
+is read the same way in both:
+
+- **SAP list export** («Dynamische Listenausgabe», `.txt`): read as is — `id` =
+  BuKr/WE/Grundstk, `egrid` = E-GRID, every other column passed through.
+- **CSV**: UTF-8 or Windows-1252; `;`, tab or `,` (or an Excel `sep=` line); quoted
+  fields; a trailing delimiter is harmless. Cells are text: `NA` stays `NA`.
+- **EGRID**: upper-cased, blanks removed (`CH 4277 6011 0057` is fine).
+
 Put your own lists into `in/` and find the results in `out/`. Both folders are
 gitignored, so parcel data stays out of the repository.
 
@@ -77,12 +86,24 @@ gitignored, so parcel data stays out of the repository.
 
 The services answer HTTP 502 in bursts. Each request is retried; parcels whose
 query still failed are processed again at the end of the run (two rounds, 20 s
-apart). What fails even then is flagged in `check_egrid`, `check_wfs`,
-`check_bauzonen` or `check_habitat`, and the CLI prints how many parcels are
-affected. Ctrl-C keeps the finished parcels and writes the exports; the
-remaining rows are marked `Not processed`.
+apart), as in the web app. What fails even then is flagged in `check_egrid`,
+`check_wfs`, `check_bauzonen` or `check_habitat`, and the CLI prints how many
+parcels are affected. Ctrl-C keeps the finished parcels and writes the exports;
+the remaining rows are marked `Not processed`.
+
+A value whose query failed is left **empty**, never 0: an empty cell means "not
+known", 0 means "asked, nothing there". A parcel with `check_wfs = wfs_error` has
+empty land-cover columns (and no BAFU substitute); a parcel whose Bauzonen request
+failed has empty zone columns.
 
 An EGRID is matched exactly: a shortened or mistyped one ends as `not_found`.
+
+The `gpkg` source follows the same rule for its overlays: a failed Bauzonen or
+habitat request sets `check_bauzonen` / `check_habitat` = `error` and leaves that
+parcel's overlay cells empty (there are no retry rounds on this path). When a later
+chunk or municipality fails, or on Ctrl-C, the finished part is written and the run
+exits with 1. Exit codes: 0 done, 1 incomplete or failed, 2 wrong arguments, 130
+interrupted before anything was finished.
 
 ## Data sources & modes
 
@@ -93,7 +114,7 @@ An EGRID is matched exactly: a shortened or mistyped one ends as `not_found`.
 | Green inventory join | `--green-inventory` (opt-in): `greeninv` = `yes` / `no` by EGRID, else SAP key | same flag, same column |
 | Synthetic-AV fallback | on by default (`--no-synthetic` to disable) | none |
 | Geometry / area | Shapely in EPSG:4326, **Turf-spherical** area | Shapely in EPSG:2056, exact planar area |
-| Coverage | 20 of 26 cantons via public WFS | all cantons |
+| Coverage | 20 of 26 cantons via public WFS | the cantons in the GeoPackage (the 2026 file has 20: `not_found` can mean "canton not in the file") |
 | Input | `--egrid` list or optional `--input` | `--input` (Mode 1) or all parcels (`--mode 2`) |
 | Output | GeoJSON · Excel · CSV | CSV |
 
@@ -132,11 +153,20 @@ cd .. && npm test                        # processing-web/tests (node:test, no d
 ```
 
 `tests/test_parity_js.py` evaluates the browser modules (`processing-web/js/config.js`,
-`processor.js`) with Node on `tests/fixtures/parity_cases.json` and compares every
-table, classifier, label, number format, row shape and aggregation with the Python
-modules. `tests/fixtures/live/` holds a web export of eight parcels (overlays on,
-green inventory off) for the end-to-end check; re-export it from the web app when
-the cadastral data behind it changes.
+`processor.js`, `userinput.js`) with Node on `tests/fixtures/parity_cases.json` and
+compares every table, classifier, label, number format, row shape, aggregation and
+the list reader with the Python modules. `tests/test_robustness.py` runs failure
+scenarios against fake services; the same scenarios run against the web app in
+`processing-web/tests/processrows.test.mjs`.
+
+`tests/fixtures/live/` holds a web export of eight parcels (overlays on, green
+inventory off) for the end-to-end check. Recreate it when the cadastral data behind
+it changes — no browser needed, the script runs the web app's own modules and its
+pinned Turf build in Node:
+
+```bash
+node tests/web_export.mjs tests/fixtures/live/parcels.csv tests/fixtures/live/web-export.geojson
+```
 
 ## Outputs
 
@@ -145,7 +175,8 @@ Everything is written to `out/` (or `--output-dir`), timestamped.
 **`api` source:**
 
 1. **GeoJSON** (`{prefix}{ts}.geojson`) — one `FeatureCollection`; every feature
-   tagged `layer` (`parcel` | `landcover` | `bauzonen` | `habitat`). Skip with `--no-geojson`.
+   tagged `layer` (`parcel` | `landcover` | `bauzonen` | `habitat`). Compact, one
+   feature per line. Skip with `--no-geojson`.
 2. **Excel** (`{prefix}{ts}.xlsx`) — one sheet per layer. Skip with `--no-xlsx`.
 3. **CSV** (`{prefix}parcels_{ts}.csv`, `{prefix}landcover_{ts}.csv`) — semicolon-delimited,
    UTF-8 BOM, matching the web export. Skip with `--no-csv`.
@@ -153,7 +184,10 @@ Everything is written to `out/` (or `--output-dir`), timestamped.
 **`gpkg` source** (semicolon-delimited, UTF-8 BOM — the same CSV dialect as the
 web / `api` export):
 
-1. **Parcels** (`{input}_parcels_{ts}.csv`) — one row per parcel. Disable with `--no-parcels`.
+1. **Parcels** (`{input}_parcels_{ts}.csv`) — one row per parcel. Area cells are empty, not 0,
+   for a parcel that was not found; with an overlay, `check_bauzonen` / `check_habitat`
+   (`ok` / `partial` / `truncated` / `error`) say whether its numbers are complete.
+   Baurecht (SDR) EGRIDs are looked up in the `dprsf` layer. Disable with `--no-parcels`.
 2. **Land Cover** (`{input}_landcover_{ts}.csv`) — one row per clipped piece. Disable with `--no-landcover`.
    Add overlay columns with `--bauzonen` / `--habitat`.
 
@@ -172,7 +206,7 @@ web / `api` export):
 | `--no-geojson` / `--no-xlsx` / `--no-csv` | off | (api) skip an output format |
 | `--gpkg PATH` | `D:\AV_lv95\av_2056.gpkg` | (gpkg) path to the AV GeoPackage |
 | `--mode {1,2}` | `1` | (gpkg) processing mode |
-| `--chunk-size N` | `10000` | (gpkg) rows per chunk (Mode 1) |
+| `--chunk-size N` | `10000` | (gpkg) rows per chunk (Mode 1), at least 1. Does not change the result; a failure in a later chunk keeps the finished ones |
 | `--bauzonen` / `--habitat` | off | (gpkg) opt-in overlay intersection |
 | `--no-aggregate` / `--no-parcels` / `--no-landcover` | off | (gpkg) output control |
 | `--verbose`, `-v` | off | DEBUG logging |

@@ -107,18 +107,28 @@ function toFeature(row, layer) {
   return { type: "Feature", geometry: row._geometry || null, properties: props };
 }
 
-/** Download all analysed layers as one GeoJSON FeatureCollection. Each feature
+/** All analysed layers as one GeoJSON FeatureCollection, as text. Each feature
  *  carries a `layer` property (`parcel` | `landcover` | `bauzonen` | `habitat`)
  *  and links to its parcel via `id` + `egrid`. Parcels without geometry (not
  *  found / invalid EGRID) are kept with a null geometry so the file is a complete
- *  record of every input parcel; the detail layers are the clipped pieces. */
-export function downloadGeoJSON(results, filename = "landcover-parcels.geojson") {
+ *  record of every input parcel; the detail layers are the clipped pieces.
+ *
+ *  Compact, one feature per line: a pretty-printed export of ~2,100 parcels was
+ *  437 MB, 81 % of the largest string a browser can hold (the dashboard reads the
+ *  file as one string); compact it is a third of that. Mirror of build_geojson(). */
+export function buildGeoJSON(results) {
   const features = [];
   for (const p of results.parcels) features.push(toFeature(p, "parcel"));
   for (const lc of results.landcover || []) features.push(toFeature(lc, "landcover"));
   for (const bz of results.bauzonen || []) features.push(toFeature(bz, "bauzonen"));
   for (const h of results.habitat || []) features.push(toFeature(h, "habitat"));
-  saveBlob(new Blob([JSON.stringify({ type: "FeatureCollection", features }, null, 2)], { type: "application/geo+json" }), filename);
+  const NL = String.fromCharCode(10);
+  return '{"type":"FeatureCollection","features":[' + NL + features.map((f) => JSON.stringify(f)).join("," + NL) + NL + "]}";
+}
+
+/** Download all analysed layers as one GeoJSON file (see buildGeoJSON). */
+export function downloadGeoJSON(results, filename = "landcover-parcels.geojson") {
+  saveBlob(new Blob([buildGeoJSON(results)], { type: "application/geo+json" }), filename);
 }
 
 function saveBlob(blob, filename) {

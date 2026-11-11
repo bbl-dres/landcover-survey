@@ -35,9 +35,9 @@ Zusätzlich berechnet die App pro Grundstück weitere Klassierungen, umschaltbar
 |-------------|-------|
 | **Grünfläche** | Grünfläche (humusiert) · Grünfläche (bestockt) · Nicht begrünt |
 | **Versiegelung** | Versiegelt · Unversiegelt |
-| **VBS Kategorie** | A. Siedlungsfläche · B. Landwirtschaftsfläche · C. Bestockte Fläche · D. Unproduktive Fläche |
-| **VBS Produktivität** | 1 Biologisch produktiv · 2 Biologisch unproduktiv |
-| **VBS Typ** | Typ 1 — Grünflächen in Gebäudeumgebung · Typ 2 — Übrige Grünflächen |
+| **AV Kategorie** | A. Siedlungsfläche · B. Landwirtschaftsfläche · C. Bestockte Fläche · D. Unproduktive Fläche |
+| **AV Produktivität** | 1 Biologisch produktiv (alle Bodenbedeckungsarten ausser Gebäude, befestigte Flächen und Abbau/Deponie) · 2 Biologisch unproduktiv |
+| **AV Typ** | Typ 1 — Grünflächen in Gebäudeumgebung (Gartenanlage) · Typ 2 — Übrige Grünflächen (alle übrigen biologisch produktiven Arten, auch Fels, Gletscher/Firn und Geröll/Sand) |
 
 Die vollständige Zuordnung aller 26 Bodenbedeckungsarten zu diesen Klassen finden Sie in [CLASSIFICATION.md](CLASSIFICATION.md).
 
@@ -115,9 +115,9 @@ Par ailleurs, l'application calcule pour chaque parcelle d'autres classification
 |----------------|---------|
 | **Espace vert** | Espace vert (sol humifère) · Espace vert (boisé) · Non végétalisé |
 | **Imperméabilisation** | Imperméabilisé · Non imperméabilisé |
-| **Catégorie VBS** | A. Surface d'habitat · B. Surface agricole · C. Surface boisée · D. Surface improductive |
-| **Productivité VBS** | 1 Biologiquement productif · 2 Biologiquement improductif |
-| **Type VBS** | Type 1 — Espaces verts autour des bâtiments · Type 2 — Autres espaces verts |
+| **Catégorie AV** | A. Surface d'habitat · B. Surface agricole · C. Surface boisée · D. Surface improductive |
+| **Productivité AV** | 1 Biologiquement productif · 2 Biologiquement improductif |
+| **Type AV** | Type 1 — Espaces verts autour des bâtiments · Type 2 — Autres espaces verts |
 
 La correspondance complète des 26 types de couverture du sol avec ces classes figure dans [CLASSIFICATION.md](CLASSIFICATION.md).
 
@@ -192,9 +192,9 @@ Inoltre l'applicazione calcola per ogni particella altre classificazioni, selezi
 |-----------------|--------|
 | **Spazio verde** | Spazio verde (humus) · Spazio verde (boscato) · Non inverdito |
 | **Impermeabilizzazione** | Impermeabilizzato · Non impermeabilizzato |
-| **Categoria VBS** | A. Superficie insediativa · B. Superficie agricola · C. Superficie boscata · D. Superficie improduttiva |
-| **Produttività VBS** | 1 Biologicamente produttivo · 2 Biologicamente improduttivo |
-| **Tipo VBS** | Tipo 1 — Spazi verdi nell'area edificata · Tipo 2 — Altri spazi verdi |
+| **Categoria AV** | A. Superficie insediativa · B. Superficie agricola · C. Superficie boscata · D. Superficie improduttiva |
+| **Produttività AV** | 1 Biologicamente produttivo · 2 Biologicamente improduttivo |
+| **Tipo AV** | Tipo 1 — Spazi verdi nell'area edificata · Tipo 2 — Altri spazi verdi |
 
 La corrispondenza completa dei 26 tipi di copertura del suolo con queste classi è riportata in [CLASSIFICATION.md](CLASSIFICATION.md).
 
@@ -266,9 +266,9 @@ The app also derives further classifications per parcel, switchable in the **Are
 |----------------|--------|
 | **Green space** | Green space (soil-covered) · Green space (wooded) · Not vegetated |
 | **Imperviousness** | Sealed · Unsealed |
-| **VBS Category** | A. Settlement area · B. Agricultural area · C. Wooded area · D. Unproductive area |
-| **VBS Productivity** | 1 Biologically productive · 2 Biologically unproductive |
-| **VBS Type** | Type 1 — Green spaces near buildings · Type 2 — Other green spaces |
+| **AV Category** | A. Settlement area · B. Agricultural area · C. Wooded area · D. Unproductive area |
+| **AV Productivity** | 1 Biologically productive · 2 Biologically unproductive |
+| **AV Type** | Type 1 — Green spaces near buildings · Type 2 — Other green spaces |
 
 The full mapping of all 26 land cover types to these classes is in [CLASSIFICATION.md](CLASSIFICATION.md).
 

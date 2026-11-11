@@ -239,11 +239,18 @@ export async function initMap(containerId, { onParcelSelect, onLandcoverSelect }
   // spinner would spin indefinitely. Errors after load (e.g. a single missing
   // tile) are non-fatal and must not reject, so we drop the error listener once
   // the map has loaded.
+  // A failed tile, sprite or glyph request also arrives as an `error` event (it
+  // carries the source or tile it belongs to); the map still loads without it.
   await new Promise((resolve, reject) => {
     const onLoad = () => { map.off("error", onError); resolve(); };
-    const onError = (e) => { map.off("load", onLoad); reject((e && e.error) || new Error("Map failed to load")); };
+    const onError = (e) => {
+      if (e && (e.sourceId || e.tile)) return; // one resource failed — not the map
+      map.off("error", onError);
+      map.off("load", onLoad);
+      reject((e && e.error) || new Error("Map failed to load"));
+    };
     map.once("load", onLoad);
-    map.once("error", onError);
+    map.on("error", onError);
   });
 
   // Ensure the canvas matches its container now that the style has loaded.
@@ -296,11 +303,24 @@ export async function initMap(containerId, { onParcelSelect, onLandcoverSelect }
 
   // Accordion layer toggles
   initAccordionMenu();
+
+  // Reference layers ticked during an earlier analysis are still ticked: put them
+  // on this map too (the list of active layers outlives the map).
+  readdSwisstopoLayers();
 }
 
 /* ── Accordion Layer Menu ── */
 
+/** The layer menu, basemap picker and context-menu items are static elements of
+ *  index.html, while initMap runs once per analysis. Binding their listeners on every
+ *  run doubled them: on the second analysis each click toggled twice, so the layer
+ *  menu and the basemap panel no longer opened. They are wired once; the handlers
+ *  read the module-level `map`, which always is the current one. */
+let accordionWired = false, basemapWired = false, contextMenuWired = false;
+
 function initAccordionMenu() {
+  if (accordionWired) return;
+  accordionWired = true;
   // Accordion header toggle (mutually exclusive)
   document.querySelectorAll(".accordion-header").forEach((header) => {
     header.addEventListener("click", () => {
@@ -349,11 +369,9 @@ function initAccordionMenu() {
   });
 
   // Layer visibility toggles
-  initLayerToggle("layer-toggle-parcels", ["parcels-fill", "parcels-line", "parcels-label"]);
-  initLayerToggle("layer-toggle-landcover", ["landcover-fill", "landcover-line"]);
-  initLayerToggle("layer-toggle-bauzonen-result", ["bauzonen-fill", "bauzonen-line"]);
-  initLayerToggle("layer-toggle-habitat-result", ["habitat-fill", "habitat-line"]);
-  initLayerToggle("layer-toggle-labels", ["parcels-label"]);
+  for (const id of Object.keys(LAYER_TOGGLES)) {
+    document.getElementById(id)?.addEventListener("change", applyLayerToggles);
+  }
 
   // Swisstopo overlay toggles (ÖREB, AV) — add/remove as swisstopo layers
   initSwisstopoToggle("layer-toggle-av");
@@ -372,15 +390,29 @@ function initSwisstopoToggle(checkboxId) {
   });
 }
 
-function initLayerToggle(checkboxId, layerIds) {
-  const cb = document.getElementById(checkboxId);
-  if (!cb) return;
-  cb.addEventListener("change", () => {
-    const vis = cb.checked ? "visible" : "none";
-    for (const id of layerIds) {
-      if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", vis);
-    }
-  });
+/** Result-layer checkboxes → the map layers each one shows. */
+const LAYER_TOGGLES = {
+  "layer-toggle-parcels": ["parcels-fill", "parcels-line"],
+  "layer-toggle-landcover": ["landcover-fill", "landcover-line"],
+  "layer-toggle-bauzonen-result": ["bauzonen-fill", "bauzonen-line"],
+  "layer-toggle-habitat-result": ["habitat-fill", "habitat-line"],
+};
+
+/** Make the result layers match their checkboxes. Called on every toggle and after
+ *  the layers are (re)created — a new map or a basemap switch adds them with default
+ *  visibility, which would otherwise contradict the boxes. Labels show only while
+ *  both «Grundstücke» and «Beschriftungen» are ticked. */
+function applyLayerToggles() {
+  if (!map) return;
+  const checked = (id) => !!document.getElementById(id)?.checked;
+  const set = (layerId, on) => { if (map.getLayer(layerId)) map.setLayoutProperty(layerId, "visibility", on ? "visible" : "none"); };
+  for (const [checkboxId, layerIds] of Object.entries(LAYER_TOGGLES)) {
+    if (!document.getElementById(checkboxId)) continue;
+    for (const layerId of layerIds) set(layerId, checked(checkboxId));
+  }
+  if (document.getElementById("layer-toggle-labels")) {
+    set("parcels-label", checked("layer-toggle-parcels") && checked("layer-toggle-labels"));
+  }
 }
 
 /* ── Context Menu ── */
@@ -415,6 +447,10 @@ function initContextMenu() {
 
   // Hide on click elsewhere
   map.on("click", () => menu.classList.remove("show"));
+
+  // Everything below binds static elements — once (see accordionWired).
+  if (contextMenuWired) return;
+  contextMenuWired = true;
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") menu.classList.remove("show");
   });
@@ -464,6 +500,8 @@ function initBasemapSelector() {
   if (!switcher) return;
   switcher.classList.add("visible");
 
+  if (basemapWired) return;
+  basemapWired = true;
   const btn = document.getElementById("style-switcher-btn");
   const panel = document.getElementById("style-panel");
 
@@ -493,8 +531,8 @@ function initBasemapSelector() {
       const styleId = optBtn.dataset.style;
       if (styleId === currentStyle) { panel.classList.remove("show"); return; }
 
+      if (!map) return;
       currentStyle = styleId;
-      localStorage.setItem("mapStyle", styleId);
       map.setStyle(MAP_STYLES[styleId].url);
       map.once("idle", () => reAddDataLayers());
 
@@ -615,6 +653,7 @@ function reAddDataLayers() {
   if (currentBauzonenData) map.getSource("bauzonen").setData(currentBauzonenData);
   if (currentHabitatData) map.getSource("habitat").setData(currentHabitatData);
   if (currentClusterData) map.getSource("parcels-clusters").setData(currentClusterData);
+  applyLayerToggles();
   if (is3D) show3DBuildings();
   readdSwisstopoLayers();
 }
@@ -644,6 +683,7 @@ function parcelMarkerPoint(feature) {
 export function plotResults(results) {
   if (!map) return;
   if (!map.getSource("parcels")) addDataLayers();
+  applyLayerToggles(); // a fresh map starts with default visibility; the boxes may say otherwise
 
   const parcelFeatures = [];
   const lcFeatures = [];
@@ -832,6 +872,11 @@ export function teardownMap() {
   if (resizeObserver) { resizeObserver.disconnect(); resizeObserver = null; }
   if (map) { map.remove(); map = null; }
   summaryToggleControl = null; // recreated by the next initMap; avoids acting on a removed control
+  // State of the map that is gone: the next one starts flat, and a table click while
+  // it loads must not fly to a parcel of the previous run.
+  is3D = false;
+  currentParcelData = currentLandcoverData = currentBauzonenData = currentHabitatData = null;
+  currentClusterData = null;
 }
 export function is3DActive() { return is3D; }
 

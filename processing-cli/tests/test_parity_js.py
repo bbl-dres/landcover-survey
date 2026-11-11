@@ -96,6 +96,32 @@ def test_normalize_egrid_identical(js_dump):
         assert normalize_egrid(s) == expected
 
 
+# --- list reader ---------------------------------------------------------------
+
+def test_list_reader_identical(js_dump, cases):
+    """userinput.js and user_input.py read the same text into the same rows — or
+    both refuse it."""
+    import user_input as U
+
+    assert len(js_dump["upload"]) == len(cases["upload_texts"])
+    for text, js in zip(cases["upload_texts"], js_dump["upload"]):
+        try:
+            headers, rows = U._normalize_parsed(*U._parse_text(text))
+            py = {"headers": headers, "rows": rows}
+        except ValueError:
+            py = {"error": True}
+        assert py == js, f"reader differs for {text[:60]!r}"
+    # the cases cover both outcomes
+    assert sum(1 for r in js_dump["upload"] if r.get("error")) >= 4
+    assert sum(1 for r in js_dump["upload"] if not r.get("error")) >= 15
+
+
+def test_aggregate_columns_identical(js_dump):
+    assert js_dump["aggKeys"] == list(P.LANDCOVER_AGG_KEYS)
+    assert js_dump["emptyAgg"] == P._empty_landcover_aggregate()
+    assert list(js_dump["emptyAgg"]) == list(P.LANDCOVER_AGG_KEYS)   # same order → same export header
+
+
 # --- number formatting --------------------------------------------------------
 
 def test_number_formatting_identical(js_dump):
@@ -111,7 +137,7 @@ def test_number_formatting_identical(js_dump):
 # --- rows + aggregation --------------------------------------------------------
 
 def _lc_rows(cases):
-    return [P._lc_row("P1", "CH1", art, bfsnr, "", "", area, None, C.classify(art))
+    return [P._make_landcover_row("P1", "CH1", art, area, None, bfsnr=bfsnr)
             for art, area, bfsnr in cases["landcover_rows"]]
 
 

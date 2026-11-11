@@ -251,15 +251,20 @@ not halt processing. Only systemic errors abort.
 
 | Situation | Behaviour |
 |-----------|-----------|
-| EGRID not found in AV | Row kept; `Check_EGRID` = error, `parcel_area_m2` = null |
-| Duplicate EGRIDs | Geometries dissolved; `check_egrid` = `merged` (count in the log) |
+| EGRID not found in AV | Row kept; `check_egrid` = `not_found`, every area cell empty (not 0) |
+| Duplicate EGRIDs | Geometries dissolved; `check_egrid` = `merged`, `flaeche` summed, `nummer` lists every part (count in the log). Mode 2 also dissolves an EGRID that lies in two municipalities |
+| Parcel without EGRID or `BFSNr` (Mode 2) | Processed on its own: `check_egrid` = `no_egrid`, `id` = `fid:<fid>`; the log compares rows read with parcels written |
+| Overlay request fails | `check_bauzonen` / `check_habitat` = `error`, that parcel's overlay cells empty |
+| Parcel with a hole or several parts (overlay) | Queried by its envelope (the service rejects a multi-ring polygon), clipped locally |
+| Invalid land-cover polygon | Repaired (`make_valid`) before the clip |
+| A later chunk / municipality fails, or Ctrl-C | The finished part is written, the log says the run is incomplete, exit 1 |
 | `make_valid()` returns empty | Feature kept with zero area; logged WARNING |
 | Clip produces only lines/points | Feature dropped; logged DEBUG |
 | Clip produces sliver < 0.001 m² | Feature dropped; logged DEBUG |
 | Unknown `Art` value | Feature kept; defaults applied; logged WARNING |
 | CRS ≠ EPSG:2056 | **Abort** (`ValueError`) |
 | Input missing `ID`/`EGRID` | **Abort** (`ValueError`) |
-| GeoPackage missing/unreadable | **Abort** |
+| GeoPackage missing, or without the expected layers | **Abort** with a message, exit 1 (nothing is created) |
 
 | Level | Content |
 |-------|---------|
@@ -301,8 +306,21 @@ for the contrast with the CLI.
    split into four — until every request is a single complete page; results are
    deduplicated by feature id and sorted by id (F1 in the review).
 
-Calls are fired per parcel with an `AbortController` timeout and retries; a failed
-WFS fetch flags the parcel as "land cover unavailable" rather than silently zero.
+Calls are fired per parcel with an `AbortController` timeout and retries. Parcels
+whose query still failed are processed again at the end of the run (two rounds,
+20 s apart) — the services answer HTTP 502 in bursts that outlast the per-request
+retries.
+
+**Empty means unknown, 0 means nothing there.** A value whose query failed is left
+empty and the parcel is flagged; it never becomes a number:
+
+| Situation | Parcel row |
+|-----------|-----------|
+| Land-cover request failed | `check_wfs` = `wfs_error`, `errors` = «Land cover unavailable (WFS)», every `sia416_*` / `din277_*` / `sealed_m2` / `greenspace_m2` / `av_*` column **empty**, `lc_source` empty. No BAFU substitute: the land cover is unknown, not absent. |
+| Land-cover request answered, nothing on the parcel | `check_wfs` = `ok`, the same columns `0` (and the synthetic fallback applies) |
+| Bauzonen / habitat request failed | `check_bauzonen` / `check_habitat` = `error`, the per-zone / per-habitat columns **empty** |
+| Overlay answered, parcel has no area of a type | that type's column `0` |
+| EGRID invalid or not found | all area columns empty |
 
 ### Overlays: Bauzonen + BAFU habitat
 
@@ -422,6 +440,52 @@ the BAFU habitat map** (`lc_source = BAFU`, `lc_synthetic = yes`; see
 [Synthetic AV land cover](#synthetic-av-land-cover-fallback-where-av-is-missing)), so
 the KPIs stay geometry-backed rather than empty. The Python CLI has full coverage from
 the local GeoPackage and does not synthesize. See [MANUAL.md](MANUAL.md).
+
+---
+
+## Web app ⇄ CLI `api` source: one pipeline, two implementations
+
+The web app and the CLI's `api` source are two independent implementations of the
+same pipeline — no shared code, by design: the web app must run from a static
+folder, the CLI without Node. They are kept in step by naming and by tests instead.
+A function has the same name on both sides (camelCase ⇄ snake_case, private Python
+functions with a leading underscore), does the same thing in the same order, and
+the constants have the same names and values.
+
+| Concern | Web app (`processing-web/js/`) | CLI (`processing-cli/src/`) |
+|---------|-------------------------------|------------------------------|
+| List reader | `userinput.js` — `decodeText`, `detectDelimiter`, `tokenizeDelimited`, `parseDelimited`, `isSapExport`, `parseSAP`, `parseText`, `excelCellStr`, `normalizeParsed` | `user_input.py` — `_decode_text`, `_detect_delimiter`, `_tokenize_delimited`, `_parse_delimited`, `_is_sap_export`, `_parse_sap`, `_parse_text`, `_excel_cell_str`, `_normalize_parsed` |
+| EGRID spelling | `config.js` `normalizeEgrid` | `user_input.py` `normalize_egrid` |
+| Live requests | `geoapi.js` — `fetchJson`, `fetchParcelGeometry` (+ `clearParcelCache`), `fetchLandCover`, `fetchIdentify`, `fetchLandCoverBAFU`, `fetchBauzonen`, `loadGreenInventory`, `greenInventoryFlag` | `api.py` — `_fetch_json`, `fetch_parcel_geometry` (+ `clear_parcel_cache`), `fetch_landcover`, `fetch_identify`, `fetch_landcover_bafu`, `fetch_bauzonen`, `load_green_inventory`, `green_inventory_flag` |
+| Per-parcel pipeline | `processor.js` — `processRows`, `processOne`, `needsRetry`, `betterResult`, `overlayFill`, `clipFeatures`, `clipLandCover`, `clipHabitat`, `clipBauzonen`, `ohneBauzoneGeometry` | `processor_web.py` — `process_rows`, `_process_one`, `needs_retry`, `_better_result`, `_overlay_fill`, `_clip_features`, `_clip_landcover`, `_clip_habitat`, `_clip_bauzonen`, `_ohne_bauzone_geometry` |
+| Row builders | `makeLandcoverRow`, `makeSynthLandcoverRow`, `makeBauzoneRow`, `makeHabitatRow`, `makeErrorParcel` | `_make_landcover_row`, `_make_synth_landcover_row`, `_make_bauzone_row`, `_make_habitat_row`, `_make_error_parcel` |
+| Aggregation | `aggregateLandCover`, `emptyLandCoverAggregate`, `aggregateBauzonen`, `aggregateHabitat`, `dominantBfsnr`, `round2` | `_aggregate_landcover`, `_empty_landcover_aggregate`, `_aggregate_bauzonen`, `_aggregate_habitat`, `_dominant_bfsnr`, `round2` |
+| Classification | `config.js` — tables, `classify`, `classifyBafu`, `typochToBBArt`, key helpers | `config.py` (tables) + `classify_web.py` (`classify`, `classify_bafu`, `typoch_to_bbart`, key helpers) |
+| Export | `export.js` — `csvCell`, `buildCSV`, `unionHeaders`, `toFeature`, `buildGeoJSON` | `export_web.py` — `_csv_cell`, `_build_csv`, `_union_headers`, `_to_feature`, `build_geojson` |
+| Geometry | Turf 7.4.0 (pinned in `index.html`) | `geom_wgs84.py` (port of `turf.area`, GEOS clip) + `fdlibm.py` (the JS engine's `sin`) |
+| Constants | `CONCURRENCY`, `MIN_AV_COVER_FRAC`, `OHNE_BAUZONE_MIN_AREA`, `HABITAT_GAP_MIN_FRAC`, `RETRY_ROUNDS`, `LANDCOVER_AGG_KEYS`, `WFS_PAGE`, `WFS_MAX_FEATURES`, `IDENTIFY_PAGE`, `IDENTIFY_MAX_DEPTH`, `SLIVER_THRESHOLD` | the same names |
+
+What differs on purpose:
+
+- **Stopping a run.** The web app drops the rows that were not finished when the
+  user cancels; the CLI keeps them as error rows (`Not processed`) and still writes
+  the exports, because a batch run has no screen to show what is missing.
+- **Module split.** The web app keeps tables and classifiers in one `config.js`
+  (one less request); the CLI splits them into `config.py` and `classify_web.py`
+  because the `gpkg` source shares the tables.
+
+How it is checked:
+
+- `processing-cli/tests/test_parity_js.py` runs the browser modules in Node on
+  `tests/fixtures/parity_cases.json` and compares every table, classifier, key,
+  number format, row shape, aggregation and the list reader (26 texts) with Python.
+- `processing-web/tests/processrows.test.mjs` and
+  `processing-cli/tests/test_robustness.py` run the same failure scenarios against
+  fake services on each side.
+- `tests/test_live_parity.py` (`LANDCOVER_LIVE=1`) processes eight parcels through
+  the CLI against the live services and compares the export with the web app's at
+  zero tolerance. `tests/web_export.mjs` recreates the web side without a browser:
+  it runs the app's own modules and the pinned Turf build in Node.
 
 ---
 

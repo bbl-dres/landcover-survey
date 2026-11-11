@@ -29,9 +29,14 @@ HABITAT_HEADERS = ["id", "egrid", "fid", "art", "typoch_l1", "typoch_l2", "typoc
 
 
 def _norm_num(v):
-    """Integer-valued float → int (so 0.0 serialises as ``0``, matching JS)."""
-    if isinstance(v, float) and v.is_integer():
-        return int(v)
+    """Integer-valued float → int (so 0.0 serialises as ``0``, matching JS). A NaN
+    or infinity becomes an empty value: ``json`` would write the bare token ``NaN``,
+    which no JSON parser accepts — one such cell made the whole export unreadable."""
+    if isinstance(v, float):
+        if v != v or v in (float("inf"), float("-inf")):
+            return ""
+        if v.is_integer():
+            return int(v)
     return v
 
 
@@ -61,8 +66,13 @@ def _to_feature(row: dict, layer: str) -> dict:
     return {"type": "Feature", "geometry": mapping(g) if g is not None else None, "properties": props}
 
 
-def write_geojson(results: dict, path: str | Path) -> None:
-    """Write all analysed layers as one GeoJSON FeatureCollection (parcels first)."""
+def build_geojson(results: dict) -> str:
+    """All analysed layers as one GeoJSON FeatureCollection, as text (parcels first).
+
+    Compact, one feature per line: a pretty-printed export of ~2,100 parcels was
+    437 MB, 81 % of the largest string a browser can hold (the dashboard reads the
+    file as one string); compact it is a third of that. Mirror of buildGeoJSON().
+    """
     features = []
     for p in results.get("parcels", []):
         features.append(_to_feature(p, "parcel"))
@@ -72,12 +82,16 @@ def write_geojson(results: dict, path: str | Path) -> None:
         features.append(_to_feature(bz, "bauzonen"))
     for h in results.get("habitat", []):
         features.append(_to_feature(h, "habitat"))
-    fc = {"type": "FeatureCollection", "features": features}
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "w", encoding="utf-8") as fh:
-        json.dump(fc, fh, ensure_ascii=False, indent=2)
-    logger.info("Wrote %d features to %s", len(features), path.name)
+    nl = chr(10)
+    lines = [json.dumps(f, ensure_ascii=False, separators=(",", ":"), allow_nan=False) for f in features]
+    return '{"type":"FeatureCollection","features":[' + nl + ("," + nl).join(lines) + nl + "]}"
+
+
+def write_geojson(results: dict, path: str | Path) -> None:
+    """Write all analysed layers as one GeoJSON file (see :func:`build_geojson`)."""
+    text = build_geojson(results)
+    _write_text(text, path)
+    logger.info("Wrote %d features to %s", text.count(chr(10)) - 1, Path(path).name)
 
 
 # ---------------------------------------------------------------------------
