@@ -49,7 +49,7 @@ The header carries the Confederation lockup with the dashboard title, the
   parcels failing a Prüfregel and jumps to that tab; the area card's second line is the
   mean parcel size, the two share cards read «% der GSF»; each label and line stays on
   one row, the tooltip carries the long form); the summary tables «Flächenverteilung»
-  (VBS, Bauzonen, SIA 416, Versiegelung, AV land cover by type, BAFU habitats); the
+  (AV Produktivität and Typ, Bauzonen, SIA 416, Versiegelung, AV land cover by type, BAFU habitats); the
   same map in a fixed-height panel with a compact layer widget (top left: the app's
   own layers, same state as the Karte accordion) and the basemap switcher (bottom
   right); the accordion and the selection bar stay away, the legend prints only;
@@ -107,7 +107,8 @@ table search is now the «In Tabelle filtern…» field above the table.
   column (both maps), so it never covers the geometry it describes; the zoom-to-parcel
   fit leaves room beside it (below it on narrow maps). It shows Ort, Bezeichnung, ID,
   E-GRID, Region and Grundstücksfläche with the actions **Hinzoomen**, **In Tabelle
-  anzeigen** (switches to Auswertung and filters the table to the parcel),
+  anzeigen** (switches to Auswertung and shows exactly that parcel, as a removable
+  pill «Nur Grundstück: …»),
   **PDF-Bericht erstellen** and a checkbox to add the parcel to the PDF selection,
   plus «Alle Details anzeigen» (the detail page, below). A clicked overlay feature
   (Bodenbedeckung, Bauzone, Lebensraum) opens in the same card. Every card starts
@@ -184,7 +185,7 @@ appear as pills with an ✕ and an «Alle Filter zurücksetzen» link.
   416, Versiegelung or AV land-cover tables toggles the matching «Enthält» filter.
   These filters select **Grundstücke that contain** the category; they do not hide
   the other land cover of those parcels.
-- **VBS filters**: Produktivität (produktiv / unproduktiv) and Typ (Typ 1 / Typ 2)
+- **AV filters**: Produktivität (produktiv / unproduktiv) and Typ (Typ 1 / Typ 2)
   use the same 10 % rule as the counts (below), so the filter results equal the
   counts. Options inside one group OR, the two groups AND. A legacy `has=VBSp` /
   `has=VBSu` link still resolves and is rewritten to `vbsp=…` on load. Both groups
@@ -205,7 +206,11 @@ On load (and after «Alle Filter zurücksetzen») these filters are active:
 
 E-GRID-Status and Bodenbedeckung default to **Alle**. Bodenbedeckung is a two-box
 checklist where an empty or complete selection means «alle», so `cov` stays
-single-valued (`cov=with` / `cov=without`).
+single-valued (`cov=with` / `cov=without`). «Ohne» means a found parcel whose
+land-cover request answered with nothing; parcels without a resolved E-GRID and
+parcels whose request failed are in neither box. `id=<id>` restricts the table to
+exactly one parcel (set by «In Tabelle anzeigen»). Parameters with a fixed set of
+values (`excl`, `art`, `has`, `vbsp`, `vbst`, `gi`) ignore values outside it.
 
 #### Default exclusions
 
@@ -219,12 +224,13 @@ The rules live in `EXCLUDE_RULES` in `js/dashboard.js`:
 | `LÖVM` | Löschvermerk | prefix |
 | `PP` | Parkplatz | standalone token anywhere, e.g. "Bern, Bollwerk 27, **PP** Miete" (not inside words like Ra**pp**erswil) |
 
-### Counting rule (parcels per VBS category)
+### Counting rule (parcels per AV category)
 
-Tables show area **and** number of parcels. A parcel counts in a VBS category when
+Tables show area **and** number of parcels. A parcel counts in an AV category when
 the category covers at least **10 %** of the parcel area (`VBS_THRESHOLD` in
 `js/dashboard.js`; Typ 1 = `av_typ1_m2`, Typ 2 = `av_typ2_m2`, Unproduktiv =
-`av_unproduktiv_m2`; Produktiv = Typ 1 or Typ 2). A parcel can count in several
+`av_unproduktiv_m2`, Produktiv = `av_produktiv_m2` — the same rule the filter of
+that name uses). A parcel can count in several
 categories, so the counts do not sum to the number of parcels («Mehrfachzählung
 möglich»). Teilportfolio and Region count without a threshold (exclusive, sums to
 the Total row). The KPI card «Grundstücke mit Typ 1» shows the Typ 2 count as its
@@ -247,13 +253,50 @@ Eigentumsart and Status are written as their labels too); the GeoJSON
 export keeps the raw `greeninv` property; the Datenqualität workbook's Abweichungen
 sheet carries it as well. Exports without the column show none of this.
 
+### Unknown is not 0
+
+A value the processing tools could not obtain is shown as unknown («–», «nicht
+abrufbar»), never as 0, and is left out of denominators. What decides it are the
+flags, not the cell (older exports carry 0 there, newer ones an empty cell):
+
+| Flag on the parcel | Treated as |
+|---|---|
+| `check_wfs` = `wfs_error` and no land cover on the row | land cover unknown |
+| `check_bauzonen` = `error` | Bauzonen unknown |
+| `check_habitat` = `error` | habitat unknown |
+| `check_egrid` not `found` / `merged` | parcel not resolved: no area at all |
+
+- **KPI shares** («Grünfläche x % der GSF», «Versiegelte Fläche») divide by the GSF
+  of the parcels whose land cover is known. A parcel with a failed request used to
+  count as 0 % green and pull the share down.
+- **Tables** keep the GSF as 100 % and show the unknown part as its own row:
+  «Bodenbedeckung nicht abrufbar», «Bauzonen nicht abrufbar», «Lebensräume nicht
+  abrufbar», beside «Ohne Bodenbedeckung», «Ohne Bauzone», «Ohne Lebensraum-Daten»
+  (asked, nothing there).
+- **Datenqualität** has the rule «Bodenbedeckung abgerufen»; a failed Bauzonen or
+  habitat request fails its coverage rule instead of being skipped.
+- **Table, Excel, PDF, detail page** show «–» / an empty cell for an unknown value.
+- **Mean parcel size** divides by the parcels that have an area.
+
+### Parcels listed more than once
+
+The same E-GRID can stand in several rows (two SAP objects on one parcel). Every
+area total, share and parcel count takes such a parcel **once** — the first row in
+the file counts — and the map draws it once. The rows all stay in the table; KPI
+tooltips and the table footer say «n Grundstücke mehrfach geführt (x ha nicht
+doppelt gezählt)». Filter-facet counts, the pager and the Datenqualität tab count
+rows. The rule «E-GRID eindeutig» looks at resolved parcels only: rows without a
+valid E-GRID all carry the same placeholder and are not duplicates of each other.
+
 ### Loading indicator
 
 A full-page spinner (`#app-loading`, static in the HTML so it is on screen from the first
 paint) covers every longer step: opening a saved deliverable (parsing the embedded data and
 building the dashboard), reading and parsing a GeoJSON in the file picker, building the
-dashboard after **Dashboard anzeigen**, and filter passes on datasets of 20'000 parcels or
-more. The map shows its own spinner while MapLibre loads, and the download dialog's hint
+dashboard after **Dashboard anzeigen**, and filter passes that touch 20'000 or more
+parcels and visible overlay features. Hidden overlay layers are not sent to the map
+on a filter change; they are filled when switched on (on the 2026-08 export a filter
+change handed the map about 119 MB of GeoJSON before, 0.3 MB now). The map shows its own spinner while MapLibre loads, and the download dialog's hint
 line carries one while an export runs.
 
 ### Layout, phones and tokens
@@ -270,6 +313,23 @@ size, icon size, z-index and map colour comes from `css/tokens.css`; the app scr
 reads the map colours from the tokens at boot (`MAP_COLORS`), so the offline
 deliverable carries the same palette. Design review:
 [docs/reviews/2026-10-28-dashboard-ux-review.md](../docs/reviews/2026-10-28-dashboard-ux-review.md).
+
+### File picker
+
+- The file is read as one string, and a browser string has a maximum length: about
+  512 MB in Chrome and Edge, about 1 GB in Firefox and Safari. A larger file is
+  refused with «Datei zu gross (… MB)» before reading; from 80 % of the limit the
+  picker shows a hint. The processing tools write compact GeoJSON for this reason
+  (about a third of the size of an indented file).
+- Coordinates must be WGS84 (longitude / latitude); an LV95 file is refused with a
+  message that says so.
+- A file without `layer` properties is read as a parcel list only if its features
+  carry `egrid` or `parcel_area_m2`; anything else is refused as «kein
+  Bodenbedeckungs-Export».
+- The status line reports what was left out: features of an unknown layer, layer
+  features without geometry (not on the map, included in the sums), and the columns
+  removed by the allowlist.
+- `id` should be unique and not empty: selection, PDF pages and map clicks key on it.
 
 ### Robustness notes (code review 2026-10-29)
 
@@ -303,6 +363,7 @@ snapshot with its legend.
 | `js/dashboard.js` | The whole app: shared helpers (allowlist, inline-and-embed deliverable), the file picker, the dashboard (`boot`), map, search, external maps, selection, download dialog. |
 | `js/data.js` | **Generated** reference tables (land-cover types and main groups, TypoCH names and level-1 colours, Bauzonen, country names) from `data/*.json` and `processing-web/js/config.js` by `scripts/build_dashboard_data.mjs` — do not edit; `npm run build:dashboard-data` regenerates it. |
 | `tests/data.test.mjs` | Fails when `js/data.js` is stale or a reference breaks its contract (`npm test`). |
+| `tests/logic.test.mjs` | The dashboard's own arithmetic: reading a GeoJSON, totals and shares, the Datenqualität rules, URL parameters, the picker's checks. It loads `js/dashboard.js` without a DOM: the script then stops before `boot()` and hands its pure functions to the test as `DASHBOARD_CORE` (a browser never takes that branch). |
 | `js/ch-map.js` | Simplified Swiss outline for the PDF locator map. |
 | `assets/basemaps/*.png` | Basemap thumbnails (rendered from the styles themselves, no API key). |
 
@@ -336,8 +397,10 @@ gracefully offline: tables, filters, parcel search and exports keep working.
 ### Not-found parcels
 
 A complete export geojson contains **every** input parcel, including those without
-a valid EGRID (exported with a `null` geometry). They show up in the dashboard with
-0 m² land cover. Just export a complete geojson; nothing else is needed.
+a valid EGRID (exported with a `null` geometry). They show up in the dashboard
+without any area («–») and are counted as «ohne aufgelöste E-GRID», separately from
+found parcels without land cover. Just export a complete geojson; nothing else is
+needed.
 
 ### Column allowlist / PII
 
@@ -347,8 +410,10 @@ and the exports all see only the allowlisted columns. All non-`input_` columns a
 kept (ids, QA checks, areas, BBArt `*_m2`); of the `input_*` columns only
 `input_ort`, `input_plz`, `input_rg`, `input_bez. grundstück`, `input_eigent.art`,
 `input_tpf` (portfolio code) and `input_l/r` (country) are kept. Everything else,
-owner id (`input_verantw.`), coordinates, internal SAP codes, is **dropped**. Adjust
-the `KEEP_INPUT` allowlist near the top of `js/dashboard.js` to change this.
+owner id (`input_verantw.`), coordinates, internal SAP codes, is **dropped**; the
+picker lists the dropped columns. `input_*` names are matched without regard to case
+or Unicode composition (`input_Ort`, a decomposed «ü»). Adjust the `KEEP_INPUT`
+allowlist near the top of `js/dashboard.js` to change this.
 
 > The data is embedded inline (not an ES module / not `fetch`), so the page works
 > from `file://` with no server. The BBArt "by type" table is driven by an allowlist

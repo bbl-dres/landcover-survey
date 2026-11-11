@@ -22,10 +22,11 @@ check name(s) it did not pass.
 | **Grundstück E-GRID im Kataster gefunden** | Completeness | E-GRID resolved to a geometry during processing | **all** parcels | `check_egrid` ∈ {`found`, `merged`} |
 | **Geometrie vorhanden** | Completeness | The entry carries a non-null polygon geometry | **all** parcels | `geometry` ≠ null |
 | **Fläche vorhanden** | Completeness | `parcel_area_m2` is a real positive number | **all** parcels | area is finite and > 0 |
-| **E-GRID eindeutig** *(Hinweis)* | Integrity | No E-GRID appears on more than one entry | parcels with a non-empty E-GRID | E-GRID occurs once **in the selection** |
+| **E-GRID eindeutig** *(Hinweis)* | Integrity | No E-GRID appears on more than one entry | **found** parcels (`check_egrid` ∈ {`found`, `merged`}) — unresolved rows all carry the same placeholder and are not duplicates of each other | E-GRID occurs once **in the selection** |
+| **Bodenbedeckung abgerufen** | Completeness | The land-cover request for the parcel answered | **found** parcels | `check_wfs` ≠ `wfs_error` (a failed request leaves the areas unknown, not 0) |
 | **Summe Bodenbedeckung = Grundstücksfläche** | Area balance | Σ classified land cover (GGF + BUF + UUF) equals the parcel area | parcels **with** land cover | \|Σ − area\| ≤ tol |
-| **Summe Bauzonen = Grundstücksfläche** | Area balance | Σ Bauzonen incl. „Ohne Bauzone" equals the parcel area | parcels with Bauzonen data | \|Σ − area\| ≤ tol |
-| **Summe Lebensräume = Grundstücksfläche** | Area balance | Σ BAFU-Lebensräume equals the parcel area | parcels with Lebensraum data | \|Σ − area\| ≤ tol |
+| **Summe Bauzonen = Grundstücksfläche** | Area balance | Σ Bauzonen incl. „Ohne Bauzone" equals the parcel area | parcels with Bauzonen data; a parcel whose Bauzonen request failed (`check_bauzonen` = `error`) **fails** | \|Σ − area\| ≤ tol |
+| **Summe Lebensräume = Grundstücksfläche** | Area balance | Σ BAFU-Lebensräume equals the parcel area | parcels with Lebensraum data; a parcel whose habitat request failed (`check_habitat` = `error`) **fails** | \|Σ − area\| ≤ tol |
 
 > The three **Area-balance** rules are the "land cover / BAFU polygons sum to the parcel
 > area" check — they validate the export's per-parcel area sums (`sia416_*`, `bauzonen_*`,

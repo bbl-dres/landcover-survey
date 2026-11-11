@@ -4,14 +4,27 @@
   // Snapshot the pristine template BEFORE any DOM mutation, so the HTML download
   // carries a clean shell with data swapped into the PARCEL-DATA markers.
   // The data block is swapped in on save; blanking it here avoids holding a second copy of the data all session.
-  var TEMPLATE_HTML = ("<!doctype html>\n" + document.documentElement.outerHTML).replace(/<!-- PARCEL-DATA:START[\s\S]*?PARCEL-DATA:END -->/, "<!-- PARCEL-DATA:START --><!-- PARCEL-DATA:END -->");
+  // HAS_DOM is false only under node:test (dashboard/tests/logic.test.mjs): the file is then evaluated up to
+  // the test hook in front of boot(), which hands out the pure functions and stops — see there.
+  var HAS_DOM = typeof document !== "undefined";
+  var TEMPLATE_HTML = !HAS_DOM ? "" : ("<!doctype html>\n" + document.documentElement.outerHTML).replace(/<!-- PARCEL-DATA:START[\s\S]*?PARCEL-DATA:END -->/, "<!-- PARCEL-DATA:START --><!-- PARCEL-DATA:END -->");
   // PII allowlist (mirrors the old build_dashboard.py): keep every non-input_
   // column; of input_ keep only these seven. The rest never reach a saved file.
   var KEEP_INPUT = { "input_ort":1, "input_plz":1, "input_rg":1, "input_bez. grundstück":1, "input_eigent.art":1, "input_tpf":1, "input_l/r":1 };
   // Anything that looks like personal data is dropped even outside the input_ namespace
   // (defence-in-depth: an alternate/future export schema could carry PII without the prefix).
   var PII_RE = /(^|_)(name|mieter|tenant|e?mail|telefon|phone|adresse|kontakt|person|eigent[uü]mer|owner)(_|$)/i;
-  var keepKey = function (k) { return k.indexOf("input_") === 0 ? !!KEEP_INPUT[k] : !PII_RE.test(k); };
+  function own(o, k) { return Object.prototype.hasOwnProperty.call(o, k); }
+  // Column name → the name it is kept under, or null when it is dropped. input_ columns are matched in their
+  // canonical spelling (Unicode NFC, lower case) and stored under it, because that is the spelling the app reads:
+  // a header written «input_Ort», or with a decomposed «ü», would otherwise be dropped without a trace and take
+  // the default exclusions (ABGA / LÖVM / PP) and the Land / Eigentum filters with it.
+  var normKey = function (k) { var s = String(k); return (s.normalize ? s.normalize("NFC") : s).toLowerCase(); };
+  var keepAs = function (k) {
+    var n = normKey(k);
+    if (n.indexOf("input_") === 0) return own(KEEP_INPUT, n) ? n : null;
+    return PII_RE.test(k) ? null : k;
+  };
   var DATA_MARKERS = /<!-- PARCEL-DATA:START[\s\S]*?PARCEL-DATA:END -->/;
   // Escape `<` (→ no </script> breakout) and U+2028/U+2029 (legal in JSON, but
   // terminate a JS string literal inside an inline <script> → silent corruption).
@@ -40,19 +53,25 @@
   // it). The heavy steps here are synchronous (parsing a 20 MB file, boot, a filter pass over 100k
   // rows), so withLoading() shows the overlay, lets the browser paint it (a frame + a tick), runs the
   // work, and hides it again — whatever the work returns or throws.
-  var loadingEl = document.getElementById("app-loading"), loadingMsgEl = document.getElementById("app-loading-msg");
+  var loadingEl = HAS_DOM ? document.getElementById("app-loading") : null, loadingMsgEl = HAS_DOM ? document.getElementById("app-loading-msg") : null;
   var showLoading = function (msg) { if (!loadingEl) return; if (msg) loadingMsgEl.textContent = msg; loadingEl.hidden = false; };
   // A script error before the first dispatch (js/data.js missing from a hand-edited deliverable, a syntax error)
   // would leave the overlay spinning forever: name the error on it instead.
-  window.addEventListener("error", function (e) { if (loadingEl && !loadingEl.hidden && loadingMsgEl) loadingMsgEl.textContent = "Fehler: " + ((e && e.message) || "Skript konnte nicht geladen werden") + " – Seite neu laden."; });
+  if (HAS_DOM) window.addEventListener("error", function (e) { if (loadingEl && !loadingEl.hidden && loadingMsgEl) loadingMsgEl.textContent = "Fehler: " + ((e && e.message) || "Skript konnte nicht geladen werden") + " – Seite neu laden."; });
   var hideLoading = function () { if (loadingEl) loadingEl.hidden = true; };
   var withLoading = function (msg, fn) {
     showLoading(msg);
     return new Promise(function (res, rej) {
-      requestAnimationFrame(function () { setTimeout(function () {
-        var r; try { r = fn(); } catch (e) { hideLoading(); rej(e); return; }
-        hideLoading(); res(r);
-      }, 30); });
+      var started = false;
+      var start = function () {
+        if (started) return; started = true;
+        setTimeout(function () {
+          var r; try { r = fn(); } catch (e) { hideLoading(); rej(e); return; }
+          hideLoading(); res(r);
+        }, 30);
+      };
+      requestAnimationFrame(start); // a frame, so the overlay is painted before the work blocks the thread
+      setTimeout(start, 400);       // a hidden tab gets no frames: the work must not wait until the tab is shown again
     });
   };
   var saveBlob = function (data, type, name) {
@@ -83,14 +102,23 @@
   var emptyOverlays = function () {
     return { landcover: { type: "FeatureCollection", features: [] }, bauzonen: { type: "FeatureCollection", features: [] }, habitat: { type: "FeatureCollection", features: [] } };
   };
+  // The attributes of a feature, or null when it has none that can be read (null, a string, an array).
+  var featureProps = function (f) { var pr = f && typeof f === "object" ? f.properties : null; return (pr && typeof pr === "object" && !Array.isArray(pr)) ? pr : null; };
+  // First vertex of a geometry, whatever its nesting depth; null when there is none.
+  var firstCoord = function (g) { var c = g && g.coordinates; while (Array.isArray(c) && Array.isArray(c[0])) c = c[0]; return (Array.isArray(c) && typeof c[0] === "number") ? c : null; };
   var readGeojson = function (text) {
     var doc = JSON.parse(text);
     var feats = doc && doc.type === "Feature" ? [doc] : doc && doc.features;
     if (!Array.isArray(feats)) throw new Error("keine GeoJSON-FeatureCollection.");
-    var hasLayer = feats.some(function (f) { return f && f.properties && "layer" in f.properties; });
-    var parcels = [], overlays = emptyOverlays(), skipped = 0;
+    var hasLayer = feats.some(function (f) { var pr = featureProps(f); return !!pr && "layer" in pr; });
+    // No `layer` anywhere: a legacy parcels-only export, or some other GeoJSON. Only the first carries the
+    // parcel columns; anything else would load as «n Grundstücke» without a single attribute.
+    if (!hasLayer && !feats.some(function (f) { var pr = featureProps(f); return !!pr && ("egrid" in pr || "parcel_area_m2" in pr); }))
+      throw new Error("kein Bodenbedeckungs-Export (die Features tragen weder «layer» noch «egrid» oder «parcel_area_m2»).");
+    var parcels = [], overlays = emptyOverlays(), skippedLayer = 0, skippedGeom = 0;
     feats.forEach(function (f) {
-      var pr = (f && f.properties) || {};
+      var pr = featureProps(f);
+      if (!pr) { skippedLayer++; return; }
       var layer = hasLayer ? pr.layer : "parcel";
       if (layer === "parcel") {
         // Legacy exports carry the old `vbs_*` attribute names → read them as `av_*` (an explicit `av_*` wins).
@@ -101,28 +129,61 @@
           if (!(nk in o)) o[nk] = o[lk];
           delete o[lk];
         });
-        if (f && f.geometry) o._geom = f.geometry; // for the map (survives the allowlist)
+        if (f.geometry) {
+          // The map, the labels and the PDF images all expect longitude / latitude in degrees. Projected
+          // coordinates (LV95: 2'600'000 / 1'200'000) would leave a blank map behind an exception.
+          var c0 = firstCoord(f.geometry);
+          if (c0 && (Math.abs(c0[0]) > 180 || Math.abs(c0[1]) > 90)) throw new Error("die Koordinaten sind nicht in WGS84 (Länge / Breite in Grad), sondern vermutlich in LV95. Bitte in WGS84 (EPSG:4326) exportieren.");
+          o._geom = f.geometry; // for the map (survives the allowlist)
+        }
         parcels.push(o);
-      } else if (Object.prototype.hasOwnProperty.call(overlays, layer) && f && f.geometry) {
-        overlays[layer].features.push({ type: "Feature", geometry: f.geometry, properties: { id: pr.id || "", art: pr.art || pr.Art || pr.bauzone_code || "", area_m2: +pr.area_m2 || 0 } });
+      } else if (own(overlays, layer)) {
+        if (f.geometry) overlays[layer].features.push({ type: "Feature", geometry: f.geometry, properties: { id: pr.id || "", art: pr.art || pr.Art || pr.bauzone_code || "", area_m2: +pr.area_m2 || 0 } });
+        else skippedGeom++; // a detail row without a polygon (e.g. estimated habitat): in the parcel totals, not on the map
       } else {
-        skipped++;
+        skippedLayer++;
       }
     });
-    return { parcels: parcels, overlays: overlays, skipped: skipped };
+    return { parcels: parcels, overlays: overlays, skipped: skippedLayer + skippedGeom, skippedLayer: skippedLayer, skippedGeom: skippedGeom };
   };
-  // Strip non-allowlisted (PII) columns → { cleaned, dropped }.
+  // Strip non-allowlisted (PII) columns → { cleaned, dropped }. The picker names the dropped columns, so
+  // nothing disappears silently.
   var allowlist = function (rows) {
     var droppedSet = {};
     var cleaned = rows.map(function (p) {
       var o = {};
-      for (var k in p) { if (!Object.prototype.hasOwnProperty.call(p, k)) continue; if (keepKey(k)) o[k] = p[k]; else droppedSet[k] = 1; }
+      for (var k in p) {
+        if (!own(p, k)) continue;
+        var t = keepAs(k);
+        if (t === null || (t !== k && own(p, t))) droppedSet[k] = 1; // not allowlisted, or a second spelling of a column that is there in its canonical one
+        else o[t] = p[k];
+      }
       return o;
     });
-    // keepKey now hard-drops PII-looking columns (input_ and non-input_ alike); the dropped
-    // set is surfaced to the operator in the picker so nothing leaves silently.
     return { cleaned: cleaned, dropped: Object.keys(droppedSet).sort() };
   };
+  // ---- File size: the picker reads the export as ONE string, and a string has a maximum length ----
+  // V8 (Chrome, Edge): 2^29 − 24 characters; Firefox and Safari manage about twice that. A larger file fails
+  // inside the browser with a message that says nothing about size, so the picker checks first.
+  var STR_MAX = 536870888;
+  function fileSizeLimit(ua) { return /(Chrome|Chromium|Edg)\//.test(String(ua || "")) ? STR_MAX : 2 * STR_MAX; }
+  function fileTooBig(size, ua) { return size >= fileSizeLimit(ua); }
+  function tooBigMsg(size) {
+    return "Datei zu gross (" + Math.round(size / 1048576) + " MB): der Browser kann sie nicht als Ganzes lesen (Grenze rund 512 MB in Chrome und Edge, " +
+           "rund 1 GB in Firefox und Safari). Den Export kompakt (ohne Einrückung) schreiben oder die Grundstücke auf mehrere Dateien aufteilen.";
+  }
+  // What the picker says about a file that was read: counts, what was skipped and why, which columns were dropped.
+  function pickerStatus(g, size, ua) {
+    var fmtN = new Intl.NumberFormat("de-CH"), ov = g.overlays;
+    var nOv = ov.landcover.features.length + ov.bauzonen.features.length + ov.habitat.features.length;
+    var s = fmtN.format(g.parcels.length) + " Grundstücke aus GeoJSON geladen" + (nOv ? " (+ " + fmtN.format(nOv) + " Layer-Features für die Karte)" : "");
+    if (g.skippedLayer) s += " · " + fmtN.format(g.skippedLayer) + (g.skippedLayer === 1 ? " Feature" : " Features") + " ohne bekannten Layer übersprungen";
+    if (g.skippedGeom) s += " · " + fmtN.format(g.skippedGeom) + (g.skippedGeom === 1 ? " Layer-Feature" : " Layer-Features") + " ohne Geometrie (nicht auf der Karte, in den Summen enthalten)";
+    if (g.dropped && g.dropped.length) s += " · " + g.dropped.length + (g.dropped.length === 1 ? " Spalte" : " Spalten") + " nicht übernommen (Datenschutz): " + g.dropped.join(", ");
+    s += ".";
+    if (size && size >= 0.8 * fileSizeLimit(ua)) s += " Hinweis: Die Datei belegt " + Math.round(size / fileSizeLimit(ua) * 100) + " % der Grösse, die dieser Browser lesen kann.";
+    return s;
+  }
   // Self-contained deliverable: clean template + embedded (allowlisted) parcels.
   var fetchText = function (url) {
     return fetch(url).then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status + " für " + url); return r.text(); });
@@ -168,29 +229,44 @@
     document.body.classList.add("builder-mode"); // .builder-mode shows the picker, hides the dashboard
     hideLoading();
     var bEl = function (id) { return document.getElementById(id); };
-    var fmtN = new Intl.NumberFormat("de-CH");
     var setStatus = function (h) { bEl("b-status").textContent = h; }; // plain text only — avoids injecting a parse-error message containing markup
-    var geo = null;
+    var geo = null, readSeq = 0, ua = navigator.userAgent;
     bEl("b-geojson").addEventListener("change", function (e) {
       var f = e.target.files[0]; if (!f) return;
-      setStatus("GeoJSON wird gelesen…"); bEl("b-show").disabled = true; geo = null;
+      var seq = ++readSeq; // a second file picked while the first is still being read: only the latest read may set the result
+      bEl("b-show").disabled = true; geo = null;
+      if (fileTooBig(f.size, ua)) { hideLoading(); setStatus(tooBigMsg(f.size)); return; }
+      setStatus("GeoJSON wird gelesen…");
       showLoading("GeoJSON wird gelesen…");
-      f.text().then(function (t) { return withLoading("GeoJSON wird gelesen…", function () { return readGeojson(t); }); })
+      f.text().then(function (t) {
+          if (seq !== readSeq) return null;
+          if (!t && f.size > 0) { var er = new Error("die Datei konnte nicht als Text gelesen werden."); er.name = "RangeError"; throw er; } // some engines hand back "" above their limit
+          return withLoading("GeoJSON wird gelesen…", function () {
+            var g = readGeojson(t), al = allowlist(g.parcels); // strip PII at import: nothing else of the file is kept
+            g.parcels = al.cleaned; g.dropped = al.dropped;
+            return g;
+          });
+        })
         .then(function (g) {
-          var ov = g.overlays, nOv = ov.landcover.features.length + ov.bauzonen.features.length + ov.habitat.features.length;
+          if (seq !== readSeq || !g) return;
           if (!g.parcels.length) throw new Error("keine Grundstücke (Features mit layer = parcel) in der Datei.");
           geo = g; bEl("b-show").disabled = false;
-          setStatus(fmtN.format(g.parcels.length) + " Grundstücke aus GeoJSON geladen" + (nOv ? " (+ " + fmtN.format(nOv) + " Layer-Features für die Karte)" : "") +
-                    (g.skipped ? " · " + fmtN.format(g.skipped) + " Features ohne bekannten Layer übersprungen" : "") + ".");
+          setStatus(pickerStatus(g, f.size, ua));
         })
-        .catch(function (err) { hideLoading(); setStatus("Fehler beim Lesen der GeoJSON: " + ((err && err.message) || err)); });
+        .catch(function (err) {
+          if (seq !== readSeq) return;
+          hideLoading();
+          var msg = (err && err.message) || err;
+          // A read that fails (not a syntax error) on a file close to the string limit is a size problem, whatever the engine calls it.
+          var sizeErr = !!err && (err.name === "RangeError" || err.name === "NotReadableError") && f.size >= 0.8 * STR_MAX;
+          setStatus(sizeErr ? tooBigMsg(f.size) + " (" + msg + ")" : "Fehler beim Lesen der GeoJSON: " + msg);
+        });
     });
     bEl("b-show").addEventListener("click", function () {
       if (!geo) return;
       withLoading("Dashboard wird aufgebaut…", function () {
-        var clean = allowlist(geo.parcels).cleaned; // strip PII at import
         document.body.classList.remove("builder-mode"); // hide the picker, reveal the dashboard
-        boot(clean, geo.overlays);
+        boot(geo.parcels, geo.overlays); // already allowlisted
       }).catch(function (err) {
         // boot() binds document-level listeners before it can throw; a second boot on the same document would double them.
         document.body.classList.add("builder-mode"); bEl("b-show").disabled = true;
@@ -248,8 +324,8 @@
   function bzColor(z) { var b = BAUZONEN[z]; return b ? b.color : "#9e9e9e"; }
   // Map colours come from the design tokens (css/tokens.css; inlined into the deliverable, so this
   // works offline too). Fallbacks only matter when the stylesheet failed to load.
-  var _rootCss = window.getComputedStyle(document.documentElement);
-  function tok(name, fallback) { var v = _rootCss.getPropertyValue(name); return (v && v.trim()) || fallback; }
+  var _rootCss = HAS_DOM ? window.getComputedStyle(document.documentElement) : null;
+  function tok(name, fallback) { var v = _rootCss ? _rootCss.getPropertyValue(name) : ""; return (v && v.trim()) || fallback; }
   var MAP_COLORS = {
     parcel: tok("--parcel", "#6f8aac"), parcelLine: tok("--parcel-line", "#3b5a7a"),
     active: tok("--map-active", "#d8232a"), checked: tok("--map-checked", "#2f4356"), label: tok("--map-label", "#1f2937"),
@@ -272,7 +348,8 @@
   // E-GRID resolution status (check_egrid). Default filter = only "found".
   var STATUS_LABELS = { found:"Gefunden", merged:"Gefunden (zusammengeführt)", not_found:"Nicht gefunden", invalid:"Ungültige E-GRID", error:"Fehler" };
   var STATUS_ORDER = ["found", "merged", "not_found", "invalid", "error"];
-  function statusKey(p) { var c = p.check_egrid || ""; return c.indexOf("error:") === 0 ? "error" : (c || "—"); }
+  function statusKey(p) { var c = p.check_egrid == null ? "" : String(p.check_egrid); return c.indexOf("error:") === 0 ? "error" : (c || "—"); } // String(): a number or boolean in the column must not stop the boot
+  function isFound(p) { var k = statusKey(p); return k === "found" || k === "merged"; }
 
   // "Name"/Bezeichnung column and prefix codes excluded by default (SAP categories
   // that are not real cadastral parcels for this analysis).
@@ -319,6 +396,78 @@
   function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[c]; }); }
   function isCovered(p) { return num(p.sia416_ggf_m2) + num(p.sia416_buf_m2) + num(p.sia416_uuf_m2) > 0; }
 
+  // ---- Unknown is not zero ----
+  // A request that failed leaves its columns EMPTY in a current export and 0 in an older one, so the state is
+  // read from the check_* flag, never from the cell: such a value is shown as «–» / «nicht abrufbar», is left
+  // out of the denominators of the shares, and is reported by the Datenqualität rules.
+  //   lcFailed — the land-cover request failed (check_wfs = wfs_error) and the row carries no land cover.
+  //              (An older export could substitute modelled BAFU cover in that case: that row HAS areas, flagged
+  //              lc_synthetic; it is only reported by the rule «Bodenbedeckung abgerufen».)
+  //   bzFailed / hbFailed — the Bauzonen / habitat overlay did not answer for this parcel.
+  function known(v) { return v != null && v !== "" && isFinite(parseFloat(v)); }
+  function lcFailed(p) { return p.check_wfs === "wfs_error" && !isCovered(p); }
+  function bzFailed(p) { return p.check_bauzonen === "error"; }
+  function hbFailed(p) { return p.check_habitat === "error"; }
+  // Land-cover state of a row: "with" (classified cover), "without" (parcel found, request answered, nothing
+  // classified), "unknown" (parcel found, request failed) or "unresolved" (E-GRID invalid / not found: there is
+  // no parcel that could have land cover). Counts and the Bodenbedeckung filter keep the four apart.
+  function coverState(p) { return isCovered(p) ? "with" : !isFound(p) ? "unresolved" : lcFailed(p) ? "unknown" : "without"; }
+  // A numeric cell is known when it holds a number and, for a land-cover column, the request did not fail.
+  function valueKnown(p, key, isLc) { return known(p[key]) && !(isLc && lcFailed(p)); }
+  function areaText(v) { return known(v) && num(v) > 0 ? fmtAreaU(num(v)) : "–"; } // a parcel area; «–» when the parcel was not resolved
+  // Unknown values sort after every known one, in both directions (they are not "the smallest").
+  function numCompare(a, b, key, isLc, dir) {
+    var ka = valueKnown(a, key, isLc), kb = valueKnown(b, key, isLc);
+    if (ka !== kb) return ka ? -1 : 1;
+    return ka ? (num(a[key]) - num(b[key])) * dir : 0;
+  }
+
+  // ---- One parcel, listed more than once ----
+  // The same E-GRID under two system ids (two SAP objects on one parcel) is ONE parcel: its area counts once in
+  // every total and in the parcel count. The first row of the row set counts; the others stay visible in the
+  // table and are reported («n Grundstücke mehrfach geführt»). Only resolved E-GRIDs are compared: the text an
+  // invalid / not-found row carries in the column identifies nothing.
+  function foundEgrid(p) { return isFound(p) ? String(p.egrid == null ? "" : p.egrid).trim() : ""; }
+  function egridCounts(rows) {
+    var c = Object.create(null);
+    rows.forEach(function (p) { var eg = foundEgrid(p); if (eg) c[eg] = (c[eg] || 0) + 1; });
+    return c;
+  }
+  // Map: repeated row → the row that counts for its parcel. "First" is the first row in `rows`, or — with
+  // `orderOf` (row → position in the dataset) — the earliest row of the dataset, so that sorting the table
+  // never changes which of two rows counts.
+  function egridRepeats(rows, orderOf) {
+    var first = Object.create(null), rep = new Map();
+    rows.forEach(function (p) { var eg = foundEgrid(p); if (!eg) return; var f = first[eg]; if (!f || (orderOf && orderOf(p) < orderOf(f))) first[eg] = p; });
+    rows.forEach(function (p) { var eg = foundEgrid(p); if (eg && first[eg] !== p) rep.set(p, first[eg]); });
+    return rep;
+  }
+  var NO_REPEATS = new Map();
+  // Rows → GeoJSON for the map: one polygon per parcel (a repeated row is drawn by the row that counts).
+  function rowsToFC(rows, repeats) {
+    repeats = repeats || NO_REPEATS;
+    return { type: "FeatureCollection", features: rows.filter(function (p) { return p && p._geom && !repeats.has(p); }).map(function (p) {
+      return { type: "Feature", geometry: p._geom, properties: { id: String(p.id == null ? "" : p.id) } }; // string id: the highlight / selection filters compare strings
+    }) };
+  }
+  // A summary table's rows plus what the categories do not cover, so the table sums to `total` (the GSF):
+  // first the area whose request failed (`unk` = { label, area, n }: unknown, its own row), then the rest
+  // (`label`: known to be without). Float noise below half a square metre is no row.
+  function withRemainder(items, total, label, n, unk) {
+    var s = 0; items.forEach(function (it) { s += it.value; });
+    var rest = Math.max(0, total - s), u = unk && unk.area > 0 ? Math.min(unk.area, rest) : 0, out = items;
+    if (u > 0.5) out = out.concat([{ name: unk.label, value: u, muted: true, n: unk.n }]); else u = 0;
+    if (rest - u > 0.5) out = out.concat([{ name: label || "Ohne Bodenbedeckung", value: rest - u, muted: true, n: n }]);
+    return out;
+  }
+  // Table search (substring over the identifying columns) and the exact-id filter of «In Tabelle anzeigen».
+  var SEARCH_KEYS = ["id", "egrid", "nummer", "input_ort", "input_rg", "input_bez. grundstück"];
+  function rowMatches(p, q, onlyId) {
+    if (onlyId != null && String(p.id == null ? "" : p.id) !== onlyId) return false;
+    if (q && !SEARCH_KEYS.some(function (k) { return String(p[k] == null ? "" : p[k]).toLowerCase().indexOf(q) !== -1; })) return false;
+    return true;
+  }
+
   // ---- Icons: Lucide (ISC), 24 grid, stroke 2, round caps — inlined so the offline file needs no font/CDN ----
   var ICON = (function () {
     var P = {
@@ -353,25 +502,258 @@
   // the inventory app, which reads center + zoom from its URL. ----
   var GREEN_INVENTORY_APP = "https://bbl-dres.github.io/green-inventory/prototype-main/";
   var GREENINV_KEYS = ["yes", "no"], GREENINV_LABELS = { yes: "Erfasst", no: "Nicht erfasst" };
-  function greeninvLabel(v) { return GREENINV_LABELS[v] || "—"; }
+  function greeninvLabel(v) { return (v != null && own(GREENINV_LABELS, v)) ? GREENINV_LABELS[v] : "—"; }
 
+  // ---- Fixed-domain filter facets ----
+  // Aggregate "Enthält" categories (clickable on the SIA 416 / Grün·Versiegelung·VBS
+  // charts). Like the per-Art filter, each selects Grundstücke that *contain* the
+  // category (value > 0) — it does not hide the other land cover of those parcels.
+  var HAS_METRICS = {
+    GGF:    { label:"Gebäudegrundfläche (GGF)", field:"sia416_ggf_m2" },
+    BUF:    { label:"Bearbeitete Umgebung (BUF)", field:"sia416_buf_m2" },
+    UUF:    { label:"Unbearbeitete Umgebung (UUF)", field:"sia416_uuf_m2" },
+    Green:  { label:"Grünfläche", field:"greenspace_m2" },
+    Sealed: { label:"Versiegelte Fläche", field:"sealed_m2" }
+  };
+  var HAS_KEYS = Object.keys(HAS_METRICS);
+  // VBS (arImmo) as two independent filter groups — Produktivität (layer 2) and, within
+  // the productive share, Typ (layer 3; typ1 + typ2 == produktiv). They get their own
+  // facets rather than joining `has`, because that facet ORs across all of its keys:
+  // "produktiv or Typ 1" is never a useful question, while two facets AND like every
+  // other group ("produktiv" AND "Typ 1") and still OR inside a group.
+  var VBS_GROUPS = {
+    vbsprod: {
+      keys: ["produktiv", "unproduktiv"], pill: "AV", attr: "vp",
+      fields: { produktiv:"av_produktiv_m2", unproduktiv:"av_unproduktiv_m2" },
+      labels: { produktiv:"Biologisch produktiv", unproduktiv:"Biologisch unproduktiv" },
+      short:  { produktiv:"Biologisch produktiv", unproduktiv:"Biologisch unproduktiv" }
+    },
+    vbstyp: {
+      keys: ["typ1", "typ2"], pill: "AV Typ", attr: "vt",
+      fields: { typ1:"av_typ1_m2", typ2:"av_typ2_m2" },
+      labels: { typ1:"Typ 1 · Grünflächen in Gebäudeumgebung", typ2:"Typ 2 · Übrige Grünflächen" },
+      short:  { typ1:"Typ 1", typ2:"Typ 2" }
+    }
+  };
+  var VBS_FACETS = Object.keys(VBS_GROUPS);
+  // URL values of these facets: only their own keys pass. Own-property checks, because «constructor» or
+  // «toString» are properties of every object and `!!MAP[k]` lets them through (an empty dashboard behind a
+  // pill reading «Enthält: undefined»).
+  var URL_VALID = {
+    excl: function (k) { return EXCLUDE_RULES.some(function (r) { return r.key === k; }); },
+    art:  function (a) { return own(ART_TYPES, a); },
+    has:  function (m) { return own(HAS_METRICS, m); },
+    vbsp: function (k) { return own(VBS_GROUPS.vbsprod.fields, k); },
+    vbst: function (k) { return own(VBS_GROUPS.vbstyp.fields, k); },
+    gi:   function (g) { return own(GREENINV_LABELS, g); }
+  };
+  // One comma-separated URL parameter → selection object. `valid` keeps a facet with a fixed
+  // domain from carrying a value that can never match (a typo in a hand-written link would
+  // otherwise empty the dashboard behind a pill); data-driven facets accept any value.
+  function readSet(pr, key, valid) {
+    var o = {};
+    (pr.get(key) || "").split(",").forEach(function (v) { if (v && (!valid || valid(v))) o[v] = true; });
+    return o;
+  }
 
-  function boot(PARCELS, OVERLAYS) {
-    OVERLAYS = OVERLAYS || {};
-  // ---- Precompute filter option counts (over the full dataset) ----
-  var cantonCounts = {}, countryCounts = {}, eigentumCounts = {}, artTotal = {}, artParcelCount = {}, covWith = 0, covWithout = 0;
-  var excludeCounts = {}, statusCounts = {}, tpfCounts = {}, bauzoneTotal = {}, bauzoneParcelCount = {}, habitatTotal = {}, habitatParcelCount = {};
-  var greeninvCounts = { yes: 0, no: 0 }, hasGreeninv = false; // the export carries the opt-in join column
-  var gsfAll = 0; // Grundstücksfläche of the whole dataset (the KPI tooltip relates the selection to it)
+  // ---- Dataset schema: the BBArt / Bauzonen / habitat columns an export carries, with their dataset totals ----
   var BAUZONE_RE = /^bauzonen_(.+)_m2$/; // bauzonen_<slug>_m2 (the bauzonen_m2 total does not match)
   // Habitat columns come in two export shapes: the current pipeline emits code columns
   // habitat_l1_<code>_m2 + habitat_l2_<code>_m2; older exports a single slug family
   // habitat_<slug>_m2. Use the LEVEL-2 leaves only — the l1_ columns are redundant and
-  // would double-count. Detect the shape once, then match leaves (the habitat_m2 total
+  // would double-count. The shape is detected once per dataset (the habitat_m2 total
   // never matches). The captured group is the slug/code; habDigit/habCode/hbLabel handle it.
-  var _habCodeCols = PARCELS.some(function (p) { for (var k in p) if (k.indexOf("habitat_l2_") === 0) return true; return false; });
-  var HABITAT_RE = _habCodeCols ? /^habitat_l2_(.+)_m2$/ : /^habitat_(.+)_m2$/;
-  var _habKeyBySlug = {}; // captured slug/code → the actual column key (differs for code columns)
+  function datasetSchema(PARCELS) {
+    var habCodeCols = PARCELS.some(function (p) { for (var k in p) if (k.indexOf("habitat_l2_") === 0) return true; return false; });
+    var S = { HABITAT_RE: habCodeCols ? /^habitat_l2_(.+)_m2$/ : /^habitat_(.+)_m2$/,
+              artTotal: {}, artParcelCount: {}, bauzoneTotal: {}, bauzoneParcelCount: {}, habitatTotal: {}, habitatParcelCount: {},
+              stats: new WeakMap() }; // rowStats cache
+    var habKeyBySlug = {}; // captured slug/code → the actual column key (differs for code columns)
+    PARCELS.forEach(function (p) {
+      ART_KEYS.forEach(function (a) {
+        var v = num(p[artCol(a)]);
+        if (v > 0) { S.artTotal[a] = (S.artTotal[a] || 0) + v; S.artParcelCount[a] = (S.artParcelCount[a] || 0) + 1; }
+      });
+      for (var bk in p) {
+        var bm = BAUZONE_RE.exec(bk);
+        if (bm) { var bv = num(p[bk]); if (bv > 0) { var bz = bm[1]; S.bauzoneTotal[bz] = (S.bauzoneTotal[bz] || 0) + bv; S.bauzoneParcelCount[bz] = (S.bauzoneParcelCount[bz] || 0) + 1; } }
+        var hm = S.HABITAT_RE.exec(bk);
+        if (hm) { var hv = num(p[bk]); if (hv > 0) { var hz = hm[1]; habKeyBySlug[hz] = bk; S.habitatTotal[hz] = (S.habitatTotal[hz] || 0) + hv; S.habitatParcelCount[hz] = (S.habitatParcelCount[hz] || 0) + 1; } }
+      }
+    });
+    var byTotal = function (m) { return Object.keys(m).sort(function (a, b) { return m[b] - m[a]; }); };
+    S.artList = byTotal(S.artTotal); S.bauzoneList = byTotal(S.bauzoneTotal); S.habitatList = byTotal(S.habitatTotal);
+    // Column-name arrays — built once so the per-parcel aggregate loop does not rebuild the strings on every render.
+    S.artCols = ART_KEYS.map(artCol);
+    S.bzCols = S.bauzoneList.map(function (z) { return "bauzonen_" + z + "_m2"; });
+    S.hbCols = S.habitatList.map(function (h) { return habKeyBySlug[h]; }); // real column key (code cols ≠ "habitat_"+slug)
+    return S;
+  }
+
+  // ---- Aggregation over a row set ----
+  // `repeats` (egridRepeats) marks the rows that list a parcel again: they are counted in dupRows / dupArea and
+  // nowhere else. `n` is the number of parcels, `len` the number of rows. Unknown areas (a failed request) add
+  // nothing to the sums; the parcel area behind them is kept apart (lcUnknownArea, bzUnknownArea, hbUnknownArea)
+  // so that shares can leave it out of their denominator and tables can show it as its own row.
+  function aggregateRows(rows, S, repeats) {
+    repeats = repeats || egridRepeats(rows);
+    var t = { parcelArea:0, lcUnknownArea:0, bzUnknownArea:0, hbUnknownArea:0, GGF:0, BUF:0, UUF:0, Sealed:0, Green:0, VBSp:0, VBSu:0, VBSa:0, VBSb:0, VBSc:0, VBSd:0, VBSt1:0, VBSt2:0 }, byArt = {}, byBauzone = {}, byHabitat = {};
+    var n = 0, nArea = 0, dupRows = 0, dupArea = 0, withData = 0, nNoCover = 0, nLcUnknown = 0, nUnresolved = 0, nBzUnknown = 0, nHbUnknown = 0;
+    var wfsIssues = 0, geomIssues = 0, nT1 = 0, nT2 = 0, nU = 0, nP = 0; // parcel counts by the 10 % rule
+    var artCols = S.artCols, bzList = S.bauzoneList, bzCols = S.bzCols, hbList = S.habitatList, hbCols = S.hbCols;
+    rows.forEach(function (p) {
+      var area = num(p.parcel_area_m2);
+      if (repeats.has(p)) { dupRows++; dupArea += area; return; } // the same parcel again: counted with its first row
+      n++; if (area > 0) nArea++;
+      t.parcelArea += area;
+      var cs = coverState(p);
+      if (cs === "with") withData++; else if (cs === "without") nNoCover++; else if (cs === "unknown") { nLcUnknown++; t.lcUnknownArea += area; } else nUnresolved++;
+      if (bzFailed(p)) { nBzUnknown++; t.bzUnknownArea += area; }
+      if (hbFailed(p)) { nHbUnknown++; t.hbUnknownArea += area; }
+      t.GGF += num(p.sia416_ggf_m2); t.BUF += num(p.sia416_buf_m2); t.UUF += num(p.sia416_uuf_m2);
+      t.Sealed += num(p.sealed_m2); t.Green += num(p.greenspace_m2);
+      t.VBSp += num(p.av_produktiv_m2); t.VBSu += num(p.av_unproduktiv_m2);
+      t.VBSt1 += num(p.av_typ1_m2); t.VBSt2 += num(p.av_typ2_m2); // VBS Typ (within produktiv): typ1+typ2 == produktiv
+      t.VBSa += num(p.av_kat_a_m2); t.VBSb += num(p.av_kat_b_m2); t.VBSc += num(p.av_kat_c_m2); t.VBSd += num(p.av_kat_d_m2);
+      if (vbsHas(p, "av_typ1_m2")) nT1++; if (vbsHas(p, "av_typ2_m2")) nT2++;
+      if (vbsHas(p, "av_produktiv_m2")) nP++; // the SAME rule as the «Biologisch produktiv» filter (not "Typ 1 or Typ 2 ≥ 10 %": 6 % + 7 % is productive)
+      if (vbsHas(p, "av_unproduktiv_m2")) nU++;
+      if (p.check_wfs && p.check_wfs !== "ok") wfsIssues++;
+      if (p.check_geom && p.check_geom !== "ok") geomIssues++;
+      for (var ai = 0; ai < ART_KEYS.length; ai++) { var av = num(p[artCols[ai]]); if (av) byArt[ART_KEYS[ai]] = (byArt[ART_KEYS[ai]] || 0) + av; }
+      for (var zi = 0; zi < bzList.length; zi++) { var zv = num(p[bzCols[zi]]); if (zv) byBauzone[bzList[zi]] = (byBauzone[bzList[zi]] || 0) + zv; }
+      for (var hi = 0; hi < hbList.length; hi++) { var hv2 = num(p[hbCols[hi]]); if (hv2) byHabitat[hbList[hi]] = (byHabitat[hbList[hi]] || 0) + hv2; }
+    });
+    return { len:rows.length, n:n, nArea:nArea, dupRows:dupRows, dupArea:dupArea, withData:withData, nNoCover:nNoCover, nLcUnknown:nLcUnknown, nUnresolved:nUnresolved,
+             nBzUnknown:nBzUnknown, nHbUnknown:nHbUnknown, totals:t, byArt:byArt, byBauzone:byBauzone, byHabitat:byHabitat, classified:t.GGF + t.BUF + t.UUF,
+             lcKnownArea:t.parcelArea - t.lcUnknownArea, wfsIssues:wfsIssues, geomIssues:geomIssues, nT1:nT1, nT2:nT2, nU:nU, nP:nP };
+  }
+
+  // ---- Datenqualität-Prüfregeln (per Grundstück geprüft, als Regel/Ergebnis/Status) ----
+  // Names + descriptions kept deliberately plain. Each rule is only evaluated on the
+  // subset it applies to (e.g. Bodenbedeckungs-Regeln nur auf Grundstücke mit Bodenbedeckung),
+  // so the tips state the scope — the table shows how many wurden übersprungen.
+  var RULE_DEFS = [
+    { key: "egrid", name: "Grundstück E-GRID im Kataster gefunden", tip: "Die E-GRID wurde in der amtlichen Vermessung gefunden und die Geometrie geladen. Geprüft: alle Grundstücke der Auswahl." },
+    { key: "geom", name: "Geometrie vorhanden", tip: "Der Grundstück-Eintrag enthält eine Polygon-Geometrie (nicht NULL). Geprüft: alle Grundstücke der Auswahl." },
+    { key: "area", name: "Fläche vorhanden", tip: "Die Grundstücksfläche ist eine gültige, positive Zahl (nicht NULL, grösser 0). Geprüft: alle Grundstücke der Auswahl." },
+    { key: "egridUnique", name: "E-GRID eindeutig", tip: "Jede E-GRID kommt in der aktuellen Auswahl nur einmal vor (kein Grundstück mehrfach geführt). Geprüft: gefundene Grundstücke; ungültige und nicht gefundene E-GRID werden nicht verglichen." },
+    { key: "lcFetch", name: "Bodenbedeckung abgerufen", tip: "Die Bodenbedeckung des Grundstücks konnte bei der amtlichen Vermessung abgerufen werden (kein WFS-Fehler). Bei einer Abweichung sind die Flächen unbekannt, nicht 0. Geprüft: gefundene Grundstücke." },
+    { key: "bbCover", name: "Summe Bodenbedeckung = Grundstücksfläche", tip: "Die Summe der einzelnen Bodenbedeckungsflächen (Gebäude + Umgebung) entspricht der Grundstücksfläche (±1 %). Nur Grundstücke mit Bodenbedeckungsdaten." },
+    { key: "bzCover", name: "Summe Bauzonen = Grundstücksfläche", tip: "Die Summe der einzelnen Bauzonenflächen inkl. «Ohne Bauzone» entspricht der Grundstücksfläche (±1 %). Nur Grundstücke mit Bauzonen-Daten; eine fehlgeschlagene Bauzonen-Abfrage gilt als Abweichung." },
+    { key: "hbCover", name: "Summe Lebensräume = Grundstücksfläche", tip: "Die Summe der einzelnen BAFU-Lebensraumflächen entspricht der Grundstücksfläche (±1 %). Nur Grundstücke mit Lebensraum-Daten; eine fehlgeschlagene Lebensraum-Abfrage gilt als Abweichung." }
+  ];
+  // Per-parcel derived scalars for the quality rules: bzSumAll — Σ bauzonen_<slug> incl.
+  // ohne_bauzone (the full parcel partition); hbSum — Σ habitat leaves. Parcels are immutable,
+  // so the wide-column scan runs once per parcel and is cached in a WeakMap (not on the
+  // object — keeps it out of exports/the embedded deliverable).
+  function rowStats(p, S) {
+    var s = S.stats.get(p); if (s) return s;
+    var bzSumAll = 0, hbSum = 0;
+    for (var k in p) {
+      if (!own(p, k) || k.slice(-3) !== "_m2") continue;
+      if (BAUZONE_RE.test(k)) bzSumAll += num(p[k]);
+      else if (S.HABITAT_RE.test(k)) hbSum += num(p[k]);
+    }
+    s = { bzSumAll: bzSumAll, hbSum: hbSum };
+    S.stats.set(p, s); return s;
+  }
+  function checkRules(rows, S) {
+    var R = {}; RULE_DEFS.forEach(function (d) { R[d.key] = { name: d.name, pass: 0, fail: 0, fails: [] }; });
+    // E-GRID uniqueness is judged over the current (filtered) selection, among the resolved parcels — count first.
+    var egCounts = egridCounts(rows);
+    var p = null, tol = 1; // the two helpers read the current row from here instead of being re-created per row
+    var nearOK = function (a, b) { return Math.abs(a - b) <= tol; };
+    // pass → count; fail → count + remember the parcel so a click can list them.
+    var rec = function (key, ok) { if (ok) R[key].pass++; else { R[key].fail++; R[key].fails.push({ p: p, hint: R[key].name }); } };
+    rows.forEach(function (row) {
+      p = row;
+      var area = num(p.parcel_area_m2); tol = Math.max(1, area * 0.01);
+      var classified = num(p.sia416_ggf_m2) + num(p.sia416_buf_m2) + num(p.sia416_uuf_m2);
+      var st = rowStats(p, S), sumBz = st.bzSumAll, sumHb = st.hbSum;
+      // Completeness — every entry must resolve, carry a geometry + a real area, and be unique.
+      var found = isFound(p);
+      rec("egrid", found);
+      rec("geom", !!p._geom);
+      rec("area", area > 0);
+      var eg = foundEgrid(p);
+      if (eg) rec("egridUnique", egCounts[eg] === 1);
+      // Retrieval — a request that failed is a deviation of its own: the areas are unknown, not 0.
+      if (found) rec("lcFetch", p.check_wfs !== "wfs_error");
+      // Flächenbilanz — classified cover / Bauzonen / Lebensräume tile the parcel.
+      if (isCovered(p)) rec("bbCover", nearOK(classified, area));
+      if (bzFailed(p)) rec("bzCover", false);
+      else if (sumBz > 0 || !!p.check_bauzonen) rec("bzCover", nearOK(sumBz, area));
+      if (hbFailed(p)) rec("hbCover", false);
+      else if (sumHb > 0 || !!p.check_habitat) rec("hbCover", nearOK(sumHb, area));
+    });
+    return R;
+  }
+  function devDelta(diff, base) { // "+50 (+5 %)" / "-32 (-3.8 %)" — Ist minus Soll, signed
+    var d = Math.round(diff), p = base > 0 ? Math.round(diff / base * 1000) / 10 : null;
+    return (d > 0 ? "+" : "") + d + (p == null ? "" : " (" + (p > 0 ? "+" : "") + p + " %)");
+  }
+  // Ist / Soll / Abweichung / Einheit for one FAILED check (the parcel already failed `key`,
+  // so e.g. the geom Ist is always "nein" and the coverage Ist ≠ Soll). Mirrors the checks
+  // in checkRules exactly; only the *values*, not the pass/fail decision, live here.
+  function devValues(key, p, egCounts, S) {
+    var area = num(p.parcel_area_m2), st = rowStats(p, S);
+    var classified = num(p.sia416_ggf_m2) + num(p.sia416_buf_m2) + num(p.sia416_uuf_m2);
+    var eg = foundEgrid(p), sk = statusKey(p), NA = "nicht abrufbar";
+    switch (key) {
+      case "egrid":       return { ist: STATUS_LABELS[sk] || sk || "—", soll: "gefunden", abw: "", unit: "" };
+      case "geom":        return { ist: "nein", soll: "ja", abw: "", unit: "" };
+      case "area":        return { ist: known(p.parcel_area_m2) ? Math.round(area) : "", soll: "> 0", abw: "", unit: "m²" };
+      case "egridUnique": return { ist: (eg ? (egCounts[eg] || 0) : 0), soll: 1, abw: "", unit: "Vorkommen" };
+      case "lcFetch":     return { ist: NA, soll: "abgerufen", abw: "", unit: "" };
+      case "bbCover":     return { ist: Math.round(classified), soll: Math.round(area), abw: devDelta(classified - area, area), unit: "m²" };
+      case "bzCover":     return bzFailed(p) ? { ist: NA, soll: Math.round(area), abw: "", unit: "m²" } : { ist: Math.round(st.bzSumAll), soll: Math.round(area), abw: devDelta(st.bzSumAll - area, area), unit: "m²" };
+      case "hbCover":     return hbFailed(p) ? { ist: NA, soll: Math.round(area), abw: "", unit: "m²" } : { ist: Math.round(st.hbSum), soll: Math.round(area), abw: devDelta(st.hbSum - area, area), unit: "m²" };
+      default:            return { ist: "", soll: "", abw: "", unit: "" };
+    }
+  }
+  // One Excel cell: the label for a coded column, the number for an area — and NO cell (null) where the value
+  // is unknown, so the file never claims 0 m² for a parcel whose request failed or that was not resolved.
+  function exportCell(p, c) {
+    if (c.text) return c.text(p[c.key], p);
+    if (c.key === "greeninv") return greeninvLabel(p.greeninv);
+    if (c.num) return valueKnown(p, c.key, c.lc) ? num(p[c.key]) : null;
+    return p[c.key] == null ? "" : String(p[c.key]);
+  }
+  // Green share of one parcel for the PDF report: «–» while the parcel area or its land cover is unknown.
+  function greenShareText(p) { var area = num(p.parcel_area_m2); return !(area > 0) || lcFailed(p) ? "–" : Math.round(num(p.greenspace_m2) / area * 100) + "%"; }
+
+  // ── Test hook ───────────────────────────────────────────────────────────────
+  // dashboard/tests/logic.test.mjs evaluates js/data.js and this file in a context that has `window` but no
+  // `document`. Everything above this line is free of the DOM, so the tests get the real functions (not a copy)
+  // here, and the script stops before boot() or the picker would look for a page. A browser never takes this
+  // branch, and nothing is exported in a browser.
+  if (!HAS_DOM) {
+    window.DASHBOARD_CORE = {
+      readGeojson: readGeojson, allowlist: allowlist, pickerStatus: pickerStatus, fileTooBig: fileTooBig, fileSizeLimit: fileSizeLimit, tooBigMsg: tooBigMsg, STR_MAX: STR_MAX,
+      num: num, pct: pct, known: known, statusKey: statusKey, isFound: isFound, isCovered: isCovered, lcFailed: lcFailed, bzFailed: bzFailed, hbFailed: hbFailed,
+      coverState: coverState, valueKnown: valueKnown, areaText: areaText, numCompare: numCompare, vbsHas: vbsHas,
+      egridCounts: egridCounts, egridRepeats: egridRepeats, rowsToFC: rowsToFC, withRemainder: withRemainder, rowMatches: rowMatches,
+      datasetSchema: datasetSchema, aggregateRows: aggregateRows, RULE_DEFS: RULE_DEFS, checkRules: checkRules, devValues: devValues,
+      exportCell: exportCell, greenShareText: greenShareText, greeninvLabel: greeninvLabel, URL_VALID: URL_VALID, readSet: readSet,
+      EXCLUDE_RULES: EXCLUDE_RULES, nameMatches: nameMatches
+    };
+    return;
+  }
+
+  function boot(PARCELS, OVERLAYS) {
+    OVERLAYS = OVERLAYS || {};
+  // ---- Precompute filter option counts (over the full dataset) ----
+  var cantonCounts = {}, countryCounts = {}, eigentumCounts = {}, covWith = 0, covWithout = 0;
+  var excludeCounts = {}, statusCounts = {}, tpfCounts = {};
+  var greeninvCounts = { yes: 0, no: 0 }, hasGreeninv = false; // the export carries the opt-in join column
+  var gsfAll = 0; // Grundstücksfläche of the whole dataset (the KPI tooltip relates the selection to it)
+  // The Bauzonen / habitat / BBArt columns of this export and their dataset totals (datasetSchema, above boot).
+  var S = datasetSchema(PARCELS), HABITAT_RE = S.HABITAT_RE;
+  var artTotal = S.artTotal, artParcelCount = S.artParcelCount, bauzoneTotal = S.bauzoneTotal, bauzoneParcelCount = S.bauzoneParcelCount, habitatTotal = S.habitatTotal, habitatParcelCount = S.habitatParcelCount;
+  // Parcels listed more than once count once (egridRepeats): the dataset's parcel count and GSF are the unique ones.
+  var repAll = egridRepeats(PARCELS), nAll = PARCELS.length - repAll.size;
+  var bzRan = false; // the Bauzonen overlay ran for this export (else its table says so instead of «Ohne Bauzone 100 %»)
   // Habitat column slug → TypoCH code ("6_3_andere_laubwaelder" → "6.3"; the level-1
   // catch-all "2_ufer_und_feuchtgebiete" → "2"). "" when the slug carries no leading code.
   function habCode(h) {
@@ -393,37 +775,22 @@
   function hbLabelFull(h) { return hbIsL1Only(h) ? hbLabel(h) + " (nur Stufe 1)" : hbLabel(h); }
   EXCLUDE_RULES.forEach(function (r) { excludeCounts[r.key] = 0; });
   PARCELS.forEach(function (p) {
-    gsfAll += num(p.parcel_area_m2);
+    if (!repAll.has(p)) gsfAll += num(p.parcel_area_m2);
+    if (p.check_bauzonen) bzRan = true;
     var c = p.input_rg || ""; if (c) cantonCounts[c] = (cantonCounts[c] || 0) + 1;
     var lc = p["input_l/r"] || ""; if (lc) countryCounts[lc] = (countryCounts[lc] || 0) + 1;
     var e = p["input_eigent.art"] || ""; if (e) eigentumCounts[e] = (eigentumCounts[e] || 0) + 1;
     var tp = (p.input_tpf == null || p.input_tpf === "") ? "—" : String(p.input_tpf); tpfCounts[tp] = (tpfCounts[tp] || 0) + 1;
     var st = statusKey(p); statusCounts[st] = (statusCounts[st] || 0) + 1;
-    if (isCovered(p)) covWith++; else covWithout++;
+    var cs = coverState(p); if (cs === "with") covWith++; else if (cs === "without") covWithout++; // the two filter options; unknown / unresolved rows are neither
     if (p.greeninv === "yes" || p.greeninv === "no") { greeninvCounts[p.greeninv]++; hasGreeninv = true; }
     EXCLUDE_RULES.forEach(function (r) { if (nameMatches(p, r)) excludeCounts[r.key]++; });
-    ART_KEYS.forEach(function (a) {
-      var v = num(p[artCol(a)]);
-      if (v > 0) { artTotal[a] = (artTotal[a] || 0) + v; artParcelCount[a] = (artParcelCount[a] || 0) + 1; }
-    });
-    for (var bk in p) {
-      var bm = BAUZONE_RE.exec(bk);
-      if (bm) { var bv = num(p[bk]); if (bv > 0) { var bz = bm[1]; bauzoneTotal[bz] = (bauzoneTotal[bz] || 0) + bv; bauzoneParcelCount[bz] = (bauzoneParcelCount[bz] || 0) + 1; } }
-      var hm = HABITAT_RE.exec(bk);
-      if (hm) { var hv = num(p[bk]); if (hv > 0) { var hz = hm[1]; _habKeyBySlug[hz] = bk; habitatTotal[hz] = (habitatTotal[hz] || 0) + hv; habitatParcelCount[hz] = (habitatParcelCount[hz] || 0) + 1; } }
-    }
   });
   var cantonList = Object.keys(cantonCounts).sort(function (a, b) { return cantonCounts[b] - cantonCounts[a]; });
   // Country list sorted by frequency (CH dominant); the raw ISO code stays the filter key.
   var countryList = Object.keys(countryCounts).sort(function (a, b) { return countryCounts[b] - countryCounts[a]; });
-  var artListAll = Object.keys(artTotal).sort(function (a, b) { return artTotal[b] - artTotal[a]; });
-  var bauzoneListAll = Object.keys(bauzoneTotal).sort(function (a, b) { return bauzoneTotal[b] - bauzoneTotal[a]; });
-  var habitatListAll = Object.keys(habitatTotal).sort(function (a, b) { return habitatTotal[b] - habitatTotal[a]; });
-  // Precomputed column-name arrays — built once so the per-parcel aggregate loop
-  // doesn't rebuild "av_<a>_m2" / "bauzonen_<z>_m2" / "habitat_<h>_m2" strings every render.
-  var artCols = ART_KEYS.map(artCol);
-  var bzCols = bauzoneListAll.map(function (z) { return "bauzonen_" + z + "_m2"; });
-  var hbCols = habitatListAll.map(function (h) { return _habKeyBySlug[h]; }); // real column key (code cols ≠ "habitat_"+slug)
+  var artListAll = S.artList, bauzoneListAll = S.bauzoneList, habitatListAll = S.habitatList;
+  if (bauzoneListAll.length) bzRan = true;
   var tpfList = Object.keys(tpfCounts).sort(function (a, b) { return tpfCounts[b] - tpfCounts[a]; });
   var eigentumList = Object.keys(eigentumCounts).sort();
   var statusList = STATUS_ORDER.filter(function (s) { return statusCounts[s]; })
@@ -434,38 +801,7 @@
   // (E-GRID-Status defaults to "Alle", so the Datenqualität completeness checks can
   // see not-found parcels; Bodenbedeckung defaults to "Alle"). The empty URL
   // represents exactly this default state; query params encode deviations from it.
-  // Aggregate "Enthält" categories (clickable on the SIA 416 / Grün·Versiegelung·VBS
-  // charts). Like the per-Art filter, each selects Grundstücke that *contain* the
-  // category (value > 0) — it does not hide the other land cover of those parcels.
-  var HAS_METRICS = {
-    GGF:    { label:"Gebäudegrundfläche (GGF)", field:"sia416_ggf_m2" },
-    BUF:    { label:"Bearbeitete Umgebung (BUF)", field:"sia416_buf_m2" },
-    UUF:    { label:"Unbearbeitete Umgebung (UUF)", field:"sia416_uuf_m2" },
-    Green:  { label:"Grünfläche", field:"greenspace_m2" },
-    Sealed: { label:"Versiegelte Fläche", field:"sealed_m2" }
-  };
-  var HAS_KEYS = Object.keys(HAS_METRICS);
-
-  // VBS (arImmo) as two independent filter groups — Produktivität (layer 2) and, within
-  // the productive share, Typ (layer 3; typ1 + typ2 == produktiv). They get their own
-  // facets rather than joining `has`, because that facet ORs across all of its keys:
-  // "produktiv or Typ 1" is never a useful question, while two facets AND like every
-  // other group ("produktiv" AND "Typ 1") and still OR inside a group.
-  var VBS_GROUPS = {
-    vbsprod: {
-      keys: ["produktiv", "unproduktiv"], pill: "AV", attr: "vp",
-      fields: { produktiv:"av_produktiv_m2", unproduktiv:"av_unproduktiv_m2" },
-      labels: { produktiv:"Biologisch produktiv", unproduktiv:"Biologisch unproduktiv" },
-      short:  { produktiv:"Biologisch produktiv", unproduktiv:"Biologisch unproduktiv" }
-    },
-    vbstyp: {
-      keys: ["typ1", "typ2"], pill: "AV Typ", attr: "vt",
-      fields: { typ1:"av_typ1_m2", typ2:"av_typ2_m2" },
-      labels: { typ1:"Typ 1 · Grünflächen in Gebäudeumgebung", typ2:"Typ 2 · Übrige Grünflächen" },
-      short:  { typ1:"Typ 1", typ2:"Typ 2" }
-    }
-  };
-  var VBS_FACETS = Object.keys(VBS_GROUPS);
+  // (HAS_METRICS and VBS_GROUPS, the fixed-domain facets, are defined above boot with their URL validators.)
   var vbsCounts = {}; // facet → key → number of parcels carrying that area
   VBS_FACETS.forEach(function (f) { vbsCounts[f] = {}; VBS_GROUPS[f].keys.forEach(function (k) { vbsCounts[f][k] = 0; }); });
   PARCELS.forEach(function (p) {
@@ -481,8 +817,11 @@
   // Country defaults to Switzerland — hides the foreign representation parcels (Ausland).
   function defaultCountries() { return countryCounts["CH"] ? { CH: true } : {}; }
   // Bodenbedeckung is a two-option checklist like every other group (so its head
-  // carries the same "alle / keine" toggle): an empty selection — or both boxes,
-  // since every parcel is either covered or not — means "alle".
+  // carries the same "alle / keine" toggle): an empty selection — or both boxes — means "alle".
+  // One box narrows: «Mit» = classified land cover; «Ohne» = a found parcel whose request answered
+  // and returned nothing (coverState "without"). Rows whose E-GRID was not resolved, or whose
+  // land-cover request failed, are in neither: they are not "without land cover", their land cover
+  // is unknown — the Status filter and the Datenqualität tab reach them.
   var COVERAGE_KEYS = ["with", "without"];
   var COVERAGE_LABELS = { with: "Mit Bodenbedeckung", without: "Ohne Bodenbedeckung" };
   function coverageCount(k) { return k === "with" ? covWith : covWithout; }
@@ -505,7 +844,7 @@
     var cs = Object.keys(filters.cantons);
     if (cs.length && !filters.cantons[p.input_rg || ""]) return false;
     var cv = Object.keys(filters.coverage);
-    if (cv.length && !cv.some(function (k) { return k === "with" ? isCovered(p) : !isCovered(p); })) return false;
+    if (cv.length === 1 && coverState(p) !== cv[0]) return false; // both boxes = "alle" (as the pill and the URL already treat it)
     var as = Object.keys(filters.arts);
     if (as.length && !as.some(function (a) { return num(p[artCol(a)]) > 0; })) return false;
     var bz = Object.keys(filters.bauzonen);
@@ -526,8 +865,8 @@
   }
 
   // ---- Table state & search ----
-  var SEARCH_KEYS = ["id", "egrid", "nummer", "input_ort", "input_rg", "input_bez. grundstück"];
-  var state = { sort:"parcel_area_m2", dir:-1, search:"", page:1, pageSize:25, rows:PARCELS.slice() };
+  // onlyId: «In Tabelle anzeigen» on the map card — exactly that row (an id, compared whole; the search box is a substring search).
+  var state = { sort:"parcel_area_m2", dir:-1, search:"", onlyId:null, page:1, pageSize:25, rows:PARCELS.slice() };
   var selectedParcelId = null; // parcel highlighted on the map / focused in the table
   var printing = false;
   // PDF-report selection: session state (not in the URL), at most SEL_MAX parcels.
@@ -537,37 +876,20 @@
   function selRows() { return selIds().map(parcelById).filter(function (p) { return !!p; }); }
 
   function getFiltered() {
-    var q = state.search.trim().toLowerCase();
-    return PARCELS.filter(function (p) {
-      if (!passesFilters(p)) return false;
-      if (q && !SEARCH_KEYS.some(function (k) { return String(p[k] == null ? "" : p[k]).toLowerCase().indexOf(q) !== -1; })) return false;
-      return true;
-    });
+    var q = state.search.trim().toLowerCase(), only = state.onlyId;
+    return PARCELS.filter(function (p) { return passesFilters(p) && rowMatches(p, q, only); });
   }
+  // The rows of a row set that list a parcel again (egridRepeats), judged in dataset order — not in the order
+  // the table happens to be sorted in. Memoised on the array (a filter pass builds a new one, sorting keeps it).
+  var _ord = new WeakMap(); PARCELS.forEach(function (p, i) { _ord.set(p, i); });
+  var _repRows = null, _rep = NO_REPEATS;
+  function repeatsFor(rows) { if (rows !== _repRows) { _repRows = rows; _rep = egridRepeats(rows, function (p) { return _ord.get(p); }); } return _rep; }
+  function aggregate(rows) { return aggregateRows(rows, S, repeatsFor(rows)); }
+  function parcelStats(p) { return rowStats(p, S); }
+  function computeRules(rows) { return checkRules(rows, S); }
+  // «3 Grundstücke mehrfach geführt (1.2 ha nicht doppelt gezählt)» — the note wherever a total left repeats out.
+  function dupNote(a) { return fmt(a.dupRows) + (a.dupRows === 1 ? " Grundstück" : " Grundstücke") + " mehrfach geführt (" + fmtAreaU(a.dupArea) + " nicht doppelt gezählt)"; }
 
-  // ---- Aggregation over a dataset ----
-  function aggregate(rows) {
-    var t = { parcelArea:0, GGF:0, BUF:0, UUF:0, Sealed:0, Green:0, VBSp:0, VBSu:0, VBSa:0, VBSb:0, VBSc:0, VBSd:0, VBSt1:0, VBSt2:0 }, byArt = {}, byBauzone = {}, byHabitat = {}, withData = 0;
-    var wfsIssues = 0, geomIssues = 0, nT1 = 0, nT2 = 0, nU = 0, nP = 0; // parcel counts by the 10 % rule
-    rows.forEach(function (p) {
-      t.parcelArea += num(p.parcel_area_m2);
-      t.GGF += num(p.sia416_ggf_m2); t.BUF += num(p.sia416_buf_m2); t.UUF += num(p.sia416_uuf_m2);
-      t.Sealed += num(p.sealed_m2); t.Green += num(p.greenspace_m2);
-      t.VBSp += num(p.av_produktiv_m2); t.VBSu += num(p.av_unproduktiv_m2);
-      t.VBSt1 += num(p.av_typ1_m2); t.VBSt2 += num(p.av_typ2_m2); // VBS Typ (within produktiv): typ1+typ2 == produktiv
-      t.VBSa += num(p.av_kat_a_m2); t.VBSb += num(p.av_kat_b_m2); t.VBSc += num(p.av_kat_c_m2); t.VBSd += num(p.av_kat_d_m2);
-      if (isCovered(p)) withData++;
-      var h1 = vbsHas(p, "av_typ1_m2"), h2 = vbsHas(p, "av_typ2_m2");
-      if (h1) nT1++; if (h2) nT2++; if (h1 || h2) nP++; if (vbsHas(p, "av_unproduktiv_m2")) nU++;
-      if (p.check_wfs && p.check_wfs !== "ok") wfsIssues++;
-      if (p.check_geom && p.check_geom !== "ok") geomIssues++;
-      for (var ai = 0; ai < ART_KEYS.length; ai++) { var av = num(p[artCols[ai]]); if (av) byArt[ART_KEYS[ai]] = (byArt[ART_KEYS[ai]] || 0) + av; }
-      for (var zi = 0; zi < bauzoneListAll.length; zi++) { var zv = num(p[bzCols[zi]]); if (zv) byBauzone[bauzoneListAll[zi]] = (byBauzone[bauzoneListAll[zi]] || 0) + zv; }
-      for (var hi = 0; hi < habitatListAll.length; hi++) { var hv2 = num(p[hbCols[hi]]); if (hv2) byHabitat[habitatListAll[hi]] = (byHabitat[habitatListAll[hi]] || 0) + hv2; }
-    });
-    return { len:rows.length, withData:withData, totals:t, byArt:byArt, byBauzone:byBauzone, byHabitat:byHabitat, classified:t.GGF + t.BUF + t.UUF,
-             wfsIssues:wfsIssues, geomIssues:geomIssues, nT1:nT1, nT2:nT2, nU:nU, nP:nP };
-  }
 
   // ---- Summary-table renderer (sortable; inline proportion bar per row) ----
   // Default order = the caller's (preserves fixed orders like SIA GGF/BUF/UUF and VBS A–D);
@@ -676,8 +998,9 @@
   // ---- Parcel area + parcel count grouped by a field (Teilportfolio, Region) → table items ----
   // Exclusive counts (each parcel in exactly one group), so the count column sums to the Total row.
   function groupBarItems(rows, field, selMap, topN, labelFn) {
-    var map = {}, cnt = {};
+    var map = {}, cnt = {}, rep = repeatsFor(rows);
     rows.forEach(function (p) {
+      if (rep.has(p)) return; // a parcel listed again: counted with its first row (and that row's group)
       var v = p[field]; var k = (v == null || v === "") ? "—" : String(v);
       map[k] = (map[k] || 0) + num(p.parcel_area_m2); cnt[k] = (cnt[k] || 0) + 1;
     });
@@ -697,8 +1020,13 @@
     var a = aggregate(rows);
     // Card subs are one short row, relative to the total Grundstücksfläche (GSF) — the figure users compare against;
     // the share of the classified Bodenbedeckung stays in the tooltip.
-    var ofGsf = function (v) { return pct(v, a.totals.parcelArea) + "% der GSF"; };
-    var ofArea = function (v) { return pct(v, a.totals.parcelArea) + "% der Grundstücksfläche (GSF)"; };
+    // A parcel whose land-cover request failed has a known area and unknown land cover: its area is in the GSF
+    // card, but not in the denominator of the shares (it would count as 0 % green and 0 % sealed).
+    var unk = a.nLcUnknown > 0, lcKnown = a.lcKnownArea;
+    var unkTip = unk ? " Nicht im Nenner: " + fmt(a.nLcUnknown) + (a.nLcUnknown === 1 ? " Grundstück" : " Grundstücke") + " (" + fmtAreaU(a.totals.lcUnknownArea) + ") mit nicht abrufbarer Bodenbedeckung." : "";
+    var ofGsf = function (v) { return pct(v, lcKnown) + "% der GSF" + (unk ? " (ohne nicht abrufbare)" : ""); };
+    var ofArea = function (v) { return pct(v, lcKnown) + "% der Grundstücksfläche (GSF)"; };
+    var mean = a.nArea ? a.totals.parcelArea / a.nArea : 0; // per parcel that HAS an area: unresolved rows carry none
     var ofCover = function (v) { return pct(v, a.classified) + "% der klassifizierten Bodenbedeckung"; };
     // Data quality of the selection: the parcels failing a Prüfregel (what the Datenqualität tab calls «Auffällige
     // Grundstücke») and the number of failed checks; the card jumps to that tab.
@@ -706,20 +1034,25 @@
     RULE_DEFS.forEach(function (d) { R[d.key].fails.forEach(function (f) { qDev++; qBad.set(f.p, true); }); });
     var kpis = [
       // Count card: the sub says how much of the dataset the filters keep ("von 355 (51%)"); without filters, "Alle Grundstücke".
-      { label:"Grundstücke", value:fmt(a.len), sub:a.len < PARCELS.length ? "von " + fmt(PARCELS.length) + " (" + pct(a.len, PARCELS.length) + "%)" : "Alle Grundstücke",
-        tip:"Anzahl Grundstücke (Liegenschaften und SDR) in der aktuellen Auswahl: " + fmt(a.len) + " von " + fmt(PARCELS.length) + " im Datensatz (" + pct(a.len, PARCELS.length) + "%). " +
-            "Davon " + fmt(a.withData) + " mit Bodenbedeckung (" + pct(a.withData, a.len) + "%)." },
+      { label:"Grundstücke", value:fmt(a.n), sub:a.n < nAll ? "von " + fmt(nAll) + " (" + pct(a.n, nAll) + "%)" : "Alle Grundstücke",
+        tip:"Anzahl Grundstücke (Liegenschaften und SDR) in der aktuellen Auswahl: " + fmt(a.n) + " von " + fmt(nAll) + " im Datensatz (" + pct(a.n, nAll) + "%). " +
+            "Davon " + fmt(a.withData) + " mit Bodenbedeckung (" + pct(a.withData, a.n) + "%)" +
+            (a.nNoCover ? ", " + fmt(a.nNoCover) + " ohne Bodenbedeckung" : "") +
+            (a.nLcUnknown ? ", " + fmt(a.nLcUnknown) + " mit nicht abrufbarer Bodenbedeckung" : "") +
+            (a.nUnresolved ? ", " + fmt(a.nUnresolved) + " ohne aufgelöste E-GRID" : "") + "." +
+            (a.dupRows ? " " + dupNote(a) + "." : "") },
       { label:"Datenqualität", value:fmt(qBad.size), sub:qBad.size ? "auffällig (" + pct(qBad.size, a.len) + "%)" : "keine Abweichungen", goto:"quality",
         tip:fmt(qBad.size) + " auffällige Grundstücke (" + pct(qBad.size, a.len) + "% der Auswahl) mit " + fmt(qDev) + " nicht bestandenen Prüfungen (Abweichungen). Klick öffnet den Tab Datenqualität." },
       // Area card: the sub is the mean parcel size (the count is the card before); the tooltip relates the area to the whole dataset.
-      { label:"Grundstücksfläche", value:fmtAreaU(a.totals.parcelArea), sub:"Im Mittel " + fmtAreaU(a.len ? a.totals.parcelArea / a.len : 0),
-        tip:"Summe der berechneten Grundstücksflächen (GSF), 2D-Planfläche auf LV95 (EPSG:2056); im Mittel " + fmtAreaU(a.len ? a.totals.parcelArea / a.len : 0) + " je Grundstück. " +
+      { label:"Grundstücksfläche", value:fmtAreaU(a.totals.parcelArea), sub:"Im Mittel " + fmtAreaU(mean),
+        tip:"Summe der berechneten Grundstücksflächen (GSF), 2D-Planfläche auf LV95 (EPSG:2056); im Mittel " + fmtAreaU(mean) + " je Grundstück mit Fläche (" + fmt(a.nArea) + "). " +
+            (a.dupRows ? dupNote(a) + ". " : "") +
             "Entspricht " + pct(a.totals.parcelArea, gsfAll) + "% der Grundstücksfläche des ganzen Datensatzes (" + fmtAreaU(gsfAll) + "). " +
             "Klassifizierte Bodenbedeckung: " + fmtAreaU(a.classified) + " (" + ofArea(a.classified) + ")." },
       { label:"Grünfläche", value:fmtAreaU(a.totals.Green), sub:ofGsf(a.totals.Green),
-        tip:"Humusierte und bestockte Flächen gemäss Grünflächen-Klassifizierung. Aktuell " + ofArea(a.totals.Green) + " bzw. " + ofCover(a.totals.Green) + "." },
+        tip:"Humusierte und bestockte Flächen gemäss Grünflächen-Klassifizierung. Aktuell " + ofArea(a.totals.Green) + " bzw. " + ofCover(a.totals.Green) + "." + unkTip },
       { label:"Versiegelte Fläche", value:fmtAreaU(a.totals.Sealed), sub:ofGsf(a.totals.Sealed),
-        tip:"Gebäude und befestigte Flächen (versiegelt). Aktuell " + ofArea(a.totals.Sealed) + " bzw. " + ofCover(a.totals.Sealed) + "." },
+        tip:"Gebäude und befestigte Flächen (versiegelt). Aktuell " + ofArea(a.totals.Sealed) + " bzw. " + ofCover(a.totals.Sealed) + "." + unkTip },
       { label:"Grundstücke Typ 1", value:fmt(a.nT1), sub:"Typ 2: " + fmt(a.nT2),
         tip:"Grundstücke, deren AV-Typ-1-Fläche mindestens 10 % der Grundstücksfläche ausmacht (Typ 2 ebenso). Ein Grundstück kann beide Typen haben." }
     ];
@@ -743,13 +1076,10 @@
     artGroups.forEach(function (g) { g.children.sort(function (x, y) { return y.value - x.value; }); });
     var gsfHint = "Anteil an der gesamten Grundstücksfläche (GSF) der Auswahl.";
     var pa = a.totals.parcelArea;
-    // Append a muted "remainder" row so each table sums to 100 % of the Grundstücksfläche;
-    // the gap = parcel area the categories don't cover (z. B. ohne Bodenbedeckungsdaten).
-    function withMiss(items, label, n) {
-      var s = 0; items.forEach(function (it) { s += it.value; });
-      var m = pa - s;
-      return m > 0 ? items.concat([{ name: label || "Ohne Bodenbedeckung", value: m, muted: true, n: n }]) : items;
-    }
+    // Append muted "remainder" rows so each table sums to 100 % of the Grundstücksfläche: the area whose
+    // request failed (unknown: «… nicht abrufbar») apart from the area the categories are known not to cover.
+    var lcUnk = { label: "Bodenbedeckung nicht abrufbar", area: a.totals.lcUnknownArea, n: a.nLcUnknown };
+    function withMiss(items, label, n, unknown) { return withRemainder(items, pa, label, n, unknown === undefined ? lcUnk : unknown); }
     renderValTable("tbl-art", withMiss(artGroups), pa, fmtArea, true, unitLabel(), gsfHint);
     // Provenance note: parcels whose land cover was synthesized from BAFU (real AV < 5 %) are
     // blended into the BBArt totals above, but those areas are modelled estimates, not surveyed.
@@ -791,7 +1121,7 @@
         { name:"Typ 2 · Übrige Grünflächen", value:a.totals.VBSt2, n:a.nT2 }
       ] },
       { name:"Biologisch unproduktiv", value:a.totals.VBSu, n:a.nU }
-    ], null, a.len - a.withData), pa, fmtArea, true, unitLabel(), gsfHint, { showN: true, nTotal: a.len });
+    ], null, a.nNoCover), pa, fmtArea, true, unitLabel(), gsfHint, { showN: true, nTotal: a.n }); // «Ohne Bodenbedeckung» counts found parcels without cover — not unresolved E-GRIDs, not failed requests
     // "Ohne Bauzone" is the zone-free remainder — render it as the muted last row
     // (via withMiss), not as a normal zone, so the table reads like before but now
     // sums to 100 % from real data (processing emits an "Ohne Bauzone" polygon).
@@ -800,7 +1130,9 @@
       .filter(function (it) { return it.value > 0; }).sort(function (x, y) { return y.value - x.value; });
     var bzShown = bzItems.slice(0, 10);
     if (bzItems.length > 10) { var bzRest = bzItems.slice(10).reduce(function (s, it) { return s + it.value; }, 0); bzShown.push({ name: "Übrige (" + (bzItems.length - 10) + ")", value: bzRest, swatch: "#cbd5e1" }); }
-    renderValTable("tbl-bauzonen", withMiss(bzShown, "Ohne Bauzone"), pa, fmtArea, true, unitLabel(), gsfHint);
+    // The area of a parcel whose Bauzonen request failed is not «Ohne Bauzone»: it gets its own row. An export
+    // without the Bauzonen analysis keeps the note set at boot instead of a table claiming 100 % «Ohne Bauzone».
+    if (bzRan) renderValTable("tbl-bauzonen", withMiss(bzShown, "Ohne Bauzone", null, { label: "Bauzonen nicht abrufbar", area: a.totals.bzUnknownArea, n: a.nBzUnknown }), pa, fmtArea, true, unitLabel(), gsfHint);
     if (habitatListAll.length) {
       // BAFU Lebensräume — pivot: TypoCH class (L1, by leading digit) → group (L2). Both
       // levels get consistent "<code> <name>" labels from the embedded TypoCH reference.
@@ -813,10 +1145,10 @@
         g.children.push({ name: hbLabelFull(h), value: v, swatch: habColor(h) });
       });
       var hbGroups = Object.keys(hbByDigit).map(function (d) { return hbByDigit[d]; });
-      renderValTable("tbl-habitat", withMiss(hbGroups, "Ohne Lebensraum-Daten"), pa, fmtArea, true, unitLabel(), gsfHint);
+      renderValTable("tbl-habitat", withMiss(hbGroups, "Ohne Lebensraum-Daten", null, { label: "Lebensräume nicht abrufbar", area: a.totals.hbUnknownArea, n: a.nHbUnknown }), pa, fmtArea, true, unitLabel(), gsfHint);
     }
-    renderValTable("tbl-tpf", groupBarItems(rows, "input_tpf", filters.tpf, 12, tpfLabel), a.totals.parcelArea, fmtArea, true, unitLabel(), gsfHint, { showN: true, nTotal: a.len });
-    renderValTable("tbl-rg", groupBarItems(rows, "input_rg", filters.cantons, 12), a.totals.parcelArea, fmtArea, true, unitLabel(), gsfHint, { showN: true, nTotal: a.len });
+    renderValTable("tbl-tpf", groupBarItems(rows, "input_tpf", filters.tpf, 12, tpfLabel), a.totals.parcelArea, fmtArea, true, unitLabel(), gsfHint, { showN: true, nTotal: a.n });
+    renderValTable("tbl-rg", groupBarItems(rows, "input_rg", filters.cantons, 12), a.totals.parcelArea, fmtArea, true, unitLabel(), gsfHint, { showN: true, nTotal: a.n });
 
     var qa = "";
     if (a.wfsIssues || a.geomIssues) {
@@ -825,9 +1157,14 @@
       if (a.geomIssues) parts.push(fmt(a.geomIssues) + " mit Geometrie-Hinweis");
       qa = "Datenqualität: " + parts.join(", ") + ". ";
     }
-    document.getElementById("footer-note").innerHTML =
-      "Tabellen-Anteile beziehen sich auf die Grundstücksfläche (GSF); die KPI-Anteile oben auf die klassifizierte Bodenbedeckung (" + fmtAreaU(a.classified) + "). " +
-      fmt(a.len - a.withData) + " Grundstücke ohne Bodenbedeckung. " + qa;
+    // What the selection holds besides parcels with land cover — kept apart: without cover (known), not
+    // retrievable (unknown), E-GRID not resolved (no parcel), listed more than once (counted once).
+    var rest = [fmt(a.nNoCover) + (a.nNoCover === 1 ? " Grundstück" : " Grundstücke") + " ohne Bodenbedeckung"];
+    if (a.nLcUnknown) rest.push(fmt(a.nLcUnknown) + " mit nicht abrufbarer Bodenbedeckung (" + fmtAreaU(a.totals.lcUnknownArea) + ", nicht im Nenner der KPI-Anteile)");
+    if (a.nUnresolved) rest.push(fmt(a.nUnresolved) + " ohne aufgelöste E-GRID (ohne Fläche)");
+    document.getElementById("footer-note").textContent =
+      "Anteile beziehen sich auf die Grundstücksfläche (GSF) der Auswahl; klassifizierte Bodenbedeckung: " + fmtAreaU(a.classified) + ". " +
+      rest.join(", ") + ". " + (a.dupRows ? dupNote(a) + ". " : "") + qa;
   }
 
   // ---- Datenqualität tab (uses the existing check_* / status columns) ----
@@ -854,22 +1191,31 @@
     var denom = rows.length || 1;
     // KPIs = headline of the most important Prüfregeln; each count equals its rule's
     // "abweichend" count in the Prüfregeln table below.
-    var kpiFail = function (label, key) {
-      return { label: label, value: fmt(qRules[key].fail), sub: pct(qRules[key].fail, denom) + "% der Auswahl" };
+    // A card may sum several rules (a failed request and an incomplete sum are both «unvollständig»): each parcel once.
+    var kpiFail = function (label, keys) {
+      var seen = new Map(); keys.forEach(function (k) { qRules[k].fails.forEach(function (f) { seen.set(f.p, true); }); });
+      return { label: label, value: fmt(seen.size), sub: pct(seen.size, denom) + "% der Auswahl" };
     };
+    // The unresolved rows by reason: an invalid E-GRID (a typing / data problem) is not a parcel the cadastre does not know.
+    var why = [];
+    if (c.invalid) why.push(fmt(c.invalid) + " ungültig");
+    if (c.not_found) why.push(fmt(c.not_found) + " nicht gefunden");
+    if (c.error) why.push(fmt(c.error) + " Abfragefehler");
+    if (cOther) why.push(fmt(cOther) + " ohne Status");
     var qk = [
       { label:"Grundstücke", value:fmt(rows.length) + " / " + fmt(PARCELS.length), sub:"Auswahl / Alle" },
-      kpiFail("E-GRID nicht gefunden", "egrid"),
-      kpiFail("Bodenbedeckung unvollständig", "bbCover"),
-      kpiFail("Lebensräume unvollständig", "hbCover")
+      { label:"E-GRID nicht aufgelöst", value:fmt(qRules.egrid.fail), sub: why.length ? why.join(" · ") : "0% der Auswahl" },
+      kpiFail("Bodenbedeckung unvollständig", ["lcFetch", "bbCover"]),
+      kpiFail("Lebensräume unvollständig", ["hbCover"])
     ];
     document.getElementById("q-kpis").innerHTML = qk.map(function (k) {
       return '<div class="card"><div class="label">' + esc(k.label) + '</div><div class="value">' + k.value + '</div><div class="sub">' + esc(k.sub) + '</div></div>';
     }).join("");
     renderValTable("q-egrid", [
       { name:"Gefunden", value:c.found + c.merged },
-      { name:"Nicht gefunden", value:c.not_found + c.error },
+      { name:"Nicht gefunden", value:c.not_found },
       { name:"Ungültige E-GRID", value:c.invalid },
+      { name:"Fehler bei der Abfrage", value:c.error },
       { name:"Ohne Status", value:cOther }
     ].filter(function (it) { return it.value > 0; }), rows.length, fmt, true, "Anzahl", "Anteil an der Auswahl (Anzahl Grundstücke).");
     if (qActiveRule && !(qRules[qActiveRule] && qRules[qActiveRule].fails.length)) qActiveRule = null;
@@ -897,68 +1243,10 @@
     if (next) next.disabled = qState.page >= pages;
   }
 
-  // ---- Datenqualität-Prüfregeln (per Grundstück geprüft, als Regel/Ergebnis/Status) ----
-  // Names + descriptions kept deliberately plain. Each rule is only evaluated on the
-  // subset it applies to (e.g. Bodenbedeckungs-Regeln nur auf Grundstücke mit Bodenbedeckung),
-  // so the tips state the scope — the table shows how many wurden übersprungen.
-  var RULE_DEFS = [
-    { key: "egrid", name: "Grundstück E-GRID im Kataster gefunden", tip: "Die E-GRID wurde in der amtlichen Vermessung gefunden und die Geometrie geladen. Geprüft: alle Grundstücke der Auswahl." },
-    { key: "geom", name: "Geometrie vorhanden", tip: "Der Grundstück-Eintrag enthält eine Polygon-Geometrie (nicht NULL). Geprüft: alle Grundstücke der Auswahl." },
-    { key: "area", name: "Fläche vorhanden", tip: "Die Grundstücksfläche ist eine gültige, positive Zahl (nicht NULL, grösser 0). Geprüft: alle Grundstücke der Auswahl." },
-    { key: "egridUnique", name: "E-GRID eindeutig", tip: "Jede E-GRID kommt in der aktuellen Auswahl nur einmal vor (keine doppelten Einträge). Geprüft: Grundstücke mit E-GRID." },
-    { key: "bbCover", name: "Summe Bodenbedeckung = Grundstücksfläche", tip: "Die Summe der einzelnen Bodenbedeckungsflächen (Gebäude + Umgebung) entspricht der Grundstücksfläche (±1 %). Nur Grundstücke mit Bodenbedeckungsdaten." },
-    { key: "bzCover", name: "Summe Bauzonen = Grundstücksfläche", tip: "Die Summe der einzelnen Bauzonenflächen inkl. «Ohne Bauzone» entspricht der Grundstücksfläche (±1 %). Nur Grundstücke mit Bauzonen-Daten." },
-    { key: "hbCover", name: "Summe Lebensräume = Grundstücksfläche", tip: "Die Summe der einzelnen BAFU-Lebensraumflächen entspricht der Grundstücksfläche (±1 %). Nur Grundstücke mit Lebensraum-Daten." }
-  ];
-  // Per-parcel derived scalars for the quality rules: bzSumAll — Σ bauzonen_<slug> incl.
-  // ohne_bauzone (the full parcel partition); hbSum — Σ habitat leaves. Parcels are immutable,
-  // so the wide-column scan runs once per parcel and is cached in a WeakMap (not on the
-  // object — keeps it out of exports/the embedded deliverable).
-  var _statsCache = new WeakMap();
-  function parcelStats(p) {
-    var s = _statsCache.get(p); if (s) return s;
-    var bzSumAll = 0, hbSum = 0;
-    for (var k in p) {
-      if (!Object.prototype.hasOwnProperty.call(p, k) || k.slice(-3) !== "_m2") continue;
-      if (BAUZONE_RE.test(k)) bzSumAll += num(p[k]);
-      else if (HABITAT_RE.test(k)) hbSum += num(p[k]);
-    }
-    s = { bzSumAll: bzSumAll, hbSum: hbSum };
-    _statsCache.set(p, s); return s;
-  }
   // One result per row set: the Datenqualität tab and its export ask for the same rows, so
   // the pass is memoised on the array identity (every filter pass builds a new array; sorting keeps it).
   var _rulesRows = null, _rulesR = null;
   function rulesFor(rows) { if (rows !== _rulesRows) { _rulesRows = rows; _rulesR = computeRules(rows); } return _rulesR; }
-  function computeRules(rows) {
-    var R = {}; RULE_DEFS.forEach(function (d) { R[d.key] = { name: d.name, pass: 0, fail: 0, fails: [] }; });
-    // E-GRID uniqueness is judged over the current (filtered) selection — count first.
-    var egCounts = {};
-    rows.forEach(function (p) { var eg = String(p.egrid == null ? "" : p.egrid).trim(); if (eg) egCounts[eg] = (egCounts[eg] || 0) + 1; });
-    var p = null, tol = 1; // the two helpers read the current row from here instead of being re-created per row
-    var nearOK = function (a, b) { return Math.abs(a - b) <= tol; };
-    // pass → count; fail → count + remember the parcel so a click can list them.
-    var rec = function (key, ok) { if (ok) R[key].pass++; else { R[key].fail++; R[key].fails.push({ p: p, hint: R[key].name }); } };
-    rows.forEach(function (row) {
-      p = row;
-      var area = num(p.parcel_area_m2); tol = Math.max(1, area * 0.01);
-      var classified = num(p.sia416_ggf_m2) + num(p.sia416_buf_m2) + num(p.sia416_uuf_m2);
-      var st = parcelStats(p), sumBz = st.bzSumAll, sumHb = st.hbSum;
-      var cov = isCovered(p);
-      // Completeness — every entry must resolve, carry a geometry + a real area, and be unique.
-      var sk = statusKey(p);
-      rec("egrid", sk === "found" || sk === "merged");
-      rec("geom", !!p._geom);
-      rec("area", area > 0);
-      var eg = String(p.egrid == null ? "" : p.egrid).trim();
-      if (eg) rec("egridUnique", egCounts[eg] === 1);
-      // Flächenbilanz — classified cover / Bauzonen / Lebensräume tile the parcel.
-      if (cov) rec("bbCover", nearOK(classified, area));
-      if (sumBz > 0 || (!!p.check_bauzonen && p.check_bauzonen !== "error")) rec("bzCover", nearOK(sumBz, area));
-      if (sumHb > 0 || (!!p.check_habitat && p.check_habitat !== "error")) rec("hbCover", nearOK(sumHb, area));
-    });
-    return R;
-  }
   function renderRulesTable() {
     var el = document.getElementById("q-rules"); if (!el) return;
     var body = RULE_DEFS.map(function (d) {
@@ -1008,17 +1296,17 @@
         return u ? '<a class="egrid-link" href="' + esc(u) + '" target="_blank" rel="noopener" data-tip="Im Grüninventar öffnen (neuer Tab)">' + esc(greeninvLabel(v)) + ICON.sz("extlink", 12) + '</a>' : esc(greeninvLabel(v));
       } },
     { key:"parcel_area_m2", label:"Grundstücksfläche m²", num:true, def:true, tip:"Berechnete Grundstücksfläche (GSF), 2D-Planfläche auf LV95." },
-    { key:"sia416_ggf_m2", label:"GGF m²", num:true, def:true, tip:"Gebäudegrundfläche nach SIA 416." },
-    { key:"sia416_buf_m2", label:"BUF m²", num:true, def:false, tip:"Bearbeitete Umgebungsfläche nach SIA 416 (befestigt + humusiert)." },
-    { key:"sia416_uuf_m2", label:"UUF m²", num:true, def:false, tip:"Unbearbeitete Umgebungsfläche nach SIA 416 (Gewässer + bestockt + vegetationslos)." },
-    { key:"greenspace_m2", label:"Grünfläche m²", num:true, def:true, tip:"Grünfläche (humusiert + bestockt)." },
-    { key:"sealed_m2", label:"Versiegelt m²", num:true, def:true, tip:"Versiegelte Fläche (Gebäude + befestigt)." },
-    { key:"av_produktiv_m2", label:"AV produktiv m²", num:true, def:false, tip:"Biologisch produktive Fläche (AV-Klassifizierung)." },
-    { key:"av_unproduktiv_m2", label:"AV unproduktiv m²", num:true, def:false, tip:"Biologisch unproduktive Fläche (AV-Klassifizierung)." },
+    { key:"sia416_ggf_m2", label:"GGF m²", num:true, lc:true, def:true, tip:"Gebäudegrundfläche nach SIA 416." },
+    { key:"sia416_buf_m2", label:"BUF m²", num:true, lc:true, def:false, tip:"Bearbeitete Umgebungsfläche nach SIA 416 (befestigt + humusiert)." },
+    { key:"sia416_uuf_m2", label:"UUF m²", num:true, lc:true, def:false, tip:"Unbearbeitete Umgebungsfläche nach SIA 416 (Gewässer + bestockt + vegetationslos)." },
+    { key:"greenspace_m2", label:"Grünfläche m²", num:true, lc:true, def:true, tip:"Grünfläche (humusiert + bestockt)." },
+    { key:"sealed_m2", label:"Versiegelt m²", num:true, lc:true, def:true, tip:"Versiegelte Fläche (Gebäude + befestigt)." },
+    { key:"av_produktiv_m2", label:"AV produktiv m²", num:true, lc:true, def:false, tip:"Biologisch produktive Fläche (AV-Klassifizierung)." },
+    { key:"av_unproduktiv_m2", label:"AV unproduktiv m²", num:true, lc:true, def:false, tip:"Biologisch unproduktive Fläche (AV-Klassifizierung)." },
     // Typ 1 + Typ 2 partition the productive share — selectable so the VBS-Typ filter's
     // dimension can also be read off the table (both default-hidden, like the two above).
-    { key:"av_typ1_m2", label:"AV Typ 1 m²", num:true, def:false, tip:"Typ 1 · Grünflächen in Gebäudeumgebung (Teil der biologisch produktiven Fläche)." },
-    { key:"av_typ2_m2", label:"AV Typ 2 m²", num:true, def:false, tip:"Typ 2 · Übrige Grünflächen (Teil der biologisch produktiven Fläche)." }
+    { key:"av_typ1_m2", label:"AV Typ 1 m²", num:true, lc:true, def:false, tip:"Typ 1 · Grünflächen in Gebäudeumgebung (Teil der biologisch produktiven Fläche)." },
+    { key:"av_typ2_m2", label:"AV Typ 2 m²", num:true, lc:true, def:false, tip:"Typ 2 · Übrige Grünflächen (Teil der biologisch produktiven Fläche)." }
   ];
   if (!hasGreeninv) COLUMNS = COLUMNS.filter(function (c) { return c.key !== "greeninv"; }); // column only when the export carries the join
   var colByKey = {};
@@ -1026,10 +1314,10 @@
 
   var deCollator = new Intl.Collator("de", { numeric: true }); // reused (a collator per comparison is costly at 260k rows); numeric: "9" before "10"
   function sortRows() {
-    var key = state.sort, dir = state.dir, isNum = colByKey[key] && colByKey[key].num;
+    var key = state.sort, dir = state.dir, col = colByKey[key], isNum = col && col.num, isLc = !!(col && col.lc);
     state.rows.sort(function (a, b) {
       var x = a[key], y = b[key];
-      if (isNum) { return (num(x) - num(y)) * dir; }
+      if (isNum) return numCompare(a, b, key, isLc, dir); // unknown values after the known ones, whichever way the column is sorted
       return deCollator.compare(String(x == null ? "" : x), String(y == null ? "" : y)) * dir;
     });
   }
@@ -1069,7 +1357,10 @@
       var cb = '<td class="sel-col"><input type="checkbox" data-sel="' + esc(pid) + '" aria-label="Für PDF-Bericht auswählen"' + (isSel ? " checked" : "") + (!isSel && full ? ' disabled title="Maximal ' + SEL_MAX + ' Grundstücke"' : "") + '></td>';
       return '<tr data-id="' + esc(pid) + '" tabindex="0"' + rs + ">" + cb + vis.map(function (c) {
         var v = p[c.key];
-        if (c.num) return '<td class="num">' + (num(v) ? fmtArea(num(v)) : '<span class="muted">0</span>') + "</td>";
+        if (c.num) {
+          if (!valueKnown(p, c.key, c.lc)) return '<td class="num"><span class="muted" title="' + (c.lc && lcFailed(p) ? "Bodenbedeckung nicht abrufbar" : "Kein Wert") + '">–</span></td>';
+          return '<td class="num">' + (num(v) ? fmtArea(num(v)) : '<span class="muted">0</span>') + "</td>";
+        }
         if (c.render) return "<td>" + c.render(v == null ? "" : String(v), p) + "</td>";
         var s = (v == null || v === "") ? "" : String(v);
         return "<td" + (s ? "" : ' class="muted"') + ">" + (s ? esc(s) : "–") + "</td>";
@@ -1087,11 +1378,11 @@
   }
   function renderFoot() {
     var vis = COLUMNS.filter(function (c) { return c.visible; });
-    var sums = {};
+    var sums = {}, rep = repeatsFor(state.rows);
     vis.forEach(function (c) { if (c.num) sums[c.key] = 0; });
-    state.rows.forEach(function (p) { vis.forEach(function (c) { if (c.num) sums[c.key] += num(p[c.key]); }); });
+    state.rows.forEach(function (p) { if (rep.has(p)) return; vis.forEach(function (c) { if (c.num) sums[c.key] += num(p[c.key]); }); }); // unknown cells add nothing; a repeated row is in the total once
     var firstText = -1; vis.forEach(function (c, i) { if (!c.num && firstText < 0) firstText = i; });
-    var label = "Total · " + fmt(state.rows.length) + " Grundstücke" + (printing && state.rows.length > PRINT_ROWS ? " · gedruckt: die ersten " + fmt(PRINT_ROWS) : "");
+    var label = "Total · " + fmt(state.rows.length - rep.size) + " Grundstücke" + (rep.size ? " (" + fmt(rep.size) + " mehrfach geführt, einmal gezählt)" : "") + (printing && state.rows.length > PRINT_ROWS ? " · gedruckt: die ersten " + fmt(PRINT_ROWS) : "");
     document.getElementById("tfoot-row").innerHTML = '<td class="sel-col">' + (firstText < 0 ? label : "") + '</td>' + vis.map(function (c, i) { // the label goes into the first text column, else the checkbox cell
       if (c.num) return '<td class="num">' + fmtArea(sums[c.key]) + "</td>";
       return "<td>" + (i === firstText ? label : "") + "</td>";
@@ -1104,7 +1395,7 @@
   function selectParcel(id) {
     selectedParcelId = (id == null || id === "") ? null : String(id);
     if (map && mapReady && map.getLayer("parcels-hl")) {
-      var hlFilter = ["==", ["get", "id"], selectedParcelId || " "];
+      var hlFilter = ["==", ["get", "id"], mapIdOf(selectedParcelId) || " "];
       map.setFilter("parcels-hl", hlFilter);
       if (map.getLayer("parcels-hl-casing")) map.setFilter("parcels-hl-casing", hlFilter);
     }
@@ -1181,7 +1472,7 @@
     if (lbl) lbl.textContent = n + " von max. " + SEL_MAX + " für den Bericht ausgewählt";
     if (sf) { var canAll = n === 0 && state.rows.length > 0 && state.rows.length <= SEL_MAX; sf.hidden = !canAll; sf.textContent = "Alle " + state.rows.length + " gefilterten auswählen"; }
     if (pb) { pb.disabled = n === 0; pb.textContent = n ? "PDF-Bericht (" + n + ")" : "PDF-Bericht"; pb.title = n ? "A3-Bericht, eine Seite pro ausgewähltem Grundstück" : "Zuerst Grundstücke über die Checkboxen auswählen (max. " + SEL_MAX + ")"; }
-    if (map && mapReady && map.getLayer("parcels-sel")) map.setFilter("parcels-sel", ["in", ["get", "id"], ["literal", selIds()]]);
+    if (map && mapReady && map.getLayer("parcels-sel")) map.setFilter("parcels-sel", ["in", ["get", "id"], ["literal", selIds().map(mapIdOf)]]);
     renderSelBar();
   }
 
@@ -1203,11 +1494,18 @@
   // Filter passes over a large dataset take a noticeable moment; below the threshold the overlay
   // would only flicker.
   var LOADING_ROWS = 20000;
+  // Features an update touches: every parcel row, plus the overlay features of the layers that are switched on
+  // (hidden overlays are not sent to the map, see renderMap).
+  function heavyUpdate() {
+    var n = PARCELS.length;
+    ["landcover", "bauzonen", "habitat"].forEach(function (k) { var fc = OVERLAYS[k]; if (layerVis[k] && fc && fc.features) n += fc.features.length; });
+    return n >= LOADING_ROWS;
+  }
   var PRINT_ROWS = 2000; // print renders the filtered set, capped: 260k rows would build millions of DOM nodes
   function commit() {
     refitMap = true;
     var done = function () { writeURL(); }, fail = function (e) { console.error(e); hideLoading(); }; // the address bar follows a successful update only
-    if (PARCELS.length >= LOADING_ROWS) withLoading("Auswertung wird aktualisiert…", update).then(done, fail);
+    if (heavyUpdate()) withLoading("Auswertung wird aktualisiert…", update).then(done, fail);
     else { try { update(); } catch (e) { fail(e); return; } done(); }
   }
 
@@ -1218,6 +1516,7 @@
     if (state.search.trim()) {
       pills.push({ label: "Tabelle: «" + state.search.trim() + "»", remove: function () { state.search = ""; document.getElementById("tsearch").value = ""; } });
     }
+    if (state.onlyId != null) pills.push({ label: "Nur Grundstück: " + state.onlyId, remove: function () { state.onlyId = null; } });
     EXCLUDE_RULES.forEach(function (r) {
       if (filters.exclude[r.key] && excludeCounts[r.key] > 0)
         pills.push({ label: "Ohne: " + r.label, remove: function () { delete filters.exclude[r.key]; } });
@@ -1274,7 +1573,7 @@
   // ---- Reset & drawer sync ----
   function resetAll() {
     filters = defaultFilters();
-    state.search = ""; document.getElementById("tsearch").value = "";
+    state.search = ""; state.onlyId = null; document.getElementById("tsearch").value = "";
     syncDrawer(); commit();
   }
   function syncDrawer() {
@@ -1287,7 +1586,7 @@
   // a completely empty URL (first visit) applies the defaults and stamps them in.
   // Navigation state travels alongside, never counting as a filter: tab=map|overview|quality|about,
   // basemap=light|standard|aerial|aerial-labels|dark, ext=<external map ids, "-" prefix = hidden>.
-  var URL_KEYS = ["q", "excl", "status", "eig", "cov", "land", "kanton", "art", "bauz", "has", "vbsp", "vbst", "tpf", "gi"];
+  var URL_KEYS = ["q", "id", "excl", "status", "eig", "cov", "land", "kanton", "art", "bauz", "has", "vbsp", "vbst", "tpf", "gi"];
   var NAV_KEYS = ["tab", "basemap", "ext"];
   var VBS_URL_KEY = { vbsprod: "vbsp", vbstyp: "vbst" };
   var nav = { tab: "map", basemap: null, ext: null }; // parsed navigation params (consumed by showTab / the map)
@@ -1297,6 +1596,7 @@
     if (typeof basemapUrlValue === "function" && basemapUrlValue() !== "light") pr.set("basemap", basemapUrlValue());
     if (typeof extUrlValue === "function" && extUrlValue()) pr.set("ext", extUrlValue());
     if (state.search.trim()) pr.set("q", state.search.trim());
+    if (state.onlyId != null) pr.set("id", state.onlyId);
     var excl = EXCLUDE_RULES.filter(function (r) { return filters.exclude[r.key]; }).map(function (r) { return r.key; });
     if (excl.length) pr.set("excl", excl.join(","));
     var st = Object.keys(filters.status); if (st.length) pr.set("status", st.join(","));
@@ -1315,36 +1615,29 @@
     var qs = pr.toString();
     try { history.replaceState(null, "", qs ? "?" + qs : location.pathname); } catch (e) { /* file:// may block */ }
   }
-  // One comma-separated URL parameter → selection object. `valid` keeps a facet with a fixed
-  // domain from carrying a value that can never match (a typo in a hand-written link would
-  // otherwise empty the dashboard behind a pill); data-driven facets accept any value.
-  function readSet(pr, key, valid) {
-    var o = {};
-    (pr.get(key) || "").split(",").forEach(function (v) { if (v && (!valid || valid(v))) o[v] = true; });
-    return o;
-  }
+  // (readSet and the validators of the fixed-domain facets — URL_VALID — are defined above boot.)
   // Returns true if defaults were applied (no filter params) and should be written back.
   function readURL() {
     var pr = new URLSearchParams(location.search);
     var tab = pr.get("tab"); nav.tab = (tab === "overview" || tab === "quality" || tab === "about" || tab === "map") ? tab : "map";
     nav.basemap = pr.get("basemap"); nav.ext = pr.get("ext");
     if (!URL_KEYS.some(function (k) { return pr.has(k); })) {
-      filters = defaultFilters(); state.search = ""; document.getElementById("tsearch").value = ""; return true;
+      filters = defaultFilters(); state.search = ""; state.onlyId = null; document.getElementById("tsearch").value = ""; return true;
     }
-    var validExcl = defaultExclude();
     state.search = pr.get("q") || "";
+    state.onlyId = pr.get("id") || null;
     document.getElementById("tsearch").value = state.search;
-    filters.exclude = readSet(pr, "excl", function (k) { return !!validExcl[k]; });
+    filters.exclude = readSet(pr, "excl", URL_VALID.excl);
     filters.status = readSet(pr, "status");
     filters.eigentum = readSet(pr, "eig");
     // `cov` is single-valued (with|without): anything else means "alle".
     filters.coverage = {}; var cov = pr.get("cov"); if (cov === "with" || cov === "without") filters.coverage[cov] = true;
     filters.countries = readSet(pr, "land");
     filters.cantons = readSet(pr, "kanton");
-    filters.arts = readSet(pr, "art", function (a) { return !!ART_TYPES[a]; });
+    filters.arts = readSet(pr, "art", URL_VALID.art);
     filters.bauzonen = readSet(pr, "bauz");
-    filters.has = readSet(pr, "has", function (m) { return !!HAS_METRICS[m]; });
-    VBS_FACETS.forEach(function (f) { filters[f] = readSet(pr, VBS_URL_KEY[f], function (k) { return !!VBS_GROUPS[f].fields[k]; }); });
+    filters.has = readSet(pr, "has", URL_VALID.has);
+    VBS_FACETS.forEach(function (f) { filters[f] = readSet(pr, VBS_URL_KEY[f], URL_VALID[VBS_URL_KEY[f]]); });
     // Back-compat: VBS productivity used to be two keys of the `has` facet, reachable
     // only by hand-writing the URL. Keep such links working by folding them in here
     // (showTab stamps the current spelling back into the address bar).
@@ -1353,7 +1646,7 @@
       if (m === "VBSu") filters.vbsprod.unproduktiv = true;
     });
     filters.tpf = readSet(pr, "tpf");
-    filters.greeninv = readSet(pr, "gi", function (g) { return !!GREENINV_LABELS[g]; });
+    filters.greeninv = readSet(pr, "gi", URL_VALID.gi);
     return false;
   }
 
@@ -1382,6 +1675,9 @@
   // habitatListAll.length) overwrites it with the real per-TypoCH-L1 table.
   var habEl = document.getElementById("tbl-habitat");
   if (habEl) habEl.innerHTML = '<div class="empty-note">Keine BAFU-Lebensraum-Daten im Export. Mit aktivierter Lebensraum-Analyse exportieren.</div>';
+  // Same for the Bauzonen: without the analysis there is no table (it would claim 100 % «Ohne Bauzone»).
+  var bzEl = document.getElementById("tbl-bauzonen");
+  if (bzEl && !bzRan) bzEl.innerHTML = '<div class="empty-note">Keine Bauzonen-Daten im Export. Mit aktivierter Bauzonen-Analyse exportieren.</div>';
 
   // In-card tabs (VBS Kategorien/Produktiv · Bauzonen/SIA 416/Versiegelung)
   Array.prototype.forEach.call(document.querySelectorAll(".card-tabs"), function (card) {
@@ -1457,7 +1753,7 @@
     document.getElementById("thead-row").addEventListener("change", function (e) {
       if (e.target.id !== "sel-all") return;
       var pr = pageRows(), on = e.target.checked;
-      pr.forEach(function (p) { var k = String(p.id == null ? "" : p.id); if (on) { if (!sel[k] && selCount() < SEL_MAX) sel[k] = 1; } else delete sel[k]; });
+      pr.forEach(function (p) { var k = String(p.id == null ? "" : p.id); if (!k) return; if (on) { if (!sel[k] && selCount() < SEL_MAX) sel[k] = 1; } else delete sel[k]; });
       renderSelUI();
     });
     document.getElementById("sel-clear").addEventListener("click", clearSelection);
@@ -1723,7 +2019,7 @@
     return loadXlsx().then(function (XLSX) {
       var cols = (extraCols || []).concat(COLUMNS.filter(function (c) { return c.visible || c.key === "greeninv"; }));
       var aoa = [cols.map(function (c) { return c.label; })];
-      parcels.forEach(function (p) { aoa.push(cols.map(function (c) { return c.text ? c.text(p[c.key], p) : c.key === "greeninv" ? greeninvLabel(p.greeninv) : c.num ? num(p[c.key]) : (p[c.key] == null ? "" : String(p[c.key])); })); }); // `text`: the label the table shows for a coded column
+      parcels.forEach(function (p) { aoa.push(cols.map(function (c) { return exportCell(p, c); })); }); // labels for coded columns; an unknown area is an empty cell (null), never 0
       var wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), sheet);
       XLSX.writeFile(wb, fname);
@@ -1735,34 +2031,11 @@
   // values (Ist / Soll / Abweichung) per deviation. Recomputed fresh from a row set
   // so the export is correct even if the Datenqualität tab was never opened.
   // E-GRID uniqueness (and every count) is judged within `rows`, so Alle/Gefiltert differ.
-  function _devDelta(diff, base) { // "+50 (+5 %)" / "-32 (-3.8 %)" — Ist minus Soll, signed
-    var d = Math.round(diff), p = base > 0 ? Math.round(diff / base * 1000) / 10 : null;
-    return (d > 0 ? "+" : "") + d + (p == null ? "" : " (" + (p > 0 ? "+" : "") + p + " %)");
-  }
-  // Ist / Soll / Abweichung / Einheit for one FAILED check (the parcel already failed `key`,
-  // so e.g. the geom Ist is always "nein" and the coverage Ist ≠ Soll). Mirrors the checks
-  // in computeRules exactly; only the *values*, not the pass/fail decision, live here.
-  function _devValues(key, p, egCounts) {
-    var area = num(p.parcel_area_m2), st = parcelStats(p);
-    var classified = num(p.sia416_ggf_m2) + num(p.sia416_buf_m2) + num(p.sia416_uuf_m2);
-    var eg = String(p.egrid == null ? "" : p.egrid).trim(), sk = statusKey(p);
-    switch (key) {
-      case "egrid":       return { ist: STATUS_LABELS[sk] || sk || "—", soll: "gefunden", abw: "", unit: "" };
-      case "geom":        return { ist: "nein", soll: "ja", abw: "", unit: "" };
-      case "area":        return { ist: Math.round(area), soll: "> 0", abw: "", unit: "m²" };
-      case "egridUnique": return { ist: (eg ? (egCounts[eg] || 0) : 0), soll: 1, abw: "", unit: "Vorkommen" };
-      case "bbCover":     return { ist: Math.round(classified), soll: Math.round(area), abw: _devDelta(classified - area, area), unit: "m²" };
-      case "bzCover":     return { ist: Math.round(st.bzSumAll), soll: Math.round(area), abw: _devDelta(st.bzSumAll - area, area), unit: "m²" };
-      case "hbCover":     return { ist: Math.round(st.hbSum), soll: Math.round(area), abw: _devDelta(st.hbSum - area, area), unit: "m²" };
-      default:            return { ist: "", soll: "", abw: "", unit: "" };
-    }
-  }
   function qualityDeviationRows(rows) {
-    var R = rulesFor(rows), egCounts = {};
-    rows.forEach(function (p) { var eg = String(p.egrid == null ? "" : p.egrid).trim(); if (eg) egCounts[eg] = (egCounts[eg] || 0) + 1; });
+    var R = rulesFor(rows), egCounts = egridCounts(rows); // the counter the rule itself uses (resolved E-GRIDs only)
     var out = [];
     RULE_DEFS.forEach(function (d) {
-      R[d.key].fails.forEach(function (f) { out.push({ key: d.key, name: d.name, p: f.p, v: _devValues(d.key, f.p, egCounts) }); });
+      R[d.key].fails.forEach(function (f) { out.push({ key: d.key, name: d.name, p: f.p, v: devValues(d.key, f.p, egCounts, S) }); });
     });
     return { rules: R, deviations: out };
   }
@@ -1875,7 +2148,7 @@
   // reportTable's "Ohne Bodenbedeckung" remainder makes the Total read 100 % of the GSF
   // (same reconciliation as the on-screen VBS Produktiv & Typ pivot). Replaces the former
   // SIA 416 table: for a naturnahe-VBS survey report the VBS split is the on-topic breakdown.
-  function reportVbs(p) { return [
+  function reportVbs(p) { return (lcFailed(p) || !isFound(p)) ? [] : [ // unknown land cover: no rows of 0 — the remainder line says why
     { label: "Typ 1 · Grünflächen in Gebäudeumgebung", area: num(p.av_typ1_m2), color: "#8ED554" },
     { label: "Typ 2 · Übrige Grünflächen", area: num(p.av_typ2_m2), color: "#62AF39" },
     { label: "Biologisch unproduktiv", area: num(p.av_unproduktiv_m2), color: "#9AAAB3" }
@@ -1929,10 +2202,14 @@
   function landcoverFills(b, pid) { if (_lcIdx === null) _lcIdx = _overlayIndex(OVERLAYS && OVERLAYS.landcover, mainColor); return _forParcel(_lcIdx, b, pid); }
   function habitatFills(b, pid) { if (_hbIdx === null) _hbIdx = _overlayIndex(OVERLAYS && OVERLAYS.habitat, habColorArt); return _forParcel(_hbIdx, b, pid); }
   var REPORT_SECTIONS = [
-    { n: "1", title: "Lage & AV", layers: "ch.swisstopo.swissimage", tbl: "AV - Naturnahe Flächen", rows: reportVbs },
-    { n: "2", title: "Bodenbedeckung (AV)", layers: "ch.swisstopo.pixelkarte-grau", tbl: "Bodenbedeckung", rows: reportLandcover, fills: landcoverFills },
-    { n: "3", title: "BAFU Lebensräume", layers: "ch.swisstopo.pixelkarte-grau", tbl: "Lebensräume (TypoCH)", rows: reportHabitat, fills: habitatFills }
+    { n: "1", title: "Lage & AV", layers: "ch.swisstopo.swissimage", tbl: "AV - Naturnahe Flächen", rows: reportVbs, rem: lcRemainder },
+    { n: "2", title: "Bodenbedeckung (AV)", layers: "ch.swisstopo.pixelkarte-grau", tbl: "Bodenbedeckung", rows: reportLandcover, fills: landcoverFills, rem: lcRemainder },
+    { n: "3", title: "BAFU Lebensräume", layers: "ch.swisstopo.pixelkarte-grau", tbl: "Lebensräume (TypoCH)", rows: reportHabitat, fills: habitatFills, rem: hbRemainder }
   ];
+  // The line that completes a section table to 100 % of the parcel: unknown (the request failed) is not "without".
+  function lcRemainder(p) { return lcFailed(p) ? "Bodenbedeckung nicht abrufbar" : "Ohne Bodenbedeckung"; }
+  function hbRemainder(p) { return hbFailed(p) ? "Lebensräume nicht abrufbar" : "Ohne Lebensraum-Daten"; }
+  function bzRemainder(p) { return bzFailed(p) ? "Bauzonen nicht abrufbar" : "Ohne Bauzone"; }
   function reportTable(pdf, x, y, w, title, rows, totalArea, opts) {
     var remLabel = (opts && opts.remainderLabel) || "Ohne Bodenbedeckung";
     var pctX = x + w - 26; // % column right edge; area at x+w
@@ -1957,7 +2234,7 @@
     });
     pdf.setDrawColor(170); pdf.line(x, ry - 2.6, x + w, ry - 2.6);
     pdf.setFont("helvetica", "bold"); pdf.setTextColor(31, 41, 55);
-    pdf.text("Total", x, ry + 1.5); pdf.text(pct(sum), pctX, ry + 1.5, { align: "right" }); pdf.text(fmtArea(sum) + " " + unitLabel(), x + w, ry + 1.5, { align: "right" });
+    pdf.text("Total", x, ry + 1.5); pdf.text(pct(sum), pctX, ry + 1.5, { align: "right" }); pdf.text(totalArea > 0 || sum > 0 ? fmtArea(sum) + " " + unitLabel() : "–", x + w, ry + 1.5, { align: "right" }); // no parcel area, nothing known: «–», not 0
     return ry + 1.5; // bottom baseline — lets a caller stack another table beneath
   }
   function reportDateStr() { var d = new Date(); return ("0" + d.getDate()).slice(-2) + "." + ("0" + (d.getMonth() + 1)).slice(-2) + "." + d.getFullYear(); }
@@ -1983,14 +2260,14 @@
       pdf.setDrawColor(180); pdf.line(M, hy + 2, PW - M, hy + 2);
       var start = pg * ROWS_PER_TOC, ry = hy + 8;
       rows.slice(start, start + ROWS_PER_TOC).forEach(function (p, j) {
-        var gi = start + j, area = num(p.parcel_area_m2), green = num(p.greenspace_m2), gp = area ? Math.round(green / area * 100) : 0;
+        var gi = start + j;
         pdf.setFont("helvetica", "normal"); pdf.setFontSize(9); pdf.setTextColor(40);
         pdf.text(String(gi + 1), cols[0].x, ry);
         pdf.text(String(p.id || "-"), cols[1].x, ry, { maxWidth: 40 });
         pdf.text(((p.input_plz ? p.input_plz + " " : "") + (p.input_ort || "-")), cols[2].x, ry, { maxWidth: 58 });
         pdf.text(String(p.input_rg || "-"), cols[3].x, ry);
-        pdf.text(fmtArea(area) + " " + unitLabel(), cols[4].x, ry, { align: "right" });
-        pdf.text(gp + "%", cols[5].x, ry, { align: "right" });
+        pdf.text(areaText(p.parcel_area_m2), cols[4].x, ry, { align: "right" }); // «–» for a row without a resolved parcel
+        pdf.text(greenShareText(p), cols[5].x, ry, { align: "right" });          // «–» while the land cover is unknown: not 0 %
         pdf.text(String(p.egrid || "-"), cols[6].x, ry);
         pdf.text(String(tocPages + gi + 1), cols[7].x, ry, { align: "right" });
         pdf.setDrawColor(236); pdf.line(M, ry + 2.6, PW - M, ry + 2.6); ry += 7;
@@ -2041,9 +2318,10 @@
     pdf.setFont("helvetica", "normal"); pdf.setFontSize(7); pdf.setTextColor(135); pdf.text("Lage in der Schweiz", PW - M - 23.5, 33, { align: "center" });
     drawLocatorMap(pdf, PW - M - 47, 34.5, 47, 28, pole ? pole[0] : null, pole ? pole[1] : null); // locator beside the attribute table
     // clean 2-column key/value table (left block; locator map sits to its right)
-    var area = num(p.parcel_area_m2), green = num(p.greenspace_m2), gp = area ? Math.round(green / area * 100) : 0;
+    var area = num(p.parcel_area_m2), green = num(p.greenspace_m2);
+    var greenTxt = lcFailed(p) ? "nicht abrufbar" : area > 0 ? fmtArea(green) + " " + unitLabel() + " (" + greenShareText(p) + ")" : "–";
     var L = [["Ort", (p.input_plz ? p.input_plz + " " : "") + (p.input_ort || "-")], ["Kanton", p.input_rg || "-"], ["E-GRID", p.egrid || "-"], ["Nummer", p.nummer || "-"], ["E-GRID-Status", STATUS_LABELS[statusKey(p)] || statusKey(p) || "-"]];
-    var R = [["Teilportfolio", tpfLabel(p.input_tpf)], ["Eigentumsart", eigentumLabel(p["input_eigent.art"])], ["Grundstücksfläche", fmtArea(area) + " " + unitLabel()], ["Grünfläche", fmtArea(green) + " " + unitLabel() + " (" + gp + "%)"], ["Datenquelle", p.lc_source === "AV" ? "Amtliche Vermessung (AV)" : p.lc_source === "BAFU" ? "BAFU (modelliert)" : (p.lc_source || "-")]];
+    var R = [["Teilportfolio", tpfLabel(p.input_tpf)], ["Eigentumsart", eigentumLabel(p["input_eigent.art"])], ["Grundstücksfläche", areaText(p.parcel_area_m2)], ["Grünfläche", greenTxt], ["Datenquelle", p.lc_source === "AV" ? "Amtliche Vermessung (AV)" : p.lc_source === "BAFU" ? "BAFU (modelliert)" : (p.lc_source || "-")]];
     if (hasGreeninv) R.push(["Grüninventar", greeninvLabel(p.greeninv)]); // sixth row on the right, beside the «Karte» link
     var ty = 35, rowH = 4.8, colW = 108, labW = 30;
     for (var i = 0; i < Math.max(L.length, R.length); i++) {
@@ -2066,9 +2344,9 @@
       pdf.setDrawColor(210);
       if (dataUrl) { pdf.addImage(dataUrl, "JPEG", M, yy + 4, imgW, imgH); pdf.rect(M, yy + 4, imgW, imgH, "S"); }
       else { pdf.setFillColor(245, 246, 247); pdf.rect(M, yy + 4, imgW, imgH, "FD"); pdf.setTextColor(140); pdf.setFontSize(9); pdf.setFont("helvetica", "normal"); pdf.text(p._geom ? "Kartenbild nicht verfügbar (Internet?)" : "Keine Geometrie (E-GRID nicht gefunden)", M + imgW / 2, yy + 4 + imgH / 2, { align: "center" }); }
-      var tblEnd = reportTable(pdf, tblX, yy + 11, tblW, sec.tbl, sec.rows(p), num(p.parcel_area_m2));
+      var tblEnd = reportTable(pdf, tblX, yy + 11, tblW, sec.tbl, sec.rows(p), num(p.parcel_area_m2), { remainderLabel: sec.rem(p) });
       // Section 1: a Bauzonen overview fills the space under the SIA 416 table (no extra map).
-      if (i === 0 && bauzoneListAll.length) reportTable(pdf, tblX, tblEnd + 11, tblW, "Bauzonen (ARE)", reportBauzonen(p), num(p.parcel_area_m2), { remainderLabel: "Ohne Bauzone" });
+      if (i === 0 && bauzoneListAll.length) reportTable(pdf, tblX, tblEnd + 11, tblW, "Bauzonen (ARE)", reportBauzonen(p), num(p.parcel_area_m2), { remainderLabel: bzRemainder(p) });
     });
     reportFooter(pdf, pageNum, totalPages);
   }
@@ -2331,15 +2609,15 @@
     return null;
   }
 
-  function rowsToFC(rows) {
-    return { type: "FeatureCollection", features: rows.filter(function (p) { return p && p._geom; }).map(function (p) {
-      return { type: "Feature", geometry: p._geom, properties: { id: String(p.id == null ? "" : p.id) } }; // string id: the highlight / selection filters compare strings
-    }) };
-  }
-  function rowsToPointsFC(rows) {
+  // (rowsToFC — one polygon per parcel — is defined above boot.)
+  // A parcel listed more than once is drawn by its first row; the map id of the others points to that row, so
+  // marking or selecting any of them in the table still outlines the polygon.
+  var _mapId = Object.create(null);
+  function mapIdOf(id) { return (id != null && _mapId[id] != null) ? _mapId[id] : id; }
+  function rowsToPointsFC(rows, repeats) {
     var out = [];
     rows.forEach(function (p) {
-      if (!p || !p._geom) return;
+      if (!p || !p._geom || (repeats && repeats.has(p))) return;
       if (p._pole === undefined) p._pole = poleOfGeom(p._geom); // computed once per parcel, then cached
       if (p._pole) out.push({ type: "Feature", geometry: { type: "Point", coordinates: p._pole }, properties: { id: String(p.id || "") } });
     });
@@ -2367,26 +2645,44 @@
     return (_ovById[key] = byId);
   }
   var _mapDirty = false; // a filter pass while the map's tab is hidden: applied when the map is shown again (showTab)
+  // Overlay sources per key: _ovFilled — the source holds features; _ovDirty — it does not show the current rows.
+  // setData serialises its whole payload on the main thread (MapLibre: JSON.stringify), and the three overlays
+  // of a portfolio are more than 100 MB of GeoJSON: a HIDDEN overlay is therefore not sent on a filter change.
+  // It is emptied once, marked dirty, and filled when its layer is switched on (setLayerVis).
+  var _ovFilled = {}, _ovDirty = {};
+  // Clip one data overlay to the rows (join on SAP id) so filtering hides the land cover / Bauzonen /
+  // Lebensräume of filtered-out parcels too — not just the parcel polygons. A repeated row adds nothing:
+  // its parcel's overlay is drawn by the first row.
+  function fillOverlay(d, rows) {
+    var src = map.getSource("ov-" + d.key); if (!src) return;
+    if (!layerVis[d.key]) {
+      if (_ovFilled[d.key]) { src.setData({ type: "FeatureCollection", features: [] }); _ovFilled[d.key] = false; }
+      _ovDirty[d.key] = true; return;
+    }
+    var byId = overlayById(d.key), feats = [], rep = repeatsFor(rows);
+    rows.forEach(function (p) {
+      if (rep.has(p)) return;
+      var bucket = byId[String(p.id == null ? "" : p.id)];
+      if (bucket) for (var i = 0; i < bucket.length; i++) feats.push(bucket[i]); // a loop, not push.apply: no argument limit
+    });
+    src.setData({ type: "FeatureCollection", features: feats });
+    _ovFilled[d.key] = feats.length > 0; _ovDirty[d.key] = false;
+  }
   function renderMap(rows) {
     lastRows = rows;
     if (!mapReady || !map) return;
     if (currentTab !== "map" && currentTab !== "overview") { _mapDirty = true; return; }
     _mapDirty = false;
-    var polyFC = rowsToFC(rows);
+    var rep = repeatsFor(rows);
+    _mapId = Object.create(null);
+    rep.forEach(function (first, p) { _mapId[String(p.id == null ? "" : p.id)] = String(first.id == null ? "" : first.id); });
+    var polyFC = rowsToFC(rows, rep);
     var ps = map.getSource("parcels"); if (ps) ps.setData(polyFC);
-    var pts = map.getSource("points"); if (pts) pts.setData(rowsToPointsFC(rows));
-    // Clip the data overlays to the visible parcels (join on SAP id) so filtering hides
-    // the land cover / Bauzonen / Lebensräume of filtered-out parcels too — not just the
-    // parcel polygons.
-    OVERLAY_DEFS.forEach(function (d) {
-      var src = map.getSource("ov-" + d.key); if (!src) return;
-      var byId = overlayById(d.key), feats = [];
-      rows.forEach(function (p) {
-        var bucket = byId[String(p.id == null ? "" : p.id)];
-        if (bucket) feats.push.apply(feats, bucket);
-      });
-      src.setData({ type: "FeatureCollection", features: feats });
-    });
+    var pts = map.getSource("points"); if (pts) pts.setData(rowsToPointsFC(rows, rep));
+    OVERLAY_DEFS.forEach(function (d) { fillOverlay(d, rows); });
+    // The outlines follow the rows that are drawn (a marked or selected row may be a repeat of one of them).
+    if (map.getLayer("parcels-hl")) { var hlF = ["==", ["get", "id"], mapIdOf(selectedParcelId) || " "]; map.setFilter("parcels-hl", hlF); if (map.getLayer("parcels-hl-casing")) map.setFilter("parcels-hl-casing", hlF); }
+    if (map.getLayer("parcels-sel")) map.setFilter("parcels-sel", ["in", ["get", "id"], ["literal", selIds().map(mapIdOf)]]);
     // A selected overlay feature may have just been clipped away (and setData regenerates
     // ids anyway), so drop the stale highlight bookkeeping.
     if (_selOv) hideMapCard(); // the card described a feature that may have been clipped away
@@ -2406,7 +2702,7 @@
     var btn = document.createElement("button");
     btn.type = "button"; btn.className = "map-home"; btn.title = "Auf Auswahl zoomen"; btn.setAttribute("aria-label", "Auf Auswahl zoomen");
     btn.innerHTML = ICON.sz("house", 17);
-    btn.addEventListener("click", function () { if (lastRows && lastRows.length) fitMap(rowsToFC(lastRows), true); });
+    btn.addEventListener("click", function () { if (lastRows && lastRows.length) fitMap(rowsToFC(lastRows, repeatsFor(lastRows)), true); });
     div.appendChild(btn); this._container = div; return div;
   };
   HomeControl.prototype.onRemove = function () { if (this._container && this._container.parentNode) this._container.parentNode.removeChild(this._container); this._map = undefined; };
@@ -2636,11 +2932,14 @@
       ["Eigentumsart", p["input_eigent.art"] ? eigentumLabel(p["input_eigent.art"]) : "—"],
       (hasGreeninv ? ["Grüninventar", greeninvLabel(p.greeninv)] : null)
     ]));
+    // Unknown is not 0: «nicht abrufbar» while the land-cover request failed, «–» for a row without a resolved parcel.
+    var lcU = lcFailed(p), hasArea = parcelArea > 0;
+    var lcShare = function (v) { return lcU ? "nicht abrufbar" : !hasArea ? "–" : fmtAreaU(v) + " (" + pct(v, parcelArea) + " % der GSF)"; };
     var flaechen = card("Flächen (Übersicht)", detailKV([
-      ["Grundstücksfläche (GSF)", fmtAreaU(parcelArea)],
-      ["Klassifizierte Bodenbedeckung (AV)", fmtAreaU(classified) + " (" + pct(classified, parcelArea) + " % der GSF)"],
-      ["Grünfläche", fmtAreaU(green) + " (" + pct(green, parcelArea) + " % der GSF)"],
-      ["Versiegelte Fläche", fmtAreaU(sealed) + " (" + pct(sealed, parcelArea) + " % der GSF)"]
+      ["Grundstücksfläche (GSF)", areaText(p.parcel_area_m2)],
+      ["Klassifizierte Bodenbedeckung (AV)", lcShare(classified)],
+      ["Grünfläche", lcShare(green)],
+      ["Versiegelte Fläche", lcShare(sealed)]
     ]));
     var siaCard = classified > 0 ? card("SIA 416", detailKV([
       ["GGF · Gebäudegrundfläche", fmtAreaU(ggf)], ["BUF · Bearbeitete Umgebung", fmtAreaU(buf)], ["UUF · Unbearbeitete Umgebung", fmtAreaU(uuf)]
@@ -2658,9 +2957,9 @@
     var bzCard = bzItems.length ? card("Bauzonen (ARE)", detailAreaTable(bzItems, parcelArea)) : "";
     var hbCard = hbItems.length ? card("Lebensräume (BAFU · TypoCH)", detailAreaTable(hbItems, parcelArea)) : "";
     var qCard = card("Datenqualität", detailKV([
-      ["E-GRID-Status", stLabel], ["Bodenbedeckung-WFS", p.check_wfs || "—"], ["Geometrie", p.check_geom || "—"],
-      (("check_bauzonen" in p) && p.check_bauzonen ? ["Bauzonen", p.check_bauzonen] : null),
-      (("check_habitat" in p) && p.check_habitat ? ["Lebensräume", p.check_habitat] : null),
+      ["E-GRID-Status", stLabel], ["Bodenbedeckung-WFS", p.check_wfs === "wfs_error" ? "nicht abrufbar (wfs_error)" : (p.check_wfs || "—")], ["Geometrie", p.check_geom || "—"],
+      (("check_bauzonen" in p) && p.check_bauzonen ? ["Bauzonen", bzFailed(p) ? "nicht abrufbar (error)" : p.check_bauzonen] : null),
+      (("check_habitat" in p) && p.check_habitat ? ["Lebensräume", hbFailed(p) ? "nicht abrufbar (error)" : p.check_habitat] : null),
       ["Datenquelle (LC)", p.lc_source || "—"],
       (p.lc_synthetic === "yes" ? ["Bodenbedeckung", "Hinweis: synthetisch aus BAFU-Lebensräumen abgeleitet (keine AV-Daten)"] : null)
     ]));
@@ -3009,8 +3308,16 @@
   }
   function setLayerVis(key, on) {
     layerVis[key] = !!on;
-    if (map && mapReady) applyLayerVis();
-    renderLegend(); renderAccordion(); renderLayerWidget();
+    var apply = function () {
+      if (map && mapReady) {
+        applyLayerVis();
+        OVERLAY_DEFS.forEach(function (d) { if (d.key === key && (on ? _ovDirty[key] : _ovFilled[key])) fillOverlay(d, lastRows); }); // on: fill what was skipped; off: release it
+      }
+      renderLegend(); renderAccordion(); renderLayerWidget();
+    };
+    var fc = OVERLAYS[key], big = on && _ovDirty[key] && fc && fc.features && fc.features.length >= LOADING_ROWS;
+    if (big) withLoading("Karte wird aktualisiert…", apply).catch(function (e) { console.error(e); hideLoading(); }); // tens of MB go to the map: say so
+    else apply();
   }
   function applyLayerVis() { internalLayerDefs().forEach(function (d) { d.layers.forEach(function (lid) { if (map.getLayer(lid)) map.setLayoutProperty(lid, "visibility", layerVis[d.key] ? "visible" : "none"); }); }); }
 
@@ -3209,7 +3516,7 @@
     var act = function (a, label, icon) { return '<button type="button" class="mp-act" data-pop="' + a + '" data-id="' + esc(pid) + '">' + ICON.sz(icon, 15) + '<span>' + label + '</span></button>'; };
     var full = !sel[pid] && selCount() >= SEL_MAX;
     return '<div class="map-pop"><div class="mp-kicker">Grundstück · interne Karte</div><div class="mp-t">' + esc(p.input_ort || "—") + '</div>' + (bez ? '<div class="mp-s">' + esc(bez) + '</div>' : "") +
-      '<div class="mp-kv"><span>ID</span><span>' + esc(pid || "—") + '</span><span>E-GRID</span><span>' + esc(p.egrid || "—") + '</span><span>Region</span><span>' + esc((p.input_rg || "—") + " · " + (p.input_plz ? p.input_plz + " " : "") + (p.input_ort || "")) + '</span><span>Grundstücksfläche</span><span>' + fmtAreaU(num(p.parcel_area_m2)) + '</span>' +
+      '<div class="mp-kv"><span>ID</span><span>' + esc(pid || "—") + '</span><span>E-GRID</span><span>' + esc(p.egrid || "—") + '</span><span>Region</span><span>' + esc((p.input_rg || "—") + " · " + (p.input_plz ? p.input_plz + " " : "") + (p.input_ort || "")) + '</span><span>Grundstücksfläche</span><span>' + areaText(p.parcel_area_m2) + '</span>' +
       '<span>Teilportfolio</span><span>' + esc(p.input_tpf ? tpfLabel(p.input_tpf) : "—") + '</span><span>Eigentumsart</span><span>' + esc(p["input_eigent.art"] ? eigentumLabel(p["input_eigent.art"]) : "—") + '</span>' +
       (hasGreeninv ? '<span>Grüninventar</span><span>' + esc(greeninvLabel(p.greeninv)) + '</span>' : "") + '</div>' +
       '<div class="mp-acts">' + act("zoom", "Hinzoomen", "zoomIn") + act("table", "In Tabelle anzeigen", "funnel") + act("pdf", "PDF-Bericht erstellen", "fileText") +
@@ -3225,8 +3532,8 @@
     if (act === "zoom") zoomToParcel(id, { zoom: 17.5, noCard: true });
     else if (act === "table") {
       hideMapCard();
-      state.search = id; document.getElementById("tsearch").value = id;
-      showTab("overview"); writeURL(); update();
+      state.onlyId = String(id); // exactly this row (the search box would also list every row that merely contains the id)
+      showTab("overview"); commit();
       setTimeout(function () { var t = document.getElementById("tsearch"); if (t) t.scrollIntoView({ block: "center", behavior: "smooth" }); }, 50);
     } else if (act === "pdf") { hideMapCard(); openDownload(null, [p]); }
   });
@@ -3291,9 +3598,9 @@
           hits.slice(0, 5).forEach(function (p) {
             var pid = String(p.id == null ? "" : p.id);
             actions.push(function () { setOpen(false); focusParcel(pid); });
-            h += row({ i: i++, mark: "mark-parcel", t: p[NAME_COL] || p.input_ort || pid, s: pid + " · " + (p.input_plz ? p.input_plz + " " : "") + (p.input_ort || "") + (p.input_rg ? " (" + p.input_rg + ")" : ""), meta: fmtAreaU(num(p.parcel_area_m2)), metaCls: "muted" });
+            h += row({ i: i++, mark: "mark-parcel", t: p[NAME_COL] || p.input_ort || pid, s: pid + " · " + (p.input_plz ? p.input_plz + " " : "") + (p.input_ort || "") + (p.input_rg ? " (" + p.input_rg + ")" : ""), meta: areaText(p.parcel_area_m2), metaCls: "muted" });
           });
-          actions.push(function () { setOpen(false); state.search = q; document.getElementById("tsearch").value = q; showTab("overview"); writeURL(); update(); });
+          actions.push(function () { setOpen(false); state.search = q; state.onlyId = null; document.getElementById("tsearch").value = q; showTab("overview"); writeURL(); update(); });
           h += '<button type="button" class="flink sd-more" data-i="' + (i++) + '">Alle ' + fmt(hits.length) + ' Treffer in Tabelle filtern</button></div>';
         }
       }
@@ -3469,9 +3776,9 @@
     map.addSource("parcels", { type: "geojson", data: { type: "FeatureCollection", features: [] } }); // renderMap below fills the sources once
     map.addLayer({ id: "parcels-fill", type: "fill", source: "parcels", minzoom: PARCEL_MINZOOM, paint: { "fill-color": PARCEL_COLOR, "fill-opacity": 0.4 } });
     map.addLayer({ id: "parcels-line", type: "line", source: "parcels", minzoom: PARCEL_MINZOOM, paint: { "line-color": MAP_COLORS.parcelLine, "line-width": 0.7 } });
-    map.addLayer({ id: "parcels-sel", type: "line", source: "parcels", minzoom: PARCEL_MINZOOM, filter: ["in", ["get", "id"], ["literal", selIds()]], paint: { "line-color": MAP_COLORS.checked, "line-width": 2.2, "line-dasharray": [2, 1.2] } });
-    map.addLayer({ id: "parcels-hl-casing", type: "line", source: "parcels", minzoom: PARCEL_MINZOOM, filter: ["==", ["get", "id"], selectedParcelId || " "], paint: { "line-color": MAP_COLORS.surface, "line-width": 5, "line-opacity": 0.9 } });
-    map.addLayer({ id: "parcels-hl", type: "line", source: "parcels", minzoom: PARCEL_MINZOOM, filter: ["==", ["get", "id"], selectedParcelId || " "], paint: { "line-color": MAP_COLORS.active, "line-width": 2.6 } });
+    map.addLayer({ id: "parcels-sel", type: "line", source: "parcels", minzoom: PARCEL_MINZOOM, filter: ["in", ["get", "id"], ["literal", selIds().map(mapIdOf)]], paint: { "line-color": MAP_COLORS.checked, "line-width": 2.2, "line-dasharray": [2, 1.2] } });
+    map.addLayer({ id: "parcels-hl-casing", type: "line", source: "parcels", minzoom: PARCEL_MINZOOM, filter: ["==", ["get", "id"], mapIdOf(selectedParcelId) || " "], paint: { "line-color": MAP_COLORS.surface, "line-width": 5, "line-opacity": 0.9 } });
+    map.addLayer({ id: "parcels-hl", type: "line", source: "parcels", minzoom: PARCEL_MINZOOM, filter: ["==", ["get", "id"], mapIdOf(selectedParcelId) || " "], paint: { "line-color": MAP_COLORS.active, "line-width": 2.6 } });
     addOverlayLayers(); // Bodenbedeckung / Bauzonen / Lebensräume, under the markers
     addIdentLayers(); // identify preview (external maps): above the overlays, under the markers
     if (_identOpen) { clearIdentify(); hideMapCard(); } // a style rebuild drops the preview (and a pending request)
@@ -3487,7 +3794,7 @@
       paint: { "text-color": MAP_COLORS.label, "text-halo-color": MAP_COLORS.surface, "text-halo-width": 1.4 } });
     extLayers.forEach(addExtToMap); syncExtOrder();
     applyLayerVis();
-    _selOv = null;
+    _selOv = null; _ovFilled = {}; _ovDirty = {}; // the sources of this style are new and empty
     mapReady = true; renderMap(lastRows); renderLegend(); renderAccordion(); renderLayerWidget();
     if (_pendingZoom) { var z = _pendingZoom; _pendingZoom = null; zoomToParcel(z.id, z.opts); }
     if (_pendingMapAction) { var a = _pendingMapAction; _pendingMapAction = null; a(); }
