@@ -2,9 +2,17 @@
  * Core processing: EGRID → Parcel Geometry → WFS Land Cover → Turf.js Clip → Area
  *
  * This module clips, classifies and aggregates; every live request lives in
- * geoapi.js (mirrored by processing-cli/api.py) and this file is mirrored step for step by
- * processing-cli/processor_web.py — keep the two in lock-step, the cross-check
- * (processing-cli/compare.py) depends on it.
+ * geoapi.js (mirrored by processing-cli/src/api.py) and this file is mirrored step for step by
+ * processing-cli/src/processor_web.py — keep the two in lock-step, the cross-check
+ * (processing-cli/src/compare.py) depends on it.
+ *
+ * A value whose query failed is left EMPTY, never 0: an empty cell means "not
+ * known", a 0 means "asked, nothing there". Parcels with a failed query are asked
+ * again at the end of the run (RETRY_ROUNDS).
+ *
+ * Function names follow processor_web.py (processOne ⇄ _process_one,
+ * makeLandcoverRow ⇄ _make_landcover_row, aggregateLandCover ⇄ _aggregate_landcover …)
+ * — see docs/ARCHITECTURE.md §Web ⇄ CLI name map.
  *
  * Performance strategy:
  * - Parallel parcels (bounded, max CONCURRENCY at once)
@@ -33,17 +41,78 @@ const OHNE_BAUZONE_MIN_AREA = 1;
 /** Min share of the parcel a dropped (null-geometry) habitat feature must cover
  *  before we gap-fill it — below this it's sliver noise, not a missing big feature. */
 const HABITAT_GAP_MIN_FRAC = 0.01;
+/** The services answer 502 in bursts that outlast the per-request retries, so parcels
+ *  with a failed query are processed again after the first pass (as in processor_web.py). */
+export const RETRY_ROUNDS = 2;
+const RETRY_PAUSE_MS = 20000;
+let retryPauseMs = RETRY_PAUSE_MS;
+/** Test hook: shorten the pause between retry rounds. */
+export function setRetryPauseMs(ms) { retryPauseMs = ms; }
+
+/** The fixed aggregation columns of a parcel, in output order (aggregateLandCover). */
+export const LANDCOVER_AGG_KEYS = [
+  "sia416_ggf_m2", "sia416_buf_m2", "sia416_uuf_m2",
+  "din277_bf_m2", "din277_uf_m2",
+  "sealed_m2", "greenspace_m2",
+  "av_produktiv_m2", "av_unproduktiv_m2",
+  "av_kat_a_m2", "av_kat_b_m2", "av_kat_c_m2", "av_kat_d_m2",
+  "av_typ1_m2", "av_typ2_m2",
+];
 
 export function cancelProcessing() {
   setCancelled(true);
 }
 
+/** Sequence number of the run in progress. A run stops when it is cancelled OR when
+ *  a newer run has started: the cancel flag in geoapi.js is one global boolean that
+ *  the next processRows() resets, which on its own would let an abandoned run carry on. */
+let activeRun = 0;
+
+/** True when a query of this parcel failed (a state of the service, not a property
+ *  of the parcel): the lookup or the pipeline threw, or the land-cover, Bauzonen or
+ *  habitat request did not answer. Mirror of needs_retry(). */
+export function needsRetry(result) {
+  const p = result.parcel;
+  return String(p.check_egrid || "").startsWith("error:")
+    || p.check_wfs === "wfs_error"
+    || p.check_bauzonen === "error"
+    || p.check_habitat === "error";
+}
+
+/** The result to keep after a retry: the new one, unless it failed again and the
+ *  earlier one at least resolved the parcel — never trade a partial result for an
+ *  error row. Mirror of _better_result(). */
+function betterResult(prev, next) {
+  if (!prev || !needsRetry(next) || !isFound(prev.parcel.check_egrid)) return next;
+  return prev;
+}
+
+/** Value for an overlay area column the parcel has no entry in: 0 when the overlay
+ *  answered for this parcel, "" when it did not. Mirror of _overlay_fill(). */
+function overlayFill(parcel, checkKey) {
+  const answered = isFound(parcel.check_egrid) && !!parcel[checkKey] && parcel[checkKey] !== "error";
+  return answered ? 0 : "";
+}
+
+/** Wait `ms`, waking early when the run is stopped. */
+async function pause(ms, stopped) {
+  const until = Date.now() + ms;
+  while (Date.now() < until && !stopped()) {
+    await new Promise((resolve) => setTimeout(resolve, Math.min(250, Math.max(0, until - Date.now()))));
+  }
+}
+
 /**
  * Process all rows from the CSV.
- * Returns { parcels, landcover, bauzonen, habitat, greeninvFailed }
+ * Returns { parcels, landcover, bauzonen, habitat, greeninvFailed, cancelled }
+ *
+ * A parcel is reported to `onProgress` once, with its final result; a parcel whose
+ * query failed is held back and processed again (up to RETRY_ROUNDS times) first.
  */
 export async function processRows(rows, onProgress, options = {}) {
+  const run = ++activeRun;
   setCancelled(false);
+  const stopped = () => run !== activeRun || isCancelled();
   // Load the shared TypoCH name reference once up front (memoized, fail-soft) so the
   // per-parcel habitat labelling below can resolve level-1/2/3 names synchronously.
   if (options.habitat) await ensureTypoch();
@@ -55,14 +124,22 @@ export async function processRows(rows, onProgress, options = {}) {
 
   const results = new Array(total);
 
+  // How often each EGRID stands in the list. A repeated parcel is processed per row
+  // and carries its full areas in each — a sum over the parcel table counts it that
+  // many times. The count travels on the parcel as `_egridCount` (internal, not
+  // exported) so the processing log can say so.
+  const egridCounts = new Map();
+  for (const r of rows) if (r.egrid) egridCounts.set(r.egrid, (egridCounts.get(r.egrid) || 0) + 1);
+
   // `parcel` is the row that just finished (null on the final call) — the UI's
-  // processing log reads its check_* flags; nothing else depends on it.
-  const reportProgress = (parcel = null) => {
-    onProgress({ processed: completed, total, succeeded, failed: completed - succeeded, parcel });
+  // processing log reads its check_* flags; nothing else depends on it. `retrying`
+  // is the number of parcels waiting for another attempt (0 otherwise).
+  const reportProgress = (parcel = null, retrying = 0) => {
+    onProgress({ processed: completed, total, succeeded, failed: completed - succeeded, parcel, retrying });
   };
 
   const processOne = async (row) => {
-    if (isCancelled()) return null;
+    if (stopped()) return null;
 
     const id = row.id || "";
     const egrid = row.egrid || "";
@@ -89,6 +166,7 @@ export async function processRows(rows, onProgress, options = {}) {
       const parcelGeom = parcelResult.geometry;
       const bbox = turf.bbox(parcelGeom);
       const lcResult = await fetchLandCover(bbox);
+      const lcFailed = lcResult.error; // the request failed: land cover is unknown, not absent
       const parcelArea = turf.area(parcelGeom);
 
       // Step 3: Clip AV land cover to the parcel + aggregate.
@@ -117,8 +195,10 @@ export async function processRows(rows, onProgress, options = {}) {
       // label is inferred via TYPOCH_BBART — so the KPIs stay geometry-backed and run
       // through the same classify/aggregate path as AV. Marked lc_source=BAFU +
       // lc_synthetic so it is never mistaken for authoritative cadastral land cover.
+      // Not after a failed request: then AV is not absent but unknown, and the same
+      // parcel would get BAFU-derived numbers on one run and AV numbers on the next.
       const avClassified = agg.sia416_ggf_m2 + agg.sia416_buf_m2 + agg.sia416_uuf_m2;
-      if (options.synthLandcover !== false && parcelArea > 0 && avClassified < parcelArea * MIN_AV_COVER_FRAC) {
+      if (options.synthLandcover !== false && !lcFailed && parcelArea > 0 && avClassified < parcelArea * MIN_AV_COVER_FRAC) {
         const bafu = await getBafu();
         if (bafu && bafu.clip.results.length) {
           const synth = [];
@@ -139,7 +219,11 @@ export async function processRows(rows, onProgress, options = {}) {
       // Genuine errors (status stays "found"; QA notes like merged/truncated/
       // skipped remain in the check_* columns).
       const lcErrors = [];
-      if (clipped.length === 0 && lcResult.error) lcErrors.push(ERR_MSG.wfsUnavailable);
+      if (lcFailed) {
+        lcErrors.push(ERR_MSG.wfsUnavailable);
+        agg = emptyLandCoverAggregate();
+        lcSource = "";
+      }
 
       const merged = parcelResult.properties.mergedCount > 1;
       const parcel = {
@@ -152,7 +236,7 @@ export async function processRows(rows, onProgress, options = {}) {
         nbident: parcelResult.properties.nbident || "",
         status: "found",
         check_egrid: merged ? STATUS.MERGED : STATUS.FOUND,
-        check_wfs: lcResult.error ? "wfs_error" : (lcResult.truncated ? "truncated" : "ok"),
+        check_wfs: lcFailed ? "wfs_error" : (lcResult.truncated ? "truncated" : "ok"),
         check_geom: skipped > 0 ? `${skipped}_skipped` : "ok",
         errors: lcErrors,
         lc_source: lcSource,
@@ -261,8 +345,13 @@ export async function processRows(rows, onProgress, options = {}) {
       parcel._bauzonen = bauzonenRows;
       parcel._habitat = habitatRows;
 
+      // Stopped while this parcel was in flight: its remaining requests were rejected
+      // ("Cancelled"), which would otherwise be recorded as service failures. Drop it,
+      // like the rows the run never reached.
+      if (stopped()) return null;
       return { parcel, landcover: clipped, bauzonen: bauzonenRows, habitat: habitatRows };
     } catch (err) {
+      if (stopped()) return null;
       console.error(`Error processing ${egrid}:`, err);
       return {
         parcel: makeErrorParcel(id, egrid, row, `error:${err.message}`),
@@ -271,26 +360,44 @@ export async function processRows(rows, onProgress, options = {}) {
     }
   };
 
-  // Run with bounded concurrency
-  const queue = rows.map((row, i) => ({ row, index: i }));
-  const workers = [];
-
-  const runNext = async () => {
-    while (queue.length > 0 && !isCancelled()) {
-      const { row, index } = queue.shift();
-      const result = await processOne(row);
-      results[index] = result;
-      completed++;
-      if (result && isFound(result.parcel.check_egrid)) succeeded++;
-      reportProgress(result ? result.parcel : null);
-    }
+  const reported = new Set();
+  const report = (index) => {
+    reported.add(index);
+    completed++;
+    if (isFound(results[index].parcel.check_egrid)) succeeded++;
+    reportProgress(results[index].parcel);
   };
 
-  for (let i = 0; i < Math.min(CONCURRENCY, total); i++) {
-    workers.push(runNext());
-  }
+  // First pass over every row, then up to RETRY_ROUNDS passes over the parcels with
+  // a failed query — each with bounded concurrency. A parcel that will be asked
+  // again is not reported yet.
+  let pending = rows.map((_, i) => i);
+  for (let attempt = 0; attempt <= RETRY_ROUNDS; attempt++) {
+    const last = attempt === RETRY_ROUNDS;
+    const queue = [...pending];
+    const runNext = async () => {
+      while (queue.length > 0 && !stopped()) {
+        const index = queue.shift();
+        const result = await processOne(rows[index]);
+        if (!result) continue; // stopped
+        result.parcel._egridCount = egridCounts.get(result.parcel.egrid) || 1;
+        results[index] = betterResult(results[index], result);
+        if (last || !needsRetry(results[index])) report(index);
+      }
+    };
+    const workers = [];
+    for (let i = 0; i < Math.min(CONCURRENCY, queue.length); i++) workers.push(runNext());
+    await Promise.all(workers);
 
-  await Promise.all(workers);
+    pending = pending.filter((i) => results[i] && needsRetry(results[i]));
+    if (stopped() || pending.length === 0 || last) break;
+    console.warn(`${pending.length} parcel(s) with a failed query — retry ${attempt + 1}/${RETRY_ROUNDS} in ${retryPauseMs / 1000} s`);
+    reportProgress(null, pending.length);
+    await pause(retryPauseMs, stopped);
+    if (stopped()) break;
+  }
+  // Held back for a retry that did not happen (stopped).
+  for (let i = 0; i < total; i++) if (results[i] && !reported.has(i)) report(i);
   reportProgress();
 
   // When Bauzonen ran, make the per-zone columns rectangular: collect every
@@ -327,19 +434,23 @@ export async function processRows(rows, onProgress, options = {}) {
   const habitat = [];
   for (const r of results) {
     if (!r) continue;
-    // When an overlay ran, ensure every parcel (incl. error rows) carries the
-    // joined columns (and every per-zone column) so the export header is uniform.
+    // When an overlay ran, every parcel (incl. error rows) carries the joined columns
+    // and every per-zone / per-habitat column, so the export header is uniform. A
+    // column the parcel has no area in is 0 when its overlay answered and empty when
+    // it did not (error rows, a failed request): empty = not known, 0 = nothing there.
     if (options.bauzonen) {
       if (!("bauzonen" in r.parcel)) r.parcel.bauzonen = "";
       if (!("bauzonen_m2" in r.parcel)) r.parcel.bauzonen_m2 = "";
       if (!("check_bauzonen" in r.parcel)) r.parcel.check_bauzonen = "";
-      for (const k of zoneKeys) if (!(k in r.parcel)) r.parcel[k] = 0;
+      const fill = overlayFill(r.parcel, "check_bauzonen");
+      for (const k of zoneKeys) if (!(k in r.parcel)) r.parcel[k] = fill;
     }
     if (options.habitat) {
       if (!("habitat" in r.parcel)) r.parcel.habitat = "";
       if (!("habitat_m2" in r.parcel)) r.parcel.habitat_m2 = "";
       if (!("check_habitat" in r.parcel)) r.parcel.check_habitat = "";
-      for (const k of habitatKeys) if (!(k in r.parcel)) r.parcel[k] = 0;
+      const fill = overlayFill(r.parcel, "check_habitat");
+      for (const k of habitatKeys) if (!(k in r.parcel)) r.parcel[k] = fill;
     }
     // One column, on every parcel (incl. error rows, which can still match by SAP id).
     if (options.greeninv) r.parcel.greeninv = greenInventoryFlag(greenIndex, r.parcel.id, r.parcel.egrid);
@@ -349,7 +460,7 @@ export async function processRows(rows, onProgress, options = {}) {
     if (r.habitat) habitat.push(...r.habitat);
   }
 
-  return { parcels, landcover, bauzonen, habitat, greeninvFailed: !!(options.greeninv && !greenIndex), cancelled: isCancelled() };
+  return { parcels, landcover, bauzonen, habitat, greeninvFailed: !!(options.greeninv && !greenIndex), cancelled: stopped() };
 }
 
 /** Map an EGRID-resolution failure code to a stable English error message. */
@@ -416,9 +527,9 @@ function clipFeatures(parcelGeom, features, onPiece) {
 /** VBS classification codes → the stable English output labels (blank Typ when none). */
 function vbsLabels(cls) {
   return {
-    vbs_kategorie: VBS_KATEGORIE_LABELS[cls.vbsKategorie] || "",
-    vbs_produktiv: VBS_PRODUKTIV_LABELS[cls.vbsProduktiv] || "",
-    vbs_typ: cls.vbsTyp ? (VBS_TYP_LABELS[cls.vbsTyp] || "") : "",
+    av_kategorie: VBS_KATEGORIE_LABELS[cls.vbsKategorie] || "",
+    av_produktiv: VBS_PRODUKTIV_LABELS[cls.vbsProduktiv] || "",
+    av_typ: cls.vbsTyp ? (VBS_TYP_LABELS[cls.vbsTyp] || "") : "",
   };
 }
 
@@ -636,28 +747,18 @@ export function aggregateHabitat(rows) {
   };
 }
 
+/** The aggregation columns of a parcel whose land-cover request failed: present
+ *  (uniform export header) but empty — the areas are unknown, not 0. */
+export function emptyLandCoverAggregate() {
+  return Object.fromEntries(LANDCOVER_AGG_KEYS.map((k) => [k, ""]));
+}
+
 /** Aggregate clipped land cover into summary columns */
 export function aggregateLandCover(clippedFeatures) {
   // Aggregation columns — all lowercase, namespaced by classification scheme
-  // (sia416_/din277_/vbs_) or imperviousness/green. Raw per-Art areas are added
+  // (sia416_/din277_/av_) or imperviousness/green. Raw per-Art areas are added
   // below as av_<art>_m2 (source = AV land cover).
-  const agg = {
-    sia416_ggf_m2: 0,
-    sia416_buf_m2: 0,
-    sia416_uuf_m2: 0,
-    din277_bf_m2: 0,
-    din277_uf_m2: 0,
-    sealed_m2: 0,
-    greenspace_m2: 0,
-    vbs_produktiv_m2: 0,
-    vbs_unproduktiv_m2: 0,
-    vbs_kat_a_m2: 0,
-    vbs_kat_b_m2: 0,
-    vbs_kat_c_m2: 0,
-    vbs_kat_d_m2: 0,
-    vbs_typ1_m2: 0,
-    vbs_typ2_m2: 0,
-  };
+  const agg = Object.fromEntries(LANDCOVER_AGG_KEYS.map((k) => [k, 0]));
 
   const artAreas = {};
 
@@ -687,19 +788,19 @@ export function aggregateLandCover(clippedFeatures) {
     if (f.check_greenspace !== "Not green space") agg.greenspace_m2 += area;
 
     // VBS biological productivity
-    if (f._vbsProduktiv === "produktiv") agg.vbs_produktiv_m2 += area;
-    else agg.vbs_unproduktiv_m2 += area;
+    if (f._vbsProduktiv === "produktiv") agg.av_produktiv_m2 += area;
+    else agg.av_unproduktiv_m2 += area;
 
     // VBS Kategorie (a–d); unknown falls back to kat_d
     const kat = f._vbsKategorie || "kat_d";
-    if (kat === "kat_a") agg.vbs_kat_a_m2 += area;
-    else if (kat === "kat_b") agg.vbs_kat_b_m2 += area;
-    else if (kat === "kat_c") agg.vbs_kat_c_m2 += area;
-    else agg.vbs_kat_d_m2 += area;
+    if (kat === "kat_a") agg.av_kat_a_m2 += area;
+    else if (kat === "kat_b") agg.av_kat_b_m2 += area;
+    else if (kat === "kat_c") agg.av_kat_c_m2 += area;
+    else agg.av_kat_d_m2 += area;
 
     // VBS Typ — biologically productive only (unproductive contributes to neither)
-    if (f._vbsTyp === "typ1") agg.vbs_typ1_m2 += area;
-    else if (f._vbsTyp === "typ2") agg.vbs_typ2_m2 += area;
+    if (f._vbsTyp === "typ1") agg.av_typ1_m2 += area;
+    else if (f._vbsTyp === "typ2") agg.av_typ2_m2 += area;
   }
 
   for (const k of Object.keys(agg)) agg[k] = round2(agg[k]);

@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import sys
 from collections import defaultdict
 
@@ -76,20 +77,29 @@ def _parcels(feats):
 
 def _detail(feats, layer):
     """Per-parcel aggregate for a detail layer:
-    ``{key: {"count": n, "by_art": {art: area}, "by_fid": {fid: area}}}``."""
-    out = defaultdict(lambda: {"count": 0, "by_art": defaultdict(float), "by_fid": defaultdict(float)})
+    ``{key: {"count": n, "by_art": {art: area}, "by_fid": {fid: area}}}``.
+
+    Areas are summed with ``math.fsum`` (the correctly rounded exact sum), so the
+    totals do not depend on the order of the features. The WFS serves land cover
+    in no fixed order; a plain running sum made two identical feature sets differ
+    in the last bit and fail a zero-tolerance comparison.
+    """
+    acc = defaultdict(lambda: {"count": 0, "by_art": defaultdict(list), "by_fid": defaultdict(list)})
     for f in feats:
         p = f["properties"]
         if p.get("layer") != layer:
             continue
         e = _pkey(p)
         area = _num(p.get("area_m2")) or 0.0
-        out[e]["count"] += 1
-        out[e]["by_art"][p.get("art", "")] += area
+        acc[e]["count"] += 1
+        acc[e]["by_art"][p.get("art", "")].append(area)
         fid = _norm_str(p.get("fid"))
         if fid:
-            out[e]["by_fid"][fid] += area
-    return out
+            acc[e]["by_fid"][fid].append(area)
+    return {e: {"count": d["count"],
+                "by_art": {k: math.fsum(v) for k, v in d["by_art"].items()},
+                "by_fid": {k: math.fsum(v) for k, v in d["by_fid"].items()}}
+            for e, d in acc.items()}
 
 
 def compare_parcels(web, py, rtol, atol):

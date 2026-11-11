@@ -38,6 +38,33 @@ const tabState = {
   habitat: { sortField: "id", sortAsc: true, search: "", page: 1, pageSize: 50 },
 };
 
+/** Columns the user switched off, per tab (column class names). Kept in state — not
+ *  read back from the checkbox list — because that list is rebuilt for the active tab:
+ *  after a tab switch and back, the body used to be re-rendered with every cell while
+ *  the header kept its hidden column, shifting every column under the wrong header. */
+const hiddenCols = { parcels: new Set(), landcover: new Set(), bauzonen: new Set(), habitat: new Set() };
+const knownCols = { parcels: new Set(), landcover: new Set(), bauzonen: new Set(), habitat: new Set() };
+
+/** The hidden set of a tab. A column seen for the first time (the per-zone and
+ *  per-habitat columns differ from run to run) starts hidden if that is its default. */
+function hiddenSet(tabName) {
+  for (const c of TAB_CONFIG[tabName].getCols()) {
+    if (knownCols[tabName].has(c.cls)) continue;
+    knownCols[tabName].add(c.cls);
+    if (c.hidden) hiddenCols[tabName].add(c.cls);
+  }
+  return hiddenCols[tabName];
+}
+
+/** Show / hide the header and body cells of the active tab according to its hidden set. */
+function applyHiddenCols(tabName) {
+  const hidden = hiddenSet(tabName);
+  const root = container.querySelector(`#tab-${tabName}`) || container;
+  for (const c of TAB_CONFIG[tabName].getCols()) {
+    root.querySelectorAll(`.${c.cls}`).forEach((el) => { el.style.display = hidden.has(c.cls) ? "none" : ""; });
+  }
+}
+
 /* ── Column definitions ── */
 
 function greeninvLabel(v) { return v === "yes" ? t("greeninv.yes") : v === "no" ? t("greeninv.no") : ""; }
@@ -112,9 +139,9 @@ function getLcCols() {
     { key: "bfsnr", label: t("col.bfsnr"), cls: "col-lc-bfsnr" },
     { key: "gwr_egid", label: t("col.gwr_egid"), cls: "col-lc-gwregid" },
     { key: "check_greenspace", label: t("col.greenspace"), cls: "col-lc-green", fmt: greenSpaceLabel },
-    { key: "vbs_kategorie", label: t("agg.vbs.kategorie"), cls: "col-lc-vbskat", fmt: vbsKategorieLabel },
-    { key: "vbs_produktiv", label: t("agg.vbs.produktiv"), cls: "col-lc-vbsprod", fmt: vbsProduktivLabel },
-    { key: "vbs_typ", label: t("agg.vbs.typ"), cls: "col-lc-vbstyp", fmt: vbsTypLabel },
+    { key: "av_kategorie", label: t("agg.vbs.kategorie"), cls: "col-lc-vbskat", fmt: vbsKategorieLabel },
+    { key: "av_produktiv", label: t("agg.vbs.produktiv"), cls: "col-lc-vbsprod", fmt: vbsProduktivLabel },
+    { key: "av_typ", label: t("agg.vbs.typ"), cls: "col-lc-vbstyp", fmt: vbsTypLabel },
     { key: "area_m2", label: t("col.area"), cls: "col-lc-area", numeric: true },
     { key: "lc_source", label: t("col.source"), cls: "col-lc-source" },
   ];
@@ -139,9 +166,9 @@ function getHabitatCols() {
     { key: "art", label: t("col.habitat"), cls: "col-hb-art" },
     { key: "art_label", label: t("col.habitat_group"), cls: "col-hb-group" },
     { key: "check_greenspace", label: t("col.greenspace"), cls: "col-hb-green", fmt: greenSpaceLabel },
-    { key: "vbs_kategorie", label: t("agg.vbs.kategorie"), cls: "col-hb-vbskat", fmt: vbsKategorieLabel },
-    { key: "vbs_produktiv", label: t("agg.vbs.produktiv"), cls: "col-hb-vbsprod", fmt: vbsProduktivLabel },
-    { key: "vbs_typ", label: t("agg.vbs.typ"), cls: "col-hb-vbstyp", fmt: vbsTypLabel },
+    { key: "av_kategorie", label: t("agg.vbs.kategorie"), cls: "col-hb-vbskat", fmt: vbsKategorieLabel },
+    { key: "av_produktiv", label: t("agg.vbs.produktiv"), cls: "col-hb-vbsprod", fmt: vbsProduktivLabel },
+    { key: "av_typ", label: t("agg.vbs.typ"), cls: "col-hb-vbstyp", fmt: vbsTypLabel },
     { key: "prob", label: t("col.prob"), cls: "col-hb-prob" },
     { key: "area_m2", label: t("col.area"), cls: "col-hb-area", numeric: true },
     { key: "lc_source", label: t("col.source"), cls: "col-hb-source" },
@@ -179,28 +206,58 @@ export function populateTable(parcels, landcover, bauzonen, habitat) {
   initResizeHandle();
 }
 
-/** Highlight a parcel row (called from map click). Switches to parcels tab if needed. */
-export function highlightRow(index) {
+/** Rows of a tab as currently shown: filtered by its search, then sorted. */
+function viewRows(tabName) {
+  const cfg = TAB_CONFIG[tabName];
+  const st = tabState[tabName];
+  const rows = st.search
+    ? cfg.getData().filter((r) => cfg.searchText(r).toLowerCase().includes(st.search))
+    : [...cfg.getData()];
+  const col = cfg.getCols().find((c) => c.key === st.sortField);
+  rows.sort((a, b) => compareValues(a[st.sortField], b[st.sortField], col?.numeric, st.sortAsc));
+  return rows;
+}
+
+/** Select the row with data index `idx` in a tab, wherever it is: on another page
+ *  (the table shows 50 rows) or filtered out by the search box. A click on the map,
+ *  a log line or a search hit used to do nothing in those cases. */
+function revealRow(tabName, idx) {
   if (!container) return;
-  switchToTab("parcels");
+  switchToTab(tabName);
+  const cfg = TAB_CONFIG[tabName];
+  const st = tabState[tabName];
+  let pos = viewRows(tabName).findIndex((r) => r._idx === idx);
+  if (pos < 0 && st.search) { // hidden by the search → clear it
+    st.search = "";
+    const input = container.querySelector("#tbl-search-input");
+    if (input) input.value = "";
+    const clear = container.querySelector("#tbl-search-clear");
+    if (clear) clear.hidden = true;
+    pos = viewRows(tabName).findIndex((r) => r._idx === idx);
+  }
+  if (pos < 0) return;
+  const page = Math.floor(pos / st.pageSize) + 1;
+  let row = container.querySelector(`tr[${cfg.rowAttr}="${idx}"]`);
+  if (!row || page !== st.page) {
+    st.page = page;
+    renderTab(tabName);
+    row = container.querySelector(`tr[${cfg.rowAttr}="${idx}"]`);
+  }
   clearAllActiveRows();
-  const row = container.querySelector(`tr[data-index="${index}"]`);
   if (row) {
     row.classList.add("row-active");
     row.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }
 }
 
+/** Highlight a parcel row (called from map click). Switches to parcels tab if needed. */
+export function highlightRow(index) {
+  revealRow("parcels", index);
+}
+
 /** Highlight a landcover row (called from map click). Switches to landcover tab if needed. */
 export function highlightLcRow(lcIndex) {
-  if (!container) return;
-  switchToTab("landcover");
-  clearAllActiveRows();
-  const row = container.querySelector(`tr[data-lc-index="${lcIndex}"]`);
-  if (row) {
-    row.classList.add("row-active");
-    row.scrollIntoView({ block: "nearest", behavior: "smooth" });
-  }
+  revealRow("landcover", lcIndex);
 }
 
 function clearAllActiveRows() {
@@ -415,9 +472,10 @@ function updateSortIndicators(rowId, activeKey, asc) {
 function updateColumnsDropdown() {
   const list = container.querySelector("#columns-list");
   const cols = TAB_CONFIG[activeTab].getCols();
+  const hidden = hiddenSet(activeTab);
   list.innerHTML = cols.map((c) =>
     `<label class="dropdown-menu-item">
-      <input type="checkbox" ${c.hidden ? "" : "checked"} data-column="${c.cls}"> ${esc(c.label)}
+      <input type="checkbox" ${hidden.has(c.cls) ? "" : "checked"} data-column="${c.cls}"> ${esc(c.label)}
     </label>`
   ).join("");
 
@@ -427,11 +485,10 @@ function updateColumnsDropdown() {
 }
 
 function toggleCol(checkbox) {
-  const cls = checkbox.dataset.column;
-  const show = checkbox.checked;
-  container.querySelectorAll(`.${cls}`).forEach((el) => {
-    el.style.display = show ? "" : "none";
-  });
+  const hidden = hiddenSet(activeTab);
+  if (checkbox.checked) hidden.delete(checkbox.dataset.column);
+  else hidden.add(checkbox.dataset.column);
+  applyHiddenCols(activeTab);
 }
 
 function toggleAllCols(showAll) {
@@ -463,7 +520,7 @@ const TAB_CONFIG = {
     paginationId: "lc-pagination",
     rowAttr: "data-lc-index",
     label: () => t("table.label.landcover"),
-    searchText: (r) => `${r.id} ${r.egrid} ${r.art} ${r.art_label} ${r.check_greenspace} ${r.vbs_kategorie} ${r.vbs_produktiv} ${r.vbs_typ}`,
+    searchText: (r) => `${r.id} ${r.egrid} ${r.art} ${r.art_label} ${r.check_greenspace} ${r.av_kategorie} ${r.av_produktiv} ${r.av_typ}`,
     rowClass: () => "",
     onRowClick: (idx) => { if (onLcRowClick) onLcRowClick(idx); },
   },
@@ -558,9 +615,7 @@ function renderTab(tabName) {
   );
 
   // Re-apply hidden columns after re-render
-  container.querySelectorAll("#columns-list input[type='checkbox']").forEach((cb) => {
-    if (!cb.checked) toggleCol(cb);
-  });
+  applyHiddenCols(tabName);
 }
 
 /* ── Pagination ── */

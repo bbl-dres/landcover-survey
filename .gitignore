@@ -5,3 +5,12 @@ dashboard/*.geojson*
 # Python bytecode
 __pycache__/
 *.pyc
+
+# Python tools: input lists and run outputs (portfolio / parcel data)
+processing-cli/in/
+processing-cli/out/
+test-naturnah/in/
+test-naturnah/out/
+
+# Test caches
+.pytest_cache/

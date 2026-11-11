@@ -1,5 +1,5 @@
 /**
- * BBArt classification mappings — ported from processing-cli/config.py
+ * BBArt classification mappings — ported from processing-cli/src/config.py
  */
 import { t, localeFmtNum } from "./i18n.js";
 
@@ -85,16 +85,16 @@ export const VBS_KATEGORIE = {
   uebrige_vegetationslose: "kat_d",
 };
 
-/** VBS biological productivity — derived from VBS_KATEGORIE */
-const _UNPRODUKTIV_FROM_D = new Set(["Fels", "Gletscher_Firn", "Geroell_Sand"]);
+/** AV biological productivity — derived from VBS_KATEGORIE. Definition of BAFU
+ *  (9 Nov 2026): the green area is every AV land-cover type except codes 0–7 and 24,
+ *  i.e. everything outside Kategorie A. Fels, Gletscher_Firn and Geroell_Sand (codes
+ *  21–23) were counted as unproductive before; they are productive, Typ 2, now. */
 export const VBS_PRODUKTIV = Object.fromEntries(
-  Object.entries(VBS_KATEGORIE).map(([art, kat]) => [
-    art,
-    kat === "kat_a" || _UNPRODUKTIV_FROM_D.has(art) ? "unproduktiv" : "produktiv",
-  ])
+  Object.entries(VBS_KATEGORIE).map(([art, kat]) => [art, kat === "kat_a" ? "unproduktiv" : "produktiv"])
 );
 
-/** VBS Typ — within biologically productive only */
+/** AV Typ — within biologically productive only. BAFU: Typ 1 = Gartenanlage (code 11),
+ *  Typ 2 = codes 8–23 without 11, plus 25. */
 export const VBS_TYP = Object.fromEntries(
   Object.entries(VBS_PRODUKTIV)
     .filter(([, prod]) => prod === "produktiv")
@@ -176,7 +176,7 @@ export const ART_LABELS = {
 export const BAFU_TYPOCH_L1 = {
   "1": { name: "Gewässer", color: "#0D74FC", green: "Not green space", vbsKategorie: "kat_d", vbsProduktiv: "produktiv", vbsTyp: "typ2" },
   "2": { name: "Ufer & Feuchtgebiete", color: "#12DEFF", green: "Green space (soil-covered)", vbsKategorie: "kat_d", vbsProduktiv: "produktiv", vbsTyp: "typ2" },
-  "3": { name: "Gletscher, Fels, Schutt, Geröll", color: "#9AAAB3", green: "Not green space", vbsKategorie: "kat_d", vbsProduktiv: "unproduktiv", vbsTyp: null },
+  "3": { name: "Gletscher, Fels, Schutt, Geröll", color: "#9AAAB3", green: "Not green space", vbsKategorie: "kat_d", vbsProduktiv: "produktiv", vbsTyp: "typ2" },
   "4": { name: "Grünland", color: "#FC8C1D", green: "Green space (soil-covered)", vbsKategorie: "kat_b", vbsProduktiv: "produktiv", vbsTyp: "typ2" },
   "5": { name: "Krautsäume, Hochstauden, Gebüsche", color: "#F0F000", green: "Green space (wooded)", vbsKategorie: "kat_c", vbsProduktiv: "produktiv", vbsTyp: "typ2" },
   "6": { name: "Wälder", color: "#62AF39", green: "Green space (wooded)", vbsKategorie: "kat_c", vbsProduktiv: "produktiv", vbsTyp: "typ2" },
@@ -283,7 +283,7 @@ export function habitatColor(typochDe) {
  * most-specific-first (a finer code overrides its class default in BAFU_TYPOCH_L1).
  * Only groups whose naturalness differs from their level-1 class default are listed.
  * ⚠ Starting-point mapping pending sustainability-dept validation — same status as
- * BAFU_TYPOCH_L1; edit here (and processing-cli/config.py) to correct.
+ * BAFU_TYPOCH_L1; edit here (and processing-cli/src/config.py) to correct.
  */
 export const BAFU_TYPOCH_REFINE = {
   "1.3": { green: "Green space (soil-covered)", vbsKategorie: "kat_c", vbsProduktiv: "produktiv", vbsTyp: "typ2" }, // Quellen und Quellfluren (spring flora)
@@ -400,11 +400,13 @@ export function isFound(code) {
   return code === STATUS.FOUND || code === STATUS.MERGED;
 }
 
-/** Canonical EGRID spelling: trimmed and upper-cased (" ch4277… " → "CH4277…").
- *  Mirrored by processing-cli/user_input.py normalize_egrid() — applied at every input
+/** Canonical EGRID spelling: upper-cased, without blanks (" ch 4277 6011 0057 " →
+ *  "CH427760110057"). map.geo.admin.ch writes the EGRID in groups; the parcel lookup
+ *  matches it exactly, so a grouped spelling would end as "not found".
+ *  Mirrored by processing-cli/src/user_input.py normalize_egrid() — applied at every input
  *  boundary so the same list resolves identically in the browser and the CLI. */
 export function normalizeEgrid(s) {
-  return String(s ?? "").trim().toUpperCase();
+  return String(s ?? "").replace(/[\s\u00a0\u200b\ufeff]+/g, "").toUpperCase();
 }
 
 /** Translate a status code for display */
@@ -543,11 +545,10 @@ export function habitatNameFromKey(k) {
   return name ? `${code} ${name}` : code;
 }
 
-/** Shared HTML escape utility */
-const _escDiv = document.createElement("div");
+/** Shared HTML escape utility — safe in text and in quoted attribute values. */
+const _ESC = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
 export function esc(s) {
-  _escDiv.textContent = s || "";
-  return _escDiv.innerHTML;
+  return String(s ?? "").replace(/[&<>"']/g, (c) => _ESC[c]);
 }
 
 /** Shared number formatter (locale-aware) */

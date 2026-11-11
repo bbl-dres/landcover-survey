@@ -25,6 +25,10 @@ def clean_geometries(gdf: GeoDataFrame, group_col: str) -> GeoDataFrame:
     if gdf.empty:
         return gdf
 
+    # "first" is the right aggregate here, also for areas: ``explode`` repeats the
+    # attributes of a multi-part row on every part, so a sum would multiply them.
+    # Rows that are different survey features of one parcel (their ``Flaeche`` must
+    # be added up) are merged before, in pipeline._dissolve_duplicate_egrids.
     non_geom_cols = [c for c in gdf.columns if c != gdf.geometry.name and c != group_col]
     agg = {c: "first" for c in non_geom_cols}
 

@@ -27,7 +27,7 @@
     <p class="b-lead">Wählen Sie einen <code>landcover-parcels.geojson</code>-Export. Die Daten werden lokal im Browser ausgewertet, ohne Server und ohne Installation. Herunterladen (Dashboard als HTML, Excel, PDF) können Sie anschliessend oben rechts.</p>
     <label class="b-field"><span>GeoJSON-Export <em>(erforderlich)</em></span><input id="b-geojson" type="file" accept=".geojson,.json"></label>
     <div class="b-actions">
-      <button class="btn b-primary" id="b-show" disabled>Dashboard anzeigen</button>
+      <button class="btn b-primary" id="b-show" type="button" disabled>Dashboard anzeigen</button>
     </div>
     <div id="b-status" class="b-status">Noch keine Datei gewählt.</div>
     <p class="b-note">Persönliche Felder (Eigentümer, Koordinaten, SAP-Codes) werden beim Laden automatisch entfernt.</p>
@@ -54,7 +54,7 @@
       <button class="pop-row gear-phone" id="btn-new-menu" type="button">Neue Datei laden</button>
     </div>
   </div>
-  <button class="hbtn hbtn-light" id="btn-new" title="Andere GeoJSON laden">Neue Datei</button>
+  <button class="hbtn hbtn-light" id="btn-new" type="button" title="Andere GeoJSON laden">Neue Datei</button>
   <button class="hbtn" id="dl-btn" type="button" aria-haspopup="dialog">Herunterladen</button>
 </header>
 
@@ -83,11 +83,11 @@
           <button class="btn btn-primary dl-act" id="dl-pdf" type="button">PDF erstellen</button>
         </div>
         <div class="dl-progress" id="dl-progress" hidden>
-          <div class="dl-progress-row"><div class="dl-progress-track"><i id="dl-progress-bar"></i></div><button class="btn btn-sm" id="dl-abort" type="button">Abbrechen</button></div>
-          <span class="dl-progress-txt" id="dl-progress-txt"></span>
+          <div class="dl-progress-row"><div class="dl-progress-track" role="progressbar" aria-label="PDF-Bericht" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="dl-progress-bar"></i></div><button class="btn btn-sm" id="dl-abort" type="button">Abbrechen</button></div>
+          <span class="dl-progress-txt" id="dl-progress-txt" aria-live="polite"></span>
         </div>
         <div class="dl-row">
-          <div class="dl-row-main"><div class="dl-row-t">Excel</div><div class="dl-row-s">Tabelle mit den sichtbaren Spalten.</div></div>
+          <div class="dl-row-main"><div class="dl-row-t">Excel</div><div class="dl-row-s">Sichtbare Spalten; Flächen in m², Codes als Bezeichnungen (Teilportfolio, Eigentumsart, Status, Grüninventar).</div></div>
           <button class="btn btn-primary dl-act" id="dl-xlsx" type="button">Herunterladen</button>
         </div>
         <div class="dl-row">
@@ -103,7 +103,7 @@
           <button class="btn btn-primary dl-act" id="dl-html" type="button">Herunterladen</button>
         </div>
       </div>
-      <div class="dl-hint" id="dl-hint">Karte und PDF benötigen eine Internetverbindung.</div>
+      <div class="dl-hint" id="dl-hint" aria-live="polite">Karte und PDF benötigen eine Internetverbindung.</div>
     </div>
   </div>
 </div>
@@ -123,7 +123,7 @@
   <aside id="filter-panel" aria-label="Filter">
     <div class="fp-head">
       <span class="fp-title">Filter</span>
-      <button class="icon-btn fp-collapse" id="fp-collapse" aria-label="Filter einklappen" title="Einklappen"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button>
+      <button class="icon-btn fp-collapse" id="fp-collapse" type="button" aria-label="Filter einklappen" title="Einklappen"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button>
     </div>
     <div class="fp-body">
       <div id="pill-row" class="pill-row"></div>
@@ -136,7 +136,7 @@
         <div class="checklist single" id="f-status"></div>
       </div>
       <div class="fgroup">
-        <div class="fgroup-head"><span class="ftitle">Bodenbedeckung<span class="ftip" data-tip="Keine oder beide Häkchen = alle Grundstücke."></span></span><button class="flink" data-toggle="coverage">alle / keine</button></div>
+        <div class="fgroup-head"><span class="ftitle">Bodenbedeckung<span class="ftip" data-tip="Keine oder beide Häkchen = alle Grundstücke. «Ohne» = gefundene Grundstücke, für die keine Bodenbedeckung klassiert ist. Nicht aufgelöste E-GRID und nicht abrufbare Bodenbedeckung gehören zu keiner der beiden Gruppen."></span></span><button class="flink" data-toggle="coverage">alle / keine</button></div>
         <div class="checklist single" id="f-coverage"></div>
       </div>
       <div class="fgroup">
@@ -164,11 +164,11 @@
         <div class="checklist single" id="f-bauzonen"></div>
       </div>
       <div class="fgroup" id="fg-vbsprod">
-        <div class="fgroup-head"><span class="ftitle">VBS Produktivität<span class="ftip" data-tip="VBS-/arImmo-Klassierung. Wählt Grundstücke, bei denen die Kategorie mindestens 10 % der Grundstücksfläche ausmacht."></span></span><button class="flink" data-toggle="vbsprod">alle / keine</button></div>
+        <div class="fgroup-head"><span class="ftitle">AV Produktivität<span class="ftip" data-tip="AV-/arImmo-Klassierung. Wählt Grundstücke, bei denen die Kategorie mindestens 10 % der Grundstücksfläche ausmacht."></span></span><button class="flink" data-toggle="vbsprod">alle / keine</button></div>
         <div class="checklist single" id="f-vbsprod"></div>
       </div>
       <div class="fgroup" id="fg-vbstyp">
-        <div class="fgroup-head"><span class="ftitle">VBS Typ<span class="ftip" data-tip="Untergliederung der biologisch produktiven Fläche. Typ 1 und Typ 2 ergeben zusammen die produktive Fläche. Zählt ab 10 % der Grundstücksfläche."></span></span><button class="flink" data-toggle="vbstyp">alle / keine</button></div>
+        <div class="fgroup-head"><span class="ftitle">AV Typ<span class="ftip" data-tip="Untergliederung der biologisch produktiven Fläche. Typ 1 und Typ 2 ergeben zusammen die produktive Fläche. Zählt ab 10 % der Grundstücksfläche."></span></span><button class="flink" data-toggle="vbstyp">alle / keine</button></div>
         <div class="checklist single" id="f-vbstyp"></div>
       </div>
       <div class="fgroup" id="fg-greeninv" hidden>
@@ -177,7 +177,7 @@
       </div>
     </div>
   </aside>
-  <button class="fp-expand" id="fp-expand" title="Filter anzeigen"><span>Filter</span><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
+  <button class="fp-expand" id="fp-expand" type="button" title="Filter anzeigen"><span>Filter</span><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
   <div class="fp-scrim" id="fp-scrim" hidden></div>
 
   <main id="main" tabindex="-1">
@@ -210,12 +210,12 @@
       <div class="kpis" id="kpis"></div>
 
       <h2 class="section-title">Flächenverteilung</h2>
-      <div class="chart-note">Grundstücksfläche der Auswahl nach VBS-Nutzung, Bauzone, SIA 416, Versiegelung, AV-Bodenbedeckungsart und BAFU-Lebensraum. Zeile anklicken filtert (Bauzonen, SIA 416, Versiegelung, Bodenbedeckung).</div>
+      <div class="chart-note">Grundstücksfläche der Auswahl nach AV-Nutzung, Bauzone, SIA 416, Versiegelung, AV-Bodenbedeckungsart und BAFU-Lebensraum. Zeile anklicken filtert (Bauzonen, SIA 416, Versiegelung, Bodenbedeckung).</div>
       <div class="summary-tables">
         <div class="panel card-tabs">
           <div class="ctab-head" role="group" aria-label="Tabellenansicht wählen">
-            <button type="button" class="ctab is-active" data-ctab="vbsprod" aria-pressed="true">VBS Produktiv &amp; Typ</button>
-            <button type="button" class="ctab" data-ctab="vbskat" aria-pressed="false">VBS Kategorien</button>
+            <button type="button" class="ctab is-active" data-ctab="vbsprod" aria-pressed="true">AV Produktiv &amp; Typ</button>
+            <button type="button" class="ctab" data-ctab="vbskat" aria-pressed="false">AV Kategorien</button>
           </div>
           <div class="ctab-pane" data-pane="vbsprod"><div id="tbl-vbsprod"></div><p class="panel-note">Grundstücke zählen ab 10 % der Grundstücksfläche. Mehrfachzählung möglich.</p></div>
           <div class="ctab-pane" data-pane="vbskat" hidden><div id="tbl-vbs"></div></div>
@@ -235,8 +235,8 @@
       </div>
 
       <h2 class="section-title">Karte der Auswahl</h2>
-      <div class="chart-note">Polygon, Beschriftung oder Cluster anklicken; die Details erscheinen oben rechts. Karten oben links ein- und ausblenden. Zoomen mit Strg + Mausrad (Mac: ⌘).</div>
-      <!-- Slot for the one map while the Auswertung tab is shown (overview mode: fixed height, layer widget + legend). -->
+      <div class="chart-note">Polygon, Beschriftung oder Cluster anklicken; die Details erscheinen oben rechts. Karten oben links ein- und ausblenden, Hintergrund unten rechts wechseln. Zoomen mit Strg + Mausrad (Mac: ⌘).</div>
+      <!-- Slot for the one map while the Auswertung tab is shown (overview mode: fixed height, layer widget + basemap switcher). -->
       <div class="panel map-panel" id="ov-map-panel"></div>
 
       <h2 class="section-title">Grundstücksliste</h2>
@@ -325,14 +325,24 @@
           <li><strong>Externe Karten</strong> · Geokatalog von map.geo.admin.ch, gerendert über <code>wms.geo.admin.ch</code> (© swisstopo und Datenherren)</li>
         </ul>
         <p class="muted">Metadaten-Katalog: <a href="https://www.geocat.ch/geonetwork/srv/ger/catalog.search#/home" target="_blank" rel="noopener">geocat.ch</a> · © swisstopo / Kantone (AV) · ARE · BAFU</p>
+        <h2 class="section-title">AV Typ 1 und Typ 2</h2>
+        <p>Die Grünfläche («biologisch produktiv») umfasst nach amtlicher Vermessung alle Bodenbedeckungsarten ausser den Codes 0–7 (Gebäude und befestigte Flächen) und 24 (Abbau, Deponie). Definition des BAFU vom November 2026.</p>
+        <ul>
+          <li><strong>Typ 1 · Grünflächen in Gebäudeumgebung:</strong> Gartenanlage (Code 11).</li>
+          <li><strong>Typ 2 · Übrige Grünflächen:</strong> Codes 8–23 ohne 11, plus 25: Acker, Wiese, Weide · Reben · übrige Intensivkultur · Hoch-/Flachmoor · übrige humusierte · stehendes und fliessendes Gewässer · Schilfgürtel · geschlossener Wald · Wytweiden · übrige bestockte · Fels · Gletscher, Firn · Geröll, Sand · übrige vegetationslose.</li>
+          <li>Typ 1 und Typ 2 ergeben zusammen die biologisch produktive Fläche.</li>
+          <li>Fels, Gletscher/Firn und Geröll/Sand zählen seit November 2026 zu Typ 2. Ein Export, der vorher erstellt wurde, führt diese Flächen noch als biologisch unproduktiv.</li>
+        </ul>
         <h2 class="section-title">Zählung der Grundstücke</h2>
         <p>Flächen werden summiert. Grundstücke werden je Kategorie gezählt, wenn die Kategorie mindestens <strong>10 % der Grundstücksfläche</strong> ausmacht.</p>
         <ul>
           <li>Ein Grundstück kann in mehreren Kategorien zählen. Die Summe der Zählungen ist daher grösser als die Anzahl Grundstücke.</li>
           <li>Kleinere Anteile fliessen in die Fläche ein, zählen das Grundstück aber nicht.</li>
-          <li>Die gleiche Regel gilt für die Filter «VBS Produktivität» und «VBS Typ».</li>
+          <li>Die gleiche Regel gilt für die Filter «AV Produktivität» und «AV Typ».</li>
           <li>Teilportfolio und Region zählen jedes Grundstück genau einmal.</li>
           <li>Grundstücke ohne Bodenbedeckung werden separat ausgewiesen.</li>
+          <li>Unbekannt ist nicht 0: Konnte die Bodenbedeckung eines Grundstücks nicht abgerufen werden, steht «–» bzw. «nicht abrufbar». Seine Fläche zählt zur Grundstücksfläche, aber nicht zum Nenner der Anteile von Grünfläche und versiegelter Fläche.</li>
+          <li>Ein Grundstück, das unter mehreren System-IDs geführt wird (gleiche E-GRID), zählt in Flächen und Anzahl einmal. Die Tabelle zeigt alle Einträge.</li>
         </ul>
         <div class="about-example">Beispiel: Ein Grundstück mit 2'000 m² Fläche, 400 m² Typ 1 (20 %) und 60 m² Typ 2 (3 %) zählt als <strong>Typ 1</strong>, nicht als Typ 2.</div>
         <h2 class="section-title">Hinweise</h2>

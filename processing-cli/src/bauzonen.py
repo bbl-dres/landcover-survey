@@ -29,6 +29,8 @@ BAUZONEN_CONFIG = LayerConfig(
 # ---------------------------------------------------------------------------
 
 def fetch_bauzonen_for_bbox(bbox: tuple[float, float, float, float]) -> GeoDataFrame:
+    """All Bauzonen intersecting *bbox*. Raises ``swisstopo.IdentifyError`` when a
+    request fails (an empty frame means: no zone there)."""
     return fetch_features_for_bbox(bbox, BAUZONEN_CONFIG)
 
 

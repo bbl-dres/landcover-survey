@@ -30,6 +30,8 @@ HABITAT_CONFIG = LayerConfig(
 # ---------------------------------------------------------------------------
 
 def fetch_habitat_for_bbox(bbox: tuple[float, float, float, float]) -> GeoDataFrame:
+    """All habitat polygons intersecting *bbox*. Raises ``swisstopo.IdentifyError``
+    when a request fails (an empty frame means: nothing there)."""
     return fetch_features_for_bbox(bbox, HABITAT_CONFIG)
 
 

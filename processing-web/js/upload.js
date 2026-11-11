@@ -1,13 +1,13 @@
 /**
- * File parsing and validation — CSV/XLSX with ID + EGRID columns, plus a special
- * reader for the raw SAP "Dynamische Listenausgabe" .txt export (see parseSAP), so
- * an SAP dump can be uploaded as-is without a manual clean-up first.
+ * Upload view: drop zone, file input, mode toggle, demo file. The reading itself —
+ * CSV / SAP list / header + EGRID normalisation — is the pure module userinput.js
+ * (mirrored by processing-cli/src/user_input.py); only Excel is read here, because
+ * SheetJS is a browser global loaded on demand.
  */
-import { loadScript, normalizeEgrid } from "./config.js";
+import { loadScript } from "./config.js";
 import { t } from "./i18n.js";
 import { initParcelPicker, resetParcelPicker } from "./parcelpicker.js";
-
-const REQUIRED_COLUMNS = ["id", "egrid"];
+import { InputError, decodeText, parseText, excelCellStr, normalizeParsed } from "./userinput.js";
 
 let onReady = null;
 
@@ -27,6 +27,12 @@ export function initUpload(callback) {
   initModeToggle();
 
   dropZone.addEventListener("click", () => fileInput.click());
+  // The zone is role="button": Enter / Space must open the file dialog too.
+  dropZone.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    e.preventDefault();
+    fileInput.click();
+  });
   dropZone.addEventListener("dragover", (e) => {
     e.preventDefault();
     dropZone.classList.add("drag-over");
@@ -38,7 +44,12 @@ export function initUpload(callback) {
     if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
   });
   fileInput.addEventListener("change", () => {
-    if (fileInput.files.length) handleFile(fileInput.files[0]);
+    if (!fileInput.files.length) return;
+    const file = fileInput.files[0];
+    // Clear the selection: the browser fires no `change` when the same file is picked
+    // again, e.g. after a "missing columns" error was fixed and saved under the same name.
+    fileInput.value = "";
+    handleFile(file);
   });
 
   const demoLink = document.getElementById("load-demo");
@@ -129,11 +140,7 @@ async function handleFile(file) {
     let parsedData;
 
     if (ext === "csv" || ext === "tsv" || ext === "txt") {
-      const text = await readFileText(file);
-      // SAP's "Dynamische Listenausgabe" export is a pipe-delimited .txt with banner
-      // rows above the header — route it to the dedicated reader; everything else is
-      // handled by the generic delimited parser.
-      parsedData = isSapExport(text) ? parseSAP(text) : parseDelimited(text);
+      parsedData = parseText(decodeText(await readFileBuffer(file)));
     } else if (ext === "xlsx" || ext === "xls") {
       parsedData = await parseExcel(file);
     } else {
@@ -141,36 +148,15 @@ async function handleFile(file) {
       return;
     }
 
-    if (!parsedData.headers.length || !parsedData.rows.length) {
-      showError(t("upload.error.empty"));
-      return;
-    }
-
-    const lowerHeaders = parsedData.headers.map((h) => h.toLowerCase().trim());
-    const missing = REQUIRED_COLUMNS.filter((c) => !lowerHeaders.includes(c));
-    if (missing.length > 0) {
-      showError(t("upload.error.columns", { missing: missing.join(", "), found: parsedData.headers.join(", ") }));
-      return;
-    }
-
-    // Normalize headers to lowercase, trim every cell (Excel cells arrive untrimmed),
-    // and canonicalise the EGRID — the same contract as processing-cli/user_input.py.
-    parsedData.rows = parsedData.rows.map((row) => {
-      const normalized = {};
-      parsedData.headers.forEach((h) => {
-        normalized[h.toLowerCase().trim()] = String(row[h] ?? "").trim();
-      });
-      normalized.egrid = normalizeEgrid(normalized.egrid);
-      return normalized;
-    });
-    parsedData.headers = parsedData.headers.map((h) => h.toLowerCase().trim());
-
+    // Required columns, lowercase headers, trimmed cells, canonical EGRID.
+    parsedData = normalizeParsed(parsedData);
     parsedData.filename = file.name;
     parsedData.options = getUploadOptions();
     if (onReady) onReady(parsedData);
   } catch (err) {
+    if (err instanceof InputError) { showError(err.message); return; }
     console.error("File parse error:", err);
-    showError(t("upload.error.read", { error: err.message }));
+    showError(t("upload.error.read", { error: err?.message || String(err) }));
   }
 }
 
@@ -186,166 +172,33 @@ function hideError() {
   el.hidden = true;
 }
 
-function readFileText(file) {
+function readFileBuffer(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => resolve(e.target.result);
-    reader.onerror = reject;
-    reader.readAsText(file, "utf-8");
-  });
-}
-
-function parseDelimited(raw) {
-  let text = raw;
-  // Honour a leading Excel "sep=<d>" hint line (written by some locales' CSV exports),
-  // mirroring the Python readers; otherwise auto-detect.
-  const sepHint = /^sep=(.)\r?\n/i.exec(text);
-  const delimiter = sepHint ? sepHint[1] : detectDelimiter(text);
-  if (sepHint) text = text.slice(sepHint[0].length);
-
-  const matrix = tokenizeDelimited(text, delimiter)
-    .map((cells) => cells.map((c) => c.trim()))
-    .filter((cells) => cells.some((c) => c !== "")); // drop blank lines
-
-  if (matrix.length < 2) throw new Error(t("upload.error.header"));
-
-  const headers = matrix[0];
-  const rows = matrix.slice(1).map((values) => {
-    const row = {};
-    headers.forEach((h, idx) => (row[h] = values[idx] || ""));
-    return row;
-  });
-  return { headers, rows };
-}
-
-/**
- * Recognise an SAP "Dynamische Listenausgabe" export: a pipe-delimited .txt whose
- * column header row starts with `|BuKr` (banner/metadata lines sit above it).
- */
-function isSapExport(text) {
-  return /^\|BuKr\|/m.test(text);
-}
-
-/**
- * Parse an SAP "Dynamische Listenausgabe" export into the standard {headers, rows}
- * shape. The report is pipe-delimited with enclosing pipes and banner rows above the
- * header; the dashed rules and page footer are skipped. We synthesize the two required
- * columns — `id` = BuKr/WE/Grundstk and `egrid` = E-GRID — and pass every other named
- * column through unchanged, so the pipeline maps it to input_<name> like any CSV column.
- */
-function parseSAP(text) {
-  const lines = text.split(/\r?\n/);
-  const hi = lines.findIndex((l) => l.startsWith("|BuKr"));
-  if (hi < 0) throw new Error(t("upload.error.sap"));
-
-  // "|a |b  |c|" → ["a","b","c"]: split on the pipe, then drop the empty edge cells
-  // produced by the leading and trailing pipes, and trim each field's padding.
-  const splitRow = (line) => {
-    const cells = line.split("|");
-    return cells.slice(1, cells.length - 1).map((c) => c.trim());
-  };
-
-  const rawHeaders = splitRow(lines[hi]);
-  const colIndex = (name) => rawHeaders.findIndex((h) => h.toLowerCase() === name.toLowerCase());
-  const iBuKr = colIndex("BuKr"), iWE = colIndex("WE"), iGrundstk = colIndex("Grundstk"), iEgrid = colIndex("E-GRID");
-  if (iBuKr < 0 || iWE < 0 || iGrundstk < 0 || iEgrid < 0) throw new Error(t("upload.error.sap"));
-
-  // Pass-through columns: every named column except the id parts + E-GRID (consumed above).
-  const consumed = new Set([iBuKr, iWE, iGrundstk, iEgrid]);
-  const passCols = rawHeaders
-    .map((name, i) => ({ name, i }))
-    .filter((c) => c.name !== "" && !consumed.has(c.i));
-
-  const headers = ["id", "egrid", ...passCols.map((c) => c.name)];
-  const rows = [];
-  for (let i = hi + 1; i < lines.length; i++) {
-    const line = lines[i];
-    if (!/^\|\s*\d/.test(line)) continue; // skip the dashed rules, blank lines, and the footer
-    const cells = splitRow(line);
-    if (cells.length < rawHeaders.length) continue; // malformed / truncated row
-    const bukr = cells[iBuKr], we = cells[iWE], grundstk = cells[iGrundstk];
-    if (!bukr && !we && !grundstk) continue;
-    const row = { id: `${bukr}/${we}/${grundstk}`, egrid: cells[iEgrid] || "" };
-    passCols.forEach((c) => { row[c.name] = cells[c.i] || ""; });
-    rows.push(row);
-  }
-  return { headers, rows };
-}
-
-/**
- * Detect the delimiter from the first line. Heuristic: counts raw `;`, `,`, tab
- * — it does not account for a delimiter appearing inside a quoted header cell
- * (rare for ID/EGRID lists). Defaults to comma.
- */
-function detectDelimiter(text) {
-  const firstLine = text.split(/\r?\n/, 1)[0] || "";
-  const semicolons = (firstLine.match(/;/g) || []).length;
-  const commas = (firstLine.match(/,/g) || []).length;
-  const tabs = (firstLine.match(/\t/g) || []).length;
-  if (semicolons > commas && semicolons > tabs) return ";";
-  if (tabs > commas) return "\t";
-  return ",";
-}
-
-/**
- * Single-pass RFC-4180 tokenizer: splits the whole text into rows of fields,
- * correctly handling quoted fields that contain the delimiter, quotes (`""`),
- * or newlines. Returns an array of string arrays (one per row).
- */
-function tokenizeDelimited(text, delimiter) {
-  const rows = [];
-  let row = [];
-  let field = "";
-  let inQuotes = false;
-  let sawAny = false; // did this row have any character (so trailing data flushes)?
-
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i];
-    if (inQuotes) {
-      if (ch === '"') {
-        if (text[i + 1] === '"') { field += '"'; i++; }
-        else inQuotes = false;
-      } else {
-        field += ch;
-      }
-      continue;
-    }
-    if (ch === '"') { inQuotes = true; sawAny = true; }
-    else if (ch === delimiter) { row.push(field); field = ""; sawAny = true; }
-    else if (ch === "\n") { row.push(field); rows.push(row); row = []; field = ""; sawAny = false; }
-    else if (ch === "\r") { /* ignore; LF terminates the row */ }
-    else { field += ch; sawAny = true; }
-  }
-  // Flush the final field/row if the text didn't end with a newline.
-  if (sawAny || field !== "" || row.length > 0) { row.push(field); rows.push(row); }
-  return rows;
-}
-
-async function parseExcel(file) {
-  if (!window.XLSX) {
-    await loadScript("https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js");
-  }
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const wb = XLSX.read(e.target.result, { type: "array" });
-        const ws = wb.Sheets[wb.SheetNames[0]];
-        const jsonData = XLSX.utils.sheet_to_json(ws, { defval: "" });
-        if (!jsonData.length) return reject(new Error(t("upload.error.sheet")));
-        const headers = Object.keys(jsonData[0]);
-        const rows = jsonData.map((row) => {
-          const clean = {};
-          headers.forEach((h) => (clean[h] = String(row[h] ?? "")));
-          return clean;
-        });
-        resolve({ headers, rows });
-      } catch (err) {
-        reject(err);
-      }
-    };
-    reader.onerror = reject;
+    reader.onerror = () => reject(new Error(reader.error?.message || "FileReader"));
     reader.readAsArrayBuffer(file);
   });
 }
 
+/** First sheet of an Excel file → { headers, rows }, every cell a string. */
+async function parseExcel(file) {
+  if (!window.XLSX) {
+    try {
+      await loadScript("https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js");
+    } catch {
+      throw new Error(t("export.xlsx.error")); // the library could not be loaded (offline / blocked CDN)
+    }
+  }
+  const wb = XLSX.read(await readFileBuffer(file), { type: "array" });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const jsonData = XLSX.utils.sheet_to_json(ws, { defval: "" });
+  if (!jsonData.length) throw new Error(t("upload.error.sheet"));
+  const headers = Object.keys(jsonData[0]);
+  const rows = jsonData.map((row) => {
+    const clean = {};
+    headers.forEach((h) => (clean[h] = excelCellStr(row[h])));
+    return clean;
+  });
+  return { headers, rows };
+}

@@ -34,6 +34,7 @@ export function initSearch() {
   input.addEventListener("input", () => {
     clearBtn.hidden = !input.value;
     clearTimeout(debounceTimer);
+    searchToken++; // whatever is still in flight belongs to an older text
     const q = input.value.trim();
     if (q.length < 2) { setResultsVisible(false); return; }
     debounceTimer = setTimeout(() => performSearch(q), 300);
@@ -65,6 +66,8 @@ export function initSearch() {
   clearBtn.addEventListener("click", () => {
     input.value = "";
     clearBtn.hidden = true;
+    clearTimeout(debounceTimer);
+    searchToken++;
     setResultsVisible(false);
     input.focus();
   });
@@ -117,7 +120,12 @@ function setActiveItem(items, idx) {
   }
 }
 
+/** Bumped on every keystroke and on clear: a search whose token is no longer current
+ *  drops its result instead of overwriting a newer list or reopening a closed one. */
+let searchToken = 0;
+
 async function performSearch(query) {
+  const token = ++searchToken;
   const results = document.getElementById("search-results");
   const html = [];
 
@@ -144,6 +152,7 @@ async function performSearch(query) {
     searchSwisstopoLayers(query),
   ]);
 
+  if (token !== searchToken) return; // superseded while the requests were out
   const locationResults = locationRes.status === "fulfilled" ? locationRes.value : [];
   const layerResults = layerRes.status === "fulfilled" ? layerRes.value : [];
 

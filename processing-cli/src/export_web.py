@@ -22,16 +22,21 @@ logger = logging.getLogger(__name__)
 
 # Fixed detail-layer column orders (export.js).
 LANDCOVER_HEADERS = ["id", "egrid", "fid", "art", "bfsnr", "gwr_egid", "check_greenspace",
-                     "vbs_kategorie", "vbs_produktiv", "vbs_typ", "area_m2", "lc_source", "prob"]
+                     "av_kategorie", "av_produktiv", "av_typ", "area_m2", "lc_source", "prob"]
 BAUZONEN_HEADERS = ["id", "egrid", "fid", "art", "bauzone_code", "area_m2", "lc_source"]
 HABITAT_HEADERS = ["id", "egrid", "fid", "art", "typoch_l1", "typoch_l2", "typoch_l3", "check_greenspace",
-                   "vbs_kategorie", "vbs_produktiv", "vbs_typ", "area_m2", "prob", "lc_source"]
+                   "av_kategorie", "av_produktiv", "av_typ", "area_m2", "prob", "lc_source"]
 
 
 def _norm_num(v):
-    """Integer-valued float → int (so 0.0 serialises as ``0``, matching JS)."""
-    if isinstance(v, float) and v.is_integer():
-        return int(v)
+    """Integer-valued float → int (so 0.0 serialises as ``0``, matching JS). A NaN
+    or infinity becomes an empty value: ``json`` would write the bare token ``NaN``,
+    which no JSON parser accepts — one such cell made the whole export unreadable."""
+    if isinstance(v, float):
+        if v != v or v in (float("inf"), float("-inf")):
+            return ""
+        if v.is_integer():
+            return int(v)
     return v
 
 
@@ -61,8 +66,13 @@ def _to_feature(row: dict, layer: str) -> dict:
     return {"type": "Feature", "geometry": mapping(g) if g is not None else None, "properties": props}
 
 
-def write_geojson(results: dict, path: str | Path) -> None:
-    """Write all analysed layers as one GeoJSON FeatureCollection (parcels first)."""
+def build_geojson(results: dict) -> str:
+    """All analysed layers as one GeoJSON FeatureCollection, as text (parcels first).
+
+    Compact, one feature per line: a pretty-printed export of ~2,100 parcels was
+    437 MB, 81 % of the largest string a browser can hold (the dashboard reads the
+    file as one string); compact it is a third of that. Mirror of buildGeoJSON().
+    """
     features = []
     for p in results.get("parcels", []):
         features.append(_to_feature(p, "parcel"))
@@ -72,12 +82,16 @@ def write_geojson(results: dict, path: str | Path) -> None:
         features.append(_to_feature(bz, "bauzonen"))
     for h in results.get("habitat", []):
         features.append(_to_feature(h, "habitat"))
-    fc = {"type": "FeatureCollection", "features": features}
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "w", encoding="utf-8") as fh:
-        json.dump(fc, fh, ensure_ascii=False, indent=2)
-    logger.info("Wrote %d features to %s", len(features), path.name)
+    nl = chr(10)
+    lines = [json.dumps(f, ensure_ascii=False, separators=(",", ":"), allow_nan=False) for f in features]
+    return '{"type":"FeatureCollection","features":[' + nl + ("," + nl).join(lines) + nl + "]}"
+
+
+def write_geojson(results: dict, path: str | Path) -> None:
+    """Write all analysed layers as one GeoJSON file (see :func:`build_geojson`)."""
+    text = build_geojson(results)
+    _write_text(text, path)
+    logger.info("Wrote %d features to %s", text.count(chr(10)) - 1, Path(path).name)
 
 
 # ---------------------------------------------------------------------------
@@ -131,10 +145,25 @@ def _write_text(text: str, path: str | Path) -> None:
 
 def _cell_value(v):
     if isinstance(v, list):
-        return "; ".join(str(x) for x in v)
+        v = "; ".join(str(x) for x in v)
     if v is None:
         return ""
+    if isinstance(v, str):
+        # openpyxl raises on control characters — one stray byte in an input column
+        # would abort the export after the whole run.
+        from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
+        return ILLEGAL_CHARACTERS_RE.sub("", v)
     return _norm_num(v)
+
+
+def _append_row(sheet, values: list) -> None:
+    """Append plain values. A text starting with ``=`` stays text (openpyxl would
+    store it as a formula; the web export, SheetJS, writes it as text too)."""
+    sheet.append(values)
+    if any(isinstance(v, str) and v.startswith("=") for v in values):
+        for cell in sheet[sheet._current_row]:
+            if cell.data_type == "f":
+                cell.data_type = "s"
 
 
 def _safe_sheet_name(name: str) -> str:
@@ -160,7 +189,7 @@ def write_xlsx(results: dict, path: str | Path) -> None:
     p_headers = _union_headers(parcels)
     ws.append(p_headers)
     for p in parcels:
-        ws.append([_cell_value(p.get(h, "")) for h in p_headers])
+        _append_row(ws, [_cell_value(p.get(h, "")) for h in p_headers])
 
     def add_sheet(rows, headers, name):
         if not rows:
@@ -168,7 +197,7 @@ def write_xlsx(results: dict, path: str | Path) -> None:
         sheet = wb.create_sheet(_safe_sheet_name(name))
         sheet.append(headers)
         for row in rows:
-            sheet.append([_cell_value(row.get(h, "")) for h in headers])
+            _append_row(sheet, [_cell_value(row.get(h, "")) for h in headers])
 
     add_sheet(results.get("landcover", []), LANDCOVER_HEADERS, "Bodenbedeckung")
     add_sheet(results.get("bauzonen", []), BAUZONEN_HEADERS, "Bauzonen")

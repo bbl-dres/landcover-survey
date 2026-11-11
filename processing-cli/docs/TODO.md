@@ -25,9 +25,9 @@ geo.admin.ch **Identify** API, which has two limits that bite:
 - **Null geometry for oversized features.** geo.admin.ch returns `geometry: null`
   for features whose geometry exceeds a server-side size cap — e.g. the
   city-scale `9.3.2 Asphalt- und Betonstrasse` habitat polygon. Both pipelines
-  silently drop null-geometry features (`swisstopo.py` `_fetch_and_parse`,
-  ~line 204: `if geom_dict is None: continue`), so habitat under-counts and
-  `Σ habitat < parcel area`.
+  drop null-geometry features (`swisstopo.py` `_parse_features_counted`, which
+  counts them), so habitat under-counts and `Σ habitat < parcel area`. Since
+  2026-11-10 the parcel is flagged `check_habitat` / `check_bauzonen` = `partial`.
 - **200-feature cap + latency.** Max 200 features/request; the BAFU habitat layer
   is also slow (~0.3–1 s/parcel, multi-second spikes) — the main timeout risk.
 
@@ -67,13 +67,14 @@ it. Mirror `processor.js`: after clipping zones, emit an `Ohne Bauzone` detail r
 union(zones)`), so `Σ Bauzonen = parcel area`.
 
 - [ ] Emit the `bauzonen_ohne_bauzone_m2` column / detail feature.
-- [ ] Guard with a quality flag when a zone was dropped (null geometry) or the
-      result was truncated (≥ 200) — don't let a missing zone pass as zone-free.
+- [x] Guard with a quality flag when a zone was dropped (null geometry) or the
+      result was truncated — `check_bauzonen` = `partial` / `truncated` (2026-11-10).
 
 ### 3. Quality-flag parity
 
-- [ ] Add `check_habitat` / `check_bauzonen` statuses matching the web app
-      (`ok` / `estimated` / `partial` / `truncated` / `error`).
+- [x] `check_habitat` / `check_bauzonen` with `ok` / `partial` / `truncated` /
+      `error` (2026-11-10). On `error` the parcel's overlay cells stay empty.
+- [ ] `estimated` (the habitat gap-fill) — comes with task 1.
 
 ### 4. Verify parity
 
@@ -81,6 +82,18 @@ union(zones)`), so `Σ Bauzonen = parcel area`.
       each wall-to-wall layer sums to the parcel area. Worked example
       (CH813590469881): habitat and AV both 100 %; Bauzonen 95 % zones + 5 %
       Ohne Bauzone.
+
+### 5. Open after the review of 2026-11-10
+
+See [docs/reviews/2026-11-10-code-review-web-cli-dashboard.md](../../docs/reviews/2026-11-10-code-review-web-cli-dashboard.md).
+
+- [ ] Streaming output for a nationwide Mode 2 run. Finished municipalities survive a
+      failure now, but everything is still held in memory until the end (measured:
+      about 7 kB per parcel without overlays, 18 kB with).
+- [ ] Retry rounds for failed overlay requests, as the `api` source has.
+- [ ] `invalid` for a malformed EGRID (it is `not_found` here).
+- [ ] LF line ends and 2-decimal areas in the CSVs, as the `api` source writes them.
+- [ ] Mode 2 scans `resf` once per municipality (no attribute index in the file).
 
 ## Reference
 

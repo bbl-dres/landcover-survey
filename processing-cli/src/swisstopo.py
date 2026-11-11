@@ -10,6 +10,12 @@ page is split into four) so every request is a single page. The identify
 endpoint's ``offset`` paging is not reliable — the server returns results in a
 client-dependent order, so consecutive pages overlap and omit features — and
 the same tiling is used by the web app and the ``api`` source.
+
+A request that fails (HTTP 400 / 414, or retries used up) raises
+:class:`IdentifyError`: "the service did not answer" must never look like "there
+is nothing here". The identify endpoint rejects a polygon with more than one ring
+(a hole, several parts) with HTTP 400, so only single-ring polygons are sent as
+such; everything else is queried by its envelope and clipped locally.
 """
 
 from __future__ import annotations
@@ -45,6 +51,15 @@ API_LIMIT = 200   # max features per request (documented hard cap)
 API_PAUSE = 0.2   # seconds between requests
 API_MAX_RETRIES = 3   # retries on transient HTTP errors
 API_MAX_DEPTH = 8     # quadtree depth cap for tiles that still return a full page
+
+
+class IdentifyError(RuntimeError):
+    """An identify request that did not answer. ``status`` is the HTTP status
+    code, or ``None`` for a network / decoding failure."""
+
+    def __init__(self, message: str, status: int | None = None):
+        super().__init__(message)
+        self.status = status
 
 
 # ---------------------------------------------------------------------------
@@ -126,7 +141,11 @@ def _fetch_page(
     bbox: tuple[float, float, float, float],
     layer_id: str,
 ) -> list[dict[str, Any]]:
-    """One identify request (a single page of at most ``API_LIMIT`` results)."""
+    """One identify request (a single page of at most ``API_LIMIT`` results).
+
+    Raises :class:`IdentifyError` when the service rejects the request (HTTP 4xx)
+    or still fails after the retries — never returns an empty page for a failure.
+    """
     params = _build_params(geometry_json, geometry_type, bbox, layer_id)
     url = f"{IDENTIFY_URL}?{urllib.parse.urlencode(params)}"
 
@@ -139,17 +158,15 @@ def _fetch_page(
             return data.get("results", [])
         except urllib.error.HTTPError as e:
             last_err = e
-            if e.code in (400, 414):
-                logger.debug("  HTTP %d for %s — geometry invalid or too complex, skipping", e.code, layer_id)
-                return []
             if e.code == 429 or e.code >= 500:
                 wait = API_PAUSE * (2 ** attempt)
                 logger.warning("  HTTP %d — retrying in %.1fs (attempt %d/%d)",
                                e.code, wait, attempt, API_MAX_RETRIES)
                 time.sleep(wait)
                 continue
-            logger.error("  HTTP %d for %s — not retryable", e.code, layer_id)
-            raise
+            # 400 = "Please provide a valid geometry", 414 = URL too long, and any
+            # other 4xx: retrying the same request cannot help.
+            raise IdentifyError(f"HTTP {e.code} for {layer_id} ({geometry_type})", status=e.code) from e
         except (urllib.error.URLError, json.JSONDecodeError, OSError) as e:
             last_err = e
             wait = API_PAUSE * (2 ** attempt)
@@ -157,8 +174,9 @@ def _fetch_page(
                            type(e).__name__, wait, attempt, API_MAX_RETRIES)
             time.sleep(wait)
 
-    logger.error("  API request failed after %d retries: %s", API_MAX_RETRIES, last_err)
-    return []
+    status = last_err.code if isinstance(last_err, urllib.error.HTTPError) else None
+    raise IdentifyError(
+        f"{layer_id}: request failed after {API_MAX_RETRIES} attempts ({last_err})", status=status)
 
 
 # ---------------------------------------------------------------------------
@@ -169,10 +187,24 @@ MAX_URL_COORDS = 200  # simplify polygons with more vertices than this
 SIMPLIFY_TOLERANCE_M = 5.0  # simplify tolerance + outward buffer (m, LV95)
 
 
+def _envelope_query(geom) -> tuple[str, str]:
+    minx, miny, maxx, maxy = geom.bounds
+    return f"{minx},{miny},{maxx},{maxy}", "esriGeometryEnvelope"
+
+
+def _is_single_ring(geom) -> bool:
+    return isinstance(geom, Polygon) and len(geom.interiors) == 0
+
+
 def _query_geometry(geom) -> tuple[str, str]:
     """The identify request geometry for *geom*: an Esri JSON polygon (a tighter
     spatial filter than a bounding box — fewer false positives, fewer tiles), or
-    the envelope when even a simplified polygon would exceed the URL length."""
+    the envelope when the polygon cannot be sent: more than one ring (the service
+    answers HTTP 400 to a hole or a second part), or too many vertices for the URL
+    even after simplifying. The envelope is a superset; the local intersection
+    drops what does not touch the parcel."""
+    if not _is_single_ring(geom):
+        return _envelope_query(geom)
     # Simplification can pull the boundary inward and silently miss features that
     # only touch the parcel edge, so buffer by the same tolerance to keep the filter
     # a strict superset of the real parcel (false positives are dropped by the local
@@ -181,11 +213,10 @@ def _query_geometry(geom) -> tuple[str, str]:
     if n_coords > MAX_URL_COORDS:
         geom = geom.simplify(SIMPLIFY_TOLERANCE_M, preserve_topology=True).buffer(
             SIMPLIFY_TOLERANCE_M, join_style="mitre")
-        if shapely.get_num_coordinates(geom) > MAX_URL_COORDS:
-            logger.debug("Geometry still has %d coords after simplify — using bbox",
-                         shapely.get_num_coordinates(geom))
-            minx, miny, maxx, maxy = geom.bounds
-            return f"{minx},{miny},{maxx},{maxy}", "esriGeometryEnvelope"
+        if shapely.get_num_coordinates(geom) > MAX_URL_COORDS or not _is_single_ring(geom):
+            logger.debug("Geometry has %d coords after simplify (single ring: %s) — using bbox",
+                         shapely.get_num_coordinates(geom), _is_single_ring(geom))
+            return _envelope_query(geom)
     return _geom_to_esri_json(geom), "esriGeometryPolygon"
 
 
@@ -198,9 +229,11 @@ def _feature_key(feat: dict[str, Any], cfg: LayerConfig) -> str:
     return json.dumps([feat.get("geometry"), feat.get("properties")], sort_keys=True)
 
 
-def _fetch_tiled(geom, cfg: LayerConfig, context: str = "") -> GeoDataFrame:
-    """All *cfg.layer_id* features intersecting *geom* (a Polygon/MultiPolygon in
-    LV95) as a GeoDataFrame — quadtree tiling, deduplicated by feature id, sorted by id."""
+def _fetch_tiled_raw(geom, cfg: LayerConfig, context: str = "") -> tuple[list[dict[str, Any]], bool]:
+    """All raw *cfg.layer_id* identify results intersecting *geom* (a Polygon /
+    MultiPolygon in LV95) — quadtree tiling, deduplicated by feature id, sorted by
+    id — and whether the tiling hit the depth cap with a full page (``truncated``).
+    Raises :class:`IdentifyError` when a request fails."""
     ctx = f" [{context}]" if context else ""
     seen: dict[str, dict[str, Any]] = {}
     truncated = False
@@ -214,7 +247,17 @@ def _fetch_tiled(geom, cfg: LayerConfig, context: str = "") -> GeoDataFrame:
         geometry_json, geometry_type = _query_geometry(g)
         if n_requests:
             time.sleep(API_PAUSE)
-        page = _fetch_page(geometry_json, geometry_type, g.bounds, cfg.layer_id)
+        try:
+            page = _fetch_page(geometry_json, geometry_type, g.bounds, cfg.layer_id)
+        except IdentifyError as e:
+            if e.status not in (400, 414) or geometry_type == "esriGeometryEnvelope":
+                raise
+            # The service does not take this polygon (URL too long, or a ring it
+            # calls invalid): its envelope is always acceptable and a superset.
+            logger.debug("  %s%s — polygon query rejected (HTTP %s), retrying with its envelope",
+                         cfg.layer_id, ctx, e.status)
+            geometry_json, geometry_type = _envelope_query(g)
+            page = _fetch_page(geometry_json, geometry_type, g.bounds, cfg.layer_id)
         n_requests += 1
 
         if len(page) >= API_LIMIT and depth < API_MAX_DEPTH:
@@ -239,41 +282,78 @@ def _fetch_tiled(geom, cfg: LayerConfig, context: str = "") -> GeoDataFrame:
         logger.warning("%s%s — tiling hit the depth cap with a full page (%d features), results may be incomplete",
                        cfg.layer_id, ctx, len(seen))
     logger.debug("  Fetched %d %s features in %d request(s)%s", len(seen), cfg.layer_id, n_requests, ctx)
-    return _parse_features([seen[k] for k in sorted(seen)], cfg)
+    return [seen[k] for k in sorted(seen)], truncated
 
 
-def _parse_features(all_features: list[dict[str, Any]], cfg: LayerConfig) -> GeoDataFrame:
-    """Raw identify results → GeoDataFrame with the configured columns."""
-    if not all_features:
-        return _empty_gdf(cfg)
+def _fetch_tiled(geom, cfg: LayerConfig, context: str = "") -> GeoDataFrame:
+    """As :func:`_fetch_tiled_raw`, parsed into a GeoDataFrame."""
+    features, _ = _fetch_tiled_raw(geom, cfg, context=context)
+    return _parse_features(features, cfg)
 
+
+def _parse_features_counted(
+    all_features: list[dict[str, Any]], cfg: LayerConfig,
+) -> tuple[GeoDataFrame, int]:
+    """Raw identify results → (GeoDataFrame with the configured columns, number of
+    features that could not be used because the server sent no / no readable
+    geometry)."""
     rows: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    dropped = 0
     for feat in all_features:
+        # Deduplicate on the same key as the tiling — NOT on the id column: results
+        # without an id all share ``None`` there and would collapse into one.
+        key = _feature_key(feat, cfg)
+        if key in seen:
+            continue
+        seen.add(key)
+
         geom_dict = feat.get("geometry")
-        props = feat.get("properties", {})
+        props = feat.get("properties") or {}
         if geom_dict is None:
             # The server omits the geometry of oversized features; nothing to clip.
+            dropped += 1
             continue
         try:
             geom = shape(geom_dict)
         except Exception:
             logger.debug("Skipping feature with invalid geometry: %s", feat.get("id"))
+            dropped += 1
             continue
 
-        rec: dict[str, Any] = {
-            cfg.id_column: feat.get(cfg.id_field) or feat.get("id"),
-        }
+        feature_id = feat.get(cfg.id_field)
+        if feature_id is None:
+            feature_id = feat.get("id")
+        rec: dict[str, Any] = {cfg.id_column: feature_id}
         for api_key, out_col in cfg.column_map.items():
-            rec[out_col] = props.get(api_key, "")
+            value = props.get(api_key)
+            rec[out_col] = "" if value is None else value   # JSON null → "" (never NaN)
         rec["geometry"] = geom
         rows.append(rec)
 
     if not rows:
-        return _empty_gdf(cfg)
+        return _empty_gdf(cfg), dropped
+    return GeoDataFrame(rows, geometry="geometry", crs=CRS_STRING), dropped
 
-    gdf = GeoDataFrame(rows, geometry="geometry", crs=CRS_STRING)
-    gdf = gdf.drop_duplicates(subset=cfg.id_column).reset_index(drop=True)
-    return gdf
+
+def _parse_features(all_features: list[dict[str, Any]], cfg: LayerConfig) -> GeoDataFrame:
+    """Raw identify results → GeoDataFrame with the configured columns."""
+    return _parse_features_counted(all_features, cfg)[0]
+
+
+def fetch_features_with_status(
+    geom,
+    cfg: LayerConfig,
+    context: str = "",
+) -> tuple[GeoDataFrame, dict[str, Any]]:
+    """Fetch all features of *cfg.layer_id* intersecting *geom* and say how
+    complete the answer is: ``{"truncated": bool, "dropped": int}`` — ``truncated``
+    when the tiling hit its depth cap with a full page, ``dropped`` = features the
+    server sent without a usable geometry (oversized ones come as ``null``).
+    Raises :class:`IdentifyError` when a request fails."""
+    features, truncated = _fetch_tiled_raw(geom, cfg, context=context)
+    gdf, dropped = _parse_features_counted(features, cfg)
+    return gdf, {"truncated": truncated, "dropped": dropped}
 
 
 def fetch_features_for_polygon(
@@ -285,7 +365,9 @@ def fetch_features_for_polygon(
 
     Uses ``esriGeometryPolygon`` for a tighter spatial filter than a
     bounding box, reducing false positives; complex polygons are simplified to
-    stay within URL length limits. Tiled so that every request is a single page.
+    stay within URL length limits, polygons with holes or several parts are
+    queried by their envelope. Tiled so that every request is a single page.
+    Raises :class:`IdentifyError` when a request fails.
     """
     return _fetch_tiled(geom, cfg, context=context)
 
@@ -315,7 +397,8 @@ def intersect_with_features(
     """Intersect *geom_gdf* with *features_gdf* and return area breakdown.
 
     Returns one row per (input feature × layer feature) intersection.
-    Columns: *id_cols* + *cfg.id_column* + mapped columns + ``intersection_area_m2``.
+    Columns: *id_cols* + *cfg.id_column* + mapped columns + ``intersection_area_m2``
+    (the exact piece area — callers sum first and round for output).
     """
     out_cols = (
         id_cols
@@ -374,7 +457,7 @@ def intersect_with_features(
             rec[cfg.id_column] = feat_row[cfg.id_column]
             for out_col in cfg.column_map.values():
                 rec[out_col] = feat_row.get(out_col, "")
-            rec["intersection_area_m2"] = round(area, 2)
+            rec["intersection_area_m2"] = float(area)
             results.append(rec)
 
     if not results:

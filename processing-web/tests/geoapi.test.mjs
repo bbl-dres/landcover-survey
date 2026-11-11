@@ -100,3 +100,18 @@ test("WFS: a failed request after retries is reported, not thrown", async () => 
   const r = await geoapi.fetchLandCover(BBOX);
   assert.deepEqual(r, { features: [], error: true, truncated: false });
 });
+
+test("find: the EGRID must match exactly, not as a substring", async () => {
+  // geo.admin.ch `find` is a substring search unless contains=false: "CH12" would
+  // return every parcel whose EGRID contains it, unioned into one "merged" parcel.
+  const cadastre = ["CH385146357691", "CH120004463580", "CH120012463508"];
+  installFakeFetch((u) => {
+    const text = u.searchParams.get("searchText"), exact = u.searchParams.get("contains") === "false";
+    const hits = cadastre.filter((e) => (exact ? e === text : e.includes(text)));
+    return { results: hits.map((e) => ({ geometry: parcel, properties: { number: "1", egris_egrid: e } })) };
+  });
+  assert.equal(await geoapi.fetchParcelGeometry("CH12"), null);
+  assert.equal(await geoapi.fetchParcelGeometry("CH38514635769"), null);   // truncated
+  const hit = await geoapi.fetchParcelGeometry("CH385146357691");
+  assert.equal(hit.properties.mergedCount, 1);
+});

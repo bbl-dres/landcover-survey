@@ -1,6 +1,6 @@
 /**
  * Live-service clients for the processing pipeline — the exact requests the Python
- * `api` source fires (processing-cli/api.py). The two files are kept in lock-step so the web
+ * `api` source fires (processing-cli/src/api.py). The two files are kept in lock-step so the web
  * app and the CLI resolve the same feature sets and therefore the same results:
  *
  * - fetchParcelGeometry — geo.admin.ch `find` (parcel by EGRID, duplicates unioned,
@@ -11,9 +11,10 @@
  *   request is a single page (offset paging is lossy on this endpoint)
  * - loadGreenInventory  — the public green-inventory parcel list, once per session
  *
- * Every request goes through fetchWithRetry (AbortController timeout + exponential
- * backoff on 429/5xx and network errors). Nothing in here clips or classifies —
- * that is processor.js.
+ * Every request goes through fetchJson (AbortController timeout + exponential
+ * backoff on 429/5xx, network errors and unreadable bodies). Nothing in here clips
+ * or classifies — that is processor.js. Function names follow api.py
+ * (fetchParcelGeometry ⇄ fetch_parcel_geometry, fetchJson ⇄ _fetch_json, …).
  */
 import { API, fetchWithTimeout, BAFU_LAYER_ID, GREEN_INVENTORY } from "./config.js";
 
@@ -87,6 +88,25 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/**
+ * GET `url` and parse the JSON body, with the retries of fetchWithRetry. A body that
+ * is cut off or is not JSON (a proxy's error page served with status 200) counts as
+ * a failed attempt and is asked again — mirrors _fetch_json() in api.py.
+ */
+export async function fetchJson(url) {
+  let lastError;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    const resp = await fetchWithRetry(url);
+    try {
+      return await resp.json();
+    } catch (err) {
+      lastError = new Error(`Invalid response body (${err.message})`);
+      if (attempt < MAX_RETRIES) await sleep(BASE_DELAY_MS * Math.pow(2, attempt));
+    }
+  }
+  throw lastError;
+}
+
 /* ── Parcel geometry — geo.admin.ch find ── */
 
 /** EGRID → parcel geometry cache (survives across runs within the same session).
@@ -109,13 +129,16 @@ export async function fetchParcelGeometry(egrid) {
     layer: "ch.kantone.cadastralwebmap-farbe",
     searchText: egrid,
     searchField: "egris_egrid",
+    // Exact match. The default is a substring search: "CH12" would return 200
+    // unrelated parcels (unioned into one "merged" parcel) and a truncated EGRID
+    // the parcel it is a part of. Mirrored in processing-cli/src/api.py.
+    contains: "false",
     returnGeometry: "true",
     geometryFormat: "geojson",
     sr: "4326",
   });
 
-  const resp = await fetchWithRetry(`${API.PARCEL_FIND}?${params}`);
-  const data = await resp.json();
+  const data = await fetchJson(`${API.PARCEL_FIND}?${params}`);
 
   const feats = (data.results || []).filter((r) => r.geometry);
   if (feats.length === 0) {
@@ -194,8 +217,7 @@ export async function fetchLandCover(bbox) {
         COUNT: String(WFS_PAGE),
         STARTINDEX: String(page * WFS_PAGE),
       });
-      const resp = await fetchWithRetry(`${API.WFS_AV}?${params}`);
-      const data = await resp.json();
+      const data = await fetchJson(`${API.WFS_AV}?${params}`);
       const batch = data.features || [];
       if (batch.length === 0) break; // drained
       for (const f of batch) {
@@ -265,8 +287,7 @@ export async function fetchIdentify(layerId, parcelGeom, maxFeatures) {
       offset: "0",
       lang: "de",
     });
-    const resp = await fetchWithRetry(`${API.IDENTIFY}?${params}`);
-    const data = await resp.json();
+    const data = await fetchJson(`${API.IDENTIFY}?${params}`);
     const results = data.results || [];
 
     if (results.length >= IDENTIFY_PAGE) {

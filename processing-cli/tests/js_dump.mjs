@@ -29,6 +29,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const webJs = pathToFileURL(path.join(here, "..", "..", "processing-web", "js") + path.sep).href;
 const cfg = await import(webJs + "config.js");
 const proc = await import(webJs + "processor.js");
+const ui = await import(webJs + "userinput.js");
 await cfg.ensureTypoch();
 
 const cases = JSON.parse(await readFile(process.argv[2], "utf8"));
@@ -75,7 +76,18 @@ const out = {
   bauzoneAreaKey: mapOf(cases.slugs, (s) => cfg.bauzoneAreaKey(s)),
   habitatKeys: mapOf(cases.habitat_codes, (c) => ({ l1: cfg.habitatAreaKeyL1(c), l2: cfg.habitatAreaKeyL2(c) })),
   numbers: cases.numbers.map((x) => ({ x, toFixed1: x.toFixed(1), round2: proc.round2(x) })),
-  normalizeEgrid: mapOf([" ch4277 ", "CH1", "", "  "], (s) => cfg.normalizeEgrid(s)),
+  normalizeEgrid: mapOf([" ch4277 ", "CH1", "", "  ", "CH 3735 8957 4684", "ch\u00a04277\u200b6011"], (s) => cfg.normalizeEgrid(s)),
+  // The list reader on awkward texts: the normalised rows, or `error` where it refuses the file.
+  upload: cases.upload_texts.map((text) => {
+    try {
+      const parsed = ui.normalizeParsed(ui.parseText(text));
+      return { headers: parsed.headers, rows: parsed.rows };
+    } catch {
+      return { error: true };
+    }
+  }),
+  aggKeys: proc.LANDCOVER_AGG_KEYS,
+  emptyAgg: proc.emptyLandCoverAggregate(),
   landcover: { rows: lcRows.map(rowView), synth: rowView(synthRow), agg: proc.aggregateLandCover(lcRows), bfsnr: proc.dominantBfsnr(lcRows) },
   habitat: { rows: hbRows.map(rowView), agg: proc.aggregateHabitat(hbRows) },
   bauzonen: { rows: bzRows.map(rowView), agg: proc.aggregateBauzonen(bzRows) },

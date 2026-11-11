@@ -1,11 +1,34 @@
 {
   "_meta": "Inputs for the web-vs-Python parity tests (tests/test_parity_js.py runs tests/js_dump.mjs on them and compares with the Python modules). Edit freely; every case is evaluated on both sides.",
   "arts": [
-    "Gebaeude", "Strasse_Weg", "Trottoir", "Verkehrsinsel", "Bahn", "Flugplatz", "Wasserbecken", "uebrige_befestigte",
-    "Acker_Wiese_Weide", "Reben", "uebrige_Intensivkultur", "Gartenanlage", "Hoch_Flachmoor", "uebrige_humusierte",
-    "Wytweide_dicht", "Wytweide_offen", "Gewaesser_stehendes", "Gewaesser_fliessendes", "Schilfguertel",
-    "geschlossener_Wald", "uebrige_bestockte", "Fels", "Gletscher_Firn", "Geroell_Sand", "Abbau_Deponie",
-    "uebrige_vegetationslose", "Unbekannt", ""
+    "Gebaeude",
+    "Strasse_Weg",
+    "Trottoir",
+    "Verkehrsinsel",
+    "Bahn",
+    "Flugplatz",
+    "Wasserbecken",
+    "uebrige_befestigte",
+    "Acker_Wiese_Weide",
+    "Reben",
+    "uebrige_Intensivkultur",
+    "Gartenanlage",
+    "Hoch_Flachmoor",
+    "uebrige_humusierte",
+    "Wytweide_dicht",
+    "Wytweide_offen",
+    "Gewaesser_stehendes",
+    "Gewaesser_fliessendes",
+    "Schilfguertel",
+    "geschlossener_Wald",
+    "uebrige_bestockte",
+    "Fels",
+    "Gletscher_Firn",
+    "Geroell_Sand",
+    "Abbau_Deponie",
+    "uebrige_vegetationslose",
+    "Unbekannt",
+    ""
   ],
   "typoch": [
     "6.3.1 Ahorn-Schluchtwald",
@@ -30,38 +53,189 @@
     "x",
     "  6.3   Andere Laubwälder  "
   ],
-  "numbers": [0, 0.25, 0.35, 1.005, 2.675, 0.125, 1234567.891, 0.0049, 0.005, 100.015, 12912.266169, 0.045, 1.115, 8.345,
-              489228.4471, 2.5, 3.5, 0.015, 0.025, 1e-7, 0.049999999, 999999.995, 42],
-  "slugs": ["Zonen für öffentliche Nutzungen", "eingeschränkte Bauzonen", "Tourismus- und Freizeitzonen", "Wohnzonen (W2)",
-            " Übrige ", "Straße", "Ohne Bauzone", "weitere Bauzonen", "Wald/Forst – Nr. 3"],
-  "habitat_codes": ["6", "6.3", "6.3.1", "9221", "9.0", "4.5"],
+  "numbers": [
+    0,
+    0.25,
+    0.35,
+    1.005,
+    2.675,
+    0.125,
+    1234567.891,
+    0.0049,
+    0.005,
+    100.015,
+    12912.266169,
+    0.045,
+    1.115,
+    8.345,
+    489228.4471,
+    2.5,
+    3.5,
+    0.015,
+    0.025,
+    1e-07,
+    0.049999999,
+    999999.995,
+    42
+  ],
+  "slugs": [
+    "Zonen für öffentliche Nutzungen",
+    "eingeschränkte Bauzonen",
+    "Tourismus- und Freizeitzonen",
+    "Wohnzonen (W2)",
+    " Übrige ",
+    "Straße",
+    "Ohne Bauzone",
+    "weitere Bauzonen",
+    "Wald/Forst – Nr. 3"
+  ],
+  "habitat_codes": [
+    "6",
+    "6.3",
+    "6.3.1",
+    "9221",
+    "9.0",
+    "4.5"
+  ],
   "landcover_rows": [
-    ["Gebaeude", 123.456789, 3203],
-    ["Strasse_Weg", 10.1, 3203],
-    ["Acker_Wiese_Weide", 1000.333333, 351],
-    ["Gartenanlage", 0.3333333, "351"],
-    ["geschlossener_Wald", 55.55555, ""],
-    ["Fels", 0.005, 3203],
-    ["Unbekannt", 7.77777, 3203],
-    ["Gebaeude", 0.004999, 2703],
-    ["Reben", 12.125, null],
-    ["Wytweide_offen", 900.0, 351],
-    ["Gewaesser_fliessendes", 0.1, 351]
+    [
+      "Gebaeude",
+      123.456789,
+      3203
+    ],
+    [
+      "Strasse_Weg",
+      10.1,
+      3203
+    ],
+    [
+      "Acker_Wiese_Weide",
+      1000.333333,
+      351
+    ],
+    [
+      "Gartenanlage",
+      0.3333333,
+      "351"
+    ],
+    [
+      "geschlossener_Wald",
+      55.55555,
+      ""
+    ],
+    [
+      "Fels",
+      0.005,
+      3203
+    ],
+    [
+      "Unbekannt",
+      7.77777,
+      3203
+    ],
+    [
+      "Gebaeude",
+      0.004999,
+      2703
+    ],
+    [
+      "Reben",
+      12.125,
+      null
+    ],
+    [
+      "Wytweide_offen",
+      900.0,
+      351
+    ],
+    [
+      "Gewaesser_fliessendes",
+      0.1,
+      351
+    ]
   ],
   "habitat_rows": [
-    ["6.3.1 Ahorn-Schluchtwald", 100.5],
-    ["6.3.1 Ahorn-Schluchtwald", 0.25],
-    ["6 Wälder", 3.3333],
-    ["9.3.2 Asphalt- und Betonstrasse", 50.05],
-    ["9221 Gründach", 1.111],
-    ["4.0 Kunstrasen", 2.675],
-    ["9.0", 9.99],
-    ["4.5.3 Talfettweide (Kammgrasweide)", 50.05]
+    [
+      "6.3.1 Ahorn-Schluchtwald",
+      100.5
+    ],
+    [
+      "6.3.1 Ahorn-Schluchtwald",
+      0.25
+    ],
+    [
+      "6 Wälder",
+      3.3333
+    ],
+    [
+      "9.3.2 Asphalt- und Betonstrasse",
+      50.05
+    ],
+    [
+      "9221 Gründach",
+      1.111
+    ],
+    [
+      "4.0 Kunstrasen",
+      2.675
+    ],
+    [
+      "9.0",
+      9.99
+    ],
+    [
+      "4.5.3 Talfettweide (Kammgrasweide)",
+      50.05
+    ]
   ],
   "bauzonen_rows": [
-    ["Wohnzonen", "11", 300.125],
-    ["Wohnzonen", "11", 0.015],
-    ["Zonen für öffentliche Nutzungen", "15", 1000.0049],
-    ["Ohne Bauzone", "", 25.5]
+    [
+      "Wohnzonen",
+      "11",
+      300.125
+    ],
+    [
+      "Wohnzonen",
+      "11",
+      0.015
+    ],
+    [
+      "Zonen für öffentliche Nutzungen",
+      "15",
+      1000.0049
+    ],
+    [
+      "Ohne Bauzone",
+      "",
+      25.5
+    ]
+  ],
+  "upload_texts": [
+    "ID;EGRID;Ort\n 1086/1/1 ; ch307635204644 ; Bern \n",
+    "id,egrid\n1,CH1\n",
+    "sep=;\nid;egrid\n2;CH2\n",
+    "\"sep=,\"\r\nid,egrid\r\n2,CH2\r\n",
+    "id\tegrid\tnote\n3\tCH3\tx,y;z\n",
+    "Id;EGRID;Name;name\n4;CH4;first;second\n",
+    "ID;EGRID;id\nA;CH5;B\n",
+    "ID;EGRID\nA1;CH111111111111;\nA2;CH222222222222;\n",
+    "ID;EGRID;\nA1;CH111111111111;x\n",
+    "ID;EGRID;Kanton;Note\nNA;CH1;NA;null\nN/A;CH2;nan;None\n",
+    "ID;EGRID;Note\r\nA1;CH1\r\n\r\n ; ; \r\nA2;CH2;x;surplus\r\n",
+    "ID;EGRID;Note\n\"A;1\";CH1;\"say \"\"hi\"\"\nline 2\"\n",
+    "ID;EGRID;Note\n  \"A;2\"  ;CH1; \"padded\" \n",
+    "id;egrid;name\n1;CH111;Halle 3\" breit\n2;CH222;x\n3;CH333;5\" x 3\" Rohr\n",
+    "id;egrid;name\n1;CH111;\"never closed\n2;CH222;x\n",
+    "\n\nID;EGRID;Ort\nA1;CH1;Bern\n",
+    "ID;EGRID\rA1;CH1\rA2;CH2\r",
+    "ID;EGRID\n",
+    "id;parcel\n5;CH5\n",
+    "",
+    "ID;EGRID\nA1; ch 3735 8957 4684 \nA2;ch373589574685\n",
+    "ID;EGRID;Straße;Fläche m²\nA1;CH1;Zürichstrasse;12,5\n",
+    "ID;EGRID\nA1;CH1",
+    "10.11.2026                  Dynamische Listenausgabe                 1\n----------------------------------------------------------------------\nBericht             Infosystem: Grundstücke am 10.11.2026\n----------------------------------------------------------------------\n|BuKr|WE  |Grundstk|Bez. Grundstück      |E-GRID        |TPF|\n----------------------------------------------------------------------\n|9999|0001|1       |Musterdorf, Gbbl. 1  |ch111111111111|  9|\n|9999|0002|2       |Parkplätze           |0000000000    |  3|\n|9999|0003|1       |Ohne EGRID           |              |   |\n----------------------------------------------------------------------\n",
+    "10.11.2026                  Dynamische Listenausgabe                 1\n----------------------------------------------------------------------\nBericht             Infosystem: Grundstücke am 10.11.2026\n----------------------------------------------------------------------\n|BuKr|WE  |Grundstk|Bez. Grundstück      |E-GRID        |TPF|\n----------------------------------------------------------------------\n|9999|0001|1       |Musterdorf, Gbbl. 1  |ch111111111111|  9|\n|9999|0002|2       |Park|plätze          |0000000000    |  3|\n|9999|0003|1       |Ohne EGRID           |              |   |\n----------------------------------------------------------------------\n",
+    "10.11.2026                  Dynamische Listenausgabe                 1\n----------------------------------------------------------------------\nBericht             Infosystem: Grundstücke am 10.11.2026\n----------------------------------------------------------------------\n|BuKr|WE  |Grundst.|Bez. Grundstück      |E-GRID        |TPF|\n----------------------------------------------------------------------\n|9999|0001|1       |Musterdorf, Gbbl. 1  |ch111111111111|  9|\n|9999|0002|2       |Parkplätze           |0000000000    |  3|\n|9999|0003|1       |Ohne EGRID           |              |   |\n----------------------------------------------------------------------\n"
   ]
 }

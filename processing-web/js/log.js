@@ -40,6 +40,7 @@ export function classifyParcel(p) {
 
   const notes = [];
   if (p.check_egrid === STATUS.MERGED) notes.push({ key: "log.w.merged" });
+  if (p._egridCount > 1) notes.push({ key: "log.w.duplicate", params: { n: p._egridCount } });
   if (p.lc_synthetic === "yes") notes.push({ key: "log.w.synthetic" });
   else if (!(p._landcover || []).length) notes.push({ key: "log.w.nolc" });
   if (p.check_wfs === "truncated") notes.push({ key: "log.w.wfs" });
